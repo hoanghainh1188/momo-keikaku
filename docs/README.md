@@ -8,7 +8,18 @@ External and comparable material gathered as **input**. Nothing here is a decisi
 
 | File | What it is |
 |---|---|
-| `20260914-smart-pm-suite-srs-v1.md` | SRS for *Smart PM Suite*, a separate PMBOK-grounded PM system. Reference only — a worked example of how PMI theory (EVM, CPM/PERT, EMV, portfolio economics) turns into software requirements. |
+| `20260914-smart-pm-suite-srs-v1.md` | SRS for *Smart PM Suite*, a separate PMBOK-grounded PM system. A worked example of how PMI theory becomes software requirements. |
+| `pmi-techniques-v1.md` | Compendium of PMI/PMBOK techniques — the underlying theory, not a product spec. |
+| `pmi-techniques-v2.md` | Second compendium. Broader in places, **but not a superset of v1** — see below. |
+
+### Read both PMI compendiums, not just v2
+
+Despite the version numbers, v2 does not supersede v1. Each covers material the other omits, and both halves matter here:
+
+- **Only in v1:** Free Float vs Total Float, schedule crashing trade-offs, TCPI (including the "TCPI > 1.1 is a red flag" heuristic), sum-of-years-digits depreciation, the conflict-resolution technique comparison.
+- **Only in v2:** WSJF, MoSCoW and Kano prioritisation, Lean waste (Muda), RACI, resource levelling and the resource histogram, the Work Authorization System, the `EAC = AC + (BAC - EV) / (CPI × SPI)` variant, and worked numeric examples throughout.
+
+TCPI and Free Float appear only in v1 yet are directly relevant — TCPI is also a requirement in the Smart PM Suite SRS above.
 
 ## Where decisions actually live
 
