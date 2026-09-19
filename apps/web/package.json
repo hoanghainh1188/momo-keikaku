@@ -1,0 +1,17 @@
+{
+  "name": "@momo/web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": { "dev": "next dev -p 3101", "build": "next build", "start": "next start -p 3101" },
+  "dependencies": {
+    "next": "^15.1.3",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "@momo/domain": "workspace:*",
+    "@momo/db": "workspace:*",
+    "drizzle-orm": "^0.38.2",
+    "pg": "^8.13.1"
+  },
+  "devDependencies": { "@types/react": "^19.0.2", "@types/react-dom": "^19.0.2" }
+}

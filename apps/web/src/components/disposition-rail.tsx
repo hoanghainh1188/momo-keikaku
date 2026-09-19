@@ -1,0 +1,181 @@
+'use client';
+
+import { useState } from 'react';
+import { crCandidate, explainTickets, mapTickets, planTickets } from '@/app/actions';
+
+export interface RailGroup {
+  key: string;
+  label: string;
+  ticketCount: number;
+  hours: string;
+  dispositioned: string | null;
+  ticketIds: string[];
+}
+
+/**
+ * FR-29: the Disposition queue. Map applies immediately and the Unplanned figures
+ * update in place. Plan creates a WP in the Current Plan and states that the hours
+ * stay Unplanned until the next Re-baseline.
+ */
+export function DispositionRail({
+  projectId,
+  groups,
+  leafWps,
+  explainNotes,
+  unplannedHours,
+}: {
+  projectId: string;
+  groups: RailGroup[];
+  leafWps: { id: string; label: string }[];
+  explainNotes: { note: string; hours: string }[];
+  unplannedHours: string;
+}) {
+  const queue = groups.filter((g) => !g.dispositioned);
+  return (
+    <aside className="rail" data-testid="disposition-rail">
+      <h2>Dispositions</h2>
+      <p className="caption">
+        {queue.length === 0
+          ? 'All Unmapped Work has a Disposition.'
+          : `${queue.length} group(s) waiting. Unplanned Work is ${unplannedHours}h.`}
+      </p>
+
+      {groups.map((g) => (
+        <GroupPanel key={g.key} projectId={projectId} group={g} leafWps={leafWps} />
+      ))}
+
+      {explainNotes.length > 0 ? (
+        <div className="rail-group">
+          <div className="label">Explain notes</div>
+          {explainNotes.map((n, i) => (
+            <p className="caption" key={i} data-testid="explain-note">
+              “{n.note}” — {n.hours}h
+            </p>
+          ))}
+        </div>
+      ) : null}
+    </aside>
+  );
+}
+
+function GroupPanel({
+  projectId,
+  group,
+  leafWps,
+}: {
+  projectId: string;
+  group: RailGroup;
+  leafWps: { id: string; label: string }[];
+}) {
+  const [open, setOpen] = useState<null | 'map' | 'plan' | 'explain'>(null);
+  const ticketIds = group.ticketIds.join(',');
+
+  return (
+    <div className="rail-group" data-testid={`rail-group-${group.key}`}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+        <strong>{group.label}</strong>
+        <span className="num" style={{ color: 'var(--unplanned)' }}>
+          {group.hours}
+          <span className="unit">h</span>
+        </span>
+      </div>
+      <div className="caption">
+        {group.ticketCount} Unmapped Ticket(s)
+        {group.dispositioned ? ` · disposition: ${group.dispositioned}` : ''}
+      </div>
+
+      <div className="btn-row">
+        <button type="button" className="btn" onClick={() => setOpen(open === 'map' ? null : 'map')}>
+          Map
+        </button>
+        <button
+          type="button"
+          className="btn"
+          onClick={() => setOpen(open === 'plan' ? null : 'plan')}
+        >
+          Plan
+        </button>
+        <form action={crCandidate}>
+          <input type="hidden" name="projectId" value={projectId} />
+          <input type="hidden" name="ticketIds" value={ticketIds} />
+          <button type="submit" className="btn">
+            CR candidate
+          </button>
+        </form>
+        <button
+          type="button"
+          className="btn"
+          onClick={() => setOpen(open === 'explain' ? null : 'explain')}
+        >
+          Explain
+        </button>
+      </div>
+
+      {open === 'map' ? (
+        <form action={mapTickets} style={{ marginTop: 8 }} data-testid={`map-form-${group.key}`}>
+          <input type="hidden" name="projectId" value={projectId} />
+          <input type="hidden" name="ticketIds" value={ticketIds} />
+          <label className="label" htmlFor={`wp-${group.key}`}>
+            Map to leaf Work Package
+          </label>
+          <select id={`wp-${group.key}`} name="wpId" defaultValue={leafWps[0]?.id}>
+            {leafWps.map((w) => (
+              <option key={w.id} value={w.id}>
+                {w.label}
+              </option>
+            ))}
+          </select>
+          <div className="btn-row">
+            <button className="btn primary" type="submit">
+              Map {group.ticketCount} Ticket(s)
+            </button>
+          </div>
+          <p className="caption">
+            Attribution follows the current Mapping, so these hours leave Unplanned Work
+            immediately.
+          </p>
+        </form>
+      ) : null}
+
+      {open === 'plan' ? (
+        <form action={planTickets} style={{ marginTop: 8 }} data-testid={`plan-form-${group.key}`}>
+          <input type="hidden" name="projectId" value={projectId} />
+          <input type="hidden" name="ticketIds" value={ticketIds} />
+          <label className="label" htmlFor={`name-${group.key}`}>
+            New Work Package name
+          </label>
+          <input id={`name-${group.key}`} name="name" type="text" defaultValue={group.label} />
+          <div className="btn-row">
+            <button className="btn primary" type="submit">
+              Create WP &amp; map
+            </button>
+          </div>
+          <p className="caption">
+            Counts as Unplanned Work until the next Re-baseline includes the new WP.
+          </p>
+        </form>
+      ) : null}
+
+      {open === 'explain' ? (
+        <form
+          action={explainTickets}
+          style={{ marginTop: 8 }}
+          data-testid={`explain-form-${group.key}`}
+        >
+          <input type="hidden" name="projectId" value={projectId} />
+          <input type="hidden" name="ticketIds" value={ticketIds} />
+          <label className="label" htmlFor={`note-${group.key}`}>
+            Note
+          </label>
+          <textarea id={`note-${group.key}`} name="note" rows={3} maxLength={1000} />
+          <div className="btn-row">
+            <button className="btn primary" type="submit">
+              Save note
+            </button>
+          </div>
+          <p className="caption">Clients see this note only if you publish it.</p>
+        </form>
+      ) : null}
+    </div>
+  );
+}

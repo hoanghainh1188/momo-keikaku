@@ -209,7 +209,7 @@ The protagonists are illustrative, drafted from the brief. The founder should re
 - **Disposition** — the PM's decision on an Unmapped Ticket or a group of them: *Map*, *Plan*, *Change Request candidate* or *Explain*.
 - **Change Request candidate** — a Disposition that marks Tickets as possible client-requested scope, for discussion with the client or for a Re-baseline. v1 has no approval workflow.
 - **Teirei** (定例) — the regular status meeting with the client, usually weekly.
-- **Reporting Period** — the window a report covers, measured in the Project's time zone (default JST). The default is weekly, aligned to the teirei day.
+- **Reporting Period** — the window a report covers, measured in the Project's time zone (default JST). Its length is set per Project — weekly (the default, aligned to the teirei day), biweekly or monthly — because clients report on different cadences (founder decision, 2026-09-20, closing OQ-6). Changing the length applies from the next Period; past Periods keep their boundaries.
 - **Reconciliation Review** — the PM-only view of one Reporting Period, pinned to one Tracker Snapshot.
 - **Divergence** — the differences between the Baseline, the Current Plan and actuals, per WP.
 - **EVM Metrics** — PV, EV, AC, SV, SPI, CV, CPI, EAC, ETC, VAC and TCPI, as defined in FR-30. They are measured in effort hours (工数). Money is a derived layer shown only in PM and internal views.
@@ -383,7 +383,7 @@ A Tenant Admin or PM can create Resources, each with a home Department. Only a T
 
 **Consequences (testable):**
 - An hour is valued at the Rate in effect when the hour was recorded.
-- If a Rate is corrected retroactively, adjusting entries are appended to the costing. Past entries are never rewritten.
+- If a Rate is corrected retroactively, the Actuals Ledger is left untouched and money is recomputed against the pinned Rate history, so every figure still derives from pinned inputs and earlier Published Snapshots reproduce exactly (founder decision, 2026-09-20). Past entries are never rewritten.
 
 #### FR-13: Tracker Account linking — *R0*
 
@@ -826,7 +826,7 @@ A Tenant Admin can see and manage PM Seats. Only the PM role consumes a seat (re
   - They are escaped wherever they are displayed.
   - Exports neutralise formula prefixes (FR-38).
   - Uploads have limits on file size and unpacked size, set during architecture. Files over the limits are rejected with a message.
-- **NFR-D1 Data lifecycle.** Tenant data is kept while the Tenant is active. On request it is deleted within 30 days. Copies in backups are removed when those backups expire.
+- **NFR-D1 Data lifecycle.** Tenant data is kept while the Tenant is active. On request it is deleted within 30 days, and copies in backups go when those backups expire. The deletion path ships in R0 — a documented, audited operator procedure is enough, and it needs no UI (founder decision, 2026-09-20).
 - **NFR-A1 Audit trail.** Every action that changes reported numbers or who can see them is logged with the actor and the time. The Tenant Admin can view the log. Logged actions:
   - publish, supersede and retract;
   - Re-baseline;
@@ -1024,9 +1024,7 @@ The wedge is never cut: FR-19–FR-32 (FR-30 with Typical EAC only), FR-34–FR-
 5. **OQ-5 AI provider.** The AI provider and its data terms for FR-41.
    - *Owner:* founder.
    - *Resolve by:* Post-Q1, before FR-41 is built.
-6. **OQ-6 Reporting cadence.** Weekly only, or do some clients need biweekly or monthly Periods?
-   - *Owner:* founder.
-   - *Resolve by:* during R0.
+6. **OQ-6 Reporting cadence.** ~~Weekly only, or do some clients need biweekly or monthly Periods?~~ **Closed 2026-09-20:** some clients report biweekly or monthly, so the Reporting Period length is per Project from R0 (§3 Glossary).
 7. **OQ-7 Competitive watch.**
    - *Owner:* founder.
    - Re-check the "nobody does this" claim. *Resolve by:* 2026-12-01, and again after 2027-01-01.
@@ -1062,5 +1060,10 @@ The founder confirmed every inference made in the draft; each is now a decision:
 - Client default visibility (brief addendum B): the Unplanned Work indicator, as a share and in hours, is shown by default, because it *is* the Health Indicator that the brief says includes unmapped hours. *Explain* notes appear only where the PM attached one, so they are opt-in by nature. EVM detail, the breakdown and the forecast are off by default (FR-34).
 - A Program belongs to its Projects' owning Department, following the brief's hierarchy (Tenant > Department > Program > Project).
 - v1 is split into R0 (founder-only, 2026-12-15) and R1 (client-facing, Q1 2027). Everything else is Post-Q1.
+
+**Added 2026-09-20, after the architecture reviewer gate and the overnight research:**
+- The Reporting Period length is configurable per Project from R0 (closes OQ-6).
+- Retroactive Rate corrections are handled by recomputation against pinned inputs, not by adjusting entries (FR-12).
+- The Tenant deletion path ships in R0 (NFR-D1).
 - The research R2 beachhead is overridden by the brief's: Excel WBS + Backlog, with .mpp later.
 - UI languages are English and Japanese.
