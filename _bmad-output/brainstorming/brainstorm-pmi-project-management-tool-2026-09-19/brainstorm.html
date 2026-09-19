@@ -1,0 +1,1452 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Distance Between Claim and Reality — Brainstorming Session, 19 September 2026</title>
+<style>
+/* ============================================================
+   INSTRUMENT — a brainstorming keepsake
+   Visual language: engineering blueprint + measuring instrument
+   + double-entry ledger. Claim is amber. Reality is cyan.
+   ============================================================ */
+
+:root{
+  --ink:        #070b12;
+  --ink-2:      #0a0f18;
+  --ink-3:      #0d1420;
+  --paper:      #dfe7f2;
+  --paper-dim:  #93a4bb;
+  --paper-faint:#66788f;
+  --line:       rgba(146,173,204,.16);
+  --line-2:     rgba(146,173,204,.32);
+
+  --claim:  #e0a24a;   /* what the plan asserts */
+  --real:   #4ec9d6;   /* what reality did */
+  --alarm:  #ff6a5e;   /* bias, rework, correction */
+  --ochre:  #c98b3a;
+
+  --owner:  #f6f1e6;   /* the session owner's own thinking */
+  --coach:  #7f93ad;   /* the coach's */
+
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+
+  --rule: clamp(3.25rem, 2rem + 5.5vw, 6.5rem);
+}
+
+*{box-sizing:border-box}
+html{ -webkit-text-size-adjust:100%; }
+body{
+  margin:0;
+  background:var(--ink);
+  color:var(--paper);
+  font-family:var(--sans);
+  font-size:16px;
+  line-height:1.62;
+  overflow-x:hidden;
+  background-image:
+    linear-gradient(rgba(146,173,204,.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(146,173,204,.035) 1px, transparent 1px);
+  background-size:30px 30px;
+  background-position:-1px -1px;
+}
+img{max-width:100%}
+a{color:var(--real)}
+
+.wrap{max-width:1080px;margin:0 auto;padding-inline:20px}
+section{padding-block:var(--rule);position:relative}
+
+/* ---------- shared type ---------- */
+.mono{font-family:var(--mono)}
+.label{
+  font-family:var(--mono);font-size:.68rem;letter-spacing:.2em;
+  text-transform:uppercase;color:var(--paper-faint);
+}
+h1,h2,h3,h4{margin:0;font-weight:600}
+h2{
+  font-family:var(--serif);
+  font-size:clamp(1.85rem, 1.1rem + 3.1vw, 3.35rem);
+  line-height:1.02;letter-spacing:-.02em;
+}
+h3{
+  font-family:var(--serif);
+  font-size:clamp(1.15rem,.95rem + .9vw,1.6rem);
+  line-height:1.15;letter-spacing:-.01em;margin-bottom:.5rem;
+}
+h4{font-family:var(--mono);font-size:.72rem;letter-spacing:.18em;text-transform:uppercase;color:var(--paper-dim)}
+p{margin:0 0 1rem}
+.lede{
+  font-family:var(--serif);
+  font-size:clamp(1.05rem,.95rem + .6vw,1.35rem);
+  line-height:1.5;color:var(--paper);
+  max-width:62ch;
+}
+.note{font-size:.88rem;color:var(--paper-dim);max-width:70ch}
+.tiny{font-size:.76rem;color:var(--paper-faint)}
+
+/* ---------- plate header for each section ---------- */
+.plate{
+  display:flex;flex-wrap:wrap;gap:.35rem 1.1rem;align-items:baseline;
+  border-bottom:1px solid var(--line-2);
+  padding-bottom:.7rem;margin-bottom:1.9rem;
+}
+.plate .num{font-family:var(--mono);font-size:.78rem;font-weight:700;letter-spacing:.2em;color:var(--real)}
+.plate .kind{font-family:var(--mono);font-size:.66rem;letter-spacing:.24em;text-transform:uppercase;color:var(--paper-faint)}
+.plate h2{flex:1 1 100%}
+
+/* ---------- attribution: the spine of the whole document ---------- */
+.log{list-style:none;margin:0;padding:0;display:grid;gap:.6rem}
+.e{
+  position:relative;padding:.7rem .95rem .75rem 1.05rem;
+  font-size:.945rem;
+  transition:opacity .25s ease;
+}
+.e .who{
+  display:inline-block;font-family:var(--mono);font-size:.6rem;letter-spacing:.2em;
+  text-transform:uppercase;margin-right:.6em;vertical-align:.12em;
+  padding:.18em .5em;border-radius:2px;white-space:nowrap;
+}
+.e--owner{
+  border-left:3px solid var(--owner);
+  background:linear-gradient(90deg, rgba(246,241,230,.065), rgba(246,241,230,0) 72%);
+  color:var(--paper);
+}
+.e--owner .who{background:var(--owner);color:#0b1019;font-weight:700}
+.e--coach{
+  border-left:2px dashed var(--coach);
+  color:var(--paper-dim);
+}
+.e--coach .who{border:1px solid rgba(127,147,173,.65);color:var(--coach)}
+.e--sys{
+  border-left:2px dotted var(--line-2);
+  color:var(--paper-faint);font-family:var(--mono);font-size:.8rem;
+}
+.e b{color:var(--paper);font-weight:650}
+.e--coach b{color:#b9c8da}
+
+body.owner-only .e--coach{opacity:.17}
+body.owner-only .e--sys{opacity:.3}
+
+/* the key / control */
+.key{
+  display:flex;flex-wrap:wrap;gap:.9rem 1.5rem;align-items:center;
+  border:1px solid var(--line);border-radius:3px;
+  padding:.85rem 1rem;background:rgba(255,255,255,.015);
+}
+.key-item{display:flex;align-items:center;gap:.55rem;font-size:.8rem;color:var(--paper-dim)}
+.swatch{width:26px;height:12px;flex:none}
+.swatch--owner{background:var(--owner)}
+.swatch--coach{background:repeating-linear-gradient(90deg,var(--coach) 0 5px,transparent 5px 10px)}
+.toggle{
+  margin-left:auto;font-family:var(--mono);font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;
+  background:transparent;color:var(--real);border:1px solid rgba(78,201,214,.45);
+  padding:.55em .9em;border-radius:2px;cursor:pointer;transition:background .2s,color .2s;
+}
+.toggle:hover,.toggle:focus-visible{background:rgba(78,201,214,.12);color:#9df0f8;outline:none}
+body.owner-only .toggle{background:var(--real);color:#04191c;border-color:var(--real)}
+
+/* tally bar */
+.tally{display:flex;height:8px;border:1px solid var(--line-2);margin-top:.9rem}
+.tally i{display:block;height:100%}
+.tally .t-owner{background:var(--owner);flex:25}
+.tally .t-coach{background:repeating-linear-gradient(90deg,var(--coach) 0 4px,rgba(127,147,173,.25) 4px 8px);flex:21}
+.tally .t-sys{background:rgba(146,173,204,.12);flex:9}
+
+/* ---------- figures ---------- */
+figure{margin:0 0 1.6rem}
+.fig-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:.4rem}
+.fig-scroll svg{display:block;width:100%;height:auto}
+figcaption{
+  font-family:var(--mono);font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--paper-faint);margin-top:.7rem;border-top:1px solid var(--line);padding-top:.5rem;
+}
+.svg-t{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;letter-spacing:.06em}
+.svg-t.sm{font-size:10.5px}
+.svg-t.lg{font-size:14px;letter-spacing:.14em}
+.scrollhint{display:none;font-family:var(--mono);font-size:.64rem;letter-spacing:.16em;color:var(--paper-faint);margin-bottom:.4rem}
+
+/* ============================================================
+   MASTHEAD
+   ============================================================ */
+.mast{padding-top:clamp(2.5rem,1.5rem+4vw,5rem);padding-bottom:0}
+.eyebrow{
+  font-family:var(--mono);font-size:.68rem;letter-spacing:.34em;text-transform:uppercase;
+  color:var(--real);margin-bottom:1.6rem;
+}
+h1{
+  font-family:var(--serif);
+  font-size:clamp(2.5rem, 1.1rem + 8.4vw, 6.5rem);
+  line-height:.94;letter-spacing:-.035em;font-weight:600;
+  margin:0 0 1.2rem;max-width:15ch;
+}
+h1 em{font-style:normal;color:var(--claim)}
+h1 i{font-style:normal;color:var(--real)}
+.mast .lede{margin-top:1.4rem;color:var(--paper-dim)}
+.mast .lede b{color:var(--paper);font-weight:600}
+
+.ruler{
+  height:34px;margin:2.4rem 0 2rem;border-top:1px solid var(--line-2);
+  background-image:
+    repeating-linear-gradient(90deg, var(--line-2) 0 1px, transparent 1px 12px),
+    repeating-linear-gradient(90deg, rgba(146,173,204,.55) 0 1px, transparent 1px 60px);
+  background-size:100% 8px, 100% 16px;
+  background-repeat:no-repeat;
+  background-position:0 0, 0 0;
+}
+
+/* blueprint title block */
+.titleblock{
+  border:1px solid var(--line-2);
+  display:grid;grid-template-columns:1fr;
+  font-size:.86rem;
+}
+.tb-row{display:grid;grid-template-columns:104px 1fr;border-top:1px solid var(--line)}
+.tb-row:first-child{border-top:0}
+.tb-row dt{
+  font-family:var(--mono);font-size:.62rem;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--paper-faint);padding:.7rem .8rem;border-right:1px solid var(--line);
+  background:rgba(255,255,255,.017);
+}
+.tb-row dd{margin:0;padding:.7rem .9rem;color:var(--paper)}
+@media (min-width:760px){ .tb-row{grid-template-columns:150px 1fr} }
+
+/* gauge */
+.gaugewrap{display:flex;gap:1.4rem;align-items:center;flex-wrap:wrap;margin-top:2rem}
+.gaugewrap svg{width:min(320px,100%);height:auto;flex:none}
+
+/* index */
+.index{display:grid;gap:0;border-top:1px solid var(--line-2);margin-top:2.6rem}
+.index a{
+  display:grid;grid-template-columns:52px 1fr auto;gap:.8rem;align-items:baseline;
+  padding:.72rem .2rem;border-bottom:1px solid var(--line);
+  text-decoration:none;color:var(--paper-dim);transition:color .18s,background .18s,padding-left .18s;
+}
+.index a:hover,.index a:focus-visible{color:var(--paper);background:rgba(78,201,214,.05);padding-left:.7rem;outline:none}
+.index .i-n{font-family:var(--mono);font-size:.72rem;color:var(--real);letter-spacing:.1em}
+.index .i-t{font-family:var(--serif);font-size:1.02rem}
+.index .i-k{font-family:var(--mono);font-size:.6rem;letter-spacing:.16em;text-transform:uppercase;color:var(--paper-faint)}
+
+/* ============================================================
+   T1 — FAILURE ANALYSIS : blueprint schematic
+   ============================================================ */
+#t1{background:linear-gradient(180deg,rgba(78,201,214,.045),transparent 42%)}
+#t1 .plate .num{color:var(--real)}
+.blueprintbox{
+  border:1px dashed var(--line-2);padding:1.1rem;position:relative;
+  background:rgba(78,201,214,.022);
+}
+.blueprintbox::after{
+  content:attr(data-stamp);
+  position:absolute;right:.9rem;bottom:.5rem;
+  font-family:var(--mono);font-size:.58rem;letter-spacing:.2em;color:var(--paper-faint);
+}
+
+/* ============================================================
+   T2 — ONE FEATURE ONLY : instrument screen
+   ============================================================ */
+#t2 .plate .num{color:var(--claim)}
+.screen{
+  border:1px solid var(--line-2);border-radius:12px;
+  background:linear-gradient(180deg,#0a1019,#070b12 70%);
+  padding:clamp(.75rem,.4rem+1.4vw,1.2rem);
+  box-shadow:inset 0 0 90px rgba(78,201,214,.05), 0 28px 60px -34px #000;
+  position:relative;overflow:hidden;
+}
+.screen::before{
+  content:"";position:absolute;inset:0;pointer-events:none;
+  background:repeating-linear-gradient(180deg,rgba(255,255,255,.018) 0 1px,transparent 1px 3px);
+}
+.screenbar{
+  display:flex;flex-wrap:wrap;gap:.4rem 1rem;justify-content:space-between;
+  font-family:var(--mono);font-size:.62rem;letter-spacing:.18em;text-transform:uppercase;
+  color:var(--paper-faint);border-bottom:1px dashed var(--line-2);padding-bottom:.7rem;margin-bottom:1rem;
+}
+.tier{border-left:3px solid;padding:.75rem .9rem;margin-bottom:.8rem;background:rgba(255,255,255,.018);position:relative}
+.tier--1{border-color:var(--real)}
+.tier--2{border-color:var(--claim)}
+.tier--3{border-left-style:dashed;border-color:var(--alarm)}
+.tier-h{display:flex;flex-wrap:wrap;gap:.3rem .8rem;align-items:baseline;margin-bottom:.55rem}
+.tier-n{font-family:var(--mono);font-size:.6rem;letter-spacing:.2em;padding:.16em .45em;border-radius:2px}
+.tier--1 .tier-n{background:rgba(78,201,214,.16);color:var(--real)}
+.tier--2 .tier-n{background:rgba(224,162,74,.16);color:var(--claim)}
+.tier--3 .tier-n{background:rgba(255,106,94,.14);color:var(--alarm)}
+.tier-t{font-family:var(--serif);font-size:1.02rem}
+.tier-s{font-size:.78rem;color:var(--paper-faint)}
+.row{
+  display:flex;flex-wrap:wrap;gap:.4rem .75rem;align-items:center;justify-content:space-between;
+  padding:.5rem 0;border-top:1px dotted var(--line);font-size:.86rem;
+}
+.row:first-of-type{border-top:0}
+.row .rname{flex:1 1 180px;min-width:0}
+.chip{
+  font-family:var(--mono);font-size:.6rem;letter-spacing:.12em;text-transform:uppercase;
+  padding:.25em .55em;border-radius:2px;white-space:nowrap;
+}
+.chip--verified{color:var(--real);border:1px solid rgba(78,201,214,.5);background:rgba(78,201,214,.09)}
+.chip--claimed{color:var(--claim);border:1px dashed rgba(224,162,74,.6)}
+.chip--signal{color:var(--alarm);border:1px dashed rgba(255,106,94,.55)}
+.meter{height:6px;width:100%;max-width:120px;background:rgba(255,255,255,.07);flex:none}
+.meter i{display:block;height:100%}
+
+.principle{
+  border-left:3px solid var(--claim);padding:.2rem 0 .2rem 1rem;margin:1.6rem 0;
+  font-family:var(--serif);font-size:clamp(1.1rem,1rem+.6vw,1.45rem);line-height:1.35;
+}
+.principle span{color:var(--paper-dim);display:block;font-family:var(--sans);font-size:.85rem;margin-top:.5rem;line-height:1.55}
+
+/* ============================================================
+   T3 — ASSUMPTION REVERSAL : the page inverts
+   ============================================================ */
+#t3{
+  background:#e9e5da;color:#14181f;
+  background-image:
+    linear-gradient(rgba(20,24,31,.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(20,24,31,.045) 1px, transparent 1px);
+  background-size:30px 30px;
+}
+#t3 .plate{border-color:rgba(20,24,31,.3)}
+#t3 .plate .num{color:#0f6f79}
+#t3 .plate .kind,#t3 .label,#t3 .tiny{color:#5a6472}
+#t3 .note{color:#3d4654}
+#t3 .lede{color:#14181f}
+#t3 figcaption{color:#5a6472;border-color:rgba(20,24,31,.18)}
+#t3 .e--owner{
+  border-left-color:#14181f;color:#14181f;
+  background:linear-gradient(90deg, rgba(20,24,31,.07), rgba(20,24,31,0) 72%);
+}
+#t3 .e--owner .who{background:#14181f;color:#e9e5da}
+#t3 .e--coach{border-left-color:#8a94a3;color:#4b5563}
+#t3 .e--coach .who{border-color:#8a94a3;color:#5a6472}
+#t3 .e b,#t3 .e--coach b{color:#000}
+#t3 h3{color:#14181f}
+.rejected{
+  border:2px solid rgba(20,24,31,.35);padding:1.1rem 1.2rem;position:relative;
+  background:rgba(255,255,255,.4);margin-bottom:1.8rem;
+}
+.rejected .stamp{
+  display:inline-block;font-family:var(--mono);font-size:.62rem;letter-spacing:.22em;
+  border:2px solid #b6412f;color:#b6412f;padding:.3em .6em;transform:rotate(-2.5deg);margin-bottom:.7rem;
+}
+.rejected .struck{text-decoration:line-through;text-decoration-thickness:1px;color:#5a6472}
+.chain{display:grid;gap:0;counter-reset:ch;margin:1.6rem 0}
+.chain li{
+  list-style:none;position:relative;padding:.85rem 0 .85rem 3.1rem;
+  border-top:1px solid rgba(20,24,31,.18);
+}
+.chain li:last-child{border-bottom:1px solid rgba(20,24,31,.18)}
+.chain li::before{
+  counter-increment:ch;content:counter(ch,decimal-leading-zero);
+  position:absolute;left:0;top:.95rem;font-family:var(--mono);font-size:.7rem;
+  color:#0f6f79;letter-spacing:.1em;
+}
+.chain strong{display:block;font-family:var(--serif);font-size:1.12rem;font-weight:600;margin-bottom:.15rem}
+.chain span{font-size:.9rem;color:#3d4654}
+
+/* ============================================================
+   T4 — VALUES ARCHAEOLOGY : strata
+   ============================================================ */
+#t4{background:linear-gradient(180deg,rgba(201,139,58,.07),transparent 55%)}
+#t4 .plate .num{color:var(--ochre)}
+.strata-note{border-left:3px solid var(--ochre);padding-left:1rem;margin:1.4rem 0}
+.flip{
+  display:grid;gap:1px;background:var(--line-2);border:1px solid var(--line-2);margin:1.8rem 0;
+}
+@media (min-width:720px){.flip{grid-template-columns:1fr 1fr}}
+.flip > div{background:var(--ink-2);padding:1.1rem 1.2rem}
+.flip .was .label{color:var(--paper-faint)}
+.flip .was p{color:var(--paper-faint);text-decoration:line-through;text-decoration-color:rgba(255,106,94,.6)}
+.flip .now .label{color:var(--ochre)}
+.flip .now p{color:var(--paper);font-family:var(--serif);font-size:1.12rem;margin:0}
+.flip .was p{margin:0;font-family:var(--serif);font-size:1.12rem}
+
+/* ============================================================
+   T5 — ROLE PLAYING : transcript
+   ============================================================ */
+#t5{background:var(--ink-2)}
+#t5 .plate .num{color:#b58ee0}
+.transcript{border-top:1px solid var(--line-2);margin:1.6rem 0}
+.speech{display:grid;grid-template-columns:1fr;gap:.2rem;padding:1.1rem 0;border-bottom:1px solid var(--line)}
+@media (min-width:760px){ .speech{grid-template-columns:170px 1fr;gap:1.4rem} }
+.speaker{font-family:var(--mono);font-size:.64rem;letter-spacing:.18em;text-transform:uppercase;color:#b58ee0;padding-top:.3rem}
+.speech .said{font-family:var(--serif);font-size:1.12rem;line-height:1.45}
+.speech .said em{font-style:italic;color:var(--paper-dim)}
+
+/* ============================================================
+   CONVERGENCE : ledger
+   ============================================================ */
+.phases{display:grid;gap:1px;background:var(--line-2);border:1px solid var(--line-2);margin:1.6rem 0}
+@media (min-width:860px){.phases{grid-template-columns:repeat(3,1fr)}}
+.phase{background:var(--ink);padding:1.1rem 1.15rem;position:relative}
+.phase--during{background:linear-gradient(180deg,rgba(78,201,214,.1),rgba(78,201,214,.03))}
+.phase .ph-n{font-family:var(--mono);font-size:.62rem;letter-spacing:.24em;color:var(--paper-faint)}
+.phase h3{font-size:1.5rem;margin:.2rem 0 .1rem}
+.phase--before h3{color:var(--claim)}
+.phase--during h3{color:var(--real)}
+.phase--after h3{color:#b58ee0}
+.phase .ph-s{font-size:.8rem;color:var(--paper-faint);margin-bottom:.9rem}
+.phase ul{list-style:none;margin:0;padding:0;display:grid;gap:.45rem}
+.phase li{font-size:.88rem;padding-left:.95rem;position:relative;color:var(--paper-dim)}
+.phase li::before{content:"";position:absolute;left:0;top:.62em;width:5px;height:5px;background:currentColor;opacity:.6}
+.phase--during li{color:var(--paper)}
+.ph-tag{
+  display:inline-block;margin-top:1rem;font-family:var(--mono);font-size:.6rem;letter-spacing:.16em;
+  text-transform:uppercase;padding:.3em .6em;border:1px solid var(--line-2);color:var(--paper-faint);
+}
+.phase--during .ph-tag{border-color:rgba(78,201,214,.5);color:var(--real)}
+
+.killer{
+  border:1px solid rgba(78,201,214,.4);background:rgba(78,201,214,.06);
+  padding:1.2rem;margin:1.8rem 0;
+}
+.killer .q{font-family:var(--mono);font-size:.7rem;letter-spacing:.14em;text-transform:uppercase;color:var(--paper-faint);margin-bottom:.6rem}
+.killer .a{font-family:var(--serif);font-size:clamp(1.2rem,1rem+1vw,1.75rem);line-height:1.28}
+.killer .a b{color:var(--real);font-weight:600}
+
+/* MoSCoW */
+.moscow{border-top:1px solid var(--line-2);margin:1.4rem 0}
+.mos{display:grid;grid-template-columns:1fr;gap:.55rem;padding:1.05rem 0;border-bottom:1px solid var(--line)}
+@media (min-width:760px){.mos{grid-template-columns:120px 1fr;gap:1.3rem;align-items:start}}
+.mos-k{display:flex;align-items:center;gap:.6rem}
+.mos-k b{font-family:var(--mono);font-size:.72rem;letter-spacing:.18em}
+.mos-bar{height:9px;background:rgba(255,255,255,.06);flex:1;min-width:46px}
+.mos-bar i{display:block;height:100%}
+.mos--must b{color:var(--real)} .mos--must .mos-bar i{background:var(--real);width:100%}
+.mos--should b{color:var(--claim)} .mos--should .mos-bar i{background:var(--claim);width:62%}
+.mos--could b{color:var(--ochre)} .mos--could .mos-bar i{background:var(--ochre);width:36%}
+.mos--wont b{color:var(--paper-faint)} .mos--wont .mos-bar i{background:repeating-linear-gradient(90deg,var(--paper-faint) 0 3px,transparent 3px 7px);width:18%}
+.items{display:flex;flex-wrap:wrap;gap:.4rem}
+.item{
+  font-size:.8rem;padding:.35em .65em;border:1px solid var(--line-2);border-radius:2px;
+  color:var(--paper-dim);background:rgba(255,255,255,.015);
+}
+.mos--must .item{color:var(--paper);border-color:rgba(78,201,214,.35)}
+.mos--wont .item{border-style:dashed;color:var(--paper-faint);text-decoration:line-through;text-decoration-color:rgba(146,173,204,.4)}
+.item.new{border-color:var(--claim);color:var(--claim)}
+
+/* monetisation boundary */
+.boundary{margin:2rem 0;border:1px solid var(--line-2)}
+.bnd{padding:1.2rem}
+.bnd .bl{font-family:var(--mono);font-size:.62rem;letter-spacing:.2em;text-transform:uppercase}
+.bnd h3{margin:.3rem 0 .4rem}
+.bnd p{margin:0;font-size:.88rem;color:var(--paper-dim)}
+.bnd--free{background:rgba(78,201,214,.05)}
+.bnd--free .bl{color:var(--real)}
+.bnd--paid{background:rgba(181,142,224,.06)}
+.bnd--paid .bl{color:#b58ee0}
+.bnd-rule{
+  display:flex;align-items:center;gap:.8rem;padding:.55rem 1.2rem;
+  border-top:1px dashed var(--line-2);border-bottom:1px dashed var(--line-2);
+  font-family:var(--mono);font-size:.6rem;letter-spacing:.22em;text-transform:uppercase;color:var(--paper-faint);
+  background:rgba(255,255,255,.02);
+}
+.bnd-rule::before,.bnd-rule::after{content:"";height:1px;background:var(--line-2);flex:1}
+
+/* ============================================================
+   THE CORRECTION
+   ============================================================ */
+#turn{
+  background:#120709;
+  background-image:
+    linear-gradient(rgba(255,106,94,.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,106,94,.05) 1px, transparent 1px);
+  background-size:30px 30px;
+  border-top:1px solid rgba(255,106,94,.3);border-bottom:1px solid rgba(255,106,94,.3);
+}
+#turn .plate{border-color:rgba(255,106,94,.35)}
+#turn .plate .num,#turn .plate .kind{color:var(--alarm)}
+#turn h2 em{font-style:normal;color:var(--alarm)}
+.bigstate{
+  font-family:var(--serif);
+  font-size:clamp(1.35rem,1rem+2.3vw,2.5rem);
+  line-height:1.22;letter-spacing:-.015em;max-width:24ch;margin:1.6rem 0;
+}
+.bigstate b{color:var(--alarm);font-weight:600}
+.vs{display:grid;gap:1.1rem;margin:2rem 0}
+@media (min-width:820px){.vs{grid-template-columns:1fr 1fr;gap:1.6rem}}
+.vs-card{border:1px solid var(--line-2);padding:1.1rem;background:rgba(0,0,0,.25)}
+.vs-card.bad{border-color:rgba(255,106,94,.4)}
+.vs-card.good{border-color:rgba(78,201,214,.4)}
+.vs-card .vl{font-family:var(--mono);font-size:.62rem;letter-spacing:.2em;text-transform:uppercase;color:var(--paper-faint);margin-bottom:.9rem;display:block}
+.hostbox{border:1px solid var(--line-2);padding:.9rem;position:relative}
+.hostbox .hb-t{font-family:var(--mono);font-size:.66rem;letter-spacing:.16em;color:var(--paper-dim);margin-bottom:.7rem}
+.addon{
+  border:1px dashed var(--alarm);color:var(--alarm);padding:.55rem .7rem;font-size:.82rem;
+  margin-top:.8rem;position:relative;
+}
+.addon::before{content:"clings to →";position:absolute;left:0;top:-1.25rem;font-family:var(--mono);font-size:.56rem;letter-spacing:.14em;color:var(--alarm);opacity:.8}
+.modgrid{display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.5rem}
+.mod{font-size:.78rem;padding:.35em .6em;border:1px solid var(--line-2);color:var(--paper-dim)}
+.mod.core{border-color:rgba(78,201,214,.45);color:var(--paper)}
+.mod.diff{border-color:var(--real);background:rgba(78,201,214,.12);color:var(--real)}
+.mechanism{display:grid;gap:0;margin:2rem 0;border-top:1px solid rgba(255,106,94,.3)}
+.mech{display:grid;grid-template-columns:auto 1fr;gap:.9rem;padding:.8rem 0;border-bottom:1px solid rgba(255,106,94,.18);align-items:baseline}
+.mech .mn{font-family:var(--mono);font-size:.66rem;color:var(--alarm);letter-spacing:.14em}
+.mech .mt{font-size:.92rem;color:var(--paper-dim)}
+.mech .mt b{color:var(--paper)}
+
+/* ============================================================
+   SYNTHESIS — the climax
+   ============================================================ */
+#synth{
+  background:radial-gradient(120% 90% at 50% 0%, rgba(78,201,214,.13), transparent 62%), #060a10;
+  border-top:1px solid rgba(78,201,214,.35);
+}
+#synth .plate{border-color:rgba(78,201,214,.4)}
+#synth .plate .num,#synth .plate .kind{color:var(--real)}
+#synth h2{font-size:clamp(2.1rem,1.2rem+4.2vw,4.2rem)}
+.links{display:grid;gap:0;margin-top:2.4rem}
+.link{
+  display:grid;grid-template-columns:1fr;gap:.5rem;
+  padding:1.9rem 0;border-top:1px solid var(--line-2);
+}
+@media (min-width:820px){ .link{grid-template-columns:76px 1fr;gap:1.8rem;align-items:start} }
+.link .ln{font-family:var(--mono);font-size:2rem;line-height:1;color:rgba(78,201,214,.45);letter-spacing:-.02em}
+.link .lt{
+  font-family:var(--serif);font-size:clamp(1.25rem,1rem+1.5vw,2rem);line-height:1.25;letter-spacing:-.015em;
+}
+.link .lt b{color:var(--real);font-weight:600}
+.link .lb{font-size:.9rem;color:var(--paper-dim);margin-top:.7rem;max-width:66ch}
+.link .lb b{color:var(--paper);font-weight:600}
+
+/* three faces figure */
+.faces{margin:1.4rem 0 .4rem}
+.faces-top{display:grid;gap:.6rem}
+@media (min-width:640px){.faces-top{grid-template-columns:repeat(3,1fr)}}
+.face{
+  border:1px dashed rgba(255,106,94,.5);color:var(--paper);padding:.7rem .8rem;
+  font-size:.86rem;background:rgba(255,106,94,.05);text-align:center;
+}
+.faces-join{height:34px;position:relative;margin:.2rem 0}
+.faces-join::before{content:"";position:absolute;left:50%;top:0;bottom:0;width:1px;background:repeating-linear-gradient(180deg,var(--alarm) 0 4px,transparent 4px 8px)}
+.faces-join::after{content:"";position:absolute;left:50%;bottom:0;transform:translateX(-50%);border:5px solid transparent;border-top-color:var(--alarm)}
+.faces-out{
+  border:1px solid var(--alarm);background:rgba(255,106,94,.1);padding:.85rem;text-align:center;
+  font-family:var(--mono);font-size:.76rem;letter-spacing:.16em;text-transform:uppercase;color:var(--alarm);
+}
+
+/* ============================================================
+   OPEN LEDGER + FOOTER
+   ============================================================ */
+#open{background:var(--ink-2)}
+.ledger{border:1px solid var(--line-2)}
+.led-h{
+  display:grid;grid-template-columns:1fr;gap:.2rem;padding:.6rem .9rem;
+  border-bottom:1px solid var(--line-2);background:rgba(255,255,255,.02);
+  font-family:var(--mono);font-size:.6rem;letter-spacing:.2em;text-transform:uppercase;color:var(--paper-faint);
+}
+.led{display:grid;grid-template-columns:1fr;gap:.35rem;padding:1rem .9rem;border-bottom:1px solid var(--line)}
+@media (min-width:760px){ .led{grid-template-columns:92px 1fr} .led-h{grid-template-columns:92px 1fr} }
+.led:last-child{border-bottom:0}
+.led .st{font-family:var(--mono);font-size:.62rem;letter-spacing:.18em;color:var(--claim);padding-top:.3rem}
+.led .bd{font-size:.94rem}
+.led .bd b{display:block;font-family:var(--serif);font-size:1.1rem;margin-bottom:.25rem;color:var(--paper)}
+.led .bd span{color:var(--paper-dim)}
+
+footer{padding-block:3rem;border-top:1px solid var(--line-2)}
+.foot{display:flex;flex-wrap:wrap;gap:1rem 2rem;justify-content:space-between;align-items:baseline}
+.foot p{margin:0}
+
+@media (max-width:620px){
+  .scrollhint{display:block}
+  .key{flex-direction:column;align-items:flex-start}
+  .toggle{margin-left:0;width:100%;text-align:center}
+}
+@media (prefers-reduced-motion:reduce){
+  *{transition:none !important;animation:none !important}
+}
+</style>
+</head>
+<body>
+
+<!-- ============================ MASTHEAD ============================ -->
+<header class="mast">
+  <div class="wrap">
+    <div class="eyebrow">Brainstorming session &middot; 19 September 2026 &middot; status: complete</div>
+
+    <h1>The distance between what a plan <em>claims</em> and what reality <i>did</i>.</h1>
+
+    <p class="lede">A session that set out to design a lighter Microsoft&nbsp;Project and found something else underneath it: <b>an instrument for measuring divergence</b> — and, at the very end, the discovery that the instrument had been mistaken for the whole machine.</p>
+
+    <div class="ruler" role="presentation"></div>
+
+    <div class="gaugewrap">
+      <svg viewBox="0 0 320 178" role="img" aria-label="A dial gauge with its needle resting between CLAIM and REALITY, in the divergence zone.">
+        <defs>
+          <linearGradient id="gg" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stop-color="#e0a24a"/>
+            <stop offset="1" stop-color="#4ec9d6"/>
+          </linearGradient>
+        </defs>
+        <path d="M24 148 A136 136 0 0 1 296 148" fill="none" stroke="url(#gg)" stroke-width="2" opacity=".75"/>
+        <g stroke="rgba(146,173,204,.5)" stroke-width="1">
+          <line x1="24" y1="148" x2="38" y2="148"/>
+          <line x1="47" y1="93" x2="59" y2="100"/>
+          <line x1="95" y1="48" x2="103" y2="59"/>
+          <line x1="160" y1="26" x2="160" y2="40"/>
+          <line x1="225" y1="48" x2="217" y2="59"/>
+          <line x1="273" y1="93" x2="261" y2="100"/>
+          <line x1="296" y1="148" x2="282" y2="148"/>
+        </g>
+        <text class="svg-t sm" x="24" y="166" fill="#e0a24a">CLAIM</text>
+        <text class="svg-t sm" x="296" y="166" fill="#4ec9d6" text-anchor="end">REALITY</text>
+        <text class="svg-t sm" x="160" y="18" fill="#66788f" text-anchor="middle">DIVERGENCE</text>
+        <line x1="160" y1="148" x2="206" y2="62" stroke="#ff6a5e" stroke-width="2.5" stroke-linecap="round"/>
+        <circle cx="160" cy="148" r="7" fill="#070b12" stroke="#ff6a5e" stroke-width="2"/>
+        <text class="svg-t sm" x="160" y="136" fill="#66788f" text-anchor="middle">measured, not asserted</text>
+      </svg>
+
+      <dl class="titleblock" style="flex:1 1 320px">
+        <div class="tb-row"><dt>Topic</dt><dd>A cross-platform desktop project management tool grounded in PMI theory — a lighter alternative to Microsoft&nbsp;Project</dd></div>
+        <div class="tb-row"><dt>Stated goal</dt><dd>&ldquo;First for my own team's real daily use; later sell at a moderate price.&rdquo; <span class="tiny">— revised mid-session (see Plate 04)</span></dd></div>
+        <div class="tb-row"><dt>Mode</dt><dd>Partner &middot; stance switched to Facilitator and back again inside the first technique</dd></div>
+        <div class="tb-row"><dt>Techniques</dt><dd>Failure Analysis &rarr; One Feature Only &rarr; Assumption Reversal &rarr; Values Archaeology &rarr; Role Playing &rarr; Affinity Clustering &rarr; MoSCoW</dd></div>
+      </dl>
+    </div>
+
+    <nav class="index" aria-label="Contents">
+      <a href="#t1"><span class="i-n">01</span><span class="i-t">The Round Trip</span><span class="i-k">Failure Analysis</span></a>
+      <a href="#t2"><span class="i-n">02</span><span class="i-t">Monday, 09:00</span><span class="i-k">One Feature Only</span></a>
+      <a href="#t3"><span class="i-n">03</span><span class="i-t">The Reversal That Failed</span><span class="i-k">Assumption Reversal</span></a>
+      <a href="#t4"><span class="i-n">04</span><span class="i-t">Digging for the Why</span><span class="i-k">Values Archaeology</span></a>
+      <a href="#t5"><span class="i-n">05</span><span class="i-t">Other People's Mouths</span><span class="i-k">Role Playing</span></a>
+      <a href="#conv"><span class="i-n">06</span><span class="i-t">Before, During, After</span><span class="i-k">Convergence</span></a>
+      <a href="#turn"><span class="i-n">07</span><span class="i-t">The Course Correction</span><span class="i-k">Self-critique</span></a>
+      <a href="#synth"><span class="i-n">08</span><span class="i-t">What Connects to What</span><span class="i-k">Synthesis</span></a>
+    </nav>
+  </div>
+</header>
+
+<!-- ============================ KEY ============================ -->
+<section aria-labelledby="key-h" style="padding-block:2.2rem">
+  <div class="wrap">
+    <h4 id="key-h" style="margin-bottom:.8rem">Reading key — who thought what</h4>
+    <div class="key">
+      <span class="key-item"><span class="swatch swatch--owner"></span> <b style="color:var(--paper)">Owner</b> &mdash; the session's own thinking, 25 entries</span>
+      <span class="key-item"><span class="swatch swatch--coach"></span> Coach &mdash; proposed, challenged, or synthesised, 21 entries</span>
+      <button class="toggle" id="ownerBtn" type="button" aria-pressed="false">Isolate my ideas</button>
+    </div>
+    <div class="tally" role="img" aria-label="Attribution split: 25 owner entries, 21 coach entries, 9 procedural.">
+      <i class="t-owner"></i><i class="t-coach"></i><i class="t-sys"></i>
+    </div>
+    <p class="tiny" style="margin-top:.6rem">Every idea below is marked at source. The log is chronological; later entries repeatedly overturn earlier ones, which is the point.</p>
+  </div>
+</section>
+
+<!-- ============================ 01 FAILURE ANALYSIS ============================ -->
+<section id="t1" aria-labelledby="t1-h">
+  <div class="wrap">
+    <div class="plate">
+      <span class="num">PLATE 01</span><span class="kind">Technique &middot; Failure Analysis</span>
+      <h2 id="t1-h">The round trip</h2>
+    </div>
+
+    <p class="lede">Asked how the tool could fail hardest, the answer was not a feature. It was a description of a Tuesday: the project manager as a human sync layer, carrying plan and reality back and forth by hand.</p>
+
+    <figure class="blueprintbox" data-stamp="FIG. 1.1 — SYNC PATH, AS BUILT">
+      <p class="scrollhint">&larr; scroll the drawing &rarr;</p>
+      <div class="fig-scroll">
+        <svg viewBox="0 0 880 470" style="min-width:720px" role="img" aria-label="Diagram: plans travel by hand from Microsoft Project out to Jira, Backlog and Asana, and are carried back by hand through a judgement gate, where small tasks are silently dropped and unplanned tickets accumulate.">
+          <defs>
+            <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0 0 L10 5 L0 10 z" fill="#93a4bb"/>
+            </marker>
+            <marker id="ah-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0 0 L10 5 L0 10 z" fill="#ff6a5e"/>
+            </marker>
+          </defs>
+
+          <!-- plan -->
+          <rect x="34" y="180" width="205" height="104" fill="rgba(224,162,74,.07)" stroke="#e0a24a" stroke-width="1.5"/>
+          <text class="svg-t lg" x="52" y="216" fill="#e0a24a">MS PROJECT</text>
+          <text class="svg-t sm" x="52" y="238" fill="#93a4bb">the plan &mdash; what it CLAIMS</text>
+          <text class="svg-t sm" x="52" y="256" fill="#66788f">baseline, schedule, cost</text>
+          <text class="svg-t sm" x="52" y="274" fill="#66788f">single user: the PM</text>
+
+          <!-- trackers -->
+          <text class="svg-t sm" x="646" y="106" fill="#4ec9d6">WHERE WORK ACTUALLY HAPPENS</text>
+          <g>
+            <rect x="646" y="118" width="198" height="46" fill="rgba(78,201,214,.07)" stroke="#4ec9d6" stroke-width="1.2"/>
+            <text class="svg-t" x="664" y="146" fill="#4ec9d6">JIRA</text>
+            <rect x="646" y="176" width="198" height="46" fill="rgba(78,201,214,.07)" stroke="#4ec9d6" stroke-width="1.2"/>
+            <text class="svg-t" x="664" y="204" fill="#4ec9d6">BACKLOG</text>
+            <rect x="646" y="234" width="198" height="46" fill="rgba(78,201,214,.07)" stroke="#4ec9d6" stroke-width="1.2"/>
+            <text class="svg-t" x="664" y="262" fill="#4ec9d6">ASANA</text>
+          </g>
+          <text class="svg-t sm" x="646" y="300" fill="#66788f">a different tracker per project</text>
+
+          <!-- push -->
+          <path d="M239 200 C 400 108, 520 96, 640 140" fill="none" stroke="#93a4bb" stroke-width="1.4" marker-end="url(#ah)"/>
+          <text class="svg-t sm" x="370" y="112" fill="#93a4bb">1 &middot; pushed out BY HAND</text>
+
+          <!-- return -->
+          <path d="M640 268 C 520 348, 400 352, 245 272" fill="none" stroke="#93a4bb" stroke-width="1.4" stroke-dasharray="6 4" marker-end="url(#ah)"/>
+          <text class="svg-t sm" x="470" y="372" fill="#93a4bb" text-anchor="middle">2 &middot; pulled BACK by hand, to measure progress and cost</text>
+
+          <!-- judgement gate -->
+          <g transform="translate(440,322)">
+            <path d="M0 -30 L44 0 L0 30 L-44 0 z" fill="#0d1420" stroke="#ff6a5e" stroke-width="1.6"/>
+            <text class="svg-t sm" x="0" y="-2" fill="#ff6a5e" text-anchor="middle">JUDGEMENT</text>
+            <text class="svg-t sm" x="0" y="12" fill="#ff6a5e" text-anchor="middle">unavoidable</text>
+          </g>
+
+          <!-- leak -->
+          <path d="M440 354 L440 392" stroke="#ff6a5e" stroke-width="1.2" stroke-dasharray="3 4" marker-end="url(#ah-a)"/>
+          <g fill="#ff6a5e" opacity=".85">
+            <circle cx="402" cy="414" r="3.5"/><circle cx="424" cy="426" r="2.6"/>
+            <circle cx="446" cy="410" r="3"/><circle cx="470" cy="424" r="2.2"/>
+            <circle cx="490" cy="412" r="2.8"/><circle cx="380" cy="428" r="2"/>
+          </g>
+          <text class="svg-t sm" x="366" y="452" fill="#ff6a5e">DROPPED: work judged &ldquo;too small to bother recording&rdquo;</text>
+
+          <!-- divergence in -->
+          <path d="M744 300 L744 344" stroke="#4ec9d6" stroke-width="1.2" stroke-dasharray="3 4"/>
+          <rect x="626" y="346" width="238" height="54" fill="rgba(78,201,214,.06)" stroke="#4ec9d6" stroke-width="1" stroke-dasharray="4 3"/>
+          <text class="svg-t sm" x="644" y="370" fill="#4ec9d6">tickets that were NEVER in the plan</text>
+          <text class="svg-t sm" x="644" y="388" fill="#66788f">the two sides diverge structurally</text>
+        </svg>
+      </div>
+      <figcaption>Fig. 1.1 — Not a one-way sync. A round trip, made of hands.</figcaption>
+    </figure>
+
+    <ul class="log">
+      <li class="e e--sys">&mdash; technique started: Failure Analysis. Stance switched to Facilitator, then back to Creative Partner: &ldquo;I want you creating alongside me, not only questioning.&rdquo;</li>
+      <li class="e e--owner"><span class="who">Owner</span>The biggest failure mode is <b>B — the PM becomes a manual sync layer</b> between the plan and where work actually happens. The tool assumes the PM is its only user.</li>
+      <li class="e e--coach"><span class="who">Coach</span>Then invert the direction of travel. Don't drag the team to the plan: let the tool read real signals — commits, ticket transitions, messages — and <b>propose plan deltas</b>. The PM shifts from typist to approver.</li>
+      <li class="e e--owner"><span class="who">Owner</span>Concretely: plans live in MS Project, get manually pushed out to Jira / Backlog / Asana, then manually pulled <b>back</b> to measure progress and cost. A round trip. And a different tracker per project.</li>
+      <li class="e e--owner"><span class="who">Owner</span>Judgement on the return trip is <b>unavoidable, not optional</b>. Worse: trackers accumulate many tasks that were never in the plan. The two sides don't drift — they <b>structurally diverge</b>.</li>
+      <li class="e e--owner"><span class="who">Owner</span>And it's done inconsistently. Sometimes emergent tasks get added back into MS Project — which wrecks the baseline <b>and</b> cascades into downstream scheduling. Sometimes they're silently omitted.</li>
+      <li class="e e--owner"><span class="who">Owner</span>The hidden rule is <b>task size</b>. Work judged too small to bother recording gets silently omitted.</li>
+      <li class="e e--coach"><span class="who">Coach</span>That omission is not random noise — it is a <b>one-directional bias</b>. Actuals are always understated, never overstated.</li>
+    </ul>
+
+    <h3 style="margin-top:2.6rem">The loop that keeps estimates wrong forever</h3>
+    <figure>
+      <p class="scrollhint">&larr; scroll the drawing &rarr;</p>
+      <div class="fig-scroll">
+        <svg viewBox="0 0 620 500" style="min-width:470px" role="img" aria-label="A closed clockwise loop: small work omitted, actuals understated, history excludes small work, estimates stay low, feeding back into more omission.">
+          <defs>
+            <marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0 0 L10 5 L0 10 z" fill="#ff6a5e"/>
+            </marker>
+          </defs>
+          <circle cx="310" cy="250" r="152" fill="none" stroke="rgba(255,106,94,.14)" stroke-width="1"/>
+
+          <path d="M310 98 A152 152 0 0 1 462 250" fill="none" stroke="#ff6a5e" stroke-width="1.5" marker-end="url(#ah2)"/>
+          <path d="M462 250 A152 152 0 0 1 310 402" fill="none" stroke="#ff6a5e" stroke-width="1.5" marker-end="url(#ah2)"/>
+          <path d="M310 402 A152 152 0 0 1 158 250" fill="none" stroke="#ff6a5e" stroke-width="1.5" marker-end="url(#ah2)"/>
+          <path d="M158 250 A152 152 0 0 1 310 98" fill="none" stroke="#ff6a5e" stroke-width="1.5" marker-end="url(#ah2)"/>
+
+          <g>
+            <rect x="180" y="34" width="260" height="52" fill="#0d1420" stroke="#ff6a5e" stroke-width="1.2"/>
+            <text class="svg-t" x="310" y="58" fill="#dfe7f2" text-anchor="middle">a 20-minute task happens</text>
+            <text class="svg-t sm" x="310" y="76" fill="#93a4bb" text-anchor="middle">nobody records it: too small</text>
+
+            <rect x="410" y="224" width="206" height="52" fill="#0d1420" stroke="#ff6a5e" stroke-width="1.2"/>
+            <text class="svg-t" x="513" y="248" fill="#dfe7f2" text-anchor="middle">actuals understated</text>
+            <text class="svg-t sm" x="513" y="266" fill="#93a4bb" text-anchor="middle">always down, never up</text>
+
+            <rect x="180" y="414" width="260" height="52" fill="#0d1420" stroke="#ff6a5e" stroke-width="1.2"/>
+            <text class="svg-t" x="310" y="438" fill="#dfe7f2" text-anchor="middle">history excludes small work</text>
+            <text class="svg-t sm" x="310" y="456" fill="#93a4bb" text-anchor="middle">the record is quietly false</text>
+
+            <rect x="4" y="224" width="206" height="52" fill="#0d1420" stroke="#ff6a5e" stroke-width="1.2"/>
+            <text class="svg-t" x="107" y="248" fill="#dfe7f2" text-anchor="middle">next estimate too low</text>
+            <text class="svg-t sm" x="107" y="266" fill="#93a4bb" text-anchor="middle">built on that history</text>
+          </g>
+
+          <text class="svg-t lg" x="310" y="242" fill="#ff6a5e" text-anchor="middle">SELF-REINFORCING</text>
+          <text class="svg-t sm" x="310" y="262" fill="#93a4bb" text-anchor="middle">one direction only</text>
+          <text class="svg-t sm" x="310" y="280" fill="#93a4bb" text-anchor="middle">no event ever corrects it</text>
+        </svg>
+      </div>
+      <figcaption>Fig. 1.2 — The bias is not noise. Noise cancels; this accumulates.</figcaption>
+    </figure>
+
+    <div class="principle" style="border-color:var(--alarm)">
+      Capturing a 20-minute task must cost under 20&nbsp;seconds — or the bias comes straight back.
+      <span>The first hard design constraint of the session, derived rather than asserted. Everything later about auto-linked evidence descends from this one number.</span>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ 02 ONE FEATURE ONLY ============================ -->
+<section id="t2" aria-labelledby="t2-h">
+  <div class="wrap">
+    <div class="plate">
+      <span class="num">PLATE 02</span><span class="kind">Technique &middot; One Feature Only</span>
+      <h2 id="t2-h">Monday, 09:00</h2>
+    </div>
+
+    <p class="lede">If the product could ship exactly one screen, what would it be? The answer arrived already structured — three tiers, in descending order of certainty.</p>
+
+    <ul class="log" style="margin-bottom:2.2rem">
+      <li class="e e--owner"><span class="who">Owner</span>The one feature is <b>the plan-vs-reality reconciliation map</b>. <span class="tiny">(The coach's bet, endorsed rather than countered — worth noting, given what happens in Plate 07.)</span></li>
+      <li class="e e--owner"><span class="who">Owner</span>But I want to come back later to the classic set: WBS, Gantt, Resource, Calendar, Cost.</li>
+      <li class="e e--owner"><span class="who">Owner</span>The Monday-morning screen has <b>three tiers</b>: (1) how far the project has actually run, (2) where it is measurably diverging, (3) where it <b>might</b> be diverging — suspected, not yet proven.</li>
+    </ul>
+
+    <div class="screen" role="group" aria-label="Mock of the three-tier Monday morning screen">
+      <div class="screenbar">
+        <span>&#9679; RECONCILIATION MAP</span>
+        <span>MON 09:00 &middot; WEEK 14 OF 26</span>
+        <span>LAST SYNC 08:52</span>
+      </div>
+
+      <div class="tier tier--1">
+        <div class="tier-h">
+          <span class="tier-n">TIER 1</span>
+          <span class="tier-t">How far it has actually run</span>
+          <span class="tier-s">measured</span>
+        </div>
+        <div class="row">
+          <span class="rname">Elapsed schedule</span>
+          <span class="meter"><i style="width:54%;background:var(--real)"></i></span>
+          <span class="chip chip--verified">54% of calendar</span>
+        </div>
+        <div class="row">
+          <span class="rname">Work packages closed with evidence</span>
+          <span class="meter"><i style="width:38%;background:var(--real)"></i></span>
+          <span class="chip chip--verified">38% verified</span>
+        </div>
+        <div class="row">
+          <span class="rname">Cost booked against baseline</span>
+          <span class="meter"><i style="width:61%;background:var(--claim)"></i></span>
+          <span class="chip chip--claimed">61% spent</span>
+        </div>
+      </div>
+
+      <div class="tier tier--2">
+        <div class="tier-h">
+          <span class="tier-n">TIER 2</span>
+          <span class="tier-t">Where it is measurably diverging</span>
+          <span class="tier-s">proven &mdash; the two ledgers disagree</span>
+        </div>
+        <div class="row">
+          <span class="rname"><b>47 tickets in Jira belong to no task in your plan</b></span>
+          <span class="chip chip--verified">210 h &middot; &yen;3.1M</span>
+        </div>
+        <div class="row">
+          <span class="rname">WP-1140 &ldquo;Integration spec&rdquo; &mdash; closed, no deliverable attached</span>
+          <span class="chip chip--claimed">claimed, unverified</span>
+        </div>
+        <div class="row">
+          <span class="rname">WP-1092 &ldquo;Data migration&rdquo; &mdash; minutes + spec linked automatically</span>
+          <span class="chip chip--verified">verified by evidence</span>
+        </div>
+      </div>
+
+      <div class="tier tier--3">
+        <div class="tier-h">
+          <span class="tier-n">TIER 3</span>
+          <span class="tier-t">Where it <em>might</em> be diverging</span>
+          <span class="tier-s">suspected &mdash; not yet proven</span>
+        </div>
+        <div class="row">
+          <span class="rname">WP-1210 &mdash; 8-week task, progress reported non-linearly
+            <svg viewBox="0 0 96 22" width="96" height="22" style="vertical-align:-6px;margin-left:8px" role="img" aria-label="Sparkline showing flat reported progress then a sudden jump">
+              <polyline points="2,19 14,18 26,17 38,17 50,16 62,15 74,5 92,3" fill="none" stroke="#ff6a5e" stroke-width="1.6"/>
+              <line x1="2" y1="21" x2="94" y2="21" stroke="rgba(146,173,204,.3)"/>
+            </svg>
+          </span>
+          <span class="chip chip--signal">signal: 0&rarr;90 in one week</span>
+        </div>
+        <div class="row">
+          <span class="rname">Milestone M3 passed &mdash; no visible output anywhere</span>
+          <span class="chip chip--signal">signal: no deliverable</span>
+        </div>
+        <div class="row">
+          <span class="rname">WP-1165 &mdash; widest three-point spread in the plan</span>
+          <span class="chip chip--signal">signal: spread 3&ndash;21 d</span>
+        </div>
+        <p class="tiny" style="margin:.7rem 0 0">Tier 3 states suspicion, never accusation. Weights start from PMI priors and are retrained by what actually goes wrong here.</p>
+      </div>
+    </div>
+
+    <ul class="log" style="margin-top:2.2rem">
+      <li class="e e--owner"><span class="who">Owner</span>Tier-3 suspicion signals: <b>(a)</b> long-duration tasks whose reported progress is non-linear; <b>(b)</b> no visible output or deliverable at the milestones.</li>
+      <li class="e e--coach"><span class="who">Coach</span>Those two signals are one disease: <b>progress asserted without evidence</b>. The &lsquo;% complete&rsquo; field is the vulnerability — a self-reported number with nothing attached. PMI already prescribes the cure (8/80 work-package sizing, deliverable-based 0/100 progress); MS Project lets you ignore both. So: never accept naked % complete. Show &ldquo;verified by evidence&rdquo; and &ldquo;claimed, unverified&rdquo; as visually distinct things.</li>
+      <li class="e e--owner"><span class="who">Owner</span>In this domain the <b>output document is the evidence</b> — design docs, minutes, research reports, specs cover nearly every task type.</li>
+      <li class="e e--coach"><span class="who">Coach</span>Gaming risk: a tool that <b>demands</b> evidence gets fake documents — paperwork theatre, the exact thing that makes PMI hated.</li>
+      <li class="e e--owner"><span class="who">Owner</span>Everyone on the team should be able to see the divergence screen. But it must be configurable.</li>
+      <li class="e e--coach"><span class="who">Coach</span>Configurability doesn't remove the political dynamic, it relocates it to whoever configures. <b>The default setting is the product's real opinion</b> — default-open is radical transparency, with fear and gaming as its risk; default-PM-only is back to MS Project's single-user assumption, which is the original disease.</li>
+    </ul>
+
+    <div class="principle">
+      The tool never blocks and never punishes. It only makes truth visible.
+      <span>Absence of evidence is displayed as information, not as a violation. Corollary, straight out of Plate 01: attaching evidence must be near-automatic — the tool watches repo, drive and tracker and links artifacts itself — or the 20-second constraint breaks and the bias returns.</span>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ 03 ASSUMPTION REVERSAL ============================ -->
+<section id="t3" aria-labelledby="t3-h">
+  <div class="wrap">
+    <div class="plate">
+      <span class="num">PLATE 03</span><span class="kind">Technique &middot; Assumption Reversal</span>
+      <h2 id="t3-h">The reversal that failed — and what fell out of it</h2>
+    </div>
+
+    <p class="lede">The page inverts here because the technique did. The proposed reversal was rejected outright within one exchange; the value came from what the rejection exposed.</p>
+
+    <div class="rejected">
+      <span class="stamp">Rejected &middot; unworkable</span>
+      <p class="struck" style="margin:0;font-family:var(--serif);font-size:1.15rem">&ldquo;What if the team authored the plan instead of the PM? Bottom-up planning, the PM as editor.&rdquo;</p>
+      <p style="margin:.8rem 0 0;font-size:.92rem;color:#3d4654"><b>Owner:</b> In our reality the PM must always author the plan. Bottom-up planning is not available.</p>
+    </div>
+
+    <p class="note" style="margin-bottom:1.4rem"><b>But the rejection was itself the discovery.</b> Five moves followed, each one narrowing:</p>
+
+    <ol class="chain">
+      <li>
+        <strong>If the PM is the sole author, nobody else committed to anything.</strong>
+        <span><b>Coach.</b> Therefore divergence is not a verdict on people — it is a measurement of <b>the plan's accuracy</b>. That defuses the visibility politics from Plate 02, and yields a feature: score estimate accuracy per task type over time. &ldquo;Design tasks run 40% under, consistently.&rdquo;</span>
+      </li>
+      <li>
+        <strong>The PM-authors-the-plan rule is perception, not contract.</strong>
+        <span><b>Owner.</b> The normal flow is: PM drafts, then ratifies with management and with the team.</span>
+      </li>
+      <li>
+        <strong>The ratification meeting already exists and leaves no durable trace.</strong>
+        <span><b>Coach.</b> Capture it. Each member confirms their own packages in one click, with optional dissent — &ldquo;I think this is underestimated.&rdquo; Bottom-up signal without changing who authors the plan.</span>
+      </li>
+      <li>
+        <strong>Dissent happens, but the culture is top-down, so it is sparse.</strong>
+        <span><b>Owner.</b> Some object, some correct. Not many.</span>
+      </li>
+      <li>
+        <strong>Sparse because expensive — so don't raise its volume, lower its cost.</strong>
+        <span><b>Coach.</b> Replace the binary objection with PMI three-point estimating. <b>The spread is dissent in a form nobody can take offence at</b>: quantitative, so it feeds Tier 3 directly, and PMI-canonical, so it fits the standardise-by-PMI goal exactly.</span>
+      </li>
+    </ol>
+
+    <figure>
+      <p class="scrollhint" style="color:#5a6472">&larr; scroll the drawing &rarr;</p>
+      <div class="fig-scroll">
+        <svg viewBox="0 0 700 250" style="min-width:520px" role="img" aria-label="Two three-point estimate bars: a narrow spread reading as confidence, and a wide spread reading as quantified dissent.">
+          <text class="svg-t sm" x="0" y="16" fill="#5a6472">THREE-POINT ESTIMATE &mdash; THE SPREAD IS THE SIGNAL</text>
+
+          <!-- narrow -->
+          <text class="svg-t sm" x="0" y="62" fill="#14181f">WP-1104 &middot; API contract</text>
+          <line x1="0" y1="86" x2="700" y2="86" stroke="rgba(20,24,31,.18)"/>
+          <line x1="248" y1="72" x2="352" y2="72" stroke="#0f6f79" stroke-width="9"/>
+          <g stroke="#14181f" stroke-width="1.4">
+            <line x1="248" y1="60" x2="248" y2="84"/>
+            <line x1="296" y1="56" x2="296" y2="88"/>
+            <line x1="352" y1="60" x2="352" y2="84"/>
+          </g>
+          <text class="svg-t sm" x="248" y="104" fill="#5a6472" text-anchor="middle">O 4d</text>
+          <text class="svg-t sm" x="296" y="104" fill="#14181f" text-anchor="middle">M 5d</text>
+          <text class="svg-t sm" x="352" y="104" fill="#5a6472" text-anchor="middle">P 7d</text>
+          <text class="svg-t sm" x="380" y="76" fill="#0f6f79">narrow &rarr; nobody is worried</text>
+
+          <!-- wide -->
+          <text class="svg-t sm" x="0" y="164" fill="#14181f">WP-1165 &middot; legacy data migration</text>
+          <line x1="0" y1="188" x2="700" y2="188" stroke="rgba(20,24,31,.18)"/>
+          <line x1="200" y1="174" x2="596" y2="174" stroke="#b6412f" stroke-width="9" opacity=".8"/>
+          <g stroke="#14181f" stroke-width="1.4">
+            <line x1="200" y1="162" x2="200" y2="186"/>
+            <line x1="286" y1="158" x2="286" y2="190"/>
+            <line x1="596" y1="162" x2="596" y2="186"/>
+          </g>
+          <text class="svg-t sm" x="200" y="206" fill="#5a6472" text-anchor="middle">O 3d</text>
+          <text class="svg-t sm" x="286" y="206" fill="#14181f" text-anchor="middle">M 6d</text>
+          <text class="svg-t sm" x="596" y="206" fill="#5a6472" text-anchor="middle">P 21d</text>
+          <text class="svg-t sm" x="200" y="234" fill="#b6412f">dissent, expressed as arithmetic &mdash; straight into Tier 3</text>
+        </svg>
+      </div>
+      <figcaption style="color:#5a6472;border-color:rgba(20,24,31,.18)">Fig. 3.1 — An objection nobody has to say out loud.</figcaption>
+    </figure>
+
+    <ul class="log" style="margin-top:2rem">
+      <li class="e e--owner"><span class="who">Owner</span>Objectors are sometimes right and sometimes wrong. <b>Dissent alone is not a reliable predictor.</b></li>
+      <li class="e e--coach"><span class="who">Coach</span><b>The biggest idea in the session:</b> nobody knows the hit rate because nobody ever measured it. So don't hard-code which Tier-3 signals predict failure. <b>Record every signal</b> — long task, non-linear progress, missing deliverable, wide spread, recorded dissent — and let outcomes score them over time. The product becomes a signal-calibration engine tuned to this specific organisation.</li>
+      <li class="e e--coach"><span class="who">Coach</span>Danger: per-person calibration (&ldquo;A is right 80% of the time&rdquo;) is a <b>credibility score on humans</b> — the surveillance risk returning worse. Default to scoring the <b>signal</b>; keep any person-level calibration private to that person.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ============================ 04 VALUES ARCHAEOLOGY ============================ -->
+<section id="t4" aria-labelledby="t4-h">
+  <div class="wrap">
+    <div class="plate">
+      <span class="num">PLATE 04</span><span class="kind">Technique &middot; Values Archaeology</span>
+      <h2 id="t4-h">Digging for the why</h2>
+    </div>
+
+    <p class="lede">Why PMI, of all things? Four strikes of the spade. The first two answers were refused; the third held; the fourth turned out to be commercially load-bearing.</p>
+
+    <figure>
+      <p class="scrollhint">&larr; scroll the drawing &rarr;</p>
+      <div class="fig-scroll">
+        <svg viewBox="0 0 700 430" style="min-width:520px" role="img" aria-label="A cross-section of four strata dug downward: a rejected surface motive, then rigour, then the limits of personal experience, down to bedrock — theory as a way to generalise.">
+          <defs>
+            <pattern id="grit" width="10" height="10" patternUnits="userSpaceOnUse">
+              <circle cx="2" cy="3" r="0.8" fill="rgba(201,139,58,.4)"/>
+              <circle cx="7" cy="8" r="0.6" fill="rgba(201,139,58,.28)"/>
+            </pattern>
+          </defs>
+
+          <!-- depth scale -->
+          <line x1="28" y1="30" x2="28" y2="410" stroke="rgba(146,173,204,.35)"/>
+          <g stroke="rgba(146,173,204,.35)">
+            <line x1="22" y1="40" x2="34" y2="40"/><line x1="22" y1="140" x2="34" y2="140"/>
+            <line x1="22" y1="240" x2="34" y2="240"/><line x1="22" y1="340" x2="34" y2="340"/>
+          </g>
+          <text class="svg-t sm" x="0" y="26" fill="#66788f">DEPTH</text>
+
+          <!-- layer 1 rejected -->
+          <rect x="52" y="34" width="640" height="88" fill="rgba(255,106,94,.06)" stroke="rgba(255,106,94,.4)" stroke-dasharray="5 4"/>
+          <text class="svg-t sm" x="70" y="58" fill="#ff6a5e">STRATUM 1 &mdash; REJECTED BY THE OWNER</text>
+          <text class="svg-t lg" x="70" y="84" fill="#93a4bb" text-decoration="line-through">&ldquo;PMI gives legitimacy. Political cover.&rdquo;</text>
+          <text class="svg-t sm" x="70" y="106" fill="#66788f">not the motive. discarded immediately.</text>
+
+          <!-- layer 2 -->
+          <rect x="52" y="130" width="640" height="88" fill="url(#grit)"/>
+          <rect x="52" y="130" width="640" height="88" fill="rgba(201,139,58,.08)" stroke="rgba(201,139,58,.5)"/>
+          <text class="svg-t sm" x="70" y="154" fill="#c98b3a">STRATUM 2 &mdash; STATED REASON</text>
+          <text class="svg-t lg" x="70" y="180" fill="#dfe7f2">PMI theory is rigorous and well-formed</text>
+          <text class="svg-t sm" x="70" y="202" fill="#93a4bb">chuan muc &mdash; the owner's own word</text>
+
+          <!-- layer 3 -->
+          <rect x="52" y="226" width="640" height="88" fill="url(#grit)"/>
+          <rect x="52" y="226" width="640" height="88" fill="rgba(201,139,58,.12)" stroke="rgba(201,139,58,.6)"/>
+          <text class="svg-t sm" x="70" y="250" fill="#c98b3a">STRATUM 3 &mdash; DEEPER</text>
+          <text class="svg-t lg" x="70" y="276" fill="#dfe7f2">personal experience only covers what I have met</text>
+          <text class="svg-t sm" x="70" y="298" fill="#93a4bb">a sample of one career, and a biased one</text>
+
+          <!-- bedrock -->
+          <rect x="52" y="322" width="640" height="92" fill="rgba(78,201,214,.1)" stroke="#4ec9d6" stroke-width="1.5"/>
+          <text class="svg-t sm" x="70" y="346" fill="#4ec9d6">BEDROCK</text>
+          <text class="svg-t lg" x="70" y="374" fill="#4ec9d6">PMI supplies the theory needed to GENERALISE</text>
+          <text class="svg-t sm" x="70" y="396" fill="#93a4bb">beyond one's own sample &mdash; an academic motive, held honestly</text>
+        </svg>
+      </div>
+      <figcaption>Fig. 4.1 — Four strata. The bottom one pays for itself in Plate 06.</figcaption>
+    </figure>
+
+    <h3 style="margin-top:2.4rem">And then the goal itself reversed</h3>
+    <div class="flip">
+      <div class="was">
+        <div class="label">As briefed, at the top of the session</div>
+        <p>For my own team first. Sell it later.</p>
+      </div>
+      <div class="now">
+        <div class="label">As corrected, in Plate 04</div>
+        <p>A product built <b>to sell</b>. Using it on my own team is dogfooding — validation, not the goal.</p>
+      </div>
+    </div>
+    <p class="note"><b>Owner:</b> the opening framing was the permission structure, not the real order. &mdash; The first of two self-corrections; the second one, in Plate 07, is larger.</p>
+
+    <ul class="log" style="margin-top:1.8rem">
+      <li class="e e--coach"><span class="who">Coach</span>Consequence of that reversal: the calibration engine is a <b>moat</b> for long-time users but has a <b>cold-start problem</b> for every new customer. Day one there is no history, so every Tier-3 signal is unweighted. <b>PMI is what fills the gap before a customer's own data exists</b> — ship PMI's priors as the starting weights, then let each org's outcomes retrain them. The academic motive becomes load-bearing rather than decorative.</li>
+      <li class="e e--owner"><span class="who">Owner</span><b>Open question.</b> I cannot yet name a feature I would refuse to build even if it sold well. The truth-over-comfort value is visible all through this session but it is untested.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ============================ 05 ROLE PLAYING ============================ -->
+<section id="t5" aria-labelledby="t5-h">
+  <div class="wrap">
+    <div class="plate">
+      <span class="num">PLATE 05</span><span class="kind">Technique &middot; Role Playing</span>
+      <h2 id="t5-h">Other people's mouths</h2>
+    </div>
+
+    <p class="lede">Two borrowed voices: a team member who will be measured by this thing, and an outside PM being sold it. Each produced something the owner's own voice had not.</p>
+
+    <div class="transcript">
+      <div class="speech">
+        <div class="speaker">Team member<br><span class="tiny" style="letter-spacing:0;text-transform:none">voiced by the owner</span></div>
+        <div class="said">&ldquo;My real fear isn't being watched. It's <em>having to learn another tool.</em>&rdquo;</div>
+      </div>
+      <div class="speech">
+        <div class="speaker">Coach<br><span class="tiny" style="letter-spacing:0;text-transform:none">resolution</span></div>
+        <div class="said">Then the team never <em>operates</em> the product — they only <em>read</em> it. They keep working in Jira, Backlog, Asana. The divergence view travels to them, as a digest in chat or email. Full UI for the PM alone. <b>Zero learning curve for everyone except the buyer.</b></div>
+      </div>
+      <div class="speech">
+        <div class="speaker">Outside PM<br><span class="tiny" style="letter-spacing:0;text-transform:none">the sales question</span></div>
+        <div class="said">&ldquo;It's week one. What do I get?&rdquo;</div>
+      </div>
+      <div class="speech">
+        <div class="speaker">Owner</div>
+        <div class="said">A map of progress, <b>quality</b> and cost — plus a forecast of where the project is heading. <span class="tiny" style="display:block;margin-top:.5rem;letter-spacing:0;text-transform:none">Quality is brand new here. It appears nowhere else in the session and had, at this moment, no data source.</span></div>
+      </div>
+      <div class="speech">
+        <div class="speaker">Owner</div>
+        <div class="said">Quality data: bug tickets, comments and problem tickets in Jira — plus manual entry.</div>
+      </div>
+    </div>
+
+    <figure style="margin-top:2.4rem">
+      <p class="scrollhint">&larr; scroll the drawing &rarr;</p>
+      <div class="fig-scroll">
+        <svg viewBox="0 0 860 330" style="min-width:660px" role="img" aria-label="Rework attribution: a task marked done in week 3 spawns bug tickets in weeks 6, 7 and 9; arrows carry that effort back to the originating work package, extending its true cost.">
+          <defs>
+            <marker id="ah3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0 0 L10 5 L0 10 z" fill="#ff6a5e"/>
+            </marker>
+          </defs>
+          <text class="svg-t sm" x="0" y="16" fill="#66788f">REWORK ATTRIBUTION &mdash; THE SECOND HIDDEN BIAS</text>
+
+          <!-- axis -->
+          <line x1="40" y1="290" x2="840" y2="290" stroke="rgba(146,173,204,.35)"/>
+          <g class="svg-t sm" fill="#66788f">
+            <text x="60" y="310">W1</text><text x="200" y="310">W3</text><text x="360" y="310">W5</text>
+            <text x="520" y="310">W7</text><text x="680" y="310">W9</text><text x="800" y="310">W11</text>
+          </g>
+
+          <!-- original task -->
+          <rect x="60" y="54" width="180" height="40" fill="rgba(224,162,74,.14)" stroke="#e0a24a"/>
+          <text class="svg-t" x="72" y="79" fill="#e0a24a">WP-0880 &middot; DONE &#10003;</text>
+          <text class="svg-t sm" x="60" y="44" fill="#93a4bb">booked: 40 h</text>
+
+          <!-- true cost bar -->
+          <rect x="60" y="104" width="620" height="14" fill="rgba(255,106,94,.16)" stroke="#ff6a5e" stroke-dasharray="4 3"/>
+          <text class="svg-t sm" x="690" y="116" fill="#ff6a5e">true cost: 78 h</text>
+
+          <!-- bugs -->
+          <g>
+            <rect x="420" y="188" width="132" height="34" fill="rgba(255,106,94,.1)" stroke="#ff6a5e" stroke-width="1"/>
+            <text class="svg-t sm" x="432" y="209" fill="#ff6a5e">BUG-311 &middot; 12 h</text>
+            <rect x="500" y="232" width="132" height="34" fill="rgba(255,106,94,.1)" stroke="#ff6a5e" stroke-width="1"/>
+            <text class="svg-t sm" x="512" y="253" fill="#ff6a5e">BUG-318 &middot; 9 h</text>
+            <rect x="648" y="188" width="132" height="34" fill="rgba(255,106,94,.1)" stroke="#ff6a5e" stroke-width="1"/>
+            <text class="svg-t sm" x="660" y="209" fill="#ff6a5e">BUG-340 &middot; 17 h</text>
+          </g>
+
+          <path d="M420 200 C 300 196, 200 160, 152 100" fill="none" stroke="#ff6a5e" stroke-width="1.2" stroke-dasharray="5 4" marker-end="url(#ah3)"/>
+          <path d="M500 246 C 320 238, 190 178, 150 100" fill="none" stroke="#ff6a5e" stroke-width="1.2" stroke-dasharray="5 4" marker-end="url(#ah3)"/>
+          <path d="M648 198 C 420 150, 240 138, 156 100" fill="none" stroke="#ff6a5e" stroke-width="1.2" stroke-dasharray="5 4" marker-end="url(#ah3)"/>
+
+          <text class="svg-t sm" x="250" y="176" fill="#ff6a5e">effort carried back to its origin</text>
+          <text class="svg-t sm" x="60" y="140" fill="#93a4bb">MS Project structurally cannot do this: it has no idea the bugs exist</text>
+        </svg>
+      </div>
+      <figcaption>Fig. 5.1 — Bugs are retroactive proof that a completion claim was false.</figcaption>
+    </figure>
+
+    <ul class="log">
+      <li class="e e--coach"><span class="who">Coach</span>Bugs are <b>retroactive evidence that a completion claim was false</b>: a task marked done that later spawns bug tickets proves the &ldquo;done&rdquo; was premature. Rework is the <b>second hidden bias</b> — effort spent fixing completed work is never attributed back to its origin task, so true cost is understated again. Twin of the omitted-small-task bias from Plate 01, and it feeds calibration directly.</li>
+      <li class="e e--sys">&mdash; open, carried into convergence: what does a brand-new customer see on day five that MS Project cannot show? Used as the prioritisation criterion.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ============================ 06 CONVERGENCE ============================ -->
+<section id="conv" aria-labelledby="conv-h">
+  <div class="wrap">
+    <div class="plate">
+      <span class="num">PLATE 06</span><span class="kind">Convergence &middot; Affinity Clustering &rarr; MoSCoW</span>
+      <h2 id="conv-h">Before, during, after</h2>
+    </div>
+
+    <p class="lede">Every idea in the session measures the same gap between claim and reality. They differ only in <b>when</b> they measure it. That single axis sorted the whole board.</p>
+
+    <div class="phases">
+      <div class="phase phase--before">
+        <div class="ph-n">&larr; T minus</div>
+        <h3>BEFORE</h3>
+        <div class="ph-s">measuring the claim as it is being made</div>
+        <ul>
+          <li>Three-point estimate spread</li>
+          <li>Ratification capture, one click per member</li>
+          <li>Recorded dissent at planning time</li>
+        </ul>
+        <span class="ph-tag">needs a planning ritual</span>
+      </div>
+      <div class="phase phase--during">
+        <div class="ph-n">&#9679; now</div>
+        <h3>DURING</h3>
+        <div class="ph-s">measuring the gap as it opens</div>
+        <ul>
+          <li>The reconciliation map</li>
+          <li>The three-tier screen</li>
+          <li>Unmapped tickets, in hours and money</li>
+          <li>Evidence-backed progress</li>
+          <li>Two separate ledgers: baseline &amp; actual</li>
+        </ul>
+        <span class="ph-tag">works on day one &middot; zero history required</span>
+      </div>
+      <div class="phase phase--after">
+        <div class="ph-n">T plus &rarr;</div>
+        <h3>AFTER</h3>
+        <div class="ph-s">learning from the gap once it has closed</div>
+        <ul>
+          <li>Rework attribution</li>
+          <li>Estimate-accuracy scoring by task type</li>
+          <li>The signal-calibration engine</li>
+          <li>PMI priors, retrained per organisation</li>
+        </ul>
+        <span class="ph-tag">needs accumulated history</span>
+      </div>
+    </div>
+
+    <div class="killer">
+      <div class="q">The outside PM's killer question &mdash; what do I see on day five?</div>
+      <p class="a" style="margin:0"><b>&ldquo;47 tickets in Jira belong to no task in your plan. That is 210 hours nobody planned.&rdquo;</b></p>
+      <p class="note" style="margin:.9rem 0 0">Only the DURING cluster answers it, and MS&nbsp;Project structurally cannot: it does not know Jira exists.</p>
+    </div>
+
+    <h3 style="margin-top:2.6rem">MoSCoW</h3>
+    <p class="note" style="margin-bottom:.6rem">Two items surfaced <em>during</em> convergence rather than during ideation — marked in amber. Both are the kind that cannot be retrofitted.</p>
+
+    <div class="moscow">
+      <div class="mos mos--must">
+        <div class="mos-k"><b>MUST</b><span class="mos-bar"><i></i></span></div>
+        <div class="items">
+          <span class="item new">Import plan from MS Project (.mpp / XML)</span>
+          <span class="item">Read-only connectors: Jira, Backlog, Asana</span>
+          <span class="item">Persistent task&ndash;ticket mapping</span>
+          <span class="item">Unmapped-ticket report, in hours and money</span>
+          <span class="item">Three-tier screen, tiers 1&ndash;2</span>
+          <span class="item new">Separate baseline / actual ledgers</span>
+          <span class="item">Minimal read-only Gantt, for credibility</span>
+        </div>
+      </div>
+      <div class="mos mos--should">
+        <div class="mos-k"><b>SHOULD</b><span class="mos-bar"><i></i></span></div>
+        <div class="items">
+          <span class="item">Evidence-backed progress, artifacts auto-linked</span>
+          <span class="item">Tier 3 on PMI default weights</span>
+          <span class="item">Digest pushed to team chat / email</span>
+        </div>
+      </div>
+      <div class="mos mos--could">
+        <div class="mos-k"><b>COULD</b><span class="mos-bar"><i></i></span></div>
+        <div class="items">
+          <span class="item">Three-point estimating + ratification capture</span>
+          <span class="item">Rework attribution</span>
+          <span class="item">Quality from bug / comment tickets</span>
+        </div>
+      </div>
+      <div class="mos mos--wont">
+        <div class="mos-k"><b>WON'T</b><span class="mos-bar"><i></i></span></div>
+        <div class="items">
+          <span class="item">Self-learning calibration engine</span>
+          <span class="item">Estimate-accuracy scoring</span>
+          <span class="item">Resource levelling</span>
+          <span class="item">Full calendar</span>
+          <span class="item">Advanced cost</span>
+          <span class="item">Bottom-up planning</span>
+        </div>
+      </div>
+    </div>
+    <p class="tiny">Why the two amber items matter: MS Project import kills switching cost — the real reason people don't change tools. Separate ledgers is a data-model decision, not a feature.</p>
+
+    <h3 style="margin-top:2.6rem">Where the money line falls</h3>
+    <p class="note">The monetisation boundary was not designed. It fell out of the clustering: the free tier is the DURING cluster, the paid tier is the AFTER cluster.</p>
+
+    <div class="boundary">
+      <div class="bnd bnd--free">
+        <span class="bl">Base tier</span>
+        <h3>Sees the present</h3>
+        <p>Works on day one. Proves its value in week one. Needs nothing but a connector and a plan file.</p>
+      </div>
+      <div class="bnd-rule"><span>Monetisation boundary</span></div>
+      <div class="bnd bnd--paid">
+        <span class="bl">Paid tier</span>
+        <h3>Learns from the past</h3>
+        <p>Only valuable once the customer has accumulated history — which is exactly the point at which they are already locked in. Value rises over time, in step with willingness to pay.</p>
+      </div>
+    </div>
+
+    <figure style="margin-top:1.4rem">
+      <svg viewBox="0 0 420 150" style="max-width:420px" role="img" aria-label="Two rising curves over time: accumulated history and willingness to pay, climbing together.">
+        <line x1="34" y1="126" x2="410" y2="126" stroke="rgba(146,173,204,.35)"/>
+        <line x1="34" y1="14" x2="34" y2="126" stroke="rgba(146,173,204,.35)"/>
+        <text class="svg-t sm" x="34" y="144" fill="#66788f">day 1</text>
+        <text class="svg-t sm" x="410" y="144" fill="#66788f" text-anchor="end">year 2</text>
+        <path d="M34 126 C 140 122, 250 78, 406 22" fill="none" stroke="#4ec9d6" stroke-width="2"/>
+        <path d="M34 126 C 160 126, 260 96, 406 44" fill="none" stroke="#b58ee0" stroke-width="2" stroke-dasharray="5 4"/>
+        <text class="svg-t sm" x="228" y="62" fill="#4ec9d6">accumulated history</text>
+        <text class="svg-t sm" x="212" y="112" fill="#b58ee0">willingness to pay</text>
+      </svg>
+      <figcaption>Fig. 6.1 — The moat and the price curve are the same curve.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ============================ 07 THE CORRECTION ============================ -->
+<section id="turn" aria-labelledby="turn-h">
+  <div class="wrap">
+    <div class="plate">
+      <span class="num">PLATE 07</span><span class="kind">The course correction &middot; owner-initiated</span>
+      <h2 id="turn-h">The session had been designing <em>the wrong size of thing</em></h2>
+    </div>
+
+    <p class="lede" style="color:var(--paper-dim)">The MoSCoW was finished. It looked complete. Then the owner read it back and noticed what was missing — and, more usefully, noticed <b style="color:var(--paper)">why</b> it was missing.</p>
+
+    <ul class="log" style="margin:2rem 0">
+      <li class="e e--owner"><span class="who">Owner</span><b>Correction to the MoSCoW.</b> Core PM capability is simply absent: task management, scheduling, resource management, cost management — and program / portfolio management across multiple projects. <span class="tiny">Portfolio is entirely new to this session.</span></li>
+      <li class="e e--coach"><span class="who">Coach</span>Conceded: the MoSCoW silently assumed a <b>companion</b> product — an add-on that sits beside MS Project — without ever declaring that assumption. The opening brief said <b>replacement</b>.</li>
+    </ul>
+
+    <p class="bigstate">The classic set is not table stakes to defer. <b>It is the product.</b> The reconciliation map is the differentiator built <b>on</b> it — not instead of it.</p>
+
+    <div class="vs">
+      <div class="vs-card bad">
+        <span class="vl">What the session had been building</span>
+        <div class="hostbox">
+          <div class="hb-t">MS PROJECT &mdash; still the system of record</div>
+          <div class="modgrid">
+            <span class="mod">WBS</span><span class="mod">Gantt</span><span class="mod">Resource</span><span class="mod">Calendar</span><span class="mod">Cost</span>
+          </div>
+        </div>
+        <div class="addon">Reconciliation map &mdash; an integration layer bolted to the side</div>
+        <p class="tiny" style="margin-top:1rem">Customer still pays for, and still works in, the tool they wanted to leave.</p>
+      </div>
+      <div class="vs-card good">
+        <span class="vl">What the brief actually asked for</span>
+        <div class="hostbox" style="border-color:rgba(78,201,214,.45)">
+          <div class="hb-t" style="color:var(--real)">A STANDALONE PM TOOL &mdash; the system of record</div>
+          <div class="modgrid">
+            <span class="mod core">Task mgmt</span><span class="mod core">Scheduling</span><span class="mod core">Resource</span>
+            <span class="mod core">Cost</span><span class="mod core">Portfolio / program</span>
+            <span class="mod diff">Reconciliation map</span>
+          </div>
+        </div>
+        <p class="tiny" style="margin-top:1rem">The map is one capability <b>inside</b> the product. It is what makes the product worth switching to — it is not the product.</p>
+      </div>
+    </div>
+
+    <h3>How the option space got narrowed — at turn one, before any choice was made</h3>
+    <p class="note" style="margin-bottom:1.2rem">This is the owner's own diagnosis of the session, not the coach's. It is the most valuable thing in the log, because it is reusable.</p>
+
+    <div class="mechanism">
+      <div class="mech"><span class="mn">01</span><span class="mt"><b>Failure Analysis anchors on wound-fixing.</b> The technique asks what hurts. It does not ask what is absent.</span></div>
+      <div class="mech"><span class="mn">02</span><span class="mt"><b>The wound was tool-to-tool friction.</b> So the answers were all about the seam between two tools, never about either tool's own job.</span></div>
+      <div class="mech"><span class="mn">03</span><span class="mt"><b>All three opening sparks sat on the same plan-vs-reality axis.</b> The field was one vein wide before a single idea was chosen.</span></div>
+      <div class="mech"><span class="mn">04</span><span class="mt"><b>One Feature Only then forced a single pick from that already-narrow field.</b> A convergence technique applied to a field that had never properly diverged.</span></div>
+    </div>
+
+    <ul class="log">
+      <li class="e e--owner"><span class="who">Owner</span><b>Architectural commitment.</b> The data model must support multi-project <b>and</b> multi-department from day one. The portfolio UI can come later; the model cannot.</li>
+      <li class="e e--coach"><span class="who">Coach</span>Multi-department <b>reopens</b> the visibility decision from Plate 02. The hierarchy becomes tenant &rsaquo; department &rsaquo; program/portfolio &rsaquo; project &rsaquo; work package. <b>Resource is the hard centre</b>: a person belongs to a department but works across projects, so cross-project capacity contention is a core problem, not a later feature. Cost must roll up on two axes from day one — by project, and by department as cost centre. And visibility stops being a setting: department scoping is structural, so &ldquo;everyone sees everything&rdquo; only ever holds <b>within a scope</b>.</li>
+      <li class="e e--coach"><span class="who">Coach</span><b>Gap for a future session.</b> This session produced <b>zero</b> ideas on how the core PM capability beats MS Project — scheduling intelligence, resource optimisation, portfolio and department views, cost modelling. One vein mined deep; three untouched. The reconciliation map is not wrong. It is <b>mis-sized</b>.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ============================ 08 SYNTHESIS ============================ -->
+<section id="synth" aria-labelledby="synth-h">
+  <div class="wrap">
+    <div class="plate">
+      <span class="num">PLATE 08</span><span class="kind">Closing synthesis</span>
+      <h2 id="synth-h">What connects to what</h2>
+    </div>
+
+    <p class="lede">Four links that none of the seven techniques produced on its own. Each one only exists because two separate moments in the session turned out to be the same moment.</p>
+
+    <div class="links">
+
+      <div class="link">
+        <div class="ln">01</div>
+        <div>
+          <p class="lt" style="margin:0">&ldquo;Too small to record&rdquo;, &ldquo;sometimes I just omit it&rdquo;, and unattributed rework are three faces of <b>one</b> problem: <b>invisible work</b> — and all three are biased in the same direction.</p>
+          <div class="faces">
+            <div class="faces-top">
+              <div class="face">work too small to record<br><span class="tiny">Plate 01</span></div>
+              <div class="face">inconsistent return trip<br><span class="tiny">Plate 01</span></div>
+              <div class="face">rework never attributed<br><span class="tiny">Plate 05</span></div>
+            </div>
+            <div class="faces-join" role="presentation"></div>
+            <div class="faces-out">Actuals understated &middot; never overstated &middot; never self-correcting</div>
+          </div>
+          <p class="lb">Three techniques, three hours apart, describing one mechanism. If the product fixes only one of the three, the number on the screen is still a lie — just a smaller one.</p>
+        </div>
+      </div>
+
+      <div class="link">
+        <div class="ln">02</div>
+        <div>
+          <p class="lt" style="margin:0">The <b>academic</b> motive for choosing PMI turned out to be the <b>commercial</b> answer to the cold-start problem.</p>
+          <p class="lb">Values Archaeology dug down to &ldquo;personal experience is too small a sample to generalise from.&rdquo; Two moves later, the calibration engine hit exactly the same wall on day one of every new customer: <b>no history, nothing to generalise from.</b> PMI's priors fill the gap until the customer's own outcomes take over. The research stops being a credential and becomes a component.</p>
+        </div>
+      </div>
+
+      <div class="link">
+        <div class="ln">03</div>
+        <div>
+          <p class="lt" style="margin:0">Disease and cure share a shape. MS&nbsp;Project assumes the PM is its only user — and so does this product. The difference is that <b>this one travels to the team instead of summoning them.</b></p>
+          <p class="lb">Plate 01 named single-user-assumption as the original sin. Plate 05 then <em>adopted</em> it deliberately: full UI for the PM, read-only digests everywhere else, zero learning curve for anyone but the buyer. The same architecture, inverted in direction of travel. Worth watching: an inverted disease is still recognisably the disease.</p>
+        </div>
+      </div>
+
+      <div class="link">
+        <div class="ln">04</div>
+        <div>
+          <p class="lt" style="margin:0">&ldquo;Where it <b>might</b> be diverging&rdquo; produced Tier 3. &ldquo;Objectors are sometimes right, sometimes wrong&rdquo; produced the calibration engine that makes Tier 3 trustworthy. <b>Neither survives alone.</b></p>
+          <p class="lb">A suspicion list with hard-coded weights is a superstition generator. A calibration engine with nothing to calibrate is an empty database. The owner supplied the first half; the coach supplied the second; the pair is the only defensible part of the whole design.</p>
+        </div>
+      </div>
+
+    </div>
+
+    <p class="bigstate" style="margin-top:3rem;max-width:30ch">The product is not a planner. It is <b style="color:var(--real)">an instrument for measuring the distance between what a plan claims and what reality did</b> — housed inside a planner that has to be good enough to replace the one they have.</p>
+  </div>
+</section>
+
+<!-- ============================ OPEN LEDGER ============================ -->
+<section id="open" aria-labelledby="open-h">
+  <div class="wrap">
+    <div class="plate">
+      <span class="num">LEDGER</span><span class="kind">Carried forward &middot; unresolved</span>
+      <h2 id="open-h">Left open on purpose</h2>
+    </div>
+
+    <div class="ledger">
+      <div class="led-h"><span>Status</span><span>Entry</span></div>
+      <div class="led">
+        <span class="st">OPEN &middot; values</span>
+        <span class="bd">
+          <b>What would I refuse to build, even if it sold?</b>
+          <span>No answer yet. The truth-over-comfort value runs through every plate of this session but has never been tested against money. Revisit at the first real conflict — a paying customer asking to retroactively edit historical actuals is the obvious candidate.</span>
+        </span>
+      </div>
+      <div class="led">
+        <span class="st">OPEN &middot; scope</span>
+        <span class="bd">
+          <b>How does the core PM capability beat MS Project?</b>
+          <span>Scheduling intelligence, resource optimisation, portfolio and department views, cost modelling. Zero ideas produced here. This is the whole agenda for the next session, and it should not open with Failure Analysis.</span>
+        </span>
+      </div>
+      <div class="led">
+        <span class="st">OPEN &middot; policy</span>
+        <span class="bd">
+          <b>What is the default visibility setting?</b>
+          <span>The default is the product's real opinion, and department scoping now makes it structural rather than optional. Unsettled.</span>
+        </span>
+      </div>
+      <div class="led">
+        <span class="st">OPEN &middot; data</span>
+        <span class="bd">
+          <b>What exactly is &ldquo;quality&rdquo;?</b>
+          <span>It appeared once, in a sales answer, and was backfilled with bug tickets and manual entry. It has no model. It was promised to a customer before it existed — which is how most product debt starts.</span>
+        </span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap foot">
+    <p class="tiny">Brainstorming session &middot; 19 September 2026 &middot; 55 logged entries: 25 owner, 21 coach, 9 procedural &middot; 5 divergent techniques, 2 convergence moves, 2 owner-initiated reversals.</p>
+    <p class="tiny">Claim is amber. Reality is cyan. The gap is the product.</p>
+  </div>
+</footer>
+
+<script>
+(function(){
+  var btn = document.getElementById('ownerBtn');
+  if(!btn) return;
+  btn.addEventListener('click', function(){
+    var on = document.body.classList.toggle('owner-only');
+    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    btn.textContent = on ? 'Show the full session' : 'Isolate my ideas';
+  });
+})();
+</script>
+</body>
+</html>

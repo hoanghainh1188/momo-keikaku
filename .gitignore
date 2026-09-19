@@ -1,0 +1,7 @@
+node_modules/
+.DS_Store
+.env
+.env.local
+
+_bmad/config.user.toml
+_bmad/custom/config.user.toml
