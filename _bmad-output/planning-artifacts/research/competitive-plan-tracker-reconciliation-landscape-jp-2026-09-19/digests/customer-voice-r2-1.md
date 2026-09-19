@@ -1,0 +1,60 @@
+# Digest: customer voice (Tempo, BigPicture, Jira Plans, Planner/Project migration, LinearB/Jellyfish, Ceptah) — round 2
+
+Method note: 15 tool calls used (budget reached). Pages read directly: 5 (Atlassian Community x2, Microsoft Q&A, PeerSpot, plus failed G2/Capterra/Tech Community fetches). G2 returned 403 and Capterra 404, so G2/Capterra review content below comes only from search-engine snippets of those pages. That is lower quality, so confidence is capped at "low/med". Search snippets are marked "(snippet)".
+
+## Findings
+| # | claim | source URL | publisher | pub_date | accessed | confidence | class |
+|---|---|---|---|---|---|---|---|
+| 1 | Tempo users complain that paying separately for each module (Timesheets, Capacity Planner, etc.) is not cost-effective, and that the products are aimed at enterprise buyers. | https://community.atlassian.com/forums/Jira-questions/Is-Tempo-the-best-time-tracking-app-for-Jira/qaq-p/2930710 | Atlassian Community | 2025-01 | 2026-09-19 | med | sentiment |
+| 2 | Tempo lock-in: if you uninstall Tempo and fall back to native Jira worklogs, you lose the worklog author and description. A 2026 reply adds that Tempo keeps data in its own store, which creates "dependency and migration risk". | same as #1 | Atlassian Community | 2025-01 / 2026-02 | 2026-09-19 | med | sentiment |
+| 3 | Tempo is said to cost $9+/user/month, which "adds up quickly" for small teams against $3–5 alternatives. It also has a steep onboarding curve and is overkill for basic logging. | same as #1 | Atlassian Community (reply from a user, possibly a competitor) | 2026-02 | 2026-09-19 | low-med | sentiment |
+| 4 | (snippet) 2026 aggregated reviews say Tempo is expensive, clunky and slow, with limited reporting flexibility, occasional sync/API problems, and auto-tracking that suggests hours on closed or unused tasks. The per-Jira-user charge applies whether or not people use Tempo. | https://www.capterra.com/p/190126/Tempo/reviews/ ; https://www.g2.com/products/tempo-timesheets/reviews | Capterra / G2 (via search summary) | unknown (listed as 2026) | 2026-09-19 | low | sentiment |
+| 5 | (snippet) Tempo Cost Tracker, now Financial Manager: you can't attach several filters to one tracker for a full picture, you can't track and report overall budget alongside projected cost, issues have to be grouped by hand, and personnel cost is unavailable without Tempo Timesheets worklogs. | https://www.getapp.ca/software/131267/cost-tracker ; https://honicon.com/en/new-app-tempo-cost-tracker/ | GetApp CA (2024 listing) / Honicon partner blog | 2024 (stale) | 2026-09-19 | low | sentiment |
+| 6 | (snippet) G2 reviewers of BigPicture describe it as "slow and laggy" with large datasets, and say setup takes time and permissions get harder to manage as the org grows. | https://www.g2.com/products/appfire-bigpicture/reviews (quoted via https://www.tempo.io/blog/appfire-bigpicture-alternatives) | G2 via Tempo competitor blog | unknown | 2026-09-19 | low | sentiment |
+| 7 | BigPicture allows only one baseline per program. Creating a new one hides the old one, the suggested workaround is to clone the program, and a multiple-baselines request (ONE-23419) remains open. Baselines are Enterprise-tier only. | https://community.atlassian.com/t5/Jira-Software-questions/BigPicture-multiple-baselines/qaq-p/1361266 | Atlassian Community | ~2020 (stale; current status unverified) | 2026-09-19 | low | sentiment |
+| 8 | Jira Plans (Advanced Roadmaps) users ask how to compare the current plan with the original. The Community Champion says baselines have not come back to the product (request JSWCLOUD-20495). The workarounds are custom "baseline date" fields, JQL WAS history queries and Confluence notes. The champion also argues that agile is not about proving the plan was accurate. | https://community.atlassian.com/forums/Jira-questions/Using-Jira-Plans-formally-portfolio-how-to-manage-baselines/qaq-p/2239965 | Atlassian Community | 2023-01 (stale thread; request still referenced 2026) | 2026-09-19 | med | sentiment |
+| 9 | (snippet) Jira Plans lacks CPM: no critical path, no float and no forward/backward pass. Marketplace critical-path add-ons add license cost and vary in how well they integrate. | https://onplana.com/blog/project-online-vs-jira-plans | Onplana (competitor blog) | unknown | 2026-09-19 | low | sentiment |
+| 10 | Project Online → Planner Premium (Apr 2026 Q&A): there is no native or automatic migration from PWA. You have to rebuild, import .mpp files through a Power Apps accelerator, and re-assign resources and baselines by hand because they are not imported. Scheduling calculations may come out differently, and Microsoft staff call Planner "simpler and less customizable". | https://learn.microsoft.com/en-us/answers/questions/5846989/project-online-project-center-to-planner-premium-m | Microsoft Q&A | 2026-04 | 2026-09-19 | med-high | sentiment |
+| 11 | (snippet) PMO gap list for Planner Premium: 3,000-task cap per plan, 10 custom fields, a single baseline where Project Online has 11, no enterprise resource pool, no timesheets, and no OData reporting feed. Project Online data becomes inaccessible after 2026-09-30. | https://onplana.com/blog/microsoft-project-online-retiring ; https://clonepartner.com/blog/microsoft-project-online-retiring-sept-2026-timeline-risks-migration/ | Vendor/migration-service blogs (interested parties) | 2026 | 2026-09-19 | low-med | sentiment |
+| 12 | (snippet) LinearB/Jellyfish: investment allocation is only as accurate as ticket hygiene, meaning commits must map to tickets and tickets to initiatives. Letting managers drill into individual activity reads as surveillance in low-trust organizations. | https://getglueapp.com/blog/linearb-vs-jellyfish-vs-swarmia ; https://codepulsehq.com/guides/engineering-analytics-tools-comparison | Competitor comparison blogs | 2026 | 2026-09-19 | low | sentiment |
+| 13 | Very few first-party low-star reviews of LinearB/Jellyfish were found. PeerSpot shows no LinearB reviews and one Jellyfish request for an ROI and waste-identification view. A Software Advice snippet says Jellyfish's individual-developer metrics clutter the UI and go unused. | https://www.peerspot.com/products/comparisons/jellyfish_vs_linearb ; https://www.softwareadvice.com/project-management/jellyfish-profile/ | PeerSpot / Software Advice | unknown | 2026-09-19 | low | sentiment |
+| 14 | (snippet, vendor docs not reviews) Ceptah Bridge sync is fragile: mapping both Work and Finish from Jira to MSP fights itself, some mappings needed two sync rounds, and tasks without resources are silently skipped. Every sync is a manual review-and-apply run inside the MS Project desktop client. | https://www.ceptah.com/Guide/Synchronisation ; https://www.ceptah.com/Downloads/ReleaseNotes ; https://www.ceptah.com/bridge/FAQ/FAQ.aspx | Ceptah (vendor docs) | unknown | 2026-09-19 | low | sentiment |
+
+## Answers to the owned questions
+**What do Tempo users complain about?** The biggest complaint is cost. Every Jira user is charged, each module is priced separately, and small teams find it expensive (#1, #3, #4). The second is lock-in: Tempo worklog metadata stays in Tempo's own store, so leaving means losing data (#2). Cost reporting in Cost Tracker / Financial Manager depends on Tempo worklogs, can't show budget against projected cost in one view, and needs issues grouped by hand (#5; stale 2024). The remaining complaints are slowness and occasional sync problems (#4).
+
+**BigPicture?** Users say it slows down on large datasets and that setup and permissions are heavy (#6). Baselines are Enterprise-only, limited to one per program, and multiple baselines are a long-standing request (#7, stale). I found no fresh first-party reviews in budget because G2 blocked the fetch.
+
+**Jira Plans?** Users can't compare the plan with its original baseline (JSWCLOUD-20495) and rely on custom fields and JQL workarounds (#8). There is also no CPM or float (#9). The community's reply "agile doesn't need plan accuracy" shows there is a cultural gap as well as a feature gap.
+
+**Planner / Project migration?** It is painful and manual. Baselines and resources are not carried over, the scheduling engine behaves differently, and the product is simpler (#10). PMOs lose timesheets, the resource pool and multiple baselines (#11). The Project Online end-of-life on 2026-09-30 is today's forcing event.
+
+**LinearB / Jellyfish?** Very few public low-star reviews exist. The structural critique is that effort allocation depends on ticket hygiene, plus a sense of being watched when managers drill into individuals (#12, #13).
+
+**MSP–Jira sync (Ceptah)?** It runs through a desktop client, each sync is reviewed and applied by hand, and field mappings interfere with each other (#14). The evidence comes from vendor docs, not user reviews.
+
+## Complaint themes
+1. **No real baseline-vs-actual.** Hits Jira Plans (#8), BigPicture with one baseline and Enterprise-only (#7), and Planner Premium with one baseline where Project Online had 11 and baselines not migrated (#10, #11).
+2. **Cost depends on worklogs, and reporting is weak.** Hits Tempo Cost Tracker / Financial Manager (#5) and Planner Premium, which has no timesheets (#11).
+3. **Per-seat pricing, module sprawl and add-on stacking.** Hits Tempo (#1, #3, #4), Jira Plans plus critical-path add-ons (#9) and BigPicture Enterprise gating (#7).
+4. **Lock-in and migration pain.** Hits Tempo worklogs (#2), Project Online → Planner (#10, #11) and Jira Plans baselines lost between versions (#8).
+5. **Fragile or manual sync between plan and tracker.** Hits Ceptah (#14), Tempo sync/API issues (#4) and Jellyfish/LinearB allocation's reliance on ticket linking (#12).
+6. **Performance at scale.** Hits BigPicture (#6) and Tempo (#4).
+7. **Fear of surveillance and metrics nobody uses.** Hits LinearB and Jellyfish (#12, #13).
+
+## Reconciliation-wedge verdict for this cluster
+**Partial at most, and customers are voicing the pain.** None of the complaints mention a tool that reports tracker work not mapped to a plan in hours or cost. The nearest things are Jellyfish/LinearB allocation, which rolls up tickets by initiative but depends on hygiene and does not use PMI baselines (#12), and Tempo Financial Manager, which puts a cost on worklogs but groups issues by hand and struggles to show budget against projection (#5). The separate baseline ledger is exactly what users say is missing or restricted in Jira Plans (#8), BigPicture (#7) and Planner Premium (#10, #11). The Project Online retirement on 2026-09-30 creates an immediate pool of PMOs losing baselines, timesheets and the resource pool (#10, #11). One caveat: the Atlassian community's "agile doesn't prove plan accuracy" attitude (#8) suggests the pitch should be framed around quantifying unplanned work, not around policing the plan.
+
+## Leads worth chasing (next round)
+- Read JSWCLOUD-20495 on jira.atlassian.com for vote count, status and recent comments, to measure demand for baselines.
+- Read BigPicture's current Marketplace reviews tab and version history to confirm whether multiple baselines shipped (ONE-23419).
+- Look for Project Online refugees: r/MSProject and Tech Community comment threads from Aug–Sep 2026, and Japanese ITreview reviews of Planner and Project.
+- Check the Tempo Financial Manager Marketplace reviews tab for 2025–26 items on budget vs forecast and unmapped worklogs.
+- Look for Jellyfish/LinearB criticism on Reddit (r/ExperiencedDevs, r/EngineeringManagers) about allocation accuracy.
+
+## Looked for but could not find
+- G2 and Capterra review text read directly: G2 returned 403 and the Capterra Tempo page returned 404, so only snippets were used.
+- Reddit r/MSProject threads on the Planner migration: no Reddit results surfaced.
+- User comments on the Microsoft Tech Community Planner transition blog: the page body wasn't retrievable.
+- First-party low-star reviews of Ceptah Bridge: only vendor docs were found.
+- Any user complaint or praise about a tool that quantifies "unplanned or unmapped tickets in hours or cost": none found.
