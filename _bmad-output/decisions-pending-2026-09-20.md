@@ -70,3 +70,43 @@ Legend for **Blocks**: what cannot move until this is answered.
 - D2: reviewing the 30 UX assumptions and the architecture assumption tags.
 
 - D1 superseded 2026-09-20: the founder chose to merge PR #1 whole, so the demo spike code is on main. It is still a spike — sprint planning decides what survives. packages/domain and its golden tests are the parts worth keeping; apps/web has no auth, no RLS and only TODO-marked AD-20/AD-21 conventions.
+
+## Sprint planning decisions — 2026-09-20 (OQ-12, OQ-11 cost half)
+
+Recorded by `bmad-sprint-planning`; full working in
+`planning-artifacts/oq12-sprint-planning-2026-09-20.md`.
+
+- **OQ-12 (b) — the frozen 36-FR list is RE-AFFIRMED in full.** Nothing is cut. No
+  `bmad-correct-course` pass is needed, and the §8.3 cut order stays available and
+  unexercised.
+- **OQ-10 reopened and reclosed: build capacity is now 40 h/week**, up from "more than
+  20 h/week". This is the decision that makes the re-affirmation possible — the full cut
+  order is worth 9 % of R0 and doubling capacity is worth 50 %.
+- **OQ-12 (a) — the date for §8.1 is `2027-04-14`**, range 2027-02-12 … 2027-07-06.
+  R0 as frozen is estimated at **1,180 h** across 70 stories (826–1,652 h).
+- **OQ-12 (c) — verdict was FAIL** against the dates the PRD implied that morning: the
+  implied 2026-11-30 buys 17 % of R0 (Epic 1 plus 47 hours, and none of the wedge). The
+  capacity decision resolves it; nothing in the plan did.
+- **OQ-11 cost half closed.** FR-6b engine, pure: **92 h**. Plan surface (stories
+  2.13–2.16): **98 h**, or 110 h with the baseline-compare columns. The surface is 1.07×
+  the engine — OQ-11's premise confirmed. Its Comfort rows are worth ~18 h and are
+  cuttable without touching any FR.
+- **R1's Q1 2027 date does not survive** and needs a new one. The §8.1 gate needs four
+  consecutive weekly Reviews *after* R0 is in use, so the earliest gate pass is
+  2027-05-12 — Q2, before R1's own build starts. Capacity cannot recover this.
+
+### Superseded by the above
+
+- The OQ-10 note recorded earlier on 2026-09-20 — *"R0 as scoped is plausible with AI
+  import and Jira staying out"* — was written without an estimate behind it. R0 as scoped
+  is 1,180 h and was **not** plausible at 20 h/week against any date the PRD then implied.
+  It is plausible at 40 h/week.
+
+### Still open after this
+
+- **The 40 h/week assumption is the single point of failure.** It is sustained for 29.5
+  weeks while the founder remains PM on five projects and still owes a weekly teirei
+  report. No artifact mitigates it. Re-derive the estimate after Epic 1 (156 h, ~4 weeks)
+  for the first real velocity reading.
+- Which client (OQ-3), pricing (OQ-4), AI provider (OQ-5), client sign-in (OQ-8),
+  competitive watch (OQ-7), the 30 UX assumptions (D2) — all unchanged.
