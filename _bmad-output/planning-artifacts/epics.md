@@ -1,5 +1,5 @@
 ---
-stepsCompleted: [1, 2]
+stepsCompleted: [1, 2, 3]
 inputDocuments:
   - _bmad-output/planning-artifacts/prds/prd-momo-keikaku-2026-09-19/prd.md
   - _bmad-output/planning-artifacts/prds/prd-momo-keikaku-2026-09-19/addendum.md
@@ -518,7 +518,11 @@ So that one missed `WHERE` clause can never show me another organisation's proje
 
 **Given** a test harness seeded with two Tenants
 **When** it exercises **every** read use case
-**Then** none returns a row belonging to the other Tenant, and the harness enumerates the use cases rather than listing them by hand, so a new one is covered the day it is written (AR-5, FR-1)
+**Then** none returns a row belonging to the other Tenant, and the harness enumerates the use cases rather than listing them by hand, so a new one is covered the day it is written (AR-5, FR-1, **NFR-S1**)
+
+**Given** NFR-S1's requirement that isolation be enforced in the data layer and tested automatically
+**When** this story completes
+**Then** that harness **is** the automated test, and the FORCE-RLS assertion **is** the data-layer enforcement — NFR-S1 is discharged here and is not restated as a criterion on every later story (NFR-S1)
 
 **Given** the eight files under `apps/web` that import `@momo/db` today
 **When** this story completes
@@ -706,6 +710,50 @@ So that every NFR-P1 claim in R0 is measured against a realistic shape rather th
 **Given** `CLOCK_MODE=fixture`
 **When** either role reads the clock
 **Then** it returns `max(latest fixture observedAt, FIXTURE_TIME_ANCHOR)`, and `db/seed` creates its data through that same clock, so the demo is not permanently stale (AR-27)
+
+### Story 1.9: Every string is externalised, and the currency is fixed
+
+As a PM,
+I want an English UI whose every string already lives in a catalog beside a Japanese one,
+So that R1's Japanese Client View is a translation job rather than a refactor.
+
+**Acceptance Criteria:**
+
+**Given** the R0 UI
+**When** it renders
+**Then** it is **English**, and **every** string is externalised in `packages/i18n/{en,ja}.json` with dotted keys by feature, imported by **both roles** so the worker can render mail without importing an app (FR-4, AR-1, NFR-I1)
+
+**Given** the domain layer
+**When** it reports anything to a user
+**Then** it returns **codes, never prose**, and server actions map the code through i18n (AR-19 errors convention, NFR-I1)
+
+**Given** the `ja` catalog
+**When** R0 ships
+**Then** it exists and is keyed identically to `en`, so a missing key is a build-time gap rather than an R1 discovery — **PM screens reach full Japanese coverage Post-Q1 and the Client View in R1**, and neither is built here (FR-4, §8.1)
+
+**Given** every layout
+**When** it is checked
+**Then** it is checked with Japanese strings **30% longer** than the English ones, because a layout that only fits English is an R1 refactor (NFR-I1, UX-DR27)
+
+**Given** full-width and half-width Japanese characters
+**When** they are displayed and sorted
+**Then** they display correctly, and text sorts by Unicode code point **after NFKC width normalisation** through the single `domain/text.compareNfkc`, so the two forms sort together (NFR-I1)
+
+**Given** dates and numbers
+**When** they are formatted
+**Then** they follow the chosen locale through `Intl` — `19 Sep 2026` in English, `2026/09/19` in Japanese — and times always show the Project time zone, default JST (FR-4, UX-DR28)
+
+**Given** a note the PM wrote
+**When** it is displayed anywhere
+**Then** it is shown **as written, with no machine translation** (FR-4)
+
+**Given** the Tenant currency
+**When** a Rate exists
+**Then** it defaults to JPY and **cannot be changed once any Rate exists**, which is also why money is held as integer JPY rather than a currency-tagged amount (FR-4, AR-6)
+
+**Given** a Vietnamese UI
+**When** scope is checked
+**Then** it is **out of scope**, in v1 and after (FR-4)
 ## Epic 2: A plan that re-dates itself when the work slips
 
 A PM can build a Plan by hand and have it schedule itself: durations, finish-to-start dependencies with lag, three constraint types, a Project start, an optional Project finish and a Data Date, over a JP and VN working-day calendar with a dated version history. **A slipped task moves the tasks that depend on it.** Float and the critical path are always current, negative Float shows as a negative number against a Project finish the PM set, and every constraint violation, out-of-sequence link and un-schedulable WP is listed with the chain behind it. The tree grid is the single scheduling surface.
@@ -1199,6 +1247,10 @@ So that R0 has a complete scheduling surface without a Gantt.
 
 **Given** the Plan surface
 **When** it renders
+**Then** its elements sit in this order top to bottom: the **schedule strip**, the **toolbar** (preset switcher, `/` filter, expand-to-level, column chooser, Set Baseline / Compare baselines, Import / Re-import), the **tree grid**, with the **schedule-exceptions rail** to its right and the **What-moved band** appearing between toolbar and grid after every recalculation (UX-DR2, **Core**)
+
+**Given** the Plan surface
+**When** it renders
 **Then** three leading columns are frozen — WBS code, Name carrying the expand control, and the state glyph — and they are frozen **visually only**, staying in the same row and reading order so a screen reader hears one row (UX-DR3, **Core**)
 
 **Given** the grid
@@ -1236,6 +1288,10 @@ So that R0 has a complete scheduling surface without a Gantt.
 **Given** `1`–`4`
 **When** pressed inside the grid
 **Then** the preset changes **without losing the focused row**, so a preset change is a change of view and never of place; the choice is persisted per user per project (UX-DR24, **Core**)
+
+**Given** the plan
+**When** the PM edits it
+**Then** **nothing in the plan is edited by dragging** — and nothing needs to be, because planned dates are not typed or dragged at all, they are derived. The Gantt's bar-dragging arrives with the Gantt in R1 (UX-DR25, FR-5, FR-6b)
 
 **Given** a plan of 500 WPs from Epic 1's fixture
 **When** the grid loads
@@ -1802,6 +1858,1193 @@ So that I can see what moved without a chart R0 does not have.
 **Given** the preset
 **When** it is sized
 **Then** it fits the grid's own width like the other two sized presets, and adding a column to it takes width from another (UX-DR4, **Core**)
+## Epic 5: The work actually done arrives from Backlog and lands on the plan
+
+A PM can connect a Project to a Backlog space read-only, record who on the client side approved it, and watch an always-on snapshot service build an append-only Actuals Ledger from snapshot deltas — with hours a Ticket already had recorded as an Opening Balance so a project connected mid-flight shows no false spike. They can link Tracker Accounts to Resources, map Tickets to leaf WPs by hand or by priority-ordered rule, flag Catch-all WPs, and see coverage per Connector. Every in-scope Ticket is either mapped or reported as unmapped, and a space with no hours runs honestly in Ticket-Count Mode rather than showing zeros.
+
+*Fifteen stories, twelve FRs — one journey (UJ-2) across one set of modules. FRs: FR-13, FR-17, FR-19, FR-20, FR-21, FR-22, FR-23, FR-24, FR-25, FR-26, FR-27, FR-42.*
+
+**The invariant this epic must not break:** mapping, remapping and hourly background rule evaluation change attribution, Unplanned Work and EVM — **and never a date**. Story 2.9's reachability test is what holds it true as these modules grow.
+
+**It creates eleven tables**, none of which exist today: `ticket`, `tracker_account`, `project_setting_event`, `wp_flag_event`, `tracker_account_link_event`, `connector_scope_event`, `connector_setting_event`, `measurement_basis_event`, `connector_ownership_event`, and the `derived` projections `mapping_head` and `connector_overlap`.
+
+### Story 5.1: One port to every tracker, and a fixture that replays like one
+
+As the founder,
+I want every tracker reached through one port with a fixture implementation behind it,
+So that the demo, the tests and CI never need real Backlog credentials, and Jira later needs no ledger migration.
+
+**Acceptance Criteria:**
+
+**Given** `TrackerPort.readScope(connectorConfig, credentials)`
+**When** it returns
+**Then** it returns `{ complete, observedAt, tickets, accounts, hoursFieldPresent, rateLimit, adapterKind }`, and a `TicketObservation` holds only the FR-19 whitelist plus `createdAt`, which the Opening Balance rule needs (AR-12)
+
+**Given** Ticket attributes
+**When** they are carried
+**Then** they are `attributes: { kind, id, label? }[]` with a closed `kind` enum per Tracker, replacing any Backlog-shaped field — so adding Jira later migrates neither the ledger nor the rule schema (AR-12)
+
+**Given** a Ticket's status
+**When** the adapter reports it
+**Then** it reports `statusId` only: **the adapter does not decide "Resolved"**. The Resolved status set is Connector configuration in `connector_setting_event`, resolved at compute time under a pinned seq, because Percent Complete depends on it (AR-12)
+
+**Given** Ticket identity
+**When** it is stored
+**Then** this story creates `ticket` with `UNIQUE (tenant_id, tracker_kind, tracker_site, tracker_issue_id)` and exactly one `owner_connector_id`, plus `tracker_account` upserted only from `TrackerAccountObservation` and by nothing else (AR-12, AR-15, measured baseline)
+
+**Given** `fixture-replay`
+**When** it runs
+**Then** it reads `fixtures/backlog/<scenario>/NNNN.json` with its per-Connector cursor in a `packages/db`-owned table behind a `FixtureCursorPort`, so no outbound adapter touches the database directly (AR-12, AR-1)
+
+**Given** the required scenarios
+**When** they are recorded
+**Then** they cover at minimum: **hours**, **no-hours** for Ticket-Count Mode, **page shift** where a Ticket is updated mid-read, **leave and return**, and a **scope change** (AR-14)
+
+**Given** committed fixtures
+**When** CI checks them
+**Then** they are synthetic or produced by `--anonymise`, keeping only the whitelist fields with deterministic pseudonyms, and a CI check **rejects any fixture file containing a field outside the whitelist** (AR-41, NFR-S6)
+
+**Given** a fixture Ticket
+**When** it is stored
+**Then** it carries `tracker_kind = 'fixture'`, so fixture and live identities can never collide and a toggled override cannot mass-`left_scope` a Connector's history (AR-14)
+
+**Given** the adapter kind in effect
+**When** a snapshot is recorded
+**Then** it is stored on the snapshot, and `ingestSnapshot` refuses with an operator alert if it differs from that Connector's previous snapshot (AR-14)
+
+**Given** the HTTP adapter
+**When** its code paths are inspected
+**Then** it has **no non-GET code path at all** (FR-17, AR-12)
+
+### Story 5.2: Connect a Backlog space, read-only
+
+As a PM,
+I want to connect a Project to a Backlog space with a read-only bot user and record who approved it,
+So that the offshore team keeps working exactly as they do and the client's consent is on the record.
+
+**Acceptance Criteria:**
+
+**Given** the set-up flow
+**When** a PM adds a Connector
+**Then** it recommends a dedicated read-only bot user, and takes the space URL, the API key and the project key (FR-17)
+
+**Given** a client-owned space
+**When** the Connector is set up
+**Then** the PM records **who on the client side approved the connection, and when**, and `ingestSnapshot` **refuses** a Connector with no `approval_recorded_at`, recording the refusal as a failed attempt with a PM-visible reason (FR-17, AR-15)
+
+**Given** whether hours are available
+**When** it is detected
+**Then** it is detected **from the data** — is the actual-hours field present, and populated on any Ticket — and **never from the Backlog plan name** (FR-17, AR-17)
+
+**Given** Tracker credentials
+**When** they are stored
+**Then** they are encrypted with AES-256-GCM, **every ciphertext stores the `key_id` that produced it** so a key can be rotated by a maintenance job without downtime, and production uses KMS envelope encryption while `CREDENTIALS_KEY` is the local path only (AR-29, NFR-S2)
+
+**Given** credentials
+**When** they are handled anywhere
+**Then** they are write-only through the use-case surface, never shown after entry, and `pino` redaction covers `*.apiKey`, `*.token`, `*.password` and `authorization` (AR-29, NFR-S2)
+
+**Given** credentials rotated
+**When** the rotation completes
+**Then** **no Mapping is lost** (FR-17)
+
+**Given** an invalid or revoked credential
+**When** a snapshot attempt fails on it
+**Then** a Connector error is raised and the PM is notified **in the app and by email within one snapshot interval**, with the banner reading what actually happened — "Backlog rejected the API key (revoked?). Figures are frozen at the last good snapshot, 19 Sep 18:00." (FR-17, UX-DR23)
+
+**Given** Connector scope
+**When** it is set or changed
+**Then** it is written to `connector_scope_event`, which this story creates, and every snapshot records the `scope_seq` it read under (AR-19, FR-20)
+
+### Story 5.3: A paginated read is complete, or it is not a read
+
+As the founder,
+I want a full scope read that can prove it saw every Ticket,
+So that the ledger is never built on a read that looked finished while silently skipping Tickets.
+
+**Acceptance Criteria:**
+
+**Given** Backlog's Get Issue List
+**When** it is called
+**Then** it is called with `sort=created&order=asc` with the internal id as tiebreak — **not** the default `sort=updated&order=desc`, under which a Ticket updated mid-read jumps to page 1 and shifts every later page, so Tickets are skipped and duplicated while the read still looks finished (AR-13)
+
+**Given** a full read
+**When** completeness is judged
+**Then** Count Issues is called with the same filter **before and after** the read, and the read is `complete` only if the union of pages has distinct ids with no duplicates **and** its size equals both counts (AR-13)
+
+**Given** a read that is not complete
+**When** it finishes
+**Then** it is retried **once**, and then **writes nothing** and is recorded as a failed snapshot attempt visible to the PM (AR-13, AR-15)
+
+**Given** the "page shift" fixture scenario
+**When** it replays
+**Then** the read is reported incomplete and nothing is written, which is the test that this rule works (AR-14)
+
+**Given** Backlog's rate limits
+**When** the Connector is set up
+**Then** the adapter calls Get Rate Limit and stores the **Search** bucket limit, which is plan-dependent, lower than the Read bucket, and shared across every integration using the same API user
+**And** if one full read would consume more than 25% of the Search budget per interval, the Connector is **refused at setup or its schedule is slowed**, with an operator alert (AR-13)
+
+**Given** R0's read strategy
+**When** it is documented
+**Then** it reads the **full scope on every snapshot** — about 20 calls per 2,000 Tickets, paced by the `X-RateLimit-*` headers — and incremental reads are deferred under one guard: an incremental read may never mark `left_scope`, and a complete full read must run at least daily (AR-15, AR-62)
+
+### Story 5.4: Snapshots run on a schedule the PM can see
+
+As a PM,
+I want snapshots taken automatically during the hours my teams work, and on demand when I ask,
+So that the numbers are current without me remembering to refresh them.
+
+**Acceptance Criteria:**
+
+**Given** that cron cannot express "a JP or VN working day"
+**When** the schedule is registered
+**Then** the worker registers an **hourly tick** with `tz: 'Asia/Tokyo'` and `missed: 'skip'` — so an outage does not replay a backlog of ticks — and **the handler decides**, asking `domain/calendar` whether this hour is inside the 09:00–19:00 JST business window on a JP or VN working day (AR-28, FR-19)
+
+**Given** that window
+**When** Connectors are enqueued
+**Then** every due Connector is enqueued hourly inside it and at least every 6 hours outside it (FR-19, AR-28)
+
+**Given** the ingest queue
+**When** it is created
+**Then** it is created with `policy: 'stately'` and jobs are sent with `singletonKey = connectorId`
+**And** `singletonKey` alone on a `standard` queue only throttles per time slot and does **not** prevent two active jobs with the same key, whereas `stately` gives one active plus one queued, so an on-demand request coalesces behind the running snapshot and the rest are dropped (AR-16)
+
+**Given** a snapshot attempt that fails
+**When** it is retried
+**Then** `retryLimit: 3` with backoff sized so every attempt finishes inside one snapshot interval, under 45 minutes, and **each failed attempt is a visible row, not just a log line** (AR-16, NFR-R1)
+
+**Given** a failed snapshot
+**When** the next one succeeds
+**Then** **no data is lost**: the next successful snapshot records the full difference (FR-19)
+
+**Given** the latest successful snapshot
+**When** any project surface renders
+**Then** its age is always visible in the top-bar pin, live-updating each minute, and clicking it shows the snapshot time, the Connectors, the next scheduled snapshot and *Refresh now* (FR-19, UX-DR20)
+
+**Given** a newer snapshot than the one a Review is pinned to
+**When** the pin renders
+**Then** it reads "Newer snapshot available — Re-pin" rather than silently changing the figures (UX-DR20)
+
+**Given** stored Ticket fields
+**When** a snapshot is written
+**Then** only the FR-19 whitelist is stored — id, key, title, status, estimate, actual hours, assignee and the attributes Mapping Rules use — and **descriptions and comments are never stored** (FR-19, NFR-S6)
+
+**Given** retention
+**When** compaction runs
+**Then** snapshots older than 90 days are compacted to one per day, **the Actuals Ledger is never compacted**, and compaction deletes only `ticket_observation` rows — never a `tracker_snapshot` header, so `prev_snapshot_id` keeps its referent (FR-19, AR-10)
+
+**Given** compaction
+**When** it chooses what to keep
+**Then** it retains the observation set of any snapshot referenced by a Published Snapshot, by a ledger entry, by an open Review, by an unexpired export, by a Reporting Period's first snapshot, or that is a Connector's latest (AR-10)
+
+**Given** a 2,000-Ticket scope
+**When** a full snapshot runs
+**Then** it is read and written to the ledger **within 5 minutes**, measured against the fixture (NFR-P1)
+
+### Story 5.5: One writer builds the Actuals Ledger
+
+As the founder,
+I want the ledger written by exactly one transaction,
+So that two code paths can never derive a delta differently and no partial snapshot can corrupt one.
+
+**Acceptance Criteria:**
+
+**Given** `ingestSnapshot`
+**When** anything writes `tracker_snapshot`, `ticket_observation` or `actuals_ledger_entry`
+**Then** it is that use case and nothing else (AR-15)
+
+**Given** the ingest flow
+**When** it runs
+**Then** the full-scope read happens **outside** the transaction, and then one transaction takes the per-Project lock, records the snapshot with its adapter kind and `scope_seq`, upserts `ticket` and `tracker_account` identity, appends one ledger entry per Ticket whose `actualMh` changed, marks `left_scope`, and re-evaluates Mapping Rules — idempotent on `(connector_id, observedAt)` (AR-15, AR-37)
+
+**Given** a ledger entry
+**When** it is appended
+**Then** it records the Ticket, the delta, the snapshot window from the earlier snapshot to the later one, the assignee at the later snapshot, `prev_snapshot_id`, `snapshot_id` and `active_baseline_version_id` (FR-25, AR-15)
+
+**Given** the entry
+**When** its Resource is needed
+**Then** it is **not stored**: the Resource is resolved at query time from `tracker_account_link_event`, so a late FR-13 link fixes past hours instead of leaving them Unattributed forever (AR-15)
+
+**Given** `active_baseline_version_id`
+**When** it is chosen
+**Then** it is the latest `baseline_version` **by `seq`, committed before this transaction took its lock** — never a timestamp comparison against `observedAt`, which breaks under fixture replay and under a Re-baseline spanning a paged read (AR-15)
+
+**Given** a negative delta
+**When** it is recorded
+**Then** it is recorded as a negative entry and **never discarded**, costed at the Resource and Rate of the Ticket's most recent positive entries so money nets out (FR-25)
+
+**Given** `actualMh = null`
+**When** it is observed
+**Then** **no entry is produced**, and a transition from a value to `null` produces no negative delta: it sets `hours_cleared = true` on the observation. Only a numeric-to-numeric change produces a delta, which keeps a Ticket-Count Mode Connector or a plan downgrade from zeroing out AC (AR-15)
+
+**Given** a correction
+**When** it is made
+**Then** entries are **never updated**; a correction is a new entry (FR-25)
+
+**Given** an entry
+**When** its Reporting Period is assigned
+**Then** it belongs to the Period containing the timestamp of its **later** snapshot, computed by `periodOf(window_end, tz, teireiWeekday)` from `project_setting_event` — which this story creates (FR-25, AR-18, AR-19)
+
+**Given** the transaction
+**When** it commits
+**Then** the check `Σ delta_mh per Ticket = last observed actualMh` runs, and a violation raises an operator alert (AR-15, AR-36)
+
+### Story 5.6: The ledger stays correct as Tickets appear, move and vanish
+
+As a PM,
+I want a project connected mid-flight to show no false spike, and a Ticket that leaves scope to keep its history,
+So that the actuals are honest from the first snapshot rather than after two weeks of warm-up.
+
+**Acceptance Criteria:**
+
+**Given** hours a Ticket already had
+**When** they are recorded
+**Then** they are an **Opening Balance** in exactly two cases: the Ticket is in the Connector's **first** snapshot; or it is first seen in the first snapshot after a recorded scope change **and** its `createdAt ≤ prev_snapshot.observed_at` (FR-42, AR-15)
+
+**Given** a Ticket created since the previous snapshot
+**When** it is first seen, even in that snapshot
+**Then** it is a **delta**, because its hours are genuinely new (AR-15)
+
+**Given** Opening Balances
+**When** metrics are computed
+**Then** they count in **cumulative AC** and are **excluded from Period metrics**, so a Project connected mid-flight shows no false spike — and they are reported separately per Connector (FR-42, FR-20)
+
+**Given** a Ticket absent from a complete read
+**When** `left_scope` is considered
+**Then** it requires **two consecutive complete reads** with the Ticket absent, because completeness is a property of the adapter's own accounting and a single bad page costs a Ticket's whole history (AR-15)
+
+**Given** a Ticket that left scope
+**When** it is reported
+**Then** it keeps its ledger history, its hours are **not reversed**, no further deltas are recorded, and it is listed as "left scope" with its hours (FR-42, UX-DR23)
+
+**Given** a Ticket that left scope and returns
+**When** it is seen again
+**Then** it is a **delta from its last observed `actualMh`** — never from 0 and never an Opening Balance — unless a recorded scope change makes it an Opening Balance case (AR-15)
+
+**Given** a Ticket whose key changes, or which moves between Tracker projects within scope
+**When** it is observed
+**Then** it keeps its identity, because identity is the Tracker's internal id (FR-42)
+
+**Given** a second Connector whose scope overlaps an owned Ticket
+**When** it is observed
+**Then** the result is a `connector_overlap` record and **not a ledger entry**, the conflict is shown to the PM, and the hours are not counted twice (FR-42, AR-15)
+
+**Given** an overlap
+**When** ownership transfers
+**Then** it transfers **only** through a PM-confirmed resolution recorded as an append-only `connector_ownership_event`: the ledger stays on the Ticket, no Opening Balance is written, and only `owner_connector_id` moves. An owner Connector being deleted or losing scope does **not** transfer ownership by itself (AR-15)
+
+**Given** every in-scope Ticket
+**When** the invariant is checked
+**Then** the sum of its ledger entries equals its last observed actual hours (FR-42)
+
+### Story 5.7: A Connector with no hours says so, and stays saying it
+
+As a PM,
+I want a space that exposes no hours to run in Ticket-Count Mode and tell me which metrics are unavailable,
+So that I never read a zero that means "we do not know".
+
+**Acceptance Criteria:**
+
+**Given** the measurement basis
+**When** it is decided
+**Then** it is a property of the **Connector**, recorded in `measurement_basis_event` — which this story creates — and pinned in `ComputationInputs` as `basis_seq_max`; each snapshot still stores its observed basis as evidence, but **no metric reads it directly** (AR-17, AR-19)
+
+**Given** hysteresis
+**When** the basis flips
+**Then** it switches to `hours` only after **3 consecutive complete snapshots** with the hours field present and at least one non-null value, and back to `count` only after 3 consecutive complete snapshots with the field absent or empty on every Ticket — so one engineer logging 0.5 h does not flip a Project week to week
+**And** the flip is **automatic in both directions with no confirmation screen** (AR-17, founder decision A3)
+
+**Given** any metric function
+**When** it returns
+**Then** it returns `{ kind: 'value', value, unit, coverage }` or `{ kind: 'unavailable', reasonCode }`, and the UI renders `unavailable` with its reason and **never as 0** (AR-17, FR-27)
+
+**Given** Ticket-Count Mode
+**When** metrics are computed
+**Then** PV, EV, SV and SPI are still computed with Percent Complete on the count basis, and AC, CV, CPI, EAC, ETC, VAC and TCPI read "unavailable — tracker provides no hours" (FR-27)
+
+**Given** Ticket-Count Mode
+**When** Unplanned Work is shown
+**Then** it is a **count of Tickets**, and the Period's Unplanned count is defined explicitly as *Tickets first observed in, or Resolved within, the Period whose Mapping at `mapping_seq_max` is Unplanned* — one function in `domain/attribution` used by both the indicator and the Review, so two modules cannot colour it differently (AR-17, FR-27)
+
+**Given** "Resolved"
+**When** it is evaluated
+**Then** it comes from the Connector's Resolved status set at `connector_setting_seq_max` — created by this story — applied to the observation's `statusId` (AR-17, AR-19)
+
+**Given** a Project with both an hours Connector and a count Connector
+**When** AC-based metrics are computed
+**Then** they cover **only the hours Connectors** and are labelled with that coverage, and **hours and counts are never added together** (FR-27, AR-17)
+
+**Given** Ticket-Count Mode
+**When** Health is computed
+**Then** the Effort/Cost indicator shows "unavailable", and the overall status is the worst of the available indicators and **names the unavailable one** (FR-27)
+
+### Story 5.8: Tracker Accounts become people, retroactively
+
+As a PM,
+I want to link Tracker Accounts to Resources and have the link fix hours already recorded,
+So that a person I link in week three is not Unattributed for weeks one and two forever.
+
+**Acceptance Criteria:**
+
+**Given** observed Tracker Accounts
+**When** the PM opens the linking panel
+**Then** the system suggests links by matching names or emails, from the display name and email the observation carried (FR-13, AR-12)
+
+**Given** a link
+**When** it is recorded
+**Then** it is appended to `tracker_account_link_event`, which this story creates (FR-13, AR-19)
+
+**Given** a link made after hours were recorded
+**When** figures are computed
+**Then** the Resource is resolved at query time at `link_seq_max`, so **the link is retroactive in live views and pinned in Published Snapshots** — exactly as Rates behave (AR-18, AR-15)
+
+**Given** hours from an unlinked Tracker Account, or from a Ticket with no assignee
+**When** they are attributed
+**Then** they are **Unattributed hours**, costed at the Project default Rate from `project_default_rate_entry` (FR-13, AR-18)
+
+**Given** Unattributed hours
+**When** Department roll-ups are computed
+**Then** they appear on the *Unattributed* line, so Department totals still equal Project totals (FR-13)
+
+**Given** Tracker Account names and emails
+**When** anything is logged
+**Then** they are personal data under NFR-S6 and **never reach operator logs or metrics** (AR-12, NFR-O1, NFR-S6)
+
+### Story 5.9: Map a Ticket to a Work Package, and never move the plan
+
+As a PM,
+I want to map, remap and unmap Tickets and see the hours follow immediately,
+So that I can reconcile for an hour without the plan shifting underneath the review.
+
+**Acceptance Criteria:**
+
+**Given** `mapping_event(seq, tenant_id, project_id, ticket_id, wp_id | null, source, rule_id?, actor, at)`
+**When** a Mapping is read
+**Then** it is the **only** Mapping store, `source` is `manual | rule | disposition | release`, and a Ticket's current Mapping is its latest event at or below a given high-water mark (AR-18)
+
+**Given** a Ticket
+**When** it is mapped
+**Then** it maps to **at most one leaf WP**, and only leaf WPs are mappable — `plan` refuses any edit, and `confirmImport` any diff, that would turn a mapped leaf into a summary until its Mappings are reassigned (FR-21, AR-18)
+
+**Given** `mapping_event`'s scope
+**When** the schema is written
+**Then** it carries `project_id` with composite foreign keys, so a Ticket can only be mapped inside the Project of its owning Connector — which keeps FR-20's per-Connector sums closed (AR-18)
+
+**Given** a remap
+**When** it commits
+**Then** **all** of that Ticket's ledger entries are attributed to the WP it is mapped to **now**, Unplanned Work updates immediately, and **the ledger itself is never rewritten**: attribution is computed from the ledger and the Mapping history (FR-21, AR-18)
+
+**Given** any Mapping change
+**When** it commits
+**Then** **no WP date moves**: it writes no actual date and triggers no recalculation, and the WP's *first observed activity* is recomputed and shown beside its actual start as evidence the PM may take with one click — until they do, the schedule is exactly where it was (FR-21, AR-52)
+
+**Given** an ordinary unmap
+**When** it is recorded
+**Then** it is `release`, which hands the Ticket back to the rules, and FR-5's WP deletion writes the same. `manual` with `wp_id = null` — pinned Unmapped — is **not exposed as a PM action in R0** (AR-18, founder decision A4)
+
+**Given** `deleteWp`
+**When** it runs
+**Then** it calls `mapping.reassign(...)` and `mapping.disableRulesTargeting(wp)` in one transaction, so a deleted WP can never be a live rule target (AR-18, FR-5)
+
+**Given** `mapping_head`
+**When** it is maintained
+**Then** it is a `derived` index kept in the same transaction and **never the source of truth** (AR-18, AR-38)
+
+**Given** Tickets and WPs
+**When** the PM maps by pointing
+**Then** dragging Tickets onto WPs works here — and this is **the one and only place drag-and-drop exists in R0** — with the keyboard Map action as an exact equivalent, so no capability is reachable by mouse alone (UX-DR25, NFR-U1, UJ-2)
+
+**Given** every Mapping change
+**When** it commits
+**Then** it is recorded with its author and time (FR-21, NFR-A1)
+
+### Story 5.10: Rules keep new Tickets mapped, and still never move the plan
+
+As a PM,
+I want rules that map matching Tickets automatically in priority order,
+So that next week's Tickets are mapped without me touching them, and Monday's dates are Friday's dates.
+
+**Acceptance Criteria:**
+
+**Given** Mapping Rules
+**When** a PM defines them
+**Then** they are conditions on Ticket attributes in **strict priority order with no two rules sharing a priority**, over Backlog's milestone, category, issue type, parent issue and key pattern (FR-22)
+
+**Given** every Tracker Snapshot
+**When** ingest runs
+**Then** each Ticket without a manual Mapping is re-evaluated against the rules in priority order by the pure `evaluateRules(rules, observation) → wpId | null`, and events are appended **only for Tickets whose result changes** (FR-22, AR-18)
+
+**Given** that re-evaluation runs hourly and unattended
+**When** it runs
+**Then** it changes attribution only: **it writes no actual date and triggers no recalculation**, so a PM who opens the tool on Monday sees the dates they left on Friday with the hours behind them updated (FR-22, AR-52)
+
+**Given** a manual Mapping committed during an ingest
+**When** that ingest's rule evaluation runs
+**Then** **manual wins**: every append re-reads the Ticket's head **inside** the per-Project lock, and evaluation is skipped for any Ticket whose head is `manual` or `disposition` at lock time
+**And** a CI concurrency test asserts exactly this (AR-18, AR-37)
+
+**Given** a new, edited or deleted rule
+**When** the PM saves it
+**Then** they first see a preview of the Tickets and hours that would move — "+14 Tickets / +32h would move to WP 2.3; 2 Tickets leave WP 2.1" — and **Save is disabled until the preview has loaded** (FR-22, UX-DR22)
+
+**Given** a deleted rule
+**When** it is removed
+**Then** the Tickets it mapped are re-evaluated against the remaining rules (FR-22)
+
+**Given** a rule that changes a Ticket's Mapping
+**When** it fires
+**Then** the change is recorded as a Mapping change **by that rule**, and a Ticket a rule moves to Unmapped is highlighted in the next Review as "moved to Unmapped by rule '…'" with a link to the rule (FR-22, UX-DR23, NFR-A1)
+
+**Given** the rule list
+**When** it is reordered
+**Then** it reorders by drag handle or `Alt+↑/↓` (UX-DR22)
+
+### Story 5.11: Coverage, per Connector, in Tickets and in hours
+
+As a PM,
+I want to see how much of a Connector's work is mapped, in Catch-all, or unmapped,
+So that I know how much of my actuals the plan can account for.
+
+**Acceptance Criteria:**
+
+**Given** a Connector
+**When** coverage is shown
+**Then** it reports how much is mapped, how much is in Catch-all WPs, and how much is unmapped, with **the share of Tickets and the share of hours reported separately** (FR-23)
+
+**Given** the Scope Ledger Bar
+**When** it renders
+**Then** each segment is a button that filters the list below to that bucket, arrow keys move between segments, and an hours-share / Ticket-share toggle switches the basis (UX-DR18, FR-23)
+
+**Given** the bar
+**When** accessibility is checked
+**Then** it has a "Show as table" toggle and its figures also appear in adjacent text, because every chart has a table (UX-DR26, NFR-U1)
+
+**Given** SM-5
+**When** coverage is measured after a Project's first two weeks
+**Then** the share of hours on Mapped Tickets excluding Catch-all is reported, against a target of at least 80% (SM-5)
+
+### Story 5.12: Catch-all Work Packages, counted once
+
+As a PM,
+I want a bucket WP for miscellaneous work that is measured as Level of Effort up to its Baseline hours,
+So that small work has a home without its overflow disappearing from Unplanned Work or being counted twice.
+
+**Acceptance Criteria:**
+
+**Given** a WP flagged as Catch-all
+**When** the flag is recorded
+**Then** it is written to `wp_flag_event`, which this story creates, and attribution judges an entry against the flag at `wp_flag_seq_max` while PV and BAC read the Baseline copy (FR-24, AR-22, AR-19)
+
+**Given** a Catch-all WP **with** Baseline hours
+**When** it is measured
+**Then** it is measured as **Level of Effort**, its AC counts only up to its Baseline hours, and hours beyond that are Unplanned Work appearing only on the Project's *Unplanned* line — **never counted twice** (FR-24, FR-30)
+
+**Given** a Catch-all WP **without** Baseline hours
+**When** it is measured
+**Then** **all** of its hours are Unplanned Work (FR-24)
+
+**Given** the overflow
+**When** it is computed
+**Then** it is cumulative per Catch-all WP in `(window_end, seq)` order against the Baseline hours of each entry's `active_baseline_version_id`, the entry that crosses the cap is **prorated** with each part costed at its own entry's Rate, and negative deltas are taken **LIFO** from the overflow (AR-18)
+
+**Given** the crossing entry and a negative delta straddling the cap
+**When** they are tested
+**Then** golden tests cover both cases (AR-18)
+
+**Given** SM-C1
+**When** the counter-metric is watched
+**Then** the Catch-all share of total hours is reported, because it must not rise while Unplanned Work falls (SM-C1)
+
+### Story 5.13: Nothing in scope is silently excluded
+
+As a PM,
+I want the four buckets of in-scope hours to add up to the total,
+So that I can prove to a client that nothing was quietly left out.
+
+**Acceptance Criteria:**
+
+**Given** any Reporting Period and Connector
+**When** the four figures are summed
+**Then** these four **mutually exclusive** figures sum to the total ledger hours in that Connector's scope for that Period, excluding Opening Balances: hours mapped to baselined WPs that are not Catch-all; hours mapped to non-baselined WPs that are not Catch-all; hours mapped to Catch-all WPs; and Unmapped Work (FR-20)
+
+**Given** the sum
+**When** it is tested
+**Then** it is an automated test over the fixture, not a claim in the UI (FR-20)
+
+**Given** Opening Balances
+**When** they are reported
+**Then** they are reported **separately, per Connector**, with the line saying what they are: "Opening Balance 1,120h — hours before momo-keikaku could observe them. Excluded from period metrics." (FR-20, UX-DR23)
+
+**Given** a Connector whose scope changes
+**When** the Review renders
+**Then** it shows the change, the Tickets that left scope, and their hours (FR-20)
+
+**Given** every in-scope Ticket
+**When** it is reported
+**Then** it is **either mapped or reported as unmapped** — there is no third state and no silent exclusion (FR-20)
+
+### Story 5.14: Approximate figures say they are approximate
+
+As a PM,
+I want every person-level and day-level breakdown labelled with why it is approximate,
+So that I never present a number as precise when the data cannot support it.
+
+**Acceptance Criteria:**
+
+**Given** any breakdown of actuals by person or by day
+**When** it renders
+**Then** it carries `approximate: true` with a `reasonCode` from the domain, and the UI renders the notice as an **inline caption above the chart or table that is not dismissible** — "Approximate — hours are spread between snapshots, not taken from worklogs." (FR-26, AR-18, UX-DR17)
+
+**Given** the notice
+**When** views are audited
+**Then** it appears on **every** view at person level or day level (FR-26)
+
+**Given** actuals at person level
+**When** Client Views are built
+**Then** they **never appear** there (FR-26, FR-34)
+
+**Given** any view
+**When** it is designed
+**Then** **no view ranks or scores people by Unplanned Work**, and no person is named in any Unplanned Work context (FR-26, UX-DR29, §7.1)
+
+### Story 5.15: The Ticket half of the load fixture
+
+As the founder,
+I want the fixture extended to 2,000 Tickets per Project,
+So that the snapshot and Review budgets are measured at the shape NFR-P1 actually names.
+
+**Acceptance Criteria:**
+
+**Given** Story 1.8's generator
+**When** this story extends it
+**Then** it adds 2,000 Tickets per Project across 5 Projects with their observations, Mappings and ledger entries, deterministically from the same seed (NFR-P1, measured baseline)
+
+**Given** the extended fixture
+**When** the budgets are measured
+**Then** a full snapshot of 2,000 Tickets completes within 5 minutes, and the Review loads in under 2 s p75 and under 4 s p95 (NFR-P1)
+
+**Given** the fixture
+**When** it is committed
+**Then** it is synthetic or anonymised to the whitelist, and the CI whitelist check passes on it (AR-41)
+
+## Epic 6: Thursday's teirei report in twenty minutes
+
+A PM can open the Reconciliation Review for any Reporting Period, pinned to one Tracker Snapshot, and read the four report pages they used to rebuild by hand every week: honest EVM in effort hours with Unplanned Work carrying actual effort and no earned value, both CPIs side by side, three Health Indicators each showing the rule behind its colour, the forecast with the two finish dates and the gap between them named, and every WP whose dates moved carrying one of seven causes. They then disposition every Unmapped Ticket and advance the Data Date deliberately.
+
+*Nine stories. FRs: FR-28, FR-29, FR-30 (Typical EAC only), FR-31, FR-32. It creates `tenant_setting_event`. The formulas were read from `docs/references/` and match the PRD: CV, SV, CPI, SPI, TCPI, and Typical EAC = BAC / CPI.*
+
+### Story 6.1: Every figure comes from pinned inputs, and a test proves it
+
+As the founder,
+I want every reported number computed from an append-only source that one value pins,
+So that a Published Snapshot reproduces years later instead of drifting with the Current Plan.
+
+**Acceptance Criteria:**
+
+**Given** `domain/evm`, `domain/health`, `domain/forecast`, `domain/attribution` and `domain/schedule`
+**When** any of them reads a value
+**Then** that value comes from an append-only source `ComputationInputs` pins — and for `domain/schedule` that source is **`schedule_run.inputs` and nothing else** (AR-19)
+
+**Given** the closure rule
+**When** CI runs
+**Then** a test enumerates the exported domain function signatures and **fails if any input type is not reachable from `ComputationInputs`**, which is what makes FR-35's reproduction mechanical rather than aspirational (AR-19, AR-35)
+
+**Given** `ComputationInputs`
+**When** it is captured
+**Then** it is a **fully resolved value** carrying the pinned snapshot per Connector, `ledger_seq_max`, the mapping, baseline, rate, override, disposition, setting, status, flag, link, calendar, scope, connector-setting and basis watermarks, the Visibility Policy value, **`schedule_run_seq`**, the Period bounds, the time zone, the calendar version, the `asOf` and the `formulaVersion` (AR-19)
+
+**Given** which ledger entries a computation sees
+**When** they are selected
+**Then** they are filtered by `snapshot_id ≤ the pinned snapshot` **per Connector**, and `ledger_seq_max` is stored **only as an assertion** that the recompute saw the same row set — never as the filter, because two filters for one thing is how two builders diverge (AR-21)
+
+**Given** `ComputationInputs`
+**When** it is captured
+**Then** it is captured under `pg_advisory_xact_lock_shared` on the same namespace and key, so no transaction holding a lower `seq` can still commit after it (AR-37)
+
+**Given** `formulaVersion`
+**When** a formula changes
+**Then** a new version is registered, the old stays executable, and a CI test recomputes golden Published Snapshots for **every** registered version (AR-19, AR-35)
+
+### Story 6.2: EVM in hours, with Unplanned Work carrying no earned value
+
+As a PM,
+I want PV, EV and AC in effort hours with Unplanned Work counted as cost and never as value,
+So that the numbers say what actually happened instead of flattering the plan.
+
+**Acceptance Criteria:**
+
+**Given** PV
+**When** it is computed
+**Then** it is the Baseline hours of baselined leaf WPs spread linearly over each WP's baseline working days up to the as-of date, allocated in integer milli-hours by **largest remainder** with ties broken by date then resource id (FR-30, AR-6)
+
+**Given** AC
+**When** it is computed
+**Then** it is hours from the Actuals Ledger attributed according to the current Mapping at `mapping_seq_max` (FR-30, AR-18)
+
+**Given** Percent Complete
+**When** it is derived
+**Then** it is **never derived from burned effort**: the *estimate basis* is resolved mapped estimate hours ÷ the larger of the WP's Baseline hours and the total mapped estimate hours, used when every Mapped Ticket has an estimate; the *count basis* is resolved Tickets ÷ Mapped Tickets, used when any has none; and a WP with no Mapped Tickets is 0%, flagged "no evidence" (FR-30)
+
+**Given** Percent Complete
+**When** it is capped and flagged
+**Then** it is capped at **99% until the WP has an actual finish**, which is what "complete" means, and a WP with fewer than three Mapped Tickets is flagged "low evidence" (FR-30, UX-DR23)
+
+**Given** EV
+**When** it is computed
+**Then** it is Baseline hours × Percent Complete, and a **fall** in EV — for example because a Ticket was reopened — is flagged in the Review (FR-30)
+
+**Given** Unplanned Work
+**When** it enters EVM
+**Then** it is actual effort with **no earned value**, and at Project level AC is the AC of the baselined leaf WPs **plus an *Unplanned* line with PV = EV = 0**, so the roll-up sums exactly (FR-30)
+
+**Given** a ledger entry
+**When** its baselined status is judged
+**Then** it is judged against the Baseline version active **when the entry was recorded**, so a Re-baseline stops new hours on a newly baselined WP counting as Unplanned Work while **earlier hours stay Unplanned Work** (FR-30)
+
+**Given** the two CPIs
+**When** they are shown
+**Then** both are always shown: **CPI (all-in) = EV / total AC**, the headline figure the Effort/Cost indicator and every EAC formula use; and **CPI (planned scope) = EV / AC of the baselined WPs only** (FR-30)
+
+**Given** money
+**When** it is shown
+**Then** it is a derived layer of hours × Rate, marked Internal, appearing only in PM and internal views, and the UI says that CPI in money can differ from CPI in hours because the people planned and the people who did the work can have different Rates (FR-30, UX-DR28)
+
+**Given** any ratio
+**When** it rolls up
+**Then** it is **recomputed from summed PV, EV and AC and never averaged** (FR-30)
+
+### Story 6.3: The formulas, and the one EAC method R0 ships
+
+As a PM,
+I want each metric to show its formula, its inputs and a one-line interpretation,
+So that I can defend a number in front of a client instead of quoting a dashboard.
+
+**Acceptance Criteria:**
+
+**Given** the formulas
+**When** they are implemented
+**Then** CV = EV − AC; SV = EV − PV; CPI = EV / AC; SPI = EV / PV; TCPI = (BAC − EV) / (BAC − AC); ETC = EAC − AC; VAC = BAC − EAC — the first five from `docs/references/`, and ETC and VAC as standard PMBOK definitions that do not appear there (FR-30)
+
+**Given** BAC
+**When** it is computed
+**Then** it is the Project-level sum of Baseline hours over all baselined leaf WPs, its money form summing each WP's Baseline hours × the Rate in effect at the Baseline date, with hours split equally across assigned Resources and unassigned WPs using the Project default Rate (§3)
+
+**Given** TCPI when BAC − AC ≤ 0
+**When** it renders
+**Then** it shows **"BAC exhausted"** instead of a number (FR-30, UX-DR23)
+
+**Given** the EAC Method
+**When** R0 ships
+**Then** **Typical only**: EAC = BAC / CPI, using the all-in CPI, with the method named next to every EAC. Atypical, Schedule-constrained and Flawed-estimate are Post-Q1 (FR-30, §8.1)
+
+**Given** any metric cell
+**When** the PM clicks it or presses `Enter`
+**Then** a non-modal formula popover opens showing the formula, its inputs with their values, a one-line interpretation, the change within the Period, and a drill-down to the Tickets or WPs behind it; `Esc` closes it and focus returns to the metric (UX-DR19, FR-30)
+
+**Given** the interpretations
+**When** they render
+**Then** CV or SV > 0 reads under budget or ahead and < 0 over budget or behind; CPI or SPI < 1 reads over budget or behind; TCPI > 1 reads that the remaining work must beat the planned efficiency (FR-30)
+
+**Given** every figure
+**When** it is rendered
+**Then** rounding happens only in `domain/present` — ratios to 2 decimals, hours to 1, yen to integer — and that module is the only rounding site for both the UI and snapshot outputs (AR-6)
+
+### Story 6.4: The evidence and the plan are made to face each other
+
+As a PM,
+I want to see where the Tickets say 60% and the plan says 30%, and to accept the evidence deliberately,
+So that the plan's progress stops being an assumption in either direction.
+
+**Acceptance Criteria:**
+
+**Given** the two figures
+**When** they are computed
+**Then** the **Observed** Percent Complete is derived from Ticket completion, drives EVM and the Review, and **never moves a date**; the **Recorded** Percent Complete is imported or set as an audited PM override and **is the one FR-6b reads** (FR-30, FR-6b)
+
+**Given** a WP with no Recorded value
+**When** it is scheduled
+**Then** it is scheduled as 0% done however far along its Tickets say it is, and the Review shows both figures side by side so the gap is visible rather than silently assumed either way (FR-30)
+
+**Given** the Observed-vs-Recorded list
+**When** it renders
+**Then** it shows one row per leaf WP where the two disagree by more than a threshold the PM sets, default 10 points, **worst gap first**, and each row says it in words — "Evidence says 60%. The plan says 30%." (UX-DR16, **Core**)
+
+**Given** a row
+**When** it renders
+**Then** it shows the Observed figure with its basis and evidence count, the Recorded figure with its source — imported with file and row, PM override with reason, or *none — scheduled as 0%* — the gap, the EV each would produce, and *Accept* (UX-DR16, **Core**)
+
+**Given** *Accept*
+**When** the PM presses it
+**Then** it opens a reason field **that cannot be empty** and states the consequence before it is pressed — "This writes a Recorded override of 60%. Remaining duration falls from 12 days to 5, and dates will move." (UX-DR16, FR-30)
+
+**Given** an accepted override
+**When** it commits
+**Then** it is written to `pct_override_event` through the AD-25 fence, triggers a recalculation whose movement appears with the cause *progress changed*, is written to the audit trail, and is marked **"PM-adjusted"** wherever the value appears (FR-30, FR-28, NFR-A1)
+
+**Given** the PM-adjusted marker
+**When** a Published Snapshot renders it
+**Then** it is always shown next to the Health Indicators it affects and **no Visibility Policy setting can hide it** (FR-30)
+
+**Given** an estimate edited in the tracker
+**When** it changes EV
+**Then** the change is flagged in the Review, because Ticket estimates are read from the latest snapshot (FR-30)
+
+**Given** the gap threshold setting
+**When** a cut is considered
+**Then** it is **Comfort**: the list shows every disagreeing WP at a fixed 10 points (UX-DR16, **Comfort**)
+
+**Given** SM-C4
+**When** the counter-metric is watched
+**Then** the share of EV coming from PM overrides is reported, because a rising share means the numbers are being steered (SM-C4)
+
+### Story 6.5: Three Health Indicators, each showing its rule
+
+As a PM,
+I want Schedule, Effort/Cost and Unplanned Work as computed colours that explain themselves,
+So that a client can see why a project is amber rather than being told that it is.
+
+**Acceptance Criteria:**
+
+**Given** the thresholds
+**When** they are resolved
+**Then** a threshold resolves as a Project override at `setting_seq_max`, else the Tenant default at `tenant_setting_seq_max` — created by this story — in **one function in `domain/health`**, and the resolved value with its source is stored in the snapshot inputs because FR-31 shows the override next to the indicator (FR-31, AR-19, founder decision A1)
+
+**Given** the default thresholds
+**When** they are applied
+**Then** SPI or CPI is green ≥ 0.95, amber ≥ 0.85 and < 0.95, red < 0.85; TCPI is red > 1.1 or when BAC is exhausted; the Unplanned Work share is green < 10%, amber 10%–20% inclusive, red > 20% (FR-31)
+
+**Given** any threshold comparison
+**When** it is made
+**Then** it uses the **exact** value by cross-multiplication at the single `compareRatio` site, never a rounded one, so 0.9496 can never be green in one module and amber in another (AR-6)
+
+**Given** the Unplanned Work indicator
+**When** it is computed
+**Then** it uses the **Reporting Period's share excluding Opening Balances**, with the cumulative share shown next to it (FR-31)
+
+**Given** TCPI
+**When** it crosses its threshold
+**Then** Effort/Cost is **red whatever the CPI**, with the current CPI shown next to TCPI for comparison (FR-31)
+
+**Given** a Milestone past its Baseline date with no actual finish
+**When** Schedule is computed
+**Then** it is **at least amber**, whatever the SPI — and "not done" means the WP has no actual finish (FR-31, §3)
+
+**Given** a Milestone whose **derived** date is later than its Baseline date, even though that date has not yet passed
+**When** Schedule is computed
+**Then** it is **at least amber**, because the scheduler knows about the slip before the date arrives — and the indicator **names which of the two rules fired** (FR-31)
+
+**Given** a Project whose minimum Float is negative
+**When** Schedule is computed
+**Then** it is **red** whatever the SPI; and where no Project finish is set, Float is relative, this rule cannot fire, and **the indicator says so rather than implying the plan is safe** (FR-31, FR-43)
+
+**Given** an unmet *must finish on* constraint
+**When** Schedule is computed
+**Then** it is **at least amber**, and **red when the unmet constraint belongs to a Milestone** — a separate rule from negative Float on purpose, because a violation stays on its own WP and would otherwise sit outside every indicator. The indicator names the worst violation and how many working days late it is (FR-31, FR-6b)
+
+**Given** the overall status
+**When** it is computed
+**Then** it is the worst of the three and is **never green while Schedule is red, even when CPI > 1** (FR-31)
+
+**Given** any indicator
+**When** it renders
+**Then** it carries **glyph + word + the rule behind its colour**, never colour alone, and hovering or focusing reveals the threshold rule and the driving figure (FR-31, UX-DR26, NFR-U1)
+
+### Story 6.6: The forecast, and both finish dates
+
+As a PM,
+I want the effort forecast and the two finish dates side by side with the gap named,
+So that "when does it finish" has one honest answer instead of a number that hides a disagreement.
+
+**Acceptance Criteria:**
+
+**Given** the effort forecast
+**When** it renders
+**Then** it is the EAC from the Project's selected EAC Method, so it **includes Unplanned Work** (FR-32)
+
+**Given** the two finish dates
+**When** they render
+**Then** **both are shown, together and labelled**: the **computed finish** from FR-6b, labelled as the scheduler's output and used by the Schedule indicator; and the **trend finish** = Baseline start + (Baseline duration in working days ÷ SPI), labelled a simple trend heuristic and not a PMI formula (FR-32)
+
+**Given** the trend finish
+**When** it is computed
+**Then** "Baseline start" is the Project start pinned in the active Baseline and "Baseline duration" the working days from it to the Baseline's latest finish; the division is evaluated in **whole working days and rounded up**; while EV < BAC it is never earlier than the next working day after the as-of date; and when SPI is 0 or unavailable **no trend finish is shown** (FR-32, AR-6)
+
+**Given** the two dates disagreeing
+**When** they render
+**Then** **the UI says so and shows the gap**, because that gap is a real signal about the plan and hiding it would be the dishonest kind of simplification this product exists to avoid (FR-32)
+
+**Given** a project late in its life where SPI converges to 1
+**When** the Schedule indicator renders
+**Then** SV and both finish dates are always shown next to it (FR-31)
+
+### Story 6.7: The Reconciliation Review, pinned and in one fixed order
+
+As a PM,
+I want one page in the order I already report in, pinned to one snapshot,
+So that Thursday's report is a scroll rather than an evening in Excel.
+
+**Acceptance Criteria:**
+
+**Given** the Review
+**When** it opens
+**Then** it is for one Reporting Period, **pinned to a specific Tracker Snapshot whose time is shown**, and shows EVM Metrics, Health Indicators, Divergence by WP, mapping coverage, and Unplanned Work broken into its three components (FR-28)
+
+**Given** the page order
+**When** it renders
+**Then** it is fixed: Header, Status, **Unplanned Work**, Ahead/Behind, Progress & Dates, Effort & Cost, Forecast, with the Disposition rail at the right — and Unplanned Work sits directly after Status because it is the reason the report exists (UX-DR15, **Core**)
+
+**Given** each section
+**When** it renders
+**Then** it opens with a section title and its 1px ink rule, which is **required markup, not styling**: with a single type family that rule is what separates the report pages (UX-DR15, **Core**)
+
+**Given** the Review's pin
+**When** inputs are captured
+**Then** the pin is **split**: Tracker-side inputs stay frozen for the Review's life so the numbers do not move under the PM, while the PM-authored watermarks **and `schedule_run_seq`** are re-captured after each successful write by this PM in this Review
+**And** `schedule_run_seq` belongs in the re-captured set, because three of those watermarks are recalculation triggers and freezing the run while re-capturing them would show new EVM against the dates of a superseded schedule (AR-20)
+
+**Given** Unmapped Work
+**When** it renders
+**Then** it is grouped by Tracker attribute, expandable to individual Tickets with hours and money in PM views, and **every number links to the Tickets or WPs behind it** (FR-28, UX-DR17)
+
+**Given** the Contract Type
+**When** the Review renders
+**Then** it is shown next to Unplanned Work (FR-28)
+
+**Given** the Review on the fixture
+**When** it loads
+**Then** it meets NFR-P1's under 2 s p75 and under 4 s p95 (NFR-P1)
+
+**Given** a snapshot more than 24 hours old
+**When** the Review renders
+**Then** the pin turns amber with its glyph and a header banner offers *Refresh now* (UX-DR23, FR-35)
+
+**Given** that upward reporting is still document-based
+**When** the Review is printed
+**Then** an A4-landscape print stylesheet reproduces the report pages, and the sidebar, top bar and Disposition rail do not print
+**And** it is **Comfort**: cutting it costs a tidy printout, not a requirement (UX-DR30, **Comfort**)
+
+### Story 6.8: Every date that moved carries its cause
+
+As a PM,
+I want each moved WP grouped under the reason it moved,
+So that one duration edit moving a hundred dates is not a hundred things to triage by hand.
+
+**Acceptance Criteria:**
+
+**Given** every WP whose Current Plan dates have moved since the previous Review
+**When** it renders
+**Then** it is marked with **exactly one of seven causes**: *edited*, *moved by a predecessor*, *calendar changed*, *data date advanced*, *actual dates recorded*, *progress changed*, or *project dates changed* (FR-28)
+
+**Given** the cause
+**When** it is derived
+**Then** it comes from the per-WP `cause` in `outputs`, computed from `diff(prevInputs, inputs)` and the passes — which is why `prevInputs` is an argument and `prev_run_seq` a column — walked across the runs between the two Reviews (AR-49, AR-11)
+
+**Given** a mapping change
+**When** the cause list is inspected
+**Then** **there is no cause for it, because a mapping change cannot move a date**: the blank cause column that would otherwise appear is designed out rather than explained away (FR-28)
+
+**Given** the list
+**When** it renders
+**Then** moved WPs are grouped under their cause with each group's count collapsed, old and new dates shown, and **no WP appears without a cause** (UX-DR16, FR-28, **Core**)
+
+**Given** the Data Date block
+**When** it renders
+**Then** it shows the current Data Date, the Period boundary, and an advance action that names what it will do first — "Advancing to 26 Sep re-dates 78 remaining work packages" — and advancing is **an explicit PM action** (FR-28, FR-43, UX-DR14)
+
+**Given** the runs between two Reviews
+**When** retention runs
+**Then** they are **not deleted**, because this list is what they exist for (AR-11)
+
+### Story 6.9: Disposition every Unmapped Ticket before anything leaves
+
+As a PM,
+I want to decide what to do with each group of unmapped hours in one keyboard pass,
+So that the report I publish has an answer for every hour in it.
+
+**Acceptance Criteria:**
+
+**Given** `recordDisposition` in `packages/app/review`
+**When** a Disposition is recorded
+**Then** it is the **only** Disposition writer; in one transaction under the per-Project lock it calls `plan.createWp(...)` for *Plan* rather than inserting `work_package` itself, calls `mapping.map(...)` with `source = 'disposition'` for *Map* and *Plan*, and appends **exactly one** `disposition_event` (AR-39)
+
+**Given** `disposition_event`
+**When** it is stored
+**Then** it stores the **explicit Ticket list at record time** with each Ticket's `ledger_seq_at` and `cum_mh_at` — **never the group criteria**, because storing criteria would silently extend the Disposition to Tickets that joined later (AR-39, FR-29)
+
+**Given** *Map*
+**When** it is recorded
+**Then** it creates Mappings and those hours **leave Unplanned Work immediately**, with the figures and the Scope Ledger Bar updating in place and a one-line change note — "−8h Unplanned" (FR-29, UX-DR17)
+
+**Given** *Plan*
+**When** it is recorded
+**Then** it creates a leaf WP and maps the Tickets to it; its hours **stay Unplanned Work until a Re-baseline includes that WP**, and hours recorded before that Re-baseline stay Unplanned Work (FR-29, FR-30)
+
+**Given** *Plan*
+**When** the WP is created
+**Then** it is created with **no dependencies and an *as soon as possible* constraint**, so the recalculation it triggers touches nothing but the WP itself — and *Map*, *Change Request candidate* and *Explain* change **no WP date at all** (FR-29, FR-21)
+
+**Given** *Plan* on Tickets that carry ledger entries
+**When** the dialog opens
+**Then** it **proposes** an actual start from their first observed activity and a duration of the working days from there to the Data Date, which the PM accepts or changes in the same dialog; on acceptance the WP is *in progress* pinned at that actual start, and if the PM clears the proposal it is *remaining* and placed after the Data Date
+**And** either way **nothing writes an actual date behind the PM's back** (FR-29, FR-5)
+
+**Given** the new WP
+**When** it is linked into the graph
+**Then** that is a **later, deliberate act from the plan surface**, outside the Review — which is the point at which the rest of the plan may move (FR-29)
+
+**Given** *Change Request candidate* and *Explain*
+**When** they are recorded
+**Then** the first collects the Tickets and their hours into an exportable list; the second attaches a note, plain text, shown with "Clients see this note only if you publish it" (FR-29, UX-DR17)
+
+**Given** any Disposition but *Map*
+**When** the Unplanned Work indicator is computed
+**Then** its colour **does not change without a Re-baseline**, and that rule lives in `domain/health` reading `disposition_seq_max` (FR-29, AR-39)
+
+**Given** new hours arriving on a dispositioned Ticket
+**When** the Review renders
+**Then** the Ticket is flagged "new hours since disposition", those hours count as not yet dispositioned, and the group returns to the queue with the new hours highlighted
+**And** the figure is the Ticket's ledger sum with `seq > ledger_seq_at`, reproducible from a Published Snapshot without replaying the ledger because `cum_mh_at` is stored (FR-29, AR-39, SM-7)
+
+**Given** the Disposition rail
+**When** the PM works it
+**Then** the queue is sorted by hours descending, `j`/`k` walk it, `x` selects, and `m`/`p`/`c`/`e` record the four Dispositions; every Disposition is undoable from the group's history until the Review's next publish or export (UX-DR17, UX-DR24, **Core**)
+
+**Given** a group Disposition
+**When** it is recorded
+**Then** it covers the Tickets in the group **when it was recorded**; Tickets that join later are not covered (FR-29)
+
+## Epic 7: The numbers and the plan both leave the tool
+
+A PM can export a fixed-layout xlsx report of the current PM view, and a raw export complete enough to recompute every EVM metric **and re-derive the schedule** outside the tool. A PM leaving momo-keikaku takes a working plan, not a picture of one.
+
+*Three stories. FRs: FR-38 (R0: fixed layout of the PM view), FR-39. Small, but it is the claim an Excel refugee will actually test.*
+
+### Story 7.1: The fixed-layout xlsx report
+
+As a PM,
+I want one xlsx of the view I am looking at,
+So that I can attach it to the teirei invite without rebuilding it.
+
+**Acceptance Criteria:**
+
+**Given** the current PM view
+**When** the PM exports
+**Then** the workbook contains EVM Metrics, Health Indicators, Unplanned Work, the forecast, milestones and the WP table, in a fixed layout (FR-38)
+
+**Given** any text value beginning with `=`, `+`, `-` or `@`
+**When** it is written to a cell
+**Then** it passes through **one** `safeCell()` that prefixes `'`, and every xlsx and CSV writer in the system goes through that same function, so **no formula can be injected** (FR-38, AR-29, NFR-S8)
+
+**Given** the export
+**When** it completes
+**Then** it is recorded in the audit trail (NFR-A1)
+
+**Given** the R0 boundary
+**When** scope is checked
+**Then** Published Snapshot export and Risks are **R1**, and a PM-supplied template is **Post-Q1** (FR-38, §8.1)
+
+### Story 7.2: A raw export that can recompute every number
+
+As a PM,
+I want everything behind the figures exportable,
+So that I can recompute any metric outside the tool and never be locked in.
+
+**Acceptance Criteria:**
+
+**Given** the raw export
+**When** it runs
+**Then** it exports as xlsx or CSV: Mapping history, the Actuals Ledger, Ticket status, estimate and actual hours for each retained snapshot, Percent Complete overrides, Rate history and Project default Rates, and Health threshold and EAC Method history (FR-39)
+
+**Given** a given as-of date
+**When** the export is checked
+**Then** it **contains enough data to recompute every EVM Metric outside the tool** — the no-lock-in claim, as a test rather than a promise (FR-39)
+
+**Given** compaction
+**When** snapshots are exported
+**Then** only the snapshots whose observations are **retained** are exported, and the export **says so on its face** (AR-10)
+
+**Given** the export
+**When** it is written
+**Then** it goes through the same `safeCell()` and is audited (AR-29, NFR-A1)
+
+### Story 7.3: A raw export that can re-derive the schedule
+
+As a PM,
+I want the plan's inputs exported, not just its dates,
+So that if I leave I take a working plan rather than a picture of one.
+
+**Acceptance Criteria:**
+
+**Given** the Plan
+**When** it is exported
+**Then** it carries **every scheduling input**: per WP the duration, constraint type and date, milestone flag, derived dates, actual dates and Percent Complete, plus the Project's **complete dependency graph with its lags** (FR-39)
+
+**Given** the Project and its history
+**When** they are exported
+**Then** the export carries the Project start, Project finish and Data Date **with their history**; the Holiday Calendar **and its version history**; and each Baseline version **with the scheduling inputs it pinned** (FR-39, FR-14, FR-15)
+
+**Given** the export
+**When** it is checked
+**Then** it contains enough to **re-derive the schedule outside the tool** — the graph, the durations, the constraints, the actual dates, the progress, the calendar version and the Data Date — which is the stronger half of the no-lock-in promise (FR-39)
+
+**Given** Published Snapshots
+**When** R1 arrives
+**Then** their stored inputs join this export; in R0 they do not exist (FR-39, §8.1)
+
+## Epic 8: It runs in Tokyo, it is backed up, and the operator can see it
+
+The founder can run R0 as a real service in a Japan region rather than on a laptop: both roles deployed, the database encrypted with in-region backups, uploads and mail in Tokyo, migrations applied by a privileged one-off task before the services roll, an operator view carrying no customer data, alarms that reach a human, and a documented procedure for deleting a Tenant's data within 30 days.
+
+*Five stories, **no FRs**. This epic exists because §8.1's fourteenth scope bullet — "Hosting in a Japan region" — carries no FR number and therefore had no owner. Its requirements are NFR-S3, NFR-S4, NFR-D1, NFR-O1 and NFR-R2's backups; its design is AD-18 and AD-19. It needs only Epic 1 and nothing depends on it.*
+
+### Story 8.1: Production in Tokyo, one image, two roles
+
+As the founder,
+I want R0 deployed in `ap-northeast-1` with nothing outside it,
+So that NFR-S4 is true of the running system and a client security sheet can say so.
+
+**Acceptance Criteria:**
+
+**Given** production
+**When** it runs
+**Then** it is AWS `ap-northeast-1`: ECS Fargate `web` behind an ALB at **TLS 1.2+** and `worker` at desired count 1, RDS PostgreSQL 18 with encrypted storage, S3 Tokyo with SSE for uploads, and SES Tokyo for mail (AR-33, NFR-S3, NFR-S4)
+
+**Given** the RDS version
+**When** it is pinned
+**Then** the major is 18 and the minor tracks local's 18.6; if 18.6 is unavailable in the region the nearest 18.x is used **and the local tag follows it**, so the two never drift by a major (AR-33)
+
+**Given** both roles
+**When** they are built
+**Then** they ship in **one container image** differing only by start command (AR-3)
+
+**Given** any customer data
+**When** it is stored or processed
+**Then** **none of it leaves `ap-northeast-1` — including logs, metrics and error reports**, and no third-party APM or error-tracking SaaS outside Japan is used unless disclosed and approved (AR-33, NFR-S4)
+
+**Given** SES
+**When** the account is new
+**Then** it starts in the sandbox at 200 mails a day and 1 per second, so **requesting production access is a launch task in this epic** — the client-facing sender domain with DKIM and DMARC is R1 (AR-33)
+
+**Given** uploaded workbooks
+**When** their lifecycle is set
+**Then** the bucket is in Tokyo with SSE, **versioning off**, no cross-region replication, and a lifecycle rule expiring objects after 90 days (AR-36, NFR-S4)
+
+**Given** the environments
+**When** they are listed
+**Then** they are `local`, optional `staging` and `production` from the same template; **the IaC tool, CI provider and deploy pipeline are deferred to the first staging deploy** (AR-33, AR-62)
+
+### Story 8.2: Migrations run before the services roll
+
+As the founder,
+I want schema changes applied by a privileged one-off task ahead of the deploy,
+So that a rolling deploy never runs new code against an old schema.
+
+**Acceptance Criteria:**
+
+**Given** a deploy
+**When** it runs
+**Then** a one-off ECS task runs `drizzle-kit migrate` as the `migrator` (owner) role **before** the services roll, and re-applies `rls.sql`, `grants.sql` and the trigger SQL in the same task (AR-34)
+
+**Given** pg-boss's own schema
+**When** it is migrated
+**Then** it is migrated in that same task, before the application role starts (AR-31, AR-34)
+
+**Given** any schema change after AD-30's
+**When** it is written
+**Then** it follows **expand/contract** — add nullable, backfill, switch reads, drop in a later release — because during a rolling deploy the old and new versions run against one schema (AR-34)
+
+**Given** a backfill
+**When** it runs
+**Then** it runs through the **`maintenance` path**, so append-only triggers are satisfied explicitly rather than disabled (AR-34, AR-9)
+
+**Given** the `migrator` and `maintenance` roles
+**When** they are provisioned
+**Then** they are distinct from the application role, which remains a non-owner without `BYPASSRLS` (AR-4, AR-9)
+
+### Story 8.3: The operator can see the system without reading customer data
+
+As the operator,
+I want Connector health, snapshot lag, import failures and the scheduler's envelope visible,
+So that I find out about a stuck Connector before the PM does.
+
+**Acceptance Criteria:**
+
+**Given** logs and metrics
+**When** they are emitted
+**Then** `pino` JSON goes to CloudWatch Logs in-region with the AD-16 redaction list, log keys are `tenantId`, `connectorId`, `jobId`, `useCase`, **plus `projectId` and `scheduleRunSeq`** (AR-36, AR-29)
+
+**Given** operator metrics
+**When** they are exposed
+**Then** they live in an `operational`-class table and an operator view carrying snapshot success rate, snapshot age, queue depth and invariant violations — and **no Ticket title, WP name, note, person name or account email appears in either logs or metrics** (AR-36, NFR-O1, NFR-S6)
+
+**Given** the scheduler's envelope
+**When** it is measured
+**Then** the metrics add recalculation duration by Project size — so NFR-P1's 300 ms p95 is measurable **in production** and not only in a test — runs per Project per day, `schedule_run` bytes per Project, halted runs, and Projects currently carrying `wp_schedule.stale` (AR-36)
+
+**Given** the alarm set
+**When** it is configured
+**Then** CloudWatch alarms reach the operator by SNS email for: snapshot failure rate over an interval; the post-commit ledger invariant violation; the adapter-kind mismatch; worker heartbeat loss; RDS storage and CPU; **a recalculation halted on calendar range, which only the operator can clear by publishing a wider version**; **a `wp_schedule.stale` older than one business day**; and **a recalculation p95 over the NFR-P1 budget** (AR-36, AR-58)
+
+**Given** the alarm destination
+**When** it is chosen
+**Then** it **stays in-region** (AR-36, NFR-S4)
+
+**Given** the ALB
+**When** uptime is checked
+**Then** an external uptime check hits it (AR-36)
+
+### Story 8.4: Backups exist, and the restore is written down
+
+As the founder,
+I want daily encrypted in-region backups and a documented restore,
+So that the recovery procedure is not invented during the first incident.
+
+**Acceptance Criteria:**
+
+**Given** RDS
+**When** backups are configured
+**Then** they are automated, **kept 30 days, encrypted and in-region** (NFR-R2, AR-33)
+
+**Given** the restore
+**When** it is documented
+**Then** the procedure is point-in-time recovery into a new instance, re-point the services, then cut over — written down before it is needed (AR-36, NFR-R2)
+
+**Given** the objectives
+**When** they are recorded
+**Then** RPO is 24 hours and RTO is 1 business day (NFR-R2)
+
+**Given** the restore rehearsal
+**When** it is scheduled
+**Then** it runs **before R1** and its result is recorded; this story ships the backups and the written procedure, and the rehearsal is R1 (NFR-R2, AR-36)
+
+### Story 8.5: A Tenant's data can be deleted within 30 days
+
+As a Tenant Admin,
+I want a documented, audited way to have all of my organisation's data deleted,
+So that the answer on a Japanese security check sheet is a procedure rather than an intention.
+
+**Acceptance Criteria:**
+
+**Given** a deletion request
+**When** it is executed
+**Then** `purgeTenant` runs through the **`maintenance` role** and nothing else, deleting the Tenant's rows including the append-only tables, which the trigger permits only while `app.maintenance = 'on'` — and only that role may set it (NFR-D1, AR-9)
+
+**Given** the run
+**When** it completes
+**Then** it deletes that Tenant's **blobs in the same run**, and writes to the non-tenant `operator_audit` table, which this story creates (NFR-D1, AR-36, AR-9)
+
+**Given** the timescale
+**When** it is promised
+**Then** data is deleted within **30 days** of the request, and copies in backups go when those backups expire (NFR-D1)
+
+**Given** the deletion path
+**When** its shape is decided
+**Then** it is **a documented, audited operator procedure with no UI**, which is what NFR-D1 requires in R0 — a UI for it is CA-5 and would need a correct-course pass (NFR-D1, founder decision A5, CA-5)
+
+**Given** personal data under NFR-S6
+**When** the Tenant is deleted
+**Then** the Tracker Account names and offshore hours go with it (NFR-S6)
 ---
 
 ## Carried to `bmad-sprint-planning` (not decided here)
