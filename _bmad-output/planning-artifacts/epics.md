@@ -244,7 +244,7 @@ All 36 frozen §8.1 entries, each mapped to exactly one epic. No entry appears t
 | FR-5 | Epic 2 | Create, edit, move and delete WPs; leaf-only scheduling inputs; roll-up; PM-owned actual dates; **no typed planned dates** |
 | FR-6a | Epic 2 | FS dependencies with lag between leaf WPs, duration and constraint capture, the four graph rules as invariants |
 | FR-6b | Epic 2 | The closed trigger set, forward and backward pass, progress-aware scheduling, Float, critical path, soft constraints, out-of-sequence, determinism |
-| FR-7 | Epic 2 | The tree grid as the single R0 scheduling surface, with every column the engine produces (the Gantt is R1) |
+| FR-7 | Epic 2 | The tree grid as the single R0 scheduling surface, with every column the engine produces (the Gantt is R1). **The one FR that spans epics:** the Schedule preset is wholly Epic 2's; Progress is completed by Epics 5 and 6, Baseline compare by Epic 4, and *All* by Epic 1 — see Epic 2's notes |
 | FR-8 | Epic 2 | Custom Fields of four types as columns and grouping axes, to the tested bound of 100 per Project |
 | FR-9 | Epic 3 | Upload, sheet and header choice, column mapping with EN/JA suggestions, duration derivation, progress columns, the narrow milestone-constraint exception |
 | FR-10 | Epic 3 | The mandatory preview: no commit without confirmation, Project start and Data Date, the schedule and progress previews, counts, untrusted content |
@@ -274,13 +274,20 @@ All 36 frozen §8.1 entries, each mapped to exactly one epic. No entry appears t
 | FR-42 | Epic 5 | Opening Balances in exactly two cases, later first sightings as deltas, left scope, moves within scope, one owner, the sum invariant |
 | FR-43 | Epic 2 | Project start, optional Project finish and Data Date as Project settings; the Data Date as the only thing that advances the plan |
 
-**Count check:** 36 rows. Epic 1 covers 5 (FR-1, 2, 3, 4, 12); Epic 2 covers 7 (FR-5, 6a, 6b, 7, 8, 14, 43); Epic 3 covers 3 (FR-9, 10, 11); Epic 4 covers 2 (FR-15, 16); Epic 5 covers 12 (FR-13, 17, 19, 20, 21, 22, 23, 24, 25, 26, 27, 42); Epic 6 covers 5 (FR-28, 29, 30, 31, 32); Epic 7 covers 2 (FR-38, 39). 5 + 7 + 3 + 2 + 12 + 5 + 2 = **36**.
+**Count check:** 36 rows. Epic 1 covers 5 (FR-1, 2, 3, 4, 12); Epic 2 covers 7 (FR-5, 6a, 6b, 7, 8, 14, 43); Epic 3 covers 3 (FR-9, 10, 11); Epic 4 covers 2 (FR-15, 16); Epic 5 covers 12 (FR-13, 17, 19, 20, 21, 22, 23, 24, 25, 26, 27, 42); Epic 6 covers 5 (FR-28, 29, 30, 31, 32); Epic 7 covers 2 (FR-38, 39); **Epic 8 covers none, by design**. 5 + 7 + 3 + 2 + 12 + 5 + 2 + 0 = **36**.
 
-**NFRs are not separately epic'd**, because none of them is deliverable on its own: each is an acceptance criterion on the stories of the epic whose behaviour it constrains. Where an NFR needs work that no FR story would otherwise carry, it lands in Epic 1's substrate stories — NFR-S1, S2, S3, S8, D1, A1, C1's integer and codec discipline, I1's externalisation and O1's operator view — with NFR-P1 measured in Epic 2 (recalculation), Epic 5 (snapshot throughput) and Epic 6 (Review load), NFR-R1 in Epic 5, and NFR-U1 on every surface story. NFR-S5, NFR-S7 and NFR-R2's restore rehearsal are R1 and appear nowhere here.
+**Most NFRs are not separately epic'd**, because they are not deliverable on their own: each is an acceptance criterion on the stories of the epic whose behaviour it constrains. NFR-S1, S2, S8, A1, C1's integer and codec discipline and I1's externalisation land in Epic 1's substrate stories; NFR-R1 in Epic 5; NFR-U1 on every surface story. **NFR-P1 is measured in three places against one fixture** — 5 Projects x 500 WPs x 2,000 Tickets, built in Epic 1 and consumed by Epic 2 (the 300 ms recalculation), Epic 5 (the 5-minute snapshot) and Epic 6 (the 2 s Review load); it is named as Epic 1's deliverable because an unowned fixture is how an NFR quietly stops being measured. NFR-S5, NFR-S7 and NFR-R2's restore rehearsal are R1 and appear nowhere here.
+
+**Four NFRs do need their own epic**, because the work behind them is real and no FR story would carry it: **NFR-S3, NFR-S4, NFR-D1 and NFR-O1, plus NFR-R2's backups, are Epic 8.** They are what §8.1's fourteenth scope bullet — *"Hosting in a Japan region"* — actually asks for. The 36-FR map above is complete; it is simply not the whole of R0, and Epic 8 is the difference.
 
 ## Epic List
 
-**Seven epics, 36 FR entries, no FR in two epics and none in none.** Ordered so that each one is standalone: it delivers complete functionality for its domain, it may build on the epics before it, and **no epic requires a later epic to function**.
+**Eight epics. All 36 FR entries land in Epics 1–7, no FR in two epics and none in none; Epic 8 carries no FR and exists because the FR list is not the whole of R0.** Ordered so that each one is standalone: it delivers complete functionality for its domain, it may build on the epics before it, and no epic requires a later epic to function.
+
+**Two honest qualifications on that last claim**, both found by an Assumption Audit of an earlier seven-epic draft and kept here rather than smoothed over:
+
+- **Standalone means "runs and delivers", not always "fully acceptance-testable alone".** Epic 5 is the case: it runs before Epic 4 exists, but FR-20's baselined bucket and FR-24's Level-of-Effort branch have nothing to fire on until a Baseline does. The order below puts 4 before 5 for exactly that reason.
+- **FR-7 is the one FR that genuinely spans epics**, because its four column presets read data four different epics produce. It is mapped to Epic 2 because that is where the surface and its default preset are built, and the spread is stated in Epic 2's notes rather than hidden by the mapping.
 
 Context assessment behind the count: the architecture spine (AD-1 … AD-30) and both UX spines are final and merged, and the CI gate list is fixed, so the outcome is largely certain and the guidance is to prefer fewer, larger epics. Epics were merged where they would have churned the same files — the Connector and the Mapping layer both live in `domain/attribution` and `app/mapping`, EVM and the Review share one compute pipeline and one surface, and FR-5, FR-7, FR-8, FR-43, FR-6a and FR-6b are all **one surface** in `EXPERIENCE.md`, so splitting the engine from the grid it feeds would have torn a single surface across two epics.
 
@@ -290,7 +297,11 @@ A Tenant Admin can stand up the organisation — Departments, Programs, Projects
 
 **FRs covered:** FR-1, FR-2 (Tenant Admin and PM only), FR-3 (email + password and Google), FR-4 (English UI, all strings externalised), FR-12
 
-**Implementation notes.** This is where the substrate lands, because FR-1's own testable consequence *is* the isolation proof: the workspace and its import fences (AR-1, AR-2), the `table-classes.ts` registry that generates RLS, grants and triggers (AR-38), `FORCE ROW LEVEL SECURITY` and `withTenant` (AR-4), the cross-tenant harness (AR-5), the integer and codec discipline (AR-6, AR-8), append-only enforcement (AR-9), the audit-in-the-same-transaction rule (AR-26), the identity bridge (AR-40), the `Clock` port (AR-27), SES mail — which is **R0, not R1**, because FR-3's password reset needs it (AR-33) — and the one-command local run with its four decided version traps (AR-30, AR-31). It replaces the demo spike's `packages/db` files; the full 46-file reconciliation is settled in Epic 2.
+**Implementation notes.** This is where the substrate lands, because FR-1's own testable consequence *is* the isolation proof: the workspace and its import fences (AR-1, AR-2), the `table-classes.ts` registry that generates RLS, grants and triggers (AR-38), `FORCE ROW LEVEL SECURITY` and `withTenant` (AR-4), the cross-tenant harness (AR-5), the integer and codec discipline (AR-6, AR-8), append-only enforcement (AR-9), the audit-in-the-same-transaction rule (AR-26), the identity bridge (AR-40), the `Clock` port (AR-27), SES mail — which is **R0, not R1**, because FR-3's password reset needs it (AR-33) — and the one-command local run with its four decided version traps (AR-30, AR-31).
+
+**It wraps the demo spike's schema; it does not rebuild it from scratch.** This matters because AD-30 is written as a *delta* — it drops `work_package.start`, `.finish`, `.completed_at` and `.milestone_done_at` and rewrites `baseline_version` and `baseline_wp`, which only means anything if those columns are still there when Epic 2 runs. AD-30 says so itself: *"This migration closes the scheduling slice only; the remainder stays an outstanding build item."* So Epic 1 registers the existing tables in `table-classes.ts`, generates RLS, grants and triggers over them, and adds the AR-38 event tables it needs — and leaves the four doomed columns alone for AD-30 to drop. A reader who builds Epic 1 as a greenfield schema makes Epic 2's story 1 incoherent. The 46-file reconciliation is settled in Epic 2's disposal story.
+
+**Epic 1 also owns the NFR-P1 load fixture** — 5 Projects x 500 WPs x 2,000 Tickets — because the seed and the fixture machinery live here (AR-27, AR-32, AR-41). No FR story would otherwise carry it, and three later epics measure against it: Epic 2 for the 300 ms recalculation, Epic 5 for the 5-minute snapshot, Epic 6 for the 2 s Review load. An unowned fixture is how an NFR quietly stops being measured.
 
 ### Epic 2: A plan that re-dates itself when the work slips
 
@@ -298,14 +309,25 @@ A PM can build a Plan by hand and have it schedule itself. Leaf WPs carry a dura
 
 **FRs covered:** FR-5, FR-6a, FR-6b, FR-7 (tree grid only — the Gantt is R1), FR-8, FR-14, FR-43
 
-**Implementation notes.** The riskiest epic: this capability has no line of code today, and it is the reason the plan can leave Excel. Four things fix its internal order.
+**Implementation notes.** The riskiest epic: this capability has no line of code today, and it is the reason the plan can leave Excel. Four things fix its internal order, and two things bound what it can finish.
 
-1. **AD-30's single migration is story 1 and blocks every other story in this epic.** It is one pre-production migration that adds four tables and the input columns, drops `work_package.start`, `.finish`, `.completed_at` and `.milestone_done_at`, and rewrites `baseline_version` and `baseline_wp`. Three clauses Drizzle 0.45.2 cannot emit are hand-written SQL with CI assertions (AR-59). The expand/contract exemption is **spent here, once**.
+1. **AD-30's single migration is story 1 and blocks every other story in this epic.** It is one pre-production migration that adds four tables and the input columns, drops `work_package.start`, `.finish`, `.completed_at` and `.milestone_done_at`, and rewrites `baseline_version` and `baseline_wp`. Three clauses Drizzle 0.45.2 cannot emit are hand-written SQL with CI assertions (AR-59). The expand/contract exemption is **spent here, once**. It is a delta against the schema Epic 1 wrapped, not a greenfield create — see Epic 1's notes.
 2. **The demo-spike disposal is story 2**, immediately after the migration that breaks the spike, and carries the complete 46-file E-3 reconciliation table.
 3. **The engine is pure, so it is built and proved before any database work.** `domain/schedule.recalculate(inputs, prevInputs) → outputs` reads nothing but its arguments (AR-47), so the passes, Float, the critical path, violations and out-of-sequence handling are testable with no DB at all. `compareWp` (AR-55) comes first because the engine's ordered outputs need it.
 4. **The golden scheduler corpus is its own story, not an acceptance criterion elsewhere.** Of AD-19's six scheduler gates, five test internal consistency; only the corpus of hand-computed expected outputs tests whether the engine is **right** (AR-35). Folding it into another story's AC would hide the one gate that could catch a wrong answer.
 
 **Risk gate inside this epic.** The story that first persists a `schedule_run` measures the real payload against AD-26's measured 385 kB raw / ~141 kB stored / ~152 kB WAL, and exercises AD-5's retention-by-reference rule. If the recalculation misses NFR-P1's 300 ms p95, AD-27 fixes the lever — **lock granularity, never a background path** — and that is a fence-shape change, so it must surface here rather than in Epic 6.
+
+**What this epic cannot finish, and why that is not a defect.** FR-7's tree grid is built here, but only one of its four column presets is wholly Epic 2's. The other three read figures later epics produce, so their stories carry a dependency the FR mapping alone does not show:
+
+| Preset | Tier | Columns after the frozen three | Completed by |
+|---|---|---|---|
+| **Schedule** (default) | Core | Derived start, derived finish, duration, predecessors, constraint, Float, Critical, Exception | **Epic 2 alone** |
+| **Progress** | Core | Actual start, actual finish, Recorded %, *Observed %*, *Gap*, remaining duration, *Evidence* | Epic 2 + **5** (Mapped Tickets) + **6** (FR-30's Observed figure) |
+| **Baseline compare** | Core | Baseline vs derived dates, durations and effort with their deltas | Epic 2 + **4** |
+| **All** | Comfort | Everything above, plus planned effort, Resources, Custom Fields | + **Epic 1** (Resources) |
+
+The same seam runs through the inputs. **FR-6b reads the Recorded Percent Complete, and R0 has exactly two writers for it** — the Excel import (FR-9, Epic 3) and the PM's audited override (FR-30, Epic 6). Neither is in this epic. That is not a hole in FR-6b: a WP with no Recorded value is scheduled as 0% done, which FR-6b states outright. But it does mean the *in progress* branch — where remaining duration shrinks below the full duration — is exercised inside Epic 2 only through the seed and the golden corpus, and reaches a real PM path in Epic 3. The Plan grid's own Recorded % cell is an ordinary input edit through the AD-25 fence and belongs here; **FR-30's audited override, with its mandatory reason and its Observed-vs-Recorded comparison, is Epic 6's**.
 
 ### Epic 3: The client's Excel WBS becomes a live plan in one session
 
@@ -347,17 +369,30 @@ A PM can export a fixed-layout xlsx report of the current PM view — EVM, Healt
 
 **Implementation notes.** Small epic, but it is the claim an Excel refugee will actually test, and the stronger half of the no-lock-in promise. Every xlsx and CSV writer goes through one `safeCell()` that neutralises the four formula prefixes (AR-29). The raw export ships only the snapshots whose observations survived compaction, and says so on the export (AR-10). Exports are an audited action (NFR-A1).
 
+### Epic 8: It runs in Tokyo, it is backed up, and the operator can see it
+
+The founder can run R0 as a real service in a Japan region rather than on a laptop: both roles deployed, the database encrypted with in-region backups, uploads and mail in Tokyo, schema migrations applied by a privileged one-off task before the services roll, an operator view of Connector health and snapshot lag that contains no customer data, alarms that reach a human when a snapshot run fails or a recalculation halts on calendar range, and a documented, audited procedure for deleting a Tenant's data within 30 days.
+
+**FRs covered:** none. **This epic exists because the FR list is not the whole of R0.**
+
+**Implementation notes.** §8.1's scope bullets have fourteen entries; thirteen map onto Epics 1–7 and the fourteenth — **"Hosting in a Japan region"** — carries no FR number at all. Its requirements are NFR-S3, NFR-S4, NFR-D1 and NFR-O1, with NFR-R2's backups, and its design is AD-18 and AD-19. A coverage map that is complete against the 36 FRs and silent on this bullet is complete against the wrong list, which is why the epic is here rather than dissolved into the others.
+
+The work is named in the spine and is not small: ECS Fargate `web` behind an ALB at TLS 1.2+ and `worker` at desired count 1; RDS PostgreSQL 18 with encrypted storage and 30-day in-region automated backups, its minor tracked to local; S3 Tokyo with SSE, versioning off and a lifecycle expiry; **SES production access, which is an R0 launch task because a new account starts in the sandbox at 200 mails a day** (AR-33); the migration task that runs `drizzle-kit migrate` as the `migrator` role and re-applies `rls.sql`, `grants.sql` and the trigger SQL before the services roll (AR-34); `pino` to CloudWatch with AR-36's alarm set, including the two scheduler alarms only an operator can clear; and NFR-D1's `purgeTenant` procedure through the `maintenance` role, with no UI (CA-5).
+
+It is ordered last because nothing else depends on it, and it needs only Epic 1. It is **not** the same thing as the deferred items: AD-18 and AD-19 fix the topology, the migration discipline, the alerting and the CI gates, while the **IaC tool, CI provider and deploy pipeline stay deferred to the first staging deploy** (AR-62). This epic builds the thing those tools would automate; choosing the tools is still open.
+
 ### Epic order and what each one needs
 
 | Epic | Needs | Delivers standalone | Does **not** need |
 |---|---|---|---|
-| 1 | — | A Tenant, its org, its people, sign-in, isolation proof, audit | 2–7 |
-| 2 | 1 (a Project to plan) | A hand-built Plan that schedules itself, on one surface | 3–7. WPs can be created by hand, which is `EXPERIENCE.md`'s own empty state |
-| 3 | 2 (something to import into) | A real client .xlsx becoming that Plan | 4–7 |
-| 4 | 2 (a `schedule_run` to pin) | A re-derivable Baseline history | 5–7 |
-| 5 | 1 (Resources), 2 (leaf WPs to map to), 4 (to judge baselined-ness) | Actual hours arriving and attributed | 6, 7. Before the first Baseline everything is non-baselined, which is the designed "No Baseline yet" state |
-| 6 | 1, 2, 4, 5 | The weekly review and Dispositions | 7 |
-| 7 | 2, 4, 5, 6 | Both exports | — |
+| 1 | — | A Tenant, its org, its people, sign-in, isolation proof, audit, and the NFR-P1 load fixture | 2–8 |
+| 2 | 1 (a Project to plan) | A hand-built Plan that schedules itself, on one surface, with the Schedule preset complete | 3–8 to run. WPs are created by hand, which is `EXPERIENCE.md`'s own empty state. The Progress and Baseline compare presets are *completed* by Epics 4–6, per the table above |
+| 3 | 2 (something to import into) | A real client .xlsx becoming that Plan, and the first real writer of Recorded Percent Complete | 4–8 |
+| 4 | 2 (a `schedule_run` to pin) | A re-derivable Baseline history | 5–8 |
+| 5 | 1 (Resources), 2 (leaf WPs to map to) to **run**; 4 to be **fully accepted** | Actual hours arriving and attributed | 6–8 to run. Before the first Baseline everything is non-baselined — the designed "No Baseline yet" state — but FR-20's baselined bucket and FR-24's Level-of-Effort branch cannot be accepted until Epic 4 exists, which is why 4 is ordered first |
+| 6 | 1, 2, 4, 5 | The weekly review, Dispositions, and FR-30's audited override | 7, 8 |
+| 7 | 2, 4, 5, 6 | Both exports | 8 |
+| 8 | 1 | R0 running in Tokyo, backed up, and visible to its operator | — |
 
 ---
 
