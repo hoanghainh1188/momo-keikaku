@@ -44,3 +44,27 @@ Legend for **Blocks**: what cannot move until this is answered.
 | D1 | Branch `feat/r0-demo`: merge to main after the demo, or keep separate? | Merge the planning artifacts (research, UX, architecture) to main once you have reviewed them; keep the demo code on the branch until it is more than a demo | |
 | D2 | The 30 UX assumptions and the architecture `[ASSUMPTION]` tags | Review them after seeing the demo; I will list the ones the demo actually exercises | |
 | D3 | Demo scope: stop at the Review + Mapping slice, or keep building toward R0? | Stop after the slice, look at it, then re-plan R0 with real estimates (OQ-10) | |
+
+## Answers recorded 2026-09-20
+
+- A1: Tenant defaults **plus per-Project override** (founder chose flexibility over the recommendation; PRD FR-31 updated, spine needs a project_setting_event).
+- A2: recompute against pinned Rate history. PRD FR-12 amended.
+- A3: automatic flip both ways, no new screen.
+- A5: Tenant deletion path ships in R0. NFR-D1 amended.
+- OQ-3: 準委任/labo client first. Which client is still open.
+- OQ-6: Reporting Period length is per Project. Glossary amended, OQ-6 closed.
+- D1: merge planning artifacts to main after review; demo code stays on the branch.
+- D3: stop after the demo slice, then re-plan R0 with real estimates.
+- Connector order after R0: **Jira stays first**, Redmine after (founder overrode the research lean toward Redmine; revisit after 2027-01-01 when real Backlog churn is visible).
+- OQ-2 does not block architecture: the founder checks the 5 Backlog spaces this week; both modes stay supported.
+- A4: release-only in R0, no "pinned Unmapped".
+- OQ-10: **more than 20 h/week** of build capacity. R0 as scoped is plausible with AI import and Jira staying out.
+
+## Still open after 2026-09-20
+
+- B1/B2/B3 (UX): defaults stand unless the founder objects after seeing the demo.
+- OQ-3: which client specifically.
+- OQ-4 pricing; OQ-5 AI provider (Post-Q1); OQ-8 client sign-in.
+- OQ-7 competitive watch: whether to fund a Tempo trial and a Jellyfish demo, the Crowd Log trigger, and re-rating the eng-intelligence watch to Swarmia-weighted monthly.
+- R6 battlecard wording: Tempo does have a "No Account" view, and no BigPicture edition can be named for baselines after 2026-08-04.
+- D2: reviewing the 30 UX assumptions and the architecture assumption tags.

@@ -673,7 +673,7 @@ The system computes three Health Indicators and an overall status:
 - **Unplanned Work**, from its share of total hours in the Reporting Period.
 
 **Consequences (testable):**
-- **Default thresholds** (configurable per Tenant):
+- **Default thresholds** (Tenant defaults, which a Project can override; an override is recorded and shown next to the indicator — founder decision, 2026-09-20):
 
   | Indicator | Green | Amber | Red |
   |---|---|---|---|
@@ -1015,7 +1015,7 @@ The wedge is never cut: FR-19–FR-32 (FR-30 with Typical EAC only), FR-34–FR-
 2. **OQ-2 Backlog hours on the five target projects.** Does each project's space expose actual hours, and what share of Tickets actually have hours filled in? Which post-2027-01-01 plan (Economy, Business or Professional) will each space be on, and does that plan still expose hours? The answer decides how much of R0 and R1 runs in Ticket-Count Mode. Run hours detection (FR-17) again after 2027-01-01.
    - *Owner:* founder.
    - *Resolve by:* before `bmad-architecture`.
-3. **OQ-3 First client test.** Which client and Contract Type will see Unplanned Work first, and what will the first *Explain* notes say?
+3. **OQ-3 First client test.** Contract Type decided 2026-09-20: a 準委任/labo engagement goes first. Still open: which client, and what the first *Explain* notes will say.
    - *Owner:* founder.
    - *Resolve by:* before the first publish.
 4. **OQ-4 Pricing.** Seat price and free-tier limits.
@@ -1065,5 +1065,7 @@ The founder confirmed every inference made in the draft; each is now a decision:
 - The Reporting Period length is configurable per Project from R0 (closes OQ-6).
 - Retroactive Rate corrections are handled by recomputation against pinned inputs, not by adjusting entries (FR-12).
 - The Tenant deletion path ships in R0 (NFR-D1).
+- Health thresholds are Tenant defaults with per-Project overrides (FR-31).
+- The first client shown Unplanned Work will be a 準委任/labo engagement, because a billing conversation is easier to recover from than a 請負 scope dispute (closes OQ-3's contract-type half).
 - The research R2 beachhead is overridden by the brief's: Excel WBS + Backlog, with .mpp later.
 - UI languages are English and Japanese.
