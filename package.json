@@ -1,7 +1,7 @@
 {
   "name": "momo-keikaku",
   "private": true,
-  "packageManager": "pnpm@9.15.0",
+  "packageManager": "pnpm@12.4.2",
   "scripts": {
     "demo": "tsx scripts/demo.ts",
     "db:up": "docker compose -f infra/docker-compose.yml up -d --wait",
@@ -12,16 +12,17 @@
     "typecheck": "tsc --noEmit -p tsconfig.json --pretty false"
   },
   "devDependencies": {
-    "@types/node": "^22.10.2",
-    "drizzle-kit": "^0.31.10",
-    "tsx": "^4.19.2",
-    "typescript": "^5.7.2",
-    "vitest": "^2.1.8"
+    "@types/node": "^24.13.6",
+    "drizzle-kit": "0.31.10",
+    "tsx": "4.23.13",
+    "typescript": "6.0.3",
+    "vite": "8.3.0",
+    "vitest": "5.0.1"
   },
   "dependencies": {
-    "@types/pg": "^8.11.10",
-    "drizzle-orm": "^0.38.2",
-    "pg": "^8.13.1",
+    "@types/pg": "^8.23.1",
+    "drizzle-orm": "0.45.2",
+    "pg": "8.23.0",
     "uuid": "^11.0.3"
   },
   "type": "module"

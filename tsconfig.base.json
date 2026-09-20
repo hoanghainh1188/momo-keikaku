@@ -16,7 +16,6 @@
       "@momo/domain/*": ["./packages/domain/src/*"],
       "@momo/db": ["./packages/db/src/index.ts"],
       "@momo/db/*": ["./packages/db/src/*"]
-    },
-    "baseUrl": "."
+    }
   }
 }

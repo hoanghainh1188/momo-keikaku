@@ -30,8 +30,7 @@
       "@momo/db/*": [
         "./packages/db/src/*"
       ]
-    },
-    "baseUrl": "."
+    }
   },
   "include": [
     "packages/**/*.ts",
