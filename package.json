@@ -9,7 +9,7 @@
     "seed": "tsx packages/db/src/seed.ts",
     "dev": "pnpm --filter @momo/web dev",
     "test": "vitest run",
-    "typecheck": "tsc -b --pretty false"
+    "typecheck": "tsc --noEmit -p tsconfig.json --pretty false"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
