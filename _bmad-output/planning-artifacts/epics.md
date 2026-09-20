@@ -40,6 +40,23 @@ This document provides the complete epic and story breakdown for momo-keikaku R0
 - `review-readiness.md` Part 4 listed FR-6b, FR-21, FR-22, FR-28, FR-30 and FR-43 as BLOCKED for this step behind finding R-1. R-1 and R-2 are resolved in the current PRD (FR-6b's "Nothing derived from Tracker evidence is ever a scheduling input"; FR-28's cause list closed at **seven**), so nothing is blocked on that account.
 - 46 TypeScript files exist on `main`, all from the 2026-09-20 demo spike. They are reconciled against these stories in *E-3 reconciliation*.
 
+### Map versus territory — the measured baseline
+
+The architecture spine describes the system as it will be. This section records the repository as it **is**, measured on `main` at `87d9915`, because an earlier draft of this document said Epic 1 "wraps the existing schema" and that turned out to be true of the 17 tables and false of everything else. Every figure below was read out of the repo, not out of the spine.
+
+| What the spine requires | What exists on `main` | Gap |
+|---|---|---|
+| 8 workspace units: `apps/{web,worker}`, `packages/{domain,app,db,db/auth,adapters,i18n}` | 3: `apps/web`, `packages/db`, `packages/domain` | **5 missing**, including `packages/app` — the whole application layer |
+| 25 insert-only tables (AD-5) | 9: `baseline_version`, `baseline_wp`, `tracker_snapshot`, `ticket_observation`, `actuals_ledger_entry`, `mapping_event`, `rate_entry`, `disposition_event`, `audit_log` | **16 missing**; AD-30 creates 2 of them, 12 of the rest are R0 |
+| `apps/web` calls only `packages/app` use cases (AD-1) | 8 files import `@momo/db` directly — `getDb`, `schema`, `loadReview`, `loadProjectBundle` | **AD-1's central rule is violated today** |
+| Better Auth `user`/`session`/`account`/`verification` plus `tenant_membership` (AD-23) | `app_user`, a flat table with a `role` text column | **No auth at all** |
+| `program`, `tracker_account`, `ticket`, `import_draft`, `operator_audit` | none of them | 5 tables FRs or ADs require |
+| `wp_status_event` as the single home of actual dates (AD-25) | absent; `work_package.completed_at` and `.milestone_done_at` are the only home | see Epic 1 and Epic 2's story 1 |
+
+**What the spike does have, and is worth keeping:** `packages/domain` with `attribution`, `calendar`, `evm`, `forecast`, `health`, `ledger`, `mapping`, `present`, `review`, `units` and their golden tests; the 17 data shapes; `fixtures/backlog` and `fixtures/demo`; a working `docker-compose.yml`. That is why the disposal story keeps `packages/domain` rather than starting over.
+
+**The consequence for sizing (OQ-12): Epic 1 is the largest epic in this plan, not the smallest.** It reads like set-up and it is actually the application layer, the auth stack, the worker role, the adapters, the i18n catalogs, twelve event tables and a rewiring of every page in `apps/web`. Anyone sizing it from the phrase "stand up the workspace" will under-size R0 at its first epic.
+
 ### Documentation inconsistencies found, not fixed here
 
 Fixing the PRD is `bmad-prd`'s job, not this step's. Three places still say the UX spines are silent on dependencies, which stopped being true when PR #3 merged:
@@ -299,7 +316,40 @@ A Tenant Admin can stand up the organisation — Departments, Programs, Projects
 
 **Implementation notes.** This is where the substrate lands, because FR-1's own testable consequence *is* the isolation proof: the workspace and its import fences (AR-1, AR-2), the `table-classes.ts` registry that generates RLS, grants and triggers (AR-38), `FORCE ROW LEVEL SECURITY` and `withTenant` (AR-4), the cross-tenant harness (AR-5), the integer and codec discipline (AR-6, AR-8), append-only enforcement (AR-9), the audit-in-the-same-transaction rule (AR-26), the identity bridge (AR-40), the `Clock` port (AR-27), SES mail — which is **R0, not R1**, because FR-3's password reset needs it (AR-33) — and the one-command local run with its four decided version traps (AR-30, AR-31).
 
-**It wraps the demo spike's schema; it does not rebuild it from scratch.** This matters because AD-30 is written as a *delta* — it drops `work_package.start`, `.finish`, `.completed_at` and `.milestone_done_at` and rewrites `baseline_version` and `baseline_wp`, which only means anything if those columns are still there when Epic 2 runs. AD-30 says so itself: *"This migration closes the scheduling slice only; the remainder stays an outstanding build item."* So Epic 1 registers the existing tables in `table-classes.ts`, generates RLS, grants and triggers over them, and adds the AR-38 event tables it needs — and leaves the four doomed columns alone for AD-30 to drop. A reader who builds Epic 1 as a greenfield schema makes Epic 2's story 1 incoherent. The 46-file reconciliation is settled in Epic 2's disposal story.
+**It wraps the spike's 17 tables; it builds everything else.** The measured baseline above is the honest scope. Three parts of it decide this epic's stories.
+
+**(a) Five of the eight workspace units do not exist.** `packages/app` — use cases, ports, `RequestContext`, authz, audit, config — is the largest, and every AR that names an `app/*` module currently has no home: `applyPlanChange` (AR-43), `recalculateProject` (AR-47), `ingestSnapshot` (AR-15), `recordDisposition` (AR-39), `publishCalendarVersion` (AR-57). `packages/adapters`, `packages/db/auth`, `packages/i18n` and `apps/worker` are also absent. This epic creates the skeleton; later epics fill their own modules into it.
+
+**(b) AD-1's central rule is violated today, in eight files.** `apps/web` imports `@momo/db` directly. So the dependency-cruiser gate is not a switch to flip — **eight pages and server actions have to be rewired through a layer that does not exist yet, and the gate is turned on after that rewiring, not before.** Turning it on first means CI is red on day one for a reason nobody can fix that day.
+
+**(c) The schema work splits in two, and the split is what keeps AD-30 coherent.** AD-30 is a *delta*: it drops `work_package.start`, `.finish`, `.completed_at` and `.milestone_done_at` and rewrites `baseline_version` and `baseline_wp`, which only means anything if those columns are still there when Epic 2 runs — and they are. AD-30 says as much itself: *"This migration closes the scheduling slice only; the remainder stays an outstanding build item."* So this epic **registers the 17 existing tables** in `table-classes.ts`, generates RLS, grants and triggers over them, and **creates the R0 event tables AD-21 requires**, while leaving the four doomed columns alone for AD-30 to drop.
+
+**`wp_status_event` is the prerequisite AD-30 assumes and nobody wrote down.** AD-30 says it *"adds the actual-date fields on `wp_status_event`"*, and AD-25 drops `completed_at` and `milestone_done_at` because that table *"already carries"* the WP-marked-complete fact. **That "already" is true of the design and false of the repository:** `wp_status_event` does not exist, and those two columns are currently the only home. So **Epic 1 creates `wp_status_event` with its status fields, and AD-30 then adds the actual-date fields to it** — which is exactly what AD-30's own wording describes, once the table is there. Without this split, AD-30's drop has no destination.
+
+**The twelve R0 event tables, each with an owner** — replacing the vaguer "the event tables it needs":
+
+| Table | Created in | Why there |
+|---|---|---|
+| `wp_status_event` | **Epic 1** | AD-30's prerequisite; actual-date fields added by AD-30 in Epic 2 |
+| `project_setting_event` | Epic 1 | tz, teirei weekday, EAC Method, Health-threshold overrides |
+| `tenant_setting_event` | Epic 1 | Tenant default Health thresholds (FR-31) |
+| `project_default_rate_entry` | Epic 1 | FR-12's Project default Rate, bitemporal like `rate_entry` |
+| `wp_flag_event` | Epic 2 | the Catch-all flag it is read with; consumed by Epic 5 |
+| `pct_override_event` | Epic 2 | Recorded Percent Complete, written through the AD-25 fence |
+| `calendar_day_event` | Epic 2 | FR-14's Project non-working days, the input a version is built from |
+| `tracker_account_link_event` | Epic 5 | FR-13 |
+| `connector_scope_event` | Epic 5 | FR-20, FR-42 |
+| `connector_setting_event` | Epic 5 | the Resolved status set |
+| `measurement_basis_event` | Epic 5 | AD-8's latched basis |
+| `connector_ownership_event` | Epic 5 | FR-42's ownership transfer |
+
+`visibility_policy_event` and `published_snapshot` are the remaining two and are R1, so they appear nowhere here. `schedule_run` and `holiday_calendar_version` are AD-30's, in Epic 2.
+
+**Five non-event tables are missing too**, and each belongs to the epic that needs it: **`program` → Epic 1** (FR-1's hierarchy has no Program table today), `import_draft` → Epic 3, `tracker_account` and `ticket` → Epic 5, `operator_audit` → Epic 8. `mapping_head` and `connector_overlap` are `derived` and land with Epic 5's module that owns their source.
+
+**FR-2 and FR-3 are greenfield here, not an extension.** There is no auth in the repository: `app_user` is a flat table with a `role` text column, and none of Better Auth's `user`, `session`, `account` or `verification` tables exists, nor `tenant_membership` — which AD-23 calls *"exactly one non-RLS bridge"*. So this epic builds the identity stack, the bridge, `resolveRequestContext`, the disabled session-cookie cache and the idle expiry from nothing.
+
+The 46-file reconciliation is settled in Epic 2's disposal story.
 
 **Epic 1 also owns the NFR-P1 load fixture** — 5 Projects x 500 WPs x 2,000 Tickets — because the seed and the fixture machinery live here (AR-27, AR-32, AR-41). No FR story would otherwise carry it, and three later epics measure against it: Epic 2 for the 300 ms recalculation, Epic 5 for the 5-minute snapshot, Epic 6 for the 2 s Review load. An unowned fixture is how an NFR quietly stops being measured.
 
@@ -311,7 +361,7 @@ A PM can build a Plan by hand and have it schedule itself. Leaf WPs carry a dura
 
 **Implementation notes.** The riskiest epic: this capability has no line of code today, and it is the reason the plan can leave Excel. Four things fix its internal order, and two things bound what it can finish.
 
-1. **AD-30's single migration is story 1 and blocks every other story in this epic.** It is one pre-production migration that adds four tables and the input columns, drops `work_package.start`, `.finish`, `.completed_at` and `.milestone_done_at`, and rewrites `baseline_version` and `baseline_wp`. Three clauses Drizzle 0.45.2 cannot emit are hand-written SQL with CI assertions (AR-59). The expand/contract exemption is **spent here, once**. It is a delta against the schema Epic 1 wrapped, not a greenfield create — see Epic 1's notes.
+1. **AD-30's single migration is story 1 and blocks every other story in this epic.** It is one pre-production migration that adds four tables and the input columns, drops `work_package.start`, `.finish`, `.completed_at` and `.milestone_done_at`, and rewrites `baseline_version` and `baseline_wp`. Three clauses Drizzle 0.45.2 cannot emit are hand-written SQL with CI assertions (AR-59). The expand/contract exemption is **spent here, once**. It is a delta against the schema Epic 1 wrapped, not a greenfield create, and it carries a prerequisite AD-30's own wording assumes: **`wp_status_event` must already exist**, because that is where the dropped `completed_at` and `milestone_done_at` go. Epic 1 creates it; this story adds its actual-date fields. See Epic 1's notes.
 2. **The demo-spike disposal is story 2**, immediately after the migration that breaks the spike, and carries the complete 46-file E-3 reconciliation table.
 3. **The engine is pure, so it is built and proved before any database work.** `domain/schedule.recalculate(inputs, prevInputs) → outputs` reads nothing but its arguments (AR-47), so the passes, Float, the critical path, violations and out-of-sequence handling are testable with no DB at all. `compareWp` (AR-55) comes first because the engine's ordered outputs need it.
 4. **The golden scheduler corpus is its own story, not an acceptance criterion elsewhere.** Of AD-19's six scheduler gates, five test internal consistency; only the corpus of hand-computed expected outputs tests whether the engine is **right** (AR-35). Folding it into another story's AC would hide the one gate that could catch a wrong answer.
@@ -335,7 +385,7 @@ A PM can upload a real client .xlsx, choose the sheet and header row, map column
 
 **FRs covered:** FR-9, FR-10, FR-11
 
-**Implementation notes.** Genuine risk boundary of its own: AD-13 records that **ExcelJS fit is a spike, not an assumption**, so the first import story parses three real Japanese WBS workbooks through `WorkbookPort` and asserts merge ranges and cached formula results, with SheetJS CE as the named fallback. Limits are checked from the zip central directory **before ExcelJS sees the file** (AR-24). The importer writes scheduling inputs and actual dates and **never a derived date**; `confirmImport` calls the recalculation **once**, after the whole diff commits (AR-24, AR-54). The acceptance corpus of 10 real client files is **not in the repo** and its tests run under a local-only tag (AR-41).
+**Implementation notes.** Genuine risk boundary of its own: AD-13 records that **ExcelJS fit is a spike, not an assumption**, so the first import story parses three real Japanese WBS workbooks through `WorkbookPort` and asserts merge ranges and cached formula results, with SheetJS CE as the named fallback. Limits are checked from the zip central directory **before ExcelJS sees the file** (AR-24). The importer writes scheduling inputs and actual dates and **never a derived date**; `confirmImport` calls the recalculation **once**, after the whole diff commits (AR-24, AR-54). The acceptance corpus of 10 real client files is **not in the repo** and its tests run under a local-only tag (AR-41). This epic also creates `import_draft` (`mutable_audited`), which does not exist today.
 
 ### Epic 4: A Baseline that can explain itself years later
 
@@ -352,6 +402,8 @@ A PM can connect a Project to a Backlog space read-only, record who on the clien
 **FRs covered:** FR-13, FR-17, FR-19, FR-20, FR-21, FR-22, FR-23, FR-24, FR-25, FR-26, FR-27, FR-42
 
 **Implementation notes.** The largest epic by FR count, and one journey (UJ-2) across one set of modules — `adapters/backlog-http`, `app/ingest`, `app/mapping`, `domain/attribution` — which is why it is not split. The invariant this epic must not break is the one the whole product rests on: **mapping, remapping and hourly background rule evaluation change attribution and never a date** (AR-52's reachability test). Paginated completeness is read `sort=created&order=asc` with Count Issues before and after, because Backlog's default `updated desc` silently skips Tickets while still looking finished (AR-13); `left_scope` needs **two** consecutive complete reads (AR-15); the measurement basis latches with hysteresis N = 3 in both directions, with no confirmation screen (AR-17, founder decision A3); and unmapping is `release` only in R0 (AR-18, founder decision A4). **OQ-2 is still open** — whether the five target Backlog spaces expose actual hours — and this epic handles both answers, but the fixture scenarios should be re-recorded once the founder checks.
+
+**It also creates the tables its own invariants rest on**, none of which exist today: **`ticket`**, whose `UNIQUE (tenant_id, tracker_kind, tracker_site, tracker_issue_id)` with exactly one `owner_connector_id` is how AD-7 makes double-counting impossible rather than merely discouraged; **`tracker_account`**, which FR-13 links to Resources; the four Connector event tables (`connector_scope_event`, `connector_setting_event`, `measurement_basis_event`, `connector_ownership_event`) and `tracker_account_link_event`; and the `derived` projections `mapping_head` and `connector_overlap`. The spike has `mapping_event` and `actuals_ledger_entry` but no Ticket identity table, so today nothing structurally prevents the overlap AD-7 turns into a `connector_overlap` record.
 
 ### Epic 6: Thursday's teirei report in twenty minutes
 
@@ -377,7 +429,7 @@ The founder can run R0 as a real service in a Japan region rather than on a lapt
 
 **Implementation notes.** §8.1's scope bullets have fourteen entries; thirteen map onto Epics 1–7 and the fourteenth — **"Hosting in a Japan region"** — carries no FR number at all. Its requirements are NFR-S3, NFR-S4, NFR-D1 and NFR-O1, with NFR-R2's backups, and its design is AD-18 and AD-19. A coverage map that is complete against the 36 FRs and silent on this bullet is complete against the wrong list, which is why the epic is here rather than dissolved into the others.
 
-The work is named in the spine and is not small: ECS Fargate `web` behind an ALB at TLS 1.2+ and `worker` at desired count 1; RDS PostgreSQL 18 with encrypted storage and 30-day in-region automated backups, its minor tracked to local; S3 Tokyo with SSE, versioning off and a lifecycle expiry; **SES production access, which is an R0 launch task because a new account starts in the sandbox at 200 mails a day** (AR-33); the migration task that runs `drizzle-kit migrate` as the `migrator` role and re-applies `rls.sql`, `grants.sql` and the trigger SQL before the services roll (AR-34); `pino` to CloudWatch with AR-36's alarm set, including the two scheduler alarms only an operator can clear; and NFR-D1's `purgeTenant` procedure through the `maintenance` role, with no UI (CA-5).
+The work is named in the spine and is not small: ECS Fargate `web` behind an ALB at TLS 1.2+ and `worker` at desired count 1; RDS PostgreSQL 18 with encrypted storage and 30-day in-region automated backups, its minor tracked to local; S3 Tokyo with SSE, versioning off and a lifecycle expiry; **SES production access, which is an R0 launch task because a new account starts in the sandbox at 200 mails a day** (AR-33); the migration task that runs `drizzle-kit migrate` as the `migrator` role and re-applies `rls.sql`, `grants.sql` and the trigger SQL before the services roll (AR-34); `pino` to CloudWatch with AR-36's alarm set, including the two scheduler alarms only an operator can clear; and NFR-D1's `purgeTenant` procedure through the `maintenance` role, with no UI (CA-5). It creates `operator_audit` (class `operational`, outside every Tenant), which both sanctioned append-only exceptions write to and which does not exist today.
 
 It is ordered last because nothing else depends on it, and it needs only Epic 1. It is **not** the same thing as the deferred items: AD-18 and AD-19 fix the topology, the migration discipline, the alerting and the CI gates, while the **IaC tool, CI provider and deploy pipeline stay deferred to the first staging deploy** (AR-62). This epic builds the thing those tools would automate; choosing the tools is still open.
 
