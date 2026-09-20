@@ -446,6 +446,264 @@ It is ordered last because nothing else depends on it, and it needs only Epic 1.
 | 7 | 2, 4, 5, 6 | Both exports | 8 |
 | 8 | 1 | R0 running in Tokyo, backed up, and visible to its operator | — |
 
+## Epic 1: A Tenant, its people, and nothing leaking between them
+
+A Tenant Admin can stand up the organisation — Departments, Programs, Projects, PM assignments, Resources and their dated Rate history — invite PMs, and sign in. Every read is covered by an automated proof that no other Tenant's data comes back, and every action that changes reported numbers or who can see them is on the audit log. The English UI ships with every string externalised and a Japanese catalog in place.
+
+*Eight stories, in order. Each is completable on its own and on the ones before it; none waits on a later one. FRs: FR-1, FR-2 (Tenant Admin and PM), FR-3 (email + password and Google), FR-4 (English), FR-12. Substrate: AR-1 … AR-10, AR-26, AR-27, AR-30, AR-31, AR-33, AR-37, AR-38, AR-40. NFRs: S1, S2, S3, S8, A1, C1's integer and codec discipline, I1, P1's fixture.*
+
+### Story 1.1: One command brings the whole system up
+
+As the founder,
+I want `pnpm dev` to bring the database, both roles and a seeded demo Tenant up on my laptop,
+So that I can build and demo R0 without cloud accounts, credentials or hand steps.
+
+**Acceptance Criteria:**
+
+**Given** a clean clone and no running containers
+**When** I run `pnpm dev`
+**Then** it starts Postgres, applies migrations, applies the RLS, grants and trigger SQL, seeds a demo Tenant, and runs `web` and `worker` together
+**And** no step needs network access beyond pulling the Postgres image and installing packages (AR-30)
+
+**Given** the compose file
+**When** Postgres 18.6 starts
+**Then** the volume is mounted at `/var/lib/postgresql`, not `/var/lib/postgresql/data`
+**And** a `docker compose down` followed by `pnpm dev` finds the database still there, because PostgreSQL 18 declares the volume one level up and silently ignores the habitual mount (AR-30)
+
+**Given** the workspace
+**When** the packages are laid out
+**Then** `packages/app`, `packages/adapters`, `packages/db/auth`, `packages/i18n` and `apps/worker` exist alongside the three that already do
+**And** `packages/domain` still has no runtime dependency but `zod` (AR-1)
+
+**Given** `packages/app/config`
+**When** a required environment key is missing at boot
+**Then** the zod schema fails the boot with the key named, rather than the process starting and failing later (AR-30)
+
+**Given** the two roles
+**When** either needs the wall clock
+**Then** it reads the `Clock` port, and `Date.now()`, bare `new Date()` and `process.env` are ESLint errors everywhere but `adapters/clock` and `app/config` (AR-2)
+
+**Given** the application database role
+**When** pg-boss starts
+**Then** its schema was already installed and migrated by the `migrator` role during `migrate`, and the application role starts pg-boss with auto-migration disabled and holds only DML grants on that schema (AR-31)
+
+**Given** pnpm 12 with `strictDepBuilds` inherited true, and TypeScript 6 defaulting `types: []`
+**When** a fresh `pnpm install` and typecheck run
+**Then** both succeed, because `allowBuilds` declares the packages that legitimately run build scripts and `apps/worker`, `packages/db` and `packages/adapters` declare `"types": ["node"]` (AR-30)
+
+### Story 1.2: Nothing crosses a Tenant, and the data layer is what proves it
+
+As a Tenant Admin,
+I want isolation enforced in the database rather than remembered in application code,
+So that one missed `WHERE` clause can never show me another organisation's project.
+
+**Acceptance Criteria:**
+
+**Given** `packages/db/table-classes.ts`
+**When** the schema is built
+**Then** every table carries exactly one of the five AD-21 classes, and the RLS, grants and trigger SQL are **generated from that registry**
+**And** CI fails if a migration adds a table the registry does not name (AR-38)
+
+**Given** every tenant-owned table
+**When** the migration runs
+**Then** each has `tenant_id uuid NOT NULL`, every foreign key between tenant-owned tables is composite and includes `tenant_id`, and each has `ENABLE` and `FORCE ROW LEVEL SECURITY` with the policy `tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid`
+**And** a CI assertion reads `pg_class.relforcerowsecurity` and fails if any table carrying `tenant_id` lacks FORCE or a policy, because Drizzle 0.45 cannot emit FORCE and it lives in hand-written `rls.sql` (AR-4)
+
+**Given** the application database role
+**When** it connects
+**Then** it is a non-owner without `BYPASSRLS`, and all tenant data access goes through `withTenant(tenantId, tx => …)`, which opens a transaction and runs `set_config('app.tenant_id', $1, true)` with a **bound** uuid
+**And** `SET LOCAL app.tenant_id = $1` is absent from the codebase, because it is not parameterizable and interpolating into `SET` is an injection foot-gun (AR-4)
+
+**Given** a test harness seeded with two Tenants
+**When** it exercises **every** read use case
+**Then** none returns a row belonging to the other Tenant, and the harness enumerates the use cases rather than listing them by hand, so a new one is covered the day it is written (AR-5, FR-1)
+
+**Given** the eight files under `apps/web` that import `@momo/db` today
+**When** this story completes
+**Then** each reaches its data through a `packages/app` use case instead, and `dependency-cruiser` is switched on to fail CI on any `apps/*` import of a repository or of Drizzle
+**And** the gate is turned on **after** the rewiring in the same story, never before it, because switching it on first turns CI red on day one for a reason nobody can clear that day (AR-1, measured baseline)
+
+**Given** any append to a watermarked table
+**When** it runs
+**Then** it takes `pg_advisory_xact_lock(namespace, key)` — the two-argument form, namespace 1 for a Project key and 2 for a Tenant key — **before allocating any `seq`**, and `ComputationInputs` is captured under the shared form
+**And** a lint rule and a test ban the bare `db` handle on any tenant-owned table (AR-37, AR-4)
+
+**Given** the nine insert-only tables that already exist
+**When** the application role attempts an `UPDATE` or `DELETE` on one
+**Then** the statement is refused by both the missing grant and a `BEFORE UPDATE OR DELETE` trigger, and the only exception is the `maintenance` role with `app.maintenance = 'on'` (AR-9)
+
+**Given** effort, money and ratios anywhere in `packages/domain`
+**When** they are held or summed
+**Then** effort is `bigint` milli-hours, money is integer JPY, ratios are `{num, den}` carried unreduced, threshold comparisons cross-multiply at the single `compareRatio` site, and rounding happens only in `domain/present` (AR-6)
+**And** every `jsonb` read and write of a stored value goes through the one codec, which renders `bigint` as a decimal string, so `JSON.stringify` never meets a `bigint` (AR-8)
+
+### Story 1.3: The organisation, and the record of who changed it
+
+As a Tenant Admin,
+I want to create Departments, Programs and Projects and assign PMs to them,
+So that the hierarchy every later number rolls up through exists, and every change to it is on the record.
+
+**Acceptance Criteria:**
+
+**Given** a Tenant
+**When** I create Departments, Programs and Projects
+**Then** the hierarchy is Tenant > Department > Program > Project, `program` is created by this story as a `mutable_audited` table because it does not exist today, and each Project has one owning Department and an optional Program (FR-1, measured baseline)
+
+**Given** a Project in a Department
+**When** I assign it a Program
+**Then** the assignment is refused unless that Program belongs to the Project's owning Department (FR-1)
+
+**Given** a Project with Baselines, ledger entries, Mappings, Published Snapshots and audit history
+**When** I move it between Programs
+**Then** all of those are unchanged, and only the Program roll-up it contributes to changes (FR-1)
+
+**Given** any use case on the NFR-A1 list
+**When** it commits
+**Then** it called `audit.record(ctx, action, target, payload)` **inside its own `withTenant` transaction**, with `action` from a closed enum in `packages/app/audit`
+**And** a test enumerates the NFR-A1 use cases and fails if one produces no audit row, so an audited action cannot commit without its record and a rolled-back one leaves none (AR-26)
+
+**Given** a Tenant Admin creating, renaming or reassigning any of the above
+**When** the change commits
+**Then** the audit row carries the actor, the time and the previous value (NFR-A1)
+
+### Story 1.4: Sign in, and be revoked
+
+As a PM,
+I want to sign in with email and password or with Google, and to lose access the moment a Tenant Admin revokes it,
+So that the tool is usable day to day and closing an account actually closes it.
+
+**Acceptance Criteria:**
+
+**Given** no identity tables exist in the repository today
+**When** this story completes
+**Then** Better Auth's `user`, `session`, `account` and `verification` tables exist as class `global`, exempt from the FORCE-RLS set because the session is resolved before a Tenant is known, and reached only through `IdentityPort` implemented by `packages/db/auth` — the single sanctioned Better Auth ↔ Drizzle binding (AR-40, AR-1, measured baseline)
+
+**Given** a user who belongs to one or more Tenants
+**When** any request arrives
+**Then** `resolveRequestContext` reads `tenant_membership` — the one non-RLS bridge — and validates the session's explicit `activeTenantId` against it **on every request**, and nothing else reads that table (AR-40)
+
+**Given** a signed-in user
+**When** they are idle past the configurable timeout, default 8 hours
+**Then** the session expires
+**And** the Better Auth session cookie cache is **disabled**, so both revocation and idle expiry take effect on the user's very next request rather than when a cached cookie happens to lapse (FR-3, AR-40)
+
+**Given** a Tenant Admin revoking a user
+**When** that user makes their next request
+**Then** it is refused, and the revocation is an `app` use case that is audited — never a write through the Better Auth adapter (AR-40, NFR-A1)
+
+**Given** a user who has forgotten their password
+**When** they request a reset
+**Then** mail is sent through `MailerPort`, with `mailer-console` in development and `mailer-ses` as the production implementation
+**And** mail is therefore **R0 work, not R1** (AR-33); the AWS account, sender domain and SES production access are Epic 8's
+
+**Given** Next 16
+**When** a server action sets the session cookie
+**Then** the `nextCookies()` plugin is configured, without which the cookie is silently never set (AR-30)
+
+### Story 1.5: Roles decide what each person can reach
+
+As a Tenant Admin,
+I want each use case to declare who may call it and to check project membership,
+So that authorisation is one rule in one place rather than a condition repeated in every page.
+
+**Acceptance Criteria:**
+
+**Given** any use case
+**When** it runs
+**Then** it declares its allowed roles and checks project membership against `RequestContext`, and **the UI never authorises** (AR-23 boundary, FR-2)
+
+**Given** a caller who is not permitted
+**When** they invoke a use case or open a URL outside their set
+**Then** the answer is `not_found`, never `forbidden`, so the response does not disclose that the resource exists (FR-2)
+
+**Given** the R0 role set
+**When** roles are assigned
+**Then** Tenant Admin and PM exist and are assignable; Client Viewer and Internal Viewer are defined in the enum but not assignable, because they are R1 and Post-Q1 (FR-2, §8.1)
+
+**Given** a Project
+**When** someone edits its Plan or Mappings
+**Then** only that Project's PMs or a Tenant Admin can, and the attempt by anyone else returns `not_found` (FR-2)
+
+**Given** a role change
+**When** it commits
+**Then** it went through an `app` use case and produced its audit row (AR-40, NFR-A1)
+
+### Story 1.6: Resources and the dated Rates behind every money figure
+
+As a Tenant Admin,
+I want Resources with a home Department and a dated Rate history that only I can set,
+So that every hour can be valued at the Rate that was in force when it was recorded, and a later correction never rewrites a published figure.
+
+**Acceptance Criteria:**
+
+**Given** a Tenant
+**When** a Tenant Admin **or a PM** creates a Resource
+**Then** it is created with a home Department (FR-12)
+
+**Given** a Rate or a Project default Rate
+**When** anyone but a Tenant Admin tries to create or change it
+**Then** the attempt is refused; Rates are visible only to Tenant Admins and to the PMs of the Projects that use them (FR-12, FR-2)
+
+**Given** `rate_entry` exists and `project_default_rate_entry` does not
+**When** this story completes
+**Then** `project_default_rate_entry(project_id, effective_from, yen_per_hour, seq)` exists as `append_only`, bitemporal in the same shape as `rate_entry` (AR-19, measured baseline)
+
+**Given** an hour recorded on a date
+**When** it is valued
+**Then** the Rate used is the one in effect on that date, looked up as the latest `seq ≤ rate_seq_max` for the effective date (FR-12, AR-19)
+
+**Given** a Rate corrected retroactively
+**When** the correction commits
+**Then** the Actuals Ledger is untouched, money is recomputed against the pinned Rate history, and no past entry is rewritten
+**And** an earlier Published Snapshot still reproduces exactly, because it pinned its own `rate_seq_max` (FR-12, founder decision A2)
+
+### Story 1.7: The Tenant Admin can read the audit log
+
+As a Tenant Admin,
+I want to read and filter the log of every action that changed reported numbers or who can see them,
+So that I can answer "who changed this, and when" without asking anyone.
+
+**Acceptance Criteria:**
+
+**Given** audit rows written by Story 1.3's mechanism
+**When** a Tenant Admin opens the audit log
+**Then** they can filter it, and each row shows the actor, the time and the action from the closed enum (NFR-A1)
+
+**Given** a user who is not a Tenant Admin
+**When** they request the audit log
+**Then** the answer is `not_found` (FR-2)
+
+**Given** the log
+**When** it is rendered
+**Then** it contains no Tracker credential, and `pino` redaction already covers `*.apiKey`, `*.token`, `*.password` and `authorization` wherever they might otherwise be logged (NFR-S2, AR-29)
+
+**Given** any text that came from a Tracker or a workbook
+**When** it is displayed anywhere in the application
+**Then** it is escaped through React, and `dangerouslySetInnerHTML` is a lint error (NFR-S8, AR-29)
+
+### Story 1.8: A load fixture worth measuring against
+
+As the founder,
+I want a generator that builds 5 Projects of 500 Work Packages with their Resources,
+So that every NFR-P1 claim in R0 is measured against a realistic shape rather than asserted.
+
+**Acceptance Criteria:**
+
+**Given** the generator
+**When** it runs
+**Then** it produces 5 Projects, each with 500 Work Packages in a realistic tree, and the Resources they are assigned to, deterministically from a seed so two runs give the same fixture (AR-27, NFR-P1)
+
+**Given** the fixture
+**When** a later epic measures against it
+**Then** the same fixture serves Epic 2's 300 ms recalculation, Epic 5's 5-minute snapshot and Epic 6's 2 s Review load, so the three budgets are measured on one shape rather than three (NFR-P1)
+
+**Given** that `ticket` does not exist until Epic 5
+**When** this story completes
+**Then** it delivers the harness and the Project, WP and Resource half, and **Epic 5 extends the same generator with the 2,000 Tickets per Project**; this story does not wait on that and is complete without it (measured baseline)
+
+**Given** `CLOCK_MODE=fixture`
+**When** either role reads the clock
+**Then** it returns `max(latest fixture observedAt, FIXTURE_TIME_ANCHOR)`, and `db/seed` creates its data through that same clock, so the demo is not permanently stale (AR-27)
 ---
 
 ## Carried to `bmad-sprint-planning` (not decided here)
