@@ -300,3 +300,120 @@ Output (b) is decided. What remains is recording it and starting.
 4. **`bmad-prd`** also fixes the three stale passages and finding R-4 (unrelated to (b)).
 5. **`bmad-correct-course`** is needed only if CA-1 is later wanted — for example if the
    date slips, the cut order fires, and milestone target dates need rescuing.
+
+## Appendix — the per-story estimate
+
+Published so that §8.1's "every entry is now sized" is checkable rather than asserted.
+Hours are the central estimate; apply the 0.7×–1.4× range to any subtotal.
+
+### Epic 1 — Tenant, people, isolation · 156 h
+
+| Story | h | Driver |
+|---|---|---|
+| 1.1 | 24 | 8 workspace units, version traps, one-command run, dep-cruiser + ESLint gates |
+| 1.2 | 32 | table-class registry generating RLS/grants/triggers over 17 tables + cross-tenant harness for EVERY read |
+| 1.3 | 12 | org hierarchy + program table + audit-in-same-transaction |
+| 1.4 | 24 | Better Auth from zero: 4 tables + tenant_membership bridge + resolveRequestContext + Google + reset via SES |
+| 1.5 | 12 | role-scoped authz surfaces |
+| 1.6 | 14 | Resources + bitemporal Rate history + project_default_rate_entry |
+| 1.7 | 8 | audit log read surface |
+| 1.8 | 10 | NFR-P1 fixture 5x500x2000 |
+| 1.9 | 20 | externalise every string across all pages + JA catalog + fixed currency |
+
+### Epic 2 — Plan that re-dates itself · 308 h
+
+| Story | h | Driver |
+|---|---|---|
+| 2.1 | 20 | AD-30 single migration: +5 tables, -4 columns, 2 rewrites, 3 hand-written SQL clauses w/ CI asserts |
+| 2.2 | 20 | dispose 46-file spike; rewire 8 web files through packages/app |
+| 2.3 | 10 | compareWp single ordering site |
+| 2.4 | 12 | four graph rules as invariants |
+| 2.5 | 20 | forward pass |
+| 2.6 | 18 | backward pass, Float, minimum-Float critical path incl. negative |
+| 2.7 | 14 | soft constraints + violation w/ chain |
+| 2.8 | 18 | golden corpus of HAND-COMPUTED expected outputs |
+| 2.9 | 32 | applyPlanChange fence + schedule_run persistence + per-project lock + payload measurement (flagged split candidate) |
+| 2.10 | 20 | WP edit, actual dates, Custom Fields through the fence |
+| 2.11 | 12 | three Project schedule settings |
+| 2.12 | 14 | Holiday Calendar + dated versions |
+| 2.13 | 36 | Plan tree grid + Schedule preset: 13 AC, WCAG AA keyboard, visual regression |
+| 2.14 | 18 | dependency/constraint creation + rejection errors naming cycle/ancestor |
+| 2.15 | 22 | schedule strip + What-moved band, 300ms highlight, reduced motion |
+| 2.16 | 22 | exceptions rail + three explainers |
+
+### Epic 3 — Excel WBS -> live plan · 130 h
+
+| Story | h | Driver |
+|---|---|---|
+| 3.1 | 16 | ExcelJS SPIKE vs 3 real JP workbooks (merge ranges, cached formulas) |
+| 3.2 | 20 | upload + column mapping UI, EN/JA header suggestions, import_draft |
+| 3.3 | 18 | derive duration/deps/constraints; exactly one date kept |
+| 3.4 | 12 | import carries progress |
+| 3.5 | 22 | mandatory preview: every row, 3 scheduling states, dates the scheduler will produce |
+| 3.6 | 12 | confirmImport: one commit, recalculate once |
+| 3.7 | 18 | re-import diff separating input change from date movement |
+| 3.8 | 12 | acceptance corpus of 10 real client files (BLOCKED on founder supplying files) |
+
+### Epic 4 — Baseline that explains itself · 66 h
+
+| Story | h | Driver |
+|---|---|---|
+| 4.1 | 12 | Baseline points at a schedule_run |
+| 4.2 | 14 | re-derivation test under each run's own engine_version, via codec canonical form |
+| 4.3 | 10 | re-baseline + reason + history |
+| 4.4 | 18 | compare as PLANS: deps, lags, constraints, durations, actual dates, progress, milestones, calendar ver, 3 settings |
+| 4.5 | 12 | baseline-compare columns on the grid |
+
+### Epic 5 — Actuals arrive from Backlog · 240 h
+
+| Story | h | Driver |
+|---|---|---|
+| 5.1 | 22 | TrackerPort + fixture replay, 5 required scenarios; creates ticket + tracker_account |
+| 5.2 | 16 | connect Backlog read-only + connector_scope_event |
+| 5.3 | 16 | paginated completeness: sort=created asc + Count Issues before/after |
+| 5.4 | 24 | snapshot schedule on pg-boss stately, singletonKey, retries visible |
+| 5.5 | 24 | single ledger writer + Opening Balance + project_setting_event |
+| 5.6 | 24 | lifecycle: appear/move/vanish, left_scope needs 2 complete reads, ownership transfer, connector_overlap |
+| 5.7 | 18 | Ticket-Count Mode latch, hysteresis N=3 both directions |
+| 5.8 | 12 | tracker account -> Resource, retroactive |
+| 5.9 | 20 | manual mapping + AR-52 reachability test (never moves a date) |
+| 5.10 | 18 | rules + hourly background evaluation, still never moves a date |
+| 5.11 | 8 | coverage per Connector |
+| 5.12 | 12 | Catch-all WPs + wp_flag_event |
+| 5.13 | 10 | nothing in scope silently excluded |
+| 5.14 | 8 | approximate figures labelled |
+| 5.15 | 8 | Ticket half of the load fixture |
+
+### Epic 6 — Thursday's teirei report · 160 h
+
+| Story | h | Driver |
+|---|---|---|
+| 6.1 | 14 | closure test: CI enumerates exported signatures, fails on unreachable input |
+| 6.2 | 18 | EVM in hours, Unplanned Work carries actuals w/ no earned value |
+| 6.3 | 12 | PMI formulas + Typical EAC only |
+| 6.4 | 20 | evidence vs plan made to face each other |
+| 6.5 | 22 | 3 Health Indicators each showing its rule + tenant_setting_event + per-Project override (A1) |
+| 6.6 | 10 | forecast, both finish dates + the gap |
+| 6.7 | 20 | Review pinned in fixed order, split pin re-capturing schedule_run_seq |
+| 6.8 | 16 | every moved date carries one of SEVEN causes |
+| 6.9 | 28 | disposition every Unmapped Ticket, 4 types, explicit ticket list at record time |
+
+### Epic 7 — Numbers and plan leave the tool · 46 h
+
+| Story | h | Driver |
+|---|---|---|
+| 7.1 | 14 | fixed-layout xlsx via safeCell() |
+| 7.2 | 14 | raw export: recompute every EVM metric outside the tool |
+| 7.3 | 18 | raw export: RE-DERIVE the schedule (graph, lags, constraints, calendar history, Data Date history, baselines) |
+
+### Epic 8 — Runs in Tokyo, backed up · 74 h
+
+| Story | h | Driver |
+|---|---|---|
+| 8.1 | 24 | ECS Fargate web+worker, ALB TLS1.2+, RDS PG18 encrypted, S3 Tokyo; SES production access has EXTERNAL lead time |
+| 8.2 | 12 | migration task as migrator role, re-apply rls/grants/trigger SQL before roll |
+| 8.3 | 16 | operator view w/ no customer data, pino->CloudWatch, AR-36 alarms |
+| 8.4 | 10 | encrypted in-region backups + written restore |
+| 8.5 | 12 | purgeTenant audited procedure + operator_audit |
+
+**Total: 1180 h across 70 stories.**
