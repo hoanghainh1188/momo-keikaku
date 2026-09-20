@@ -324,17 +324,19 @@ A Tenant Admin can stand up the organisation — Departments, Programs, Projects
 
 **(c) The schema work splits in two, and the split is what keeps AD-30 coherent.** AD-30 is a *delta*: it drops `work_package.start`, `.finish`, `.completed_at` and `.milestone_done_at` and rewrites `baseline_version` and `baseline_wp`, which only means anything if those columns are still there when Epic 2 runs — and they are. AD-30 says as much itself: *"This migration closes the scheduling slice only; the remainder stays an outstanding build item."* So this epic **registers the 17 existing tables** in `table-classes.ts`, generates RLS, grants and triggers over them, and **creates the R0 event tables AD-21 requires**, while leaving the four doomed columns alone for AD-30 to drop.
 
-**`wp_status_event` is the prerequisite AD-30 assumes and nobody wrote down.** AD-30 says it *"adds the actual-date fields on `wp_status_event`"*, and AD-25 drops `completed_at` and `milestone_done_at` because that table *"already carries"* the WP-marked-complete fact. **That "already" is true of the design and false of the repository:** `wp_status_event` does not exist, and those two columns are currently the only home. So **Epic 1 creates `wp_status_event` with its status fields, and AD-30 then adds the actual-date fields to it** — which is exactly what AD-30's own wording describes, once the table is there. Without this split, AD-30's drop has no destination.
+**`wp_status_event` is the prerequisite AD-30 assumes and nobody wrote down.** AD-30 says it *"adds the actual-date fields on `wp_status_event`"*, and AD-25 drops `completed_at` and `milestone_done_at` because that table *"already carries"* the WP-marked-complete fact. **That "already" is true of the design and false of the repository:** `wp_status_event` does not exist, and those two columns are currently the only home.
 
-**The twelve R0 event tables, each with an owner** — replacing the vaguer "the event tables it needs":
+**So AD-30 creates the table whole** — status fields and actual-date fields together — in Epic 2's story 2.1. It is one pre-production migration with nothing deployed behind it, so creating a table outright is within what it already does, and AD-30's "adds the fields on" reads as the minimal coherent instruction once the table's absence is known. An earlier draft of this document split it, having Epic 1 create the table and AD-30 extend it; writing Epic 1's stories showed that to be wrong, because **no Epic 1 story needs the table**, and inventing one would have broken the create-only-what-the-story-needs rule for no gain.
+
+**The twelve R0 event tables, each with an owner.** The owner is **the epic whose first story actually needs the table**, which is why four of them moved out of Epic 1 once Epic 1's stories were written — a table nobody reads yet has no business being created early:
 
 | Table | Created in | Why there |
 |---|---|---|
-| `wp_status_event` | **Epic 1** | AD-30's prerequisite; actual-date fields added by AD-30 in Epic 2 |
-| `project_setting_event` | Epic 1 | tz, teirei weekday, EAC Method, Health-threshold overrides |
-| `tenant_setting_event` | Epic 1 | Tenant default Health thresholds (FR-31) |
+| `wp_status_event` | **Epic 2** | created whole by AD-30 in story 2.1; FR-5's actual dates are its first reader |
+| `project_setting_event` | Epic 5 | tz and teirei weekday, first needed to place a ledger entry in a Reporting Period |
+| `tenant_setting_event` | Epic 6 | the Tenant's default Health thresholds (FR-31) |
 | `project_default_rate_entry` | Epic 1 | FR-12's Project default Rate, bitemporal like `rate_entry` |
-| `wp_flag_event` | Epic 2 | the Catch-all flag it is read with; consumed by Epic 5 |
+| `wp_flag_event` | Epic 5 | the Catch-all flag is FR-24, and attribution is its only reader |
 | `pct_override_event` | Epic 2 | Recorded Percent Complete, written through the AD-25 fence |
 | `calendar_day_event` | Epic 2 | FR-14's Project non-working days, the input a version is built from |
 | `tracker_account_link_event` | Epic 5 | FR-13 |
@@ -343,7 +345,7 @@ A Tenant Admin can stand up the organisation — Departments, Programs, Projects
 | `measurement_basis_event` | Epic 5 | AD-8's latched basis |
 | `connector_ownership_event` | Epic 5 | FR-42's ownership transfer |
 
-`visibility_policy_event` and `published_snapshot` are the remaining two and are R1, so they appear nowhere here. `schedule_run` and `holiday_calendar_version` are AD-30's, in Epic 2.
+`visibility_policy_event` and `published_snapshot` are the remaining two and are R1, so they appear nowhere here. `schedule_run`, `holiday_calendar_version` and `wp_status_event` are AD-30's, in story 2.1. **Epic 1 therefore creates exactly one of the twelve** (`project_default_rate_entry`, in story 1.6); Epic 2 creates three, Epic 5 seven and Epic 6 one.
 
 **Five non-event tables are missing too**, and each belongs to the epic that needs it: **`program` → Epic 1** (FR-1's hierarchy has no Program table today), `import_draft` → Epic 3, `tracker_account` and `ticket` → Epic 5, `operator_audit` → Epic 8. `mapping_head` and `connector_overlap` are `derived` and land with Epic 5's module that owns their source.
 
@@ -704,6 +706,673 @@ So that every NFR-P1 claim in R0 is measured against a realistic shape rather th
 **Given** `CLOCK_MODE=fixture`
 **When** either role reads the clock
 **Then** it returns `max(latest fixture observedAt, FIXTURE_TIME_ANCHOR)`, and `db/seed` creates its data through that same clock, so the demo is not permanently stale (AR-27)
+## Epic 2: A plan that re-dates itself when the work slips
+
+A PM can build a Plan by hand and have it schedule itself: durations, finish-to-start dependencies with lag, three constraint types, a Project start, an optional Project finish and a Data Date, over a JP and VN working-day calendar with a dated version history. **A slipped task moves the tasks that depend on it.** Float and the critical path are always current, negative Float shows as a negative number against a Project finish the PM set, and every constraint violation, out-of-sequence link and un-schedulable WP is listed with the chain behind it. The tree grid is the single scheduling surface.
+
+*Sixteen stories — the largest count in the plan, and that is the point: this capability has no line of code today, and OQ-11 asks for the engine and its surface to be sized separately. Stories 2.1 … 2.12 are the engine and its plumbing; **2.13 … 2.16 are the plan surface OQ-11 names**, so sprint planning can total them on their own. FRs: FR-5, FR-6a, FR-6b, FR-7 (tree grid only), FR-8, FR-14, FR-43.*
+
+**Two story boundaries are deliberately the §8.3 cut lines**, so that a cut is a story removed rather than a story rewritten:
+
+| §8.3 cut | Story | What removing it costs |
+|---|---|---|
+| Item 1 — the two extra constraint types | **2.7** | Milestone target dates go with it (§3 defines a milestone target *as* a `must_finish_on`), and FR-31's two milestone rules lose their input. Carried to `bmad-sprint-planning` |
+| Item 2 — Float and critical-path display | **2.6** | Taken only after item 1, never before. The forward pass in 2.5 is **never cut** |
+
+### Story 2.1: The scheduling schema lands in one migration
+
+As the founder,
+I want the whole scheduling slice of the schema to arrive in a single pre-production migration,
+So that no story can quietly write a column that was supposed to be gone, and the expand/contract exemption is spent once and recorded.
+
+**Acceptance Criteria:**
+
+**Given** the schema Epic 1 wrapped
+**When** this migration runs
+**Then** it **adds** `wp_dependency`, `schedule_run`, `wp_schedule` and `holiday_calendar_version`; the `work_package` columns `duration_days`, `constraint_type` and `constraint_date` with their leaf-only CHECK and the `UNIQUE (tenant_id, project_id, id, is_leaf)` key; and `project.project_start`, `.project_finish`, `.data_date`, all nullable (AR-59)
+
+**Given** that `wp_status_event` does not exist in the repository
+**When** this migration runs
+**Then** it **creates `wp_status_event` whole** — the WP-marked-complete fact and the actual start and actual finish together — as class `append_only`
+**And** it then **drops** `work_package.start`, `.finish`, `.completed_at` and `.milestone_done_at`, so the two actual dates have exactly one home and the scheduler and EVM cannot disagree about a WP's actual finish (AR-42, AR-59)
+
+**Given** `baseline_version` and `baseline_wp` as they stand
+**When** this migration runs
+**Then** `baseline_version` carries a `schedule_run_seq` foreign key and `baseline_wp` is reduced to AD-26's cost projection — `start`, `finish`, `baseline_mh`, `is_milestone`, `is_catch_all`, leaf-only (AR-22, AR-59)
+
+**Given** three clauses drizzle-kit 0.31.10 cannot emit
+**When** the migration is written
+**Then** `DEFERRABLE INITIALLY DEFERRED` on `wp_dependency`'s leaf foreign keys, `MATCH FULL` on the composite tenant foreign keys, and `GENERATED ALWAYS AS (child_count = 0) STORED` are hand-written SQL
+**And** CI asserts `pg_constraint.condeferrable`, `pg_constraint.confmatchtype` and `pg_attribute.attgenerated = 's'`, so a later schema regeneration cannot silently drop them (AR-59)
+
+**Given** PostgreSQL 18 defaults a generated column to `VIRTUAL`
+**When** `is_leaf` is declared
+**Then** `STORED` is written explicitly, because a virtual column cannot be a UNIQUE member or an FK target (AR-44)
+
+**Given** every table this migration adds
+**When** it is added
+**Then** it is registered in `packages/db/table-classes.ts` in the same change — `schedule_run` and `holiday_calendar_version` as `append_only`, `wp_schedule` as `derived`, `wp_dependency` as `mutable_audited` — and the RLS, grants and triggers are generated from the registry (AR-38, AR-59)
+
+**Given** a Baseline seeded before this migration
+**When** the migration runs
+**Then** it is **deleted, not migrated**, because it pinned outputs with no inputs behind them and migrating it would fabricate inputs it never had (AR-59)
+
+**Given** this migration
+**When** the next migration is written, whenever that is
+**Then** AD-19's expand/contract discipline binds it: add nullable, backfill through the `maintenance` path, switch reads, drop later. **The exemption is spent here and is not available again** (AR-34, AR-59)
+
+### Story 2.2: The demo spike is disposed of, file by file
+
+As the founder,
+I want every one of the 46 TypeScript files on `main` either assigned to a story or removed,
+So that nothing survives from the overnight spike by accident, and §4.E-3 of the sprint change proposal is actually discharged.
+
+**Acceptance Criteria:**
+
+**Given** the migration in 2.1 has dropped `work_package.start`, `.finish`, `.completed_at` and `.milestone_done_at`
+**When** this story runs
+**Then** every file that read or wrote those columns compiles against the new schema or is removed, and the typecheck passes — the migration and this story are adjacent on purpose, because 2.1 is what breaks the spike
+
+**Given** the reconciliation
+**When** it is complete
+**Then** all 46 files appear in the table below with a disposition, and **`gantt.tsx` is removed** — the spike shipped a Gantt, and FR-7 puts the Gantt in R1, so it is R1 scope built early rather than R0 work to keep (FR-7, §8.2)
+
+| File(s) | Disposition |
+|---|---|
+| `packages/domain/src/{attribution,evm,health,forecast,ledger,mapping,review,calendar,present,types,units,index}.ts` | **Kept.** The pure core is the part worth keeping (`decisions-pending` D1). Each is claimed by the epic that owns its FRs: `calendar` → 2.12 and Epic 5's `periodOf`; `present`/`types`/`units`/`index` → 1.2's integer and codec discipline; `attribution`/`ledger`/`mapping` → Epic 5; `evm`/`health`/`forecast`/`review` → Epic 6 |
+| `packages/domain/src/{attribution,evm}.test.ts` | **Kept and extended.** The golden EVM cases seeded from UJ-3's numbers stay; Epic 6 extends them |
+| `packages/domain/src/client-view.ts` | **Removed.** No R0 story covers it, and AD-12 puts the client payload in `domain/present/clientProjection` against a Visibility Policy that does not exist yet. R1 rebuilds it in the right shape rather than editing this one |
+| `packages/db/src/schema.ts` | **Rewritten across two stories:** 1.2 registers and RLS-wraps the 17 tables, 2.1 applies the scheduling delta |
+| `packages/db/src/{client,index,repo}.ts` | **Rewritten in 1.2.** `repo.ts`'s `loadReview` and `loadProjectBundle` become `packages/app` use cases; `packages/db` keeps `withTenant` and repositories, with `repositories/schedule` exported only to `app/schedule` (AR-1, AR-43) |
+| `packages/db/src/{seed,fixtures}.ts` | **Kept, rewritten in 1.8** as the deterministic load fixture, and **regenerated in this story** against the new schema (AR-59) |
+| `packages/db/src/demo-golden.test.ts` | **Regenerated in this story.** AD-30 requires the seed, the fixtures and both golden corpora to be regenerated in the same commit |
+| `apps/web/src/app/actions.ts` | **Split and rewired in 1.2.** It is the file that imports `getDb` and `schema` directly and so is AD-1's clearest violation; each server action in it becomes a thin caller of a `packages/app` use case, and the actions themselves move to the epic that owns their surface |
+| `apps/web/src/app/{page,layout}.tsx`, `src/components/{shell,ui}.tsx` | **Kept, rewired in 1.2** and restyled against `DESIGN.md`'s tokens and `EXPERIENCE.md`'s sidebar (UX-DR1, UX-DR28) |
+| `apps/web/src/app/p/[projectId]/{layout,plan}/page.tsx` | **Rewired in 1.2, rebuilt in 2.13 … 2.16** as the real Plan surface |
+| `apps/web/src/app/p/[projectId]/baselines/page.tsx` | Rewired in 1.2, rebuilt in **Epic 4** |
+| `apps/web/src/app/p/[projectId]/{mapping,connectors}/page.tsx`, `src/components/map-ticket-form.tsx` | Rewired in 1.2, rebuilt in **Epic 5** |
+| `apps/web/src/app/p/[projectId]/review/page.tsx`, `src/components/{disposition-rail,scope-ledger-bar}.tsx` | Rewired in 1.2, rebuilt in **Epic 6** |
+| `apps/web/src/app/c/[projectId]/page.tsx` | **Removed.** The Client View is FR-36, which is R1. No R0 story covers it |
+| `apps/web/src/components/gantt.tsx` | **Removed.** FR-7 puts the Gantt in R1 |
+| `apps/web/next.config.ts`, `apps/web/next-env.d.ts`, `drizzle.config.ts`, `vitest.config.ts` | **Kept, adjusted in 1.1** for the pinned stack and the workspace layout |
+| `scripts/{demo,gen-fixtures}.ts` | **Kept, folded into 1.8's generator** and regenerated here |
+| `scripts/{peek,peek-db}.ts` | **Kept as developer utilities, with no story.** Named here so the exception is a decision: they read the database for debugging and ship nothing. Sprint planning may delete them |
+
+**Given** that §4.E-3 of the sprint change proposal counts 43 TypeScript files
+**When** the reconciliation is checked
+**Then** it covers **46**, all added on 2026-09-20, and records that the difference is the three `*.test.ts` files the proposal's count appears to have excluded (measured baseline)
+
+**Given** the disposal
+**When** it is complete
+**Then** `packages/domain` still has no runtime dependency but `zod`, and `dependency-cruiser` passes (AR-1)
+
+### Story 2.3: One canonical order for everything the scheduler reports
+
+As the founder,
+I want a single total ordering function that everything the scheduler reports goes through,
+So that a critical path compared years later does not come back in a different order on a different machine.
+
+**Acceptance Criteria:**
+
+**Given** `compareWp(a, b)` in `domain/schedule/order`
+**When** it compares two WPs
+**Then** it NFKC-normalises both `wbs_code` values so full-width digits fold to half-width, splits each on `.`, compares two all-digit segments as arbitrary-precision integers and any other pair through `domain/text.compareNfkc` code-point order, sorts the shorter code first on a tie, and falls through to the lowercase `wp_id` (AR-55, NFR-I1)
+
+**Given** two distinct WPs
+**When** `compareWp` is called on them in either order
+**Then** it never returns 0, because the `wp_id` fallback is reached whenever the codes are equal or both absent (AR-55)
+
+**Given** a WBS code
+**When** anything compares two runs or two Baselines
+**Then** it matches on `wp_id` and uses `wbs_code` only to sort, because a re-parent may renumber: **a code orders, it never identifies** (AR-55)
+
+**Given** one Project's inputs
+**When** the same recalculation runs N times over shuffled input orderings
+**Then** the `outputs` are identical **in the AD-4 codec's canonical decoded form**, and the test compares that form rather than the stored `jsonb` text, which reorders keys and renormalises numbers and would therefore flake (AR-55, AR-8)
+
+**Given** OQ-13, which NFR-C1 asserted and no document answered
+**When** this story completes
+**Then** the rule is `compareWp` and it is applied at exactly one site, so FR-15's re-derivation test and FR-35's reproduction test compare an ordered set a document defines (AR-55)
+
+### Story 2.4: The four graph rules are invariants, not entry checks
+
+As a PM,
+I want an illegal dependency refused with the offence named, whether I drew it or a re-parent created it,
+So that the plan can never reach a state the scheduler has to guess its way out of.
+
+**Acceptance Criteria:**
+
+**Given** `domain/schedule/validate(plan, edges)` as a pure function
+**When** it runs
+**Then** it returns the offending cycles, ancestor/descendant pairs, summary endpoints and cross-project links — all four, separately, not the first one found (AR-46, FR-6a)
+
+**Given** a dependency whose endpoints are in an ancestor/descendant relationship
+**When** validation runs
+**Then** it is rejected as its own offence, **separately from the cycle check**, because the cycle check runs over the dependency graph and an ancestor/descendant link is a cycle only once roll-up edges are taken into account (FR-6a)
+
+**Given** a rejected cycle
+**When** it is reported
+**Then** it is rotated to begin at its `compareWp`-minimum WP, so the same defect never reads as two different cycles (AR-56)
+
+**Given** a structural edit — a move, a re-parent, a delete or an import — that turns a legal link into an illegal one without touching any link
+**When** it is attempted
+**Then** validation catches it, because the fence calls `validate` on every mutation **and** `recalculate` calls it before the passes: these are invariants of the Plan, not checks that run only when a link is drawn (AR-46, FR-6a)
+
+**Given** `wp_dependency`
+**When** a cross-project link is attempted
+**Then** it fails on the composite foreign keys with `MATCH FULL` rather than on an application check, so FR-6a's cross-project rejection is enforced rather than remembered (AR-45)
+
+**Given** `wp_dependency.type`
+**When** a value other than `FS` is written in R0
+**Then** the `CHECK (type = 'FS')` refuses it, while `SS`, `FF` and `SF` remain expressible values so that widening the boundary later is one line of migration (AR-62)
+
+### Story 2.5: The forward pass — a slip moves the tasks that depend on it
+
+As a PM,
+I want the plan's dates derived from duration, dependencies and the work already done,
+So that when one task slips I see what it moved instead of re-dating the rest by hand.
+
+**Acceptance Criteria:**
+
+**Given** a leaf WP
+**When** the forward pass runs
+**Then** it is one of three states: **complete** if it has an actual finish, in which case its dates *are* its actual dates and the pass never moves them and passes its actual finish to its successors; **in progress** if it has an actual start and no actual finish, in which case its start is its actual start and it is scheduled forward over its remaining duration from no earlier than the Data Date; or **remaining**, in which case the pass places it and it never starts earlier than the Data Date (FR-6b)
+
+**Given** an in-progress WP
+**When** its remaining duration is derived
+**Then** it is `ceil(duration_days × (1 − recorded_pct))` clamped to at least 1, evaluated as integer arithmetic over the `Ratio` form, **never stored**, and never derived from elapsed calendar time (AR-7, FR-6b)
+
+**Given** a WP with no Recorded Percent Complete
+**When** it is scheduled
+**Then** it is treated as 0% done, however far along its Tickets say it is (FR-6b)
+
+**Given** a remaining WP
+**When** its earliest start is computed
+**Then** it is the latest of the Data Date, the Project start and every predecessor's finish plus lag, counted **in working days** on the pinned calendar version (FR-6b, AR-7)
+
+**Given** an actual start that precedes its predecessor's finish
+**When** the pass runs
+**Then** **the actual date wins**: the WP keeps it, its successors are driven from it, and the pair is flagged as out-of-sequence. The "a successor never starts before its predecessor finishes" invariant binds **remaining work only**, and the scheduler never rewrites history to preserve an invariant about the future (FR-6b)
+
+**Given** a leaf WP with no duration
+**When** the pass runs
+**Then** it is excluded from both passes and from the critical path, its successors are driven from its predecessors as though it were absent, and it is listed in a "not schedulable yet" block with its reason — **never silently treated as duration 1 or 0** (FR-6b)
+
+**Given** a summary WP
+**When** the pass runs
+**Then** nothing schedules it; its dates are the earliest early start and latest early finish among its descendants and its effort their sum, computed once into `outputs` and **never read back into a pass** (FR-5, AR-49)
+
+**Given** a pass that would place a date beyond the calendar version's `range_end`
+**When** it runs
+**Then** it **halts rather than guessing**, reporting the WPs and the range it needs, because a schedule computed against assumed working days is not re-derivable (FR-6b, AR-58)
+
+**Given** §8.3's cut order
+**When** anyone considers cutting
+**Then** this story is **never cut**: automatic recalculation is the reason the plan can live here rather than in Excel (§8.3)
+
+### Story 2.6: The backward pass, Float, and the critical path
+
+As a PM,
+I want to see how much slack each task has and which chain decides the finish,
+So that I know where a slip actually costs me the end date.
+
+**Acceptance Criteria:**
+
+**Given** the backward pass
+**When** it runs
+**Then** it derives each WP's latest start and finish backwards through the same graph from **one anchor and one only** — the Project finish where the PM set one, otherwise the computed finish, the latest derived finish in the Plan. **A constraint is never an anchor** (FR-6b)
+
+**Given** Float
+**When** it is computed
+**Then** it is latest start minus earliest start, in whole working days as an integer, and it is **negative only** because the plan cannot meet a Project finish the PM set (FR-6b, AR-7)
+
+**Given** the critical path
+**When** it is identified
+**Then** it is the set of WPs whose Float equals the **minimum Float in the Plan measured against that anchor** — zero on a plan with slack, negative on a plan that cannot meet a PM-set Project finish. **It is never the zero-Float set**, because a late plan has no zero-Float WPs and defining it that way would drop the chain that decides the finish exactly when the plan is in trouble (FR-6b, §3, AR-49)
+
+**Given** the critical path and the driving chains
+**When** they are written to `outputs`
+**Then** the path is an ordered list by early start ascending then `compareWp`; and where several predecessors tie on the value that set an early start, **all** of them are recorded in `compareWp` order and the chain the UI names is the first — naming one and hiding the rest is how a PM chases the wrong link (AR-56)
+
+**Given** any Float shown anywhere
+**When** it is displayed
+**Then** the anchor it was measured against is shown with it, because the two anchors produce different Float and the difference reaches the client on a published schedule (FR-6b)
+
+**Given** §8.3's cut order
+**When** a cut is considered
+**Then** this story is **item 2**, and it is taken **only after item 1** (story 2.7), never before — dropping Float while the two extra constraint types are still in scope leaves violations reported with no Float behind them (§8.3)
+
+### Story 2.7: Constraints are soft, reported, and stay on their own Work Package
+
+As a PM,
+I want a date I pinned to be applied where it can be and explained where it cannot,
+So that the tool never draws me a plan nobody can execute.
+
+**Acceptance Criteria:**
+
+**Given** a leaf WP with a *must start on* or *must finish on* constraint
+**When** the pass runs
+**Then** the date is applied as a lower or upper bound wherever the dependency graph allows it, and **where it does not, the graph wins**: the scheduler never draws a successor starting before its predecessor finishes (FR-6b)
+
+**Given** a constraint the graph defeats
+**When** the violation is reported
+**Then** it names the date asked for, the date derived, **how many working days late** it is, and the predecessor chain that forced it (FR-6b)
+
+**Given** an unmet *must finish on*
+**When** Float is computed
+**Then** the violation **changes no WP's Float** — not its own, not upstream, not anywhere — and **never displaces the critical path**. Violations are their own ranked list, worst first, beside the path rather than inside it. This is a deliberate choice against the more common CPM behaviour: one constraint missed by six weeks would otherwise give its own chain Float −30 and leave the chain that actually decides the finish off the critical path (FR-6b, AR-49)
+
+**Given** a milestone
+**When** it is scheduled
+**Then** it is a zero-duration leaf that participates in the passes normally, and its target date **is** its *must finish on* constraint, so a missed target is a constraint violation on that milestone with its days late and chain (§3, FR-6b)
+
+**Given** the violation list, the out-of-sequence list and the not-schedulable block
+**When** they are ordered
+**Then** violations sort by days late descending then `compareWp`, and the other two by `compareWp` (AR-56)
+
+**Given** §8.3's cut order
+**When** a cut is considered
+**Then** this story is **item 1, the first cut**, and cutting it narrows `constraint_type` to `asap` and touches no column. **It also removes every milestone target date**, because §3 defines a milestone's target as a `must_finish_on`, and FR-31's two milestone rules then lose their input — see *Carried to `bmad-sprint-planning`* (§8.3, AD-26 *Deferred*)
+
+### Story 2.8: The golden scheduler corpus
+
+As the founder,
+I want a corpus of hand-computed expected outputs the engine must reproduce,
+So that there is one gate that catches the engine computing the wrong dates, rather than five that only catch it disagreeing with itself.
+
+**Acceptance Criteria:**
+
+**Given** AD-19's six scheduler CI gates
+**When** they are counted
+**Then** five test internal consistency — the input-writer fence test, the trigger call-site test, the reachability test, the shuffled-input determinism test and the re-derivation test — and **this corpus is the only one that tests correctness**. It is therefore its own story and never an acceptance criterion inside another, because folding it in would hide the one gate that could catch a wrong answer (AR-35)
+
+**Given** the corpus
+**When** it is written
+**Then** the expected outputs are **computed by hand and recorded**, not captured from the implementation, since a captured expectation only proves the engine has not changed
+
+**Given** the minimum coverage AD-27 names
+**When** the corpus is complete
+**Then** it contains at least: a slip moving its dependents across **a JP and a VN weekend**; a mid-flight plan with complete, in-progress and remaining WPs against a Data Date; a plan with **negative Float** against a PM-set Project finish; an **out-of-sequence** actual start; a `must_finish_on` **missed by six weeks that must not displace the critical path**; a **zero-duration milestone**; and a **leaf with no duration** (AR-35)
+
+**Given** the corpus
+**When** it runs in CI
+**Then** it blocks merge, and each case's expected `outputs` are compared through the AD-4 codec's canonical form (AR-35, AR-8)
+
+**Given** a later change to the passes, the roll-up, the ordering or the cause derivation
+**When** it lands
+**Then** it registers a new `engine_version`, every registered version stays executable, and each golden case is re-derived under **its own** recorded version — so a scheduler bug fix does not turn every historical case red (AR-51)
+
+### Story 2.9: One path writes dates, and the run is the record
+
+As the founder,
+I want the input write and the recalculation to happen in one transaction behind one function,
+So that no module can change a scheduling input without a recalculation, and no background job can ever re-date a plan.
+
+**Acceptance Criteria:**
+
+**Given** `app/schedule.applyPlanChange(ctx, mutation)`
+**When** any scheduling input is written
+**Then** it performs the write **and** the recalculation in one transaction under the AD-20 per-Project exclusive lock, and no other use case writes any row in AD-25's input table
+**And** `db/repositories/plan-input` is exported only to `app/schedule`, with `dependency-cruiser` failing on any other importer — **this, not a list of callers, is what closes the trigger set's input side** (AR-43)
+
+**Given** the two layers
+**When** they are named
+**Then** `domain/schedule.recalculate(inputs, prevInputs) → outputs` is pure and reads nothing but its arguments, `app/schedule.recalculateProject(ctx, projectId, cause)` resolves the inputs, calls it and appends the run, and **nothing else is called `recalculate`** (AR-47)
+
+**Given** `schedule_run.inputs`
+**When** it is written
+**Then** it is **fully resolved — every value, no pointers**: the whole WP tree leaf and summary, the per-leaf duration, constraint, actual dates and `recorded_pct`, the edges with lag and type, the three Project settings, and **the resolved non-working-day set itself** with its range and version seq, because a pure function cannot dereference a reference
+**And** the resolution watermarks are carried as assertions that a recompute saw the same values, never as a second filter (AR-48)
+
+**Given** a 500-WP, 500-edge Project from Epic 1's fixture
+**When** a run is appended
+**Then** the payload is **measured** — raw bytes, stored bytes after `pglz`, and WAL per append — and compared against AD-26's measured 385 kB raw / ~141 kB stored / ~152 kB WAL, failing if it diverges beyond a stated tolerance
+**And** the measurement is real, because AD-5's retention rule is sized off that figure and an earlier draft of AD-26 guessed 25 KB (AR-50)
+
+**Given** the payload
+**When** it is encoded
+**Then** `inputs.wps` is an array and every other reference in `inputs` and `outputs` — `parent_id`, both ends of each edge, the critical path, the driving chains, the violation rows — is that array's **integer index**, ordered by `compareWp`, so a `wp_id` is written once per WP rather than five or more times (AR-50, AR-55)
+
+**Given** AD-5's retention rule
+**When** it is exercised
+**Then** a run's `inputs` may be deleted only when it is older than the oldest run its Project still references and is not the latest; `outputs` may be dropped earlier because it is a pure function of `inputs`; and `inputs` and the `causes` array are never dropped while the run is retained
+**And** a test proves that **the runs between two Reviews survive**, which is the set FR-28 attributes date movement from and the set a last-N-runs rule would have deleted (AR-11)
+
+**Given** the recalculation
+**When** it runs
+**Then** it is **synchronous inside the fence's transaction** under the per-Project exclusive lock — the one sanctioned long hold of that lock — measured against NFR-P1's 300 ms p95 for 500 WPs on Epic 1's fixture
+**And** if the budget is missed the lever is **lock granularity, never a background path**, because FR-6b forbids one (AR-53)
+
+**Given** a snapshot ingest for the same Project arriving during a recalculation
+**When** it tries to write
+**Then** it waits behind the fence with a `lock_timeout` set and records a retryable failed attempt rather than blocking indefinitely, because an advisory-lock wait is otherwise unbounded (AR-53)
+
+**Given** `wp_schedule`
+**When** a run completes
+**Then** it is rebuilt from the latest run as a `derived` projection with `stale = false`, `app/schedule` holds INSERT, UPDATE and DELETE on it and **INSERT only on `schedule_run`**, and nothing pinned ever references `wp_schedule` (AR-49, AR-11)
+
+**Given** an edit that cannot be scheduled
+**When** validation or the passes reject it
+**Then** the whole mutation rolls back with its reason and **nothing is persisted** (AR-46)
+
+**Given** the three closure tests
+**When** CI runs
+**Then** *writers*: every statement writing an AD-25 input row is inside the fence; *callers*: the callers of `recalculateProject` are exactly FR-6b's trigger list; *reachability*: `recalculateProject` is unreachable from `ingestSnapshot`, `evaluateRules`, every `mapping` use case and every Tracker-driven job handler
+**And** all three are required, because addendum A.5 proposed only the third and alone it cannot close the set: the snapshot path never calls the function, it changes an input the function reads (AR-52)
+
+**Given** `domain/schedule`
+**When** its imports are checked
+**Then** it may not import `domain/attribution`, so no evidence-derived figure can become a scheduling input without an import edge CI rejects (AR-1, AR-52)
+
+### Story 2.10: Work Packages, actual dates and Custom Fields, edited through the fence
+
+As a PM,
+I want to create and edit Work Packages and record when work really started and finished,
+So that the plan reflects the project, and a mid-flight project is scheduled on the work that is left.
+
+**Acceptance Criteria:**
+
+**Given** a leaf WP
+**When** a PM edits it
+**Then** they set name, duration in working days, planned effort in hours, an optional constraint, an optional actual start and actual finish, assigned Resources, Custom Field values and the milestone flag — **and no planned date, because planned dates are not typed** (FR-5)
+
+**Given** a PM who types into a derived date cell
+**When** the edit is attempted
+**Then** it is refused with "Planned dates are derived. To pin a date, set a constraint." and focus moves to that row's constraint cell — a refusal that teaches the model, rather than a disabled grey cell that does not (UX-DR12, FR-5)
+
+**Given** a leaf WP carrying a duration, constraint or dependency
+**When** it is given a child
+**Then** the PM must resolve it in the same action — the tool asks which child takes them, or confirms they are dropped — and the leaf-only `CHECK` clears those columns **in the same statement** as the row that flips `child_count`, because a CHECK cannot be deferred (FR-5, AR-45)
+
+**Given** a leaf WP with dependencies
+**When** it is deleted
+**Then** its incoming and outgoing edges are deleted with it and listed in the confirmation with the WPs at the other end, and they are **never re-linked predecessor-to-successor** — an edge the PM never drew is an edge nobody can explain later (FR-5, AR-45)
+
+**Given** a WP the PM marks complete
+**When** the action runs
+**Then** it asks for the actual finish and proposes today, which the PM can change to the date the work really finished; where the WP has Mapped Tickets the **first observed activity** is shown beside the actual start as evidence with a one-click fill, and **is never written by the system** (FR-5, UX-DR13)
+
+**Given** an actual finish earlier than its actual start
+**When** it is submitted
+**Then** it is refused with the reason (FR-5)
+
+**Given** an actual date later than the Data Date
+**When** it is submitted
+**Then** it is neither accepted silently nor rejected: the PM is asked to advance the Data Date to cover it **in the same action**, because the two are one statement about how far the plan has got (FR-5, FR-43)
+
+**Given** a Recorded Percent Complete typed on the Plan grid
+**When** it commits
+**Then** it is written to `pct_override_event` through the fence as an ordinary input edit and triggers a recalculation. **FR-30's audited override — the mandatory reason and the Observed-versus-Recorded comparison — is Epic 6's**, and this story does not build it (AR-42, FR-6b)
+
+**Given** Custom Fields
+**When** a PM defines them
+**Then** they are text, number, date or single-select, usable as columns and grouping axes, and a Project with **100** of them meets NFR-P1 — the tested bound is the bound, the 101st is not blocked but is warned as untested (FR-8)
+
+**Given** any of these edits
+**When** it commits
+**Then** it produced its audit row in the same transaction, with the previous value and, for an actual date, its source — typed, imported, or accepted from a first-observed-activity proposal (NFR-A1, AR-26)
+
+### Story 2.11: The three Project schedule settings
+
+As a PM,
+I want a Project start, an optional Project finish and a Data Date,
+So that the forward pass has an origin, the backward pass has a target, and I decide when the plan moves through time.
+
+**Acceptance Criteria:**
+
+**Given** a Project with no Project start
+**When** it is opened
+**Then** it shows a "no project start yet" state in place of dates, `FR-6b` does not run, and the schedule strip carries the one action, *Set Project start* (FR-43, UX-DR23)
+
+**Given** a PM setting a Project finish for the first time, or clearing one
+**When** they confirm
+**Then** the confirmation states what it actually does — "This moves no work package. It changes what Float is measured against, and lets Float go negative" — and **no WP moves**; only the backward pass's origin changes (FR-43, UX-DR5)
+
+**Given** a Project created with no Data Date
+**When** it is set
+**Then** it is set in the same action as the Project start, it **defaults to today** and never to a date read out of the plan's contents, and thereafter only the PM advances it (FR-43)
+
+**Given** an attempt to set the Data Date earlier than the latest actual finish in the Plan
+**When** it is submitted
+**Then** it is rejected with the WPs that block it, because the scheduler would otherwise have to place completed work in the future (FR-43)
+
+**Given** the Data Date panel
+**When** the PM is offered an advance
+**Then** it names what will happen before it is pressed — "Advancing to 26 Sep re-dates 78 remaining work packages" — and it is **never advanced automatically** (FR-43, UX-DR14)
+
+**Given** a change to any of the three
+**When** it commits
+**Then** it triggers a full recalculation through the fence and is audited with its author, its time and its previous value (FR-43, AR-26)
+
+**Given** a Tracker Snapshot, a ledger entry, a Mapping change or a Mapping Rule firing
+**When** any of them happens
+**Then** **every WP date is exactly where it was**, and the reachability test in 2.9 is what holds that true as the system grows (FR-43, AR-52)
+
+### Story 2.12: The Holiday Calendar and its dated versions
+
+As a PM,
+I want the working-day calendar versioned, national tables included,
+So that adding a client holiday in November cannot change what an October Baseline re-derives to.
+
+**Acceptance Criteria:**
+
+**Given** a Project's Holiday Calendar
+**When** it is configured
+**Then** it uses Japanese national holidays, Vietnamese national holidays including Tết, or both, and the PM can add Project-specific non-working days, written to `calendar_day_event` (FR-14)
+
+**Given** a calendar version
+**When** it is created
+**Then** `holiday_calendar_version` stores the **fully resolved** non-working-day set as `date[]` over `[range_start, range_end]` — national tables and Project days already merged — never a calendar name, and it is never edited (AR-57, FR-14)
+
+**Given** the three things that create a version
+**When** any of them happens
+**Then** a new version is appended with its author or source, its time and an optional reason: a Project-specific non-working day added or removed; a change to which national calendars are in use; and **any correction or extension of the JP or VN national tables themselves** — the third is what makes the versioning real, since Japan legislates holidays year by year and they are 95% of the calendar (FR-14)
+
+**Given** `app/calendar.publishCalendarVersion`
+**When** an operator publishes a national-table correction affecting several Projects
+**Then** it opens a transaction **per Project**, takes that Project's lock, appends the version and calls `recalculateProject(cause = 'calendar changed')` — **one Project's lock at a time and never two at once**, so the fan-out cannot deadlock against an ingest
+**And** it writes `operator_audit` once and each Project's `audit_log` per Project, and reports per-Project success, halt or failure, with a halted Project not stopping the rest (AR-57)
+
+**Given** a plan that runs past the loaded range
+**When** the recalculation runs
+**Then** the run is appended with a `halted_reason` and no `outputs`, `wp_schedule` keeps the last good run with `stale = true`, and the PM sees the WPs and the range needed — with the banner saying extending it is an **operator** action (AR-58, UX-DR23)
+
+**Given** the national dataset for 2026–2028
+**When** it ships
+**Then** it is a versioned static dataset in the repo, its id recorded on each version as provenance, and working-day arithmetic stays in `domain/calendar` taking the resolved set as an argument (AR-27, AR-57)
+
+**Given** the Current Plan
+**When** a new version is created
+**Then** it uses the latest version and the resulting date movement carries the cause *calendar changed* (FR-14, FR-28)
+
+### Story 2.13: The Plan tree grid and its Schedule preset
+
+As a PM,
+I want the whole plan as one keyboard-driven grid carrying every column the engine produces,
+So that R0 has a complete scheduling surface without a Gantt.
+
+*Stories 2.13 to 2.16 are **the plan surface OQ-11 asks to be sized as its own line item**, separately from the engine in 2.3 … 2.9. `EXPERIENCE.md`'s Core/Comfort tier is given per acceptance criterion so the Comfort rows can be cut without rewriting a story.*
+
+**Acceptance Criteria:**
+
+**Given** the Plan surface
+**When** it renders
+**Then** three leading columns are frozen — WBS code, Name carrying the expand control, and the state glyph — and they are frozen **visually only**, staying in the same row and reading order so a screen reader hears one row (UX-DR3, **Core**)
+
+**Given** the grid
+**When** a screen reader or keyboard user works it
+**Then** it follows the ARIA treegrid pattern with `aria-level`, `aria-expanded`, `aria-posinset` and `aria-setsize`; inline edit opens on double-click or `Enter`, `Esc` cancels, commit is on blur, `Enter` or `Tab`; and a commit FR-6a rejects changes nothing and triggers no recalculation (UX-DR24, NFR-U1, **Core**)
+
+**Given** the Schedule preset, which is the default
+**When** it renders
+**Then** it carries derived start, derived finish, duration, predecessors, constraint, Float, Critical and Exception after the frozen three, and **fits the grid's own width** — measured at 1,229px against the 1,232px available at a 1280px viewport with the sidebar collapsed (UX-DR4, **Core**)
+
+**Given** the Data Date
+**When** rows render
+**Then** dates on or before it are set in the muted ink and dates after it in full ink, which with the state glyph is FR-7's "boundary between the two halves of the plan" made visible in a grid (UX-DR12, FR-7, **Core**)
+
+**Given** a summary WP
+**When** its scheduling cells render
+**Then** duration, predecessor, constraint, Float, Critical and Exception show an em dash whose accessible name is "not applicable — summary work package, rolled up from its children" — **never blank**, because blank reads as missing data (UX-DR12, **Core**)
+
+**Given** negative Float
+**When** it renders
+**Then** it is the number with its minus sign, never 0 and never blank (UX-DR12, FR-7, **Core**)
+
+**Given** the critical path
+**When** it renders
+**Then** the Critical column reads the **word** "Critical" with a bar glyph and the row takes an ink left rule, and the column header names the anchor in short form, because the same WP can be critical against one anchor and not the other (UX-DR12, FR-6b, **Core**)
+
+**Given** the Percent Complete shown in the Schedule preset
+**When** it renders
+**Then** it is the **Recorded** figure, because that is the one FR-6b reads (UX-DR12, **Core**)
+
+**Given** the four presets
+**When** they are built
+**Then** Schedule is complete here; the **Progress** preset's Epic 2 columns (actual dates, Recorded %, remaining duration) ship here and its Observed %, Gap and Evidence columns are completed in Epics 5 and 6; **Baseline compare** is completed in Epic 4; and **All** is Comfort (UX-DR4, measured seam)
+
+**Given** `1`–`4`
+**When** pressed inside the grid
+**Then** the preset changes **without losing the focused row**, so a preset change is a change of view and never of place; the choice is persisted per user per project (UX-DR24, **Core**)
+
+**Given** a plan of 500 WPs from Epic 1's fixture
+**When** the grid loads
+**Then** it meets NFR-P1's under 2 s p75 and under 4 s p95 (NFR-P1)
+
+### Story 2.14: Dependencies and constraints are created and explained on the grid
+
+As a PM,
+I want to type predecessors and constraints straight into the grid and be told exactly why one is refused,
+So that FR-6a has an editing surface a keyboard user owns.
+
+**Acceptance Criteria:**
+
+**Given** the predecessor cell
+**When** the PM types
+**Then** it takes MS-Project-shaped text — `2.3FS+2d, 2.4` — with `FS` omittable as the only R0 type and lag in working days that may be negative, and autocomplete over WBS code and WP name offering **leaf WPs only** (UX-DR6, **Core**)
+
+**Given** a commit the graph rules reject
+**When** the error renders
+**Then** it appears under the cell naming the offence and the WPs in it — "2.1 → 2.3 → 2.1 would be a cycle", "4.2 is an ancestor of 4.2.1", "3.0 is a summary work package", "that work package is in another project"
+**And** **the cell keeps the typed text**, so the PM corrects rather than retypes (UX-DR6, FR-6a, **Core**)
+
+**Given** a rejection
+**When** it is announced
+**Then** it is announced **assertively**, because it means the edit did not happen — while a successful recalculation is announced politely (UX-DR26, NFR-U1, **Core**)
+
+**Given** the constraint cell
+**When** it renders and is edited
+**Then** it holds both halves in one column, reading "Must finish on 18 Mar 2027" and editing as type then date; a non-default type requires the date, and clearing the date returns the type to *as soon as possible* (UX-DR7, **Core**)
+
+**Given** a milestone
+**When** its target date is edited
+**Then** it is edited **in the constraint cell like any other constraint**, not in a field of its own (UX-DR7, §3, **Core**)
+
+**Given** a constraint the graph already makes impossible
+**When** it is committed
+**Then** the violation appears in the same row's Exception cell **in the same interaction** — the cell never promises the date will be met (UX-DR7, **Core**)
+
+**Given** the Links panel opened with `l`
+**When** it renders
+**Then** it lists the selected WP's predecessors **and successors** as rows with the other end's dates and Float, runs the same FR-6a checks, and shares the rail's slot
+**And** it is **Comfort**: the predecessor cell alone satisfies FR-6a and FR-7, and cutting it costs discoverability, not access (UX-DR11, **Comfort**)
+
+### Story 2.15: The schedule strip and the What-moved band
+
+As a PM,
+I want the plan's scheduling context on one line and a plain answer when one edit moves a hundred dates,
+So that I never read a Float number without knowing what it was measured against, and never watch a grid quietly redraw itself.
+
+**Acceptance Criteria:**
+
+**Given** the schedule strip above the grid
+**When** it renders
+**Then** it carries the Project start, the Project finish or *not set*, the Data Date, the computed finish, the minimum Float, and **the Float anchor as a sentence, not a label** — "Float measured against the Project finish, 31 Mar 2027", or "Float measured against the computed finish, 12 Mar 2027 — relative, because no Project finish is set" (UX-DR5, **Core**)
+
+**Given** the strip
+**When** the grid scrolls
+**Then** it never scrolls away, because it is the only place a Float number means anything (UX-DR5, **Core**)
+
+**Given** all three Project settings
+**When** the PM edits one on the strip
+**Then** it is an inline edit that goes through the fence and recalculates, exactly as editing it in Project settings would (UX-DR5, FR-43, **Core**)
+
+**Given** any recalculation
+**When** it settles
+**Then** the What-moved band appears under the toolbar with one line — "142 work packages moved · computed finish 12 Mar → 26 Mar 2027 · minimum Float +4 → −3" — and *See what moved* groups the moved WPs under **FR-28's seven causes** with old and new dates, any entry focusing that WP in the grid (UX-DR10, FR-28, **Core**)
+
+**Given** an edit that moves nothing
+**When** the band appears
+**Then** it says **"No dates moved"**, because silence and nothing-moved are different answers (UX-DR10, **Core**)
+
+**Given** the band
+**When** the PM looks away and comes back
+**Then** it persists until the next recalculation or until dismissed (UX-DR10, **Core**)
+
+**Given** a recalculation
+**When** it completes
+**Then** it is announced politely — "142 work packages moved. Computed finish 26 March 2027. Minimum Float minus 3." — and changed cells take a 300 ms highlight that reduced-motion users get without the transition (UX-DR26, UX-DR10, NFR-U1, **Core**)
+
+**Given** a second PM who recalculated while this grid was open
+**When** the band appears
+**Then** it is attributed — "142 work packages moved · edited by Hoang, 3 min ago" — and carries **no Undo**, because undoing someone else's edit is not this band's job (UX-DR23, **Core**)
+
+**Given** *Undo this edit*
+**When** it is considered for a cut
+**Then** it is **Comfort**: the PM re-edits by hand, and the plan is never wrong, only slower to fix (UX-DR10, **Comfort**)
+
+**Given** a recalculation in flight
+**When** the grid renders
+**Then** it stays interactive and affected date cells show "…", **never their previous values** (UX-DR23, **Core**)
+
+### Story 2.16: The schedule-exceptions rail and its three explainers
+
+As a PM,
+I want every exception the engine found in one ranked queue with an explanation I can walk,
+So that a missed date comes with the chain that caused it instead of a badge nobody reads.
+
+**Acceptance Criteria:**
+
+**Given** the rail
+**When** it renders
+**Then** it has three collapsible groups, always in this order, each with its count: **Constraint violations** ranked by working days late worst first, **Out-of-sequence links**, and **Not schedulable yet** (UX-DR8, FR-6b, **Core**)
+
+**Given** a viewport below 1680px
+**When** the rail becomes a drawer
+**Then** the toolbar toggle **always carries the total count**, so a shut drawer never hides an exception (UX-DR8, UX-DR27, **Core**)
+
+**Given** no exceptions
+**When** the rail renders
+**Then** it says "No schedule exceptions" rather than vanishing, because absence and emptiness are different facts (UX-DR8, **Core**)
+
+**Given** the constraint-violation explainer
+**When** it opens
+**Then** it names the date asked for, the date derived, **how many working days late and on which Holiday Calendar version**, and the predecessor chain that forced it
+**And** it closes with the line that keeps the model honest: "This violation stays on this work package. It has not changed any other work package's Float." (UX-DR9, FR-6b, **Core**)
+
+**Given** the out-of-sequence explainer
+**When** it opens
+**Then** it states the fact — "WP 2.4 started 12 Sep, before WP 2.3 finishes 19 Sep. Actual dates are kept. The successors of 2.4 are driven from its actual start." — and **offers no fix, because there is nothing wrong**; it is neutral ink, never amber, never red (UX-DR9, UX-DR23, **Core**)
+
+**Given** the not-schedulable explainer
+**When** it opens
+**Then** it states the consequence — excluded from both passes and the critical path, successors driven as though it were absent, blocks the next Baseline — **with a duration field in the popover**, so the fix is one action from the explanation (UX-DR9, FR-6b, FR-15, **Core**)
+
+**Given** `j`, `k` and `Enter`
+**When** used in the rail
+**Then** `j`/`k` walk the whole rail across groups and `Enter` scrolls the grid to that WP, focuses its row and opens the explainer; `e` opens the explainer on the focused row; `x` toggles the drawer (UX-DR24, **Core**)
+
+**Given** every exception
+**When** it is marked
+**Then** it is **glyph plus word plus number** in the Exception cell and again as a rail item — "▲ Late 6d", "⇄ Out of sequence", "⊘ No duration" — and no row is ever marked by colour alone (UX-DR12, UX-DR26, NFR-U1, **Core**)
+
+**Given** the violation explainer's walkable chain
+**When** it is considered for a cut
+**Then** it is **Comfort**: the chain can be listed as plain text without per-WP focus jumps (UX-DR9, **Comfort**)
+
+**Given** a structural edit that left an illegal edge
+**When** the Plan renders
+**Then** a band at the top reads "This plan cannot be scheduled. 2 dependencies are invalid." with the offending edges named and each one's fix, and the grid shows **the last good schedule with every derived date marked stale** — never a guess, never blanks (UX-DR23, FR-6a, **Core**)
 ---
 
 ## Carried to `bmad-sprint-planning` (not decided here)
