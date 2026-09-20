@@ -221,3 +221,39 @@ Steps 2, 3 and 4 may run in parallel, each in its own session. Step 7 must not s
 - A baseline captured after this change is re-derivable from its pinned inputs alone.
 - Epics and Stories exist; `bmad-sprint-planning` has returned a verdict and a re-derived R0 date.
 - Nothing in the excluded list of §3 has been built.
+
+---
+
+## 6. Closure — 2026-09-20
+
+*Appended, not merged into the body. The proposal above is the reasoning as it stood when the founder approved it, and PRD §13's norm is that such artifacts are "left unedited as evidence about the process". Read §§1–5 as of 2026-09-20 morning and this section for what became of it.*
+
+### The handoff is complete through step 6
+
+| Step | Owner | State |
+|---|---|---|
+| 1 | Founder | ✅ approved 2026-09-20 |
+| 2 | `bmad-prd` | ✅ B-1 … B-7 applied |
+| 3 | `bmad-architecture` | ✅ A-1 … A-6; spine carries AD-26 … AD-30 (PR #2) |
+| 4 | `bmad-ux` | ✅ D-1 … D-4; the plan surface is specified and tiered (PR #3) |
+| 5 | `bmad-create-epics-and-stories` | ✅ 8 epics, 70 stories (PR #4) |
+| 6 | `bmad-sprint-planning` | ✅ verdict returned, R0 date re-derived |
+| 7 | Developer | **Unblocked.** It "must not start before step 6 returns a verdict"; it has |
+
+### What step 6 returned
+
+**Verdict FAIL** against the dates this proposal assumed, on two measured findings: the then-implied 2026-11-30 bought 17 % of R0, and the whole §8.3 cut order is worth 9 %. R0 is **1,180 h across 70 stories** (826–1,652).
+
+The founder **re-affirmed the frozen 36-FR list in full and raised capacity to 40 h/week** rather than cut. **R0's date is `2027-04-14`**, range 2027-02-12 … 2027-07-06. Working: `oq12-sprint-planning-2026-09-20.md`; the decision is recorded in PRD §8.1, §13 and OQ-12.
+
+### The premise that did not survive
+
+**§3, *Revision from v1*, still reads: "The market date is R1 in Q1 2027."** That sentence is load-bearing here — it is the reason this proposal judged expanding R0 to be cheap, costing "dogfooding time, not market position". **R1's Q1 2027 date was withdrawn on 2026-09-20** (PRD §8.2): the §8.1 gate needs four consecutive weekly Reviews after R0 is in use, so the earliest gate pass is 2027-05-12, already Q2, and that is before R1's own build starts.
+
+The conclusion still holds — R0 is founder-only and no customer waits on it — but it now rests on R0 having **no** market date rather than on R1 supplying one. The 2027-01-01 Backlog repricing, which §1 treats as the competitive clock, now falls while R0 is still being built. PRD §6's *thin moat* risk carries this.
+
+**Superseded figures**, stated as current in §1 (line 52), §4 B-5 and §5 E-2: **"20+ hours per week" is now 40 h/week** (PRD OQ-10, reclosed).
+
+### Success criteria
+
+Six of the seven are build-time and remain open — they describe the scheduler working, and nothing is built yet. The one planning criterion, *"Epics and Stories exist; `bmad-sprint-planning` has returned a verdict and a re-derived R0 date"*, is **met**. The rest pass or fail during step 7, against PRD §6's date-slip rule.

@@ -59,7 +59,7 @@ Hierarchy: Tenant › Project › project surfaces. The project is the unit of w
 
 ### Plan — surface structure
 
-R0's single scheduling surface (FR-7). Every scheduling input the PM owns, and every date the scheduler derives from them, is reachable here; nothing lives only in a chart, because R0 has none. Top to bottom: the **schedule strip**, the **toolbar**, the **tree grid**; to its right the **schedule-exceptions rail**; and, after every recalculation, the **What-moved band** between toolbar and grid. Each element is tagged *Core* or *Comfort* in *Build Tiers* below, so OQ-11 can be sized as two figures rather than one.
+R0's single scheduling surface (FR-7). Every scheduling input the PM owns, and every date the scheduler derives from them, is reachable here; nothing lives only in a chart, because R0 has none. Top to bottom: the **schedule strip**, the **toolbar**, the **tree grid**; to its right the **schedule-exceptions rail**; and, after every recalculation, the **What-moved band** between toolbar and grid. Each element is tagged *Core* or *Comfort* in *Build Tiers* below, which is how OQ-11 was sized as two figures rather than one: **engine 92 h, this surface 98 h** (closed 2026-09-20).
 
 1. **Schedule strip.** One ruled line above the grid carrying the Project's scheduling context: Project start · Project finish (or *not set*) · Data Date · computed finish · minimum Float · and the Float anchor written as a sentence, not a label — "Float measured against the Project finish, 31 Mar 2027", or "Float measured against the computed finish, 12 Mar 2027 — relative, because no Project finish is set" (FR-6b, FR-43). All three settings are editable here as well as in Project settings; each edit recalculates and raises the What-moved band. The strip never scrolls away, because it is the only place a Float number means anything.
 2. **Toolbar.** Column-preset switcher · `/` filter · expand-to-level · column chooser (within the preset) · *Set Baseline* / *Compare baselines* · *Import / Re-import*.
@@ -317,7 +317,11 @@ Cutting is allowed without a correct-course pass (PRD §7.3). Adding is not.
 | Dates-that-moved list, grouped by cause | Core | FR-28 names seven causes and requires every moved WP to carry one. |
 | Data Date panel and its advance action | Core | FR-43's advance action has no surface, and the plan cannot be moved through time. |
 
-**Suggested cut order** if OQ-12 returns CONCERNS or FAIL: the Comfort rows above, in the order they are listed. They sit *above* the PRD's own first cut — the two extra constraint types (§8.3 item 1) — because cutting them removes no FR behaviour and cutting the constraint types does. The order is a recommendation to `bmad-sprint-planning`, not a decision taken here.
+**Cut order — adopted 2026-09-20, and now normative.** The Comfort rows above, in the order they are listed. They sit *above* the PRD's own first cut — the two extra constraint types — because cutting them removes no FR behaviour and cutting the constraint types does.
+
+This was offered here as a recommendation to `bmad-sprint-planning`. **It was taken.** OQ-12 closed on 2026-09-20, and **PRD §8.3 now carries these rows as `item 0` of the cut order**, above item 1, for exactly the reason given above — and with the consequence spelled out there that item 1 deletes every milestone target date, because PRD §3 defines a milestone's target *as* a *must finish on* constraint. **So this table is no longer a suggestion: it is the content of item 0**, and the PRD's cut order reads its row order from here. Changing a tier below changes what the PRD cuts first, which makes a retier a PRD-affecting edit rather than a local one.
+
+Sized at **~18 h** for all Comfort rows (OQ-12). Cutting them needs no `bmad-correct-course` pass; cutting item 1 does, because its cheapest rescue — a milestone-only deadline flag — is a capability no FR states.
 
 ## Key Flows
 
@@ -384,7 +388,9 @@ The scheduling surface's own flow. It is the one place the product stops reporti
 
 ## Open Questions
 
-- **OQ-11 — resolved here, for its design half.** The tree grid, its four presets, dependency and constraint editing, the three schedule exceptions and their explainers, the What-moved band and the Review's *Progress & Dates* section are specified above, and every element carries a Core or Comfort tier. **The cost half stays open** and belongs to `bmad-sprint-planning` (OQ-12), which PRD OQ-11 requires to size this surface as its own line item, separate from the FR-6b engine. *Build Tiers* exists to make that sizing produce two numbers.
+- ~~**OQ-11 — resolved here, for its design half.**~~ **OQ-11 is closed, both halves, 2026-09-20.** The design half is resolved here: the tree grid, its four presets, dependency and constraint editing, the three schedule exceptions and their explainers, the What-moved band and the Review's *Progress & Dates* section are specified above, and every element carries a Core or Comfort tier. **The cost half closed with `bmad-sprint-planning`**, which sized this surface as its own line item as PRD OQ-11 required: **the FR-6b engine is 92 h and this surface is 98 h — a ratio of 1.07.**
+
+    *Build Tiers* did its job: the sizing produced two numbers, and they settle the question this file was built around. **The surface is not a rounding error on the engine** — it is slightly larger than it. PRD OQ-11's premise, that "the engine being cheap is the reason the surface keeps being costed as though it were", is confirmed rather than assumed. Working: `{planning_artifacts}/oq12-sprint-planning-2026-09-20.md`.
 - **The gap threshold** on the Observed-vs-Recorded list (default 10 percentage points) is a starting value, not a researched one. It should move after the first month of real Reviews, and it is a per-Project setting so that it can.
 - **The predecessor cell's syntax** is MS-Project-shaped because that is what the PM's Japanese counterparts use in a 工程表. It has not been tried by a second PM. If it turns out to be unlearnable, the answer is to promote the Links panel from Comfort to Core — not to invent a third syntax.
 - **The tie-break rule** (PRD OQ-13, `bmad-architecture`) decides the order of equal-Float WPs on the critical path. The surface does not depend on it; FR-15's re-derivation test does. The Critical column's row order is not reproducible until it is written down.
