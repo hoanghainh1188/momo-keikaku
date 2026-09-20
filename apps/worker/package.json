@@ -1,2 +1,3 @@
 { "name": "@momo/worker", "version": "0.0.0", "private": true, "type": "module", "main": "src/index.ts",
-  "scripts": { "typecheck": "tsc --noEmit -p tsconfig.json --pretty false" } }
+  "scripts": { "start": "tsx src/index.ts", "typecheck": "tsc --noEmit -p tsconfig.json --pretty false" },
+  "dependencies": { "pg-boss": "12.33.2", "@momo/app": "workspace:*" } }

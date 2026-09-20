@@ -16,7 +16,9 @@
 #
 # So this file gates on what is real: lint, all three typechecks and the test suite.
 # Measured on 2026-09-20 — `pnpm lint` exits 0, all three typechecks exit 0, and
-# `pnpm test` passes 53 tests across 4 files against the seeded Postgres service below.
+# `pnpm test` passes 72 tests across 7 files against the prepared Postgres service below
+# (53 across 4 before story 1.1 slice B2; that slice added apps/worker/src/worker-round-trip.test.ts,
+# scripts/pgboss-migrate.test.ts and packages/app/src/config.test.ts).
 #
 # Every gate here has been watched to fail, because a gate nobody has seen fail is
 # indistinguishable from a green light:
@@ -32,6 +34,12 @@
 #   * typecheck (apps/worker) — `const __bad: number = 'nope'` in apps/worker/src/index.ts
 #     is caught by this step and by neither of the other two, because the root tsconfig
 #     excludes `apps`.
+#   * tests (the role split) — each assertion was watched to fail by breaking the thing it
+#     covers: pointing the entry point at DATABASE_URL, flipping `migrate` to true, granting
+#     the app role CREATE on `pgboss`, granting it BYPASSRLS, deleting the migrator's
+#     percent-decoding, relaxing APP_DATABASE_URL to a zod `.default()` (which still
+#     typechecks), and removing APP_DATABASE_URL under REQUIRE_DB=1. The full table is in
+#     spec-1-1-pgboss-roles.md.
 
 name: CI
 
@@ -77,8 +85,15 @@ jobs:
 
     env:
       DATABASE_URL: postgres://momo:momo@localhost:55433/momo_keikaku
+      # The restricted `app` role, created by the prepare step below from this very string:
+      # `pnpm pgboss:migrate` reads the role name and password out of it, so the role the
+      # worker connects as and the role the migrator creates cannot disagree. It is NOT a
+      # second name for DATABASE_URL — it holds DML on the `pgboss` schema and nothing
+      # else, and has no grant on any application table until story 1.2's table-class
+      # registry generates them.
+      APP_DATABASE_URL: postgres://momo_app:momo_app@localhost:55433/momo_keikaku
       # Turns an unreachable database into a failure instead of a skip. Without it the
-      # round-trip test would pass by not running, which is the same as not having it.
+      # round-trip tests would pass by not running, which is the same as not having them.
       REQUIRE_DB: '1'
 
     steps:
@@ -135,15 +150,26 @@ jobs:
         if: always()
         run: pnpm lint
 
-      # The round-trip test needs rows to read. `push` applies schema.ts through
+      # The round-trip tests need something to read. `push` applies schema.ts through
       # drizzle-kit rather than a migration, which is correct while Epic 2's single
       # pre-production migration does not exist yet; switch this to `drizzle-kit
       # migrate` when it does.
-      - name: Prepare database (schema + seed)
+      #
+      # `pgboss:migrate` is the owner-role step: it creates the `migrator` and `app` roles,
+      # installs pg-boss's schema from the SQL pg-boss itself generates, and grants the app
+      # role USAGE plus DML and nothing else. It runs here rather than inside the worker
+      # because the worker's whole point is that it *cannot* do this.
+      #
+      # It runs TWICE on purpose. Idempotence is an acceptance criterion of story 1.1 slice
+      # B2, and a criterion checked by hand once is not a gate: the second run is what fails
+      # the build the day a non-idempotent statement is added to that script.
+      - name: Prepare database (schema + seed + pgboss roles/schema)
         if: always()
         run: |
           pnpm exec drizzle-kit push --force
           pnpm seed
+          pnpm pgboss:migrate
+          pnpm pgboss:migrate
 
       # `always()` throughout so one failure does not hide the others. Every signal
       # lands on the same run.
