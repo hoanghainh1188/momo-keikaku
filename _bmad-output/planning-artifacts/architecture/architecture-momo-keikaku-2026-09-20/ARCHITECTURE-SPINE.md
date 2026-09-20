@@ -211,7 +211,7 @@ Arrows show allowed imports. Nothing imports `apps/*`. `domain` and `i18n` impor
   - `ComputationInputs` is a fully resolved value:
     - the pinned `tracker_snapshot_id` per Connector, and `ledger_seq_max`;
     - `mapping_seq_max`, `baseline_version_id`, `rate_seq_max`, `project_default_rate_seq_max`, `pct_override_seq_max`, `disposition_seq_max`;
-    - `setting_seq_max` (Project settings: tz, teirei weekday, EAC Method, Project non-working days) and `tenant_setting_seq_max` (Health thresholds, FR-31);
+    - `setting_seq_max` (Project settings: tz, teirei weekday, EAC Method, Project non-working days, **and any Project override of a Health threshold**) and `tenant_setting_seq_max` (the Tenant's default Health thresholds, FR-31);
     - `wp_status_seq_max` (WP marked complete and its actual finish, Milestone done date), `wp_flag_seq_max` (Catch-all), `link_seq_max` (Tracker Account → Resource), `calendar_seq_max`;
     - `connector_scope_seq_max`, `connector_setting_seq_max` (the Resolved status set), `basis_seq_max`;
     - the Visibility Policy value and `visibility_seq_max` (FR-35 requires the policy used to be stored);
@@ -219,8 +219,10 @@ Arrows show allowed imports. Nothing imports `apps/*`. `domain` and `i18n` impor
     - the Reporting Period bounds, the project time zone, the calendar id and version, the `asOf`, and the `formulaVersion`.
   - **Which entries.** Ledger entries are filtered by `snapshot_id ≤ the pinned snapshot` **per Connector**. `ledger_seq_max` is stored only as an assertion that the recompute saw the same row set; it is never the filter. Two filters for one thing is how two builders diverge.
   - **The Review's pin is split (FR-29, UJ-3).** Tracker-side inputs — the pinned snapshot per Connector and therefore the ledger — stay frozen for the life of the Review, so the numbers do not move under the PM. PM-authored watermarks (`mapping_seq_max`, `disposition_seq_max`, `pct_override_seq_max`, `setting_seq_max`, `wp_status_seq_max`, `wp_flag_seq_max`) are **re-captured after each successful write by this PM in this Review**, so a *Map* Disposition drops Unplanned Work immediately, as UJ-3 requires. Publish always captures fresh inputs and shows a diff if anything moved since the Review opened.
-  - Rates are bitemporal: `rate_entry(resource_id, effective_from, yen_per_hour, seq)` and `project_default_rate_entry(project_id, effective_from, yen_per_hour, seq)`. A lookup takes the latest `seq ≤ rate_seq_max` for the effective date, so a retroactive correction appears in live views and never in earlier Published Snapshots. *Interpretation of FR-12:* the spine achieves "past entries are never rewritten" by bitemporal recompute rather than by appending adjusting ledger entries; see Open Questions.
+  - Rates are bitemporal: `rate_entry(resource_id, effective_from, yen_per_hour, seq)` and `project_default_rate_entry(project_id, effective_from, yen_per_hour, seq)`. A lookup takes the latest `seq ≤ rate_seq_max` for the effective date, so a retroactive correction appears in live views and never in earlier Published Snapshots.
   - `published_snapshot` stores `inputs` (jsonb), `outputs_internal` (jsonb) and `outputs_client` (jsonb, AD-12), plus `supersedes_id` and `retracted`/`reason` rows as events. All jsonb goes through the AD-4 codec.
+  - **A Health threshold resolves as Project override at `setting_seq_max`, else the Tenant default at `tenant_setting_seq_max`** (FR-31, founder decision 2026-09-20). Resolution happens in one function in `domain/health`, and the resolved value with its source — Tenant or Project — is stored in `published_snapshot.inputs`, because FR-31 shows the override next to the indicator.
+  - **Retroactive Rate corrections leave the ledger untouched** and money is recomputed against the pinned `rate_seq_max`, so earlier Published Snapshots reproduce exactly and past entries are never rewritten (FR-12, founder decision 2026-09-20). This was previously recorded here as an interpretation awaiting confirmation; it is now the PRD's own wording.
   - `formulaVersion` is a registry key. Changing any formula adds a new version, the old one stays executable, and a CI test recomputes golden Published Snapshots for every registered version.
 
 ### AD-11: The Baseline Ledger and the Current Plan are separate models
@@ -398,7 +400,7 @@ flowchart TB
     - `connector_scope_event` — the Connector's scope, with each snapshot recording the `scope_seq` it read under (FR-20, FR-42);
     - `connector_setting_event` — the Resolved status set (Glossary "Resolved", configurable per Connector);
     - `measurement_basis_event` — the latched basis (AD-8);
-    - `tenant_setting_event` — Health thresholds (FR-31, per Tenant) and other Tenant defaults;
+    - `tenant_setting_event` — the Tenant's default Health thresholds (FR-31) and other Tenant defaults; a Project's override of a threshold is a `project_setting_event`;
     - `project_setting_event` — tz, teirei weekday, EAC Method (FR-32);
     - `visibility_policy_event` — the Visibility Policy (FR-34, FR-35);
     - `connector_ownership_event` — Ticket ownership transfers (FR-42).
@@ -723,7 +725,7 @@ flowchart TB
 - **Caching or materialising computed metrics.** Deferred until NFR-P1 is measured against 5 × 500 WPs × 2,000 Tickets. Any cache must be keyed by the `ComputationInputs` hash (AD-10).
 - **IaC tool, CI provider and deploy pipeline.** Pick at the first staging deploy. AD-18 fixes the topology and AD-19 fixes the migration, alerting and CI-gate rules that the pipeline must implement.
 - **Drizzle 1.x upgrade.** 1.0 is at RC today and brings RLS, RQB and migrator changes. Pins are exact; upgrade after R0.
-- **The R1 set:** magic links and Microsoft sign-in (Better Auth plugins), the client-facing SES sender domain with DKIM/DMARC and SES production access, and NFR-S7 operator grants. `purgeTenant` (NFR-D1) is R1 in schedule, but AD-5's trigger and role design permit it **now** so no migration is needed later.
+- **The R1 set:** magic links and Microsoft sign-in (Better Auth plugins), the client-facing SES sender domain with DKIM/DMARC and SES production access, and NFR-S7 operator grants. **`purgeTenant` is not among them:** NFR-D1 ships the deletion path in R0 as a documented, audited operator procedure with no UI (founder decision, 2026-09-20), which AD-5's `maintenance` role and AD-19's operations envelope already provide for.
 - **Jira adapter internals:** OAuth 3LO token storage and the JQL scope model. Post-Q1, behind AD-6 and its `attributes` shape.
 - **AI import provider:** OQ-5, Post-Q1, behind AD-13.
 - **Compaction schedule only** (FR-19, 90 days to daily). What compaction may and may not delete is now AD-5, not a deferral.
@@ -737,8 +739,8 @@ flowchart TB
 - **OQ-2 (PRD): Backlog hours on the five target projects.** Still open. The architecture handles both answers (AD-8), but the fixture scenarios should be re-recorded (anonymised, AD-24) from the real spaces once the founder checks them.
 - **ExcelJS maintenance.** The last release was 2023-10-19, with only a 4.4.1 prerelease since. It sits behind `WorkbookPort` (AD-13). If the FR-9 acceptance corpus exposes bugs, the fallback is **SheetJS CE from `cdn.sheetjs.com`** — *not* npm `xlsx@0.18.5`, which is frozen and carries prototype-pollution and ReDoS advisories.
 - **Upload limits, the cell ceiling and the business-hours window** (AD-13, AD-15, AD-19) are defaults set overnight. The founder should confirm them.
-- **NEEDS FOUNDER DECISION — Health threshold scope.** PRD FR-31 says thresholds are configurable *per Tenant*, so the spine stores them in `tenant_setting_event` only. The rubric review recommends Tenant defaults *plus* optional Project overrides. Adding Project overrides is new PRD scope; confirm whether R0 should have them.
-- **NEEDS FOUNDER DECISION — FR-12 retroactive Rate corrections.** FR-12 says "adjusting entries are appended to the costing". The spine instead keeps the ledger untouched and recomputes bitemporally against a pinned `rate_seq_max` (AD-10), which satisfies "past entries are never rewritten" by a different mechanism. Confirm this interpretation, or the spine must add adjusting ledger entries.
 - **NEEDS FOUNDER DECISION — measurement basis flip.** The spine latches the basis automatically after 3 consecutive agreeing snapshots (AD-8). The adversarial review recommends requiring an explicit PM confirmation to switch back to Ticket-Count Mode, which is a new PM screen and therefore PRD scope.
 - **NEEDS FOUNDER DECISION — "pinned Unmapped".** AD-9 makes an ordinary unmap a `release` back to the rules, and reserves `manual, wp_id = null` for a Ticket the PM deliberately keeps out of the rules. Whether R0 exposes that second choice as a distinct PM action is a product decision not covered by FR-21 or FR-22.
-- **NEEDS FOUNDER DECISION — Tenant deletion timing.** `purgeTenant` is R1 in the spine, while NFR-D1/NFR-S6 imply a 30-day deletion obligation from the moment the first client's data lands. Confirm R0 can ship without it, or move it into R0.
+- **CONFIRM — `schedule_run` size and retention.** Listed above with the other scheduling assumptions.
+
+*Three questions this spine carried overnight are now closed by the PRD's 2026-09-20 founder decisions, and the spine was corrected rather than left asking: Health thresholds are Tenant defaults that a Project can override (FR-31, AD-10); retroactive Rate corrections leave the ledger untouched and recompute bitemporally, which is what the spine already did (FR-12, AD-10); and the Tenant deletion path ships in R0 (NFR-D1, AD-5, AD-19).*
