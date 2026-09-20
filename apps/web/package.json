@@ -15,8 +15,8 @@
     "react-dom": "^19.0.0",
     "@momo/domain": "workspace:*",
     "@momo/db": "workspace:*",
-    "drizzle-orm": "^0.38.2",
-    "pg": "^8.13.1"
+    "drizzle-orm": "0.45.2",
+    "pg": "8.23.0"
   },
   "devDependencies": {
     "@types/react": "^19.0.2",

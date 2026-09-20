@@ -49,16 +49,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # ARCHITECTURE-SPINE.md pins Node.js 24.21.0 (LTS "Krypton"); the major is pinned
-      # here and patches float, because the spine also notes the upgrade window for v1
-      # is after R1. Story 1.1 owns tightening this to the exact version.
+      # ARCHITECTURE-SPINE.md pins Node.js 24.21.0 (LTS "Krypton"), and this is the exact
+      # version, not a floating major: two runs of the same commit resolve the same Node.
       - uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: '24.21.0'
 
       # corepack reads `packageManager` from package.json, so the pnpm version is never
-      # duplicated here. It is 9.15.0 today; the spine decided 12.4.2 and story 1.1's
-      # version-trap work will bump it. CI follows that change with no edit to this file.
+      # duplicated here. It is 12.4.2, the version the spine decided. Bumping it needs no
+      # edit to this file, but it is NOT a one-file change: pnpm pins itself in the
+      # lockfile (`packageManagerDependencies` plus 42 `@pnpm/exe.*` entries), so
+      # `packageManager` and `pnpm-lock.yaml` must move together or the frozen install
+      # below fails before any gate runs.
       - name: Enable corepack (honours packageManager)
         run: corepack enable
 

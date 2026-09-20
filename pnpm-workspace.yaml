@@ -1,3 +1,15 @@
 packages:
   - 'apps/*'
   - 'packages/*'
+
+# pnpm 12 defaults `strictDepBuilds: true`, so a dependency that wants to run an install
+# script and is not listed here makes `pnpm install` FAIL rather than warn — and pnpm
+# rewrites this file with an unresolved placeholder entry when the list is incomplete.
+# Every entry below is a deliberate yes, not a silenced warning. (`allowBuilds` replaced
+# `onlyBuiltDependencies`, which pnpm 11 removed.)
+#
+# esbuild: its postinstall resolves the platform-specific binary. Both tsx (all the
+# `db:*`/`seed`/`demo` scripts) and vitest's Vite chain shell out to it, so without the
+# binary neither runs. Three majors are present transitively; the key covers all of them.
+allowBuilds:
+  esbuild: true

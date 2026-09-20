@@ -1,0 +1,63 @@
+# Epic 1 Context: A Tenant, its people, and nothing leaking between them
+
+<!-- Compiled from planning artifacts. Edit freely. Regenerate with compile-epic-context if planning docs change. -->
+
+## Goal
+
+Epic 1 stands up the substrate the rest of the product is built on, expressed as one end-to-end capability: a Tenant Admin can create the organisation (Departments, Programs, Projects, PM assignments, Resources and their dated Rate history), invite PMs, and sign in — with an automated proof that no read ever returns another Tenant's data, and an audit record for every action that changes reported numbers or who can see them. It matters because tenant isolation, the audit trail, exact-integer arithmetic and the application layer are not features that can be retrofitted: every later epic writes through them. Treat this as the largest epic in the plan, not a warm-up — it creates five of the eight workspace units, the whole application layer, the auth stack, the worker role, the adapters, the i18n catalogs and the table-class registry, and it rewires every existing page. Current-state warning: only `apps/web`, `packages/db` and `packages/domain` exist today, there is no auth at all, and `apps/web` reaches the database directly in eight files.
+
+## Stories
+
+- Story 1.1: One command brings the whole system up
+- Story 1.2: Nothing crosses a Tenant, and the data layer is what proves it
+- Story 1.3: The organisation, and the record of who changed it
+- Story 1.4: Sign in, and be revoked
+- Story 1.5: Roles decide what each person can reach
+- Story 1.6: Resources and the dated Rates behind every money figure
+- Story 1.7: The Tenant Admin can read the audit log
+- Story 1.8: A load fixture worth measuring against
+- Story 1.9: Every string is externalised, and the currency is fixed
+
+## Requirements & Constraints
+
+- **Isolation is provable, not asserted.** A shared harness seeds two Tenants and asserts, for *every* read use case, that nothing from the other Tenant comes back. The harness must enumerate use cases mechanically so a new one is covered the day it is written. This harness plus the FORCE-RLS assertion discharge the isolation NFR once, for the whole product.
+- **Org shape.** Tenant › Department › Program › Project. A Project has one owning Department and an optional Program, and a Program may only be assigned if it belongs to the Project's owning Department. Moving a Project between Programs changes only roll-up — never its Baselines, ledger, Mappings, snapshots or audit history.
+- **Roles.** Tenant Admin and PM are assignable in this release; Client Viewer and Internal Viewer exist in the enum but are not assignable. Only a Project's PMs or a Tenant Admin may edit that Project's Plan or Mappings. Rates are writable by Tenant Admins only and visible to Tenant Admins and the PMs of Projects using them. Resources may be created by either role.
+- **Sign-in scope.** Email + password and Google only. Magic link and Microsoft are a later release; SAML/SCIM are out of scope. Idle timeout is configurable, default 8 hours. Revocation and idle expiry must take effect on the user's very next request. Password reset requires working mail, so mail is in scope for this release (console mailer locally, SES in production; the AWS account and sender domain belong to Epic 8).
+- **Authorisation failures are indistinguishable from absence.** Anything outside a caller's permitted set answers `not_found`, never `forbidden`, so existence is not disclosed.
+- **Audit.** Every audited action writes its record inside the same transaction as the change, with actor, time, previous value, and an action drawn from a closed enum. A rolled-back change must leave no audit row. A test enumerates the audited use cases and fails if one commits without a record. The Tenant Admin reads and filters this log; no one else can see it.
+- **Rates are bitemporal.** An hour is valued at the Rate in force on its date. A retroactive Rate correction rewrites nothing: the ledger is untouched, money is recomputed against pinned Rate history, and an already-published figure still reproduces exactly.
+- **Load fixture.** A deterministic, seed-driven generator produces 5 Projects × 500 Work Packages plus their Resources. Three later epics measure their performance budgets against this one fixture; Epic 5 extends it with Tickets.
+- **Localisation.** The UI ships in English with every string externalised and an identically-keyed Japanese catalog present, so a missing key is a build-time gap. Layouts must be verified with Japanese strings 30% longer than the English. Currency is JPY and cannot change once any Rate exists. PM-written notes are displayed as written, never machine-translated. Vietnamese UI is out of scope permanently.
+- **Security floor.** No tracker credential may reach logs (redaction covers api keys, tokens, passwords, authorization headers). All tracker- and workbook-sourced text renders escaped; raw HTML injection is a lint error.
+
+## Technical Decisions
+
+- **Shape:** modular monolith, hexagonal, pure functional core. `packages/domain` is pure (no I/O, no clock, no dependency but zod); `packages/app` owns use cases, ports, `RequestContext`, authorisation, audit and config; `packages/db` and `packages/adapters` implement ports; `apps/web` and `apps/worker` are inbound adapters that may only call use cases and the i18n catalogs. Import direction is enforced in CI by dependency-cruiser. The single carve-out is `packages/db/auth`, the only sanctioned Better Auth ↔ Drizzle binding, exposed as an identity port.
+- **Ordering of the rewiring gate:** the eight files reaching `@momo/db` directly must be moved onto use cases *first*, and the dependency-cruiser gate switched on afterwards in the same story. Turning it on first makes CI red on day one for a reason nobody can clear.
+- **Isolation mechanics:** every tenant-owned table carries `tenant_id`, composite foreign keys include it, and each has ENABLE + FORCE row-level security with a policy comparing `tenant_id` to a transaction-scoped session setting. The ORM cannot emit FORCE, so it lives in hand-written SQL with a CI assertion over the catalog. The application role is a non-owner without bypass. All tenant access runs inside `withTenant(...)`, which sets the tenant via a *bound* parameter — the non-parameterizable `SET LOCAL` form is banned outright. A lint rule and a test forbid the bare db handle on tenant-owned tables.
+- **Table-class registry:** `packages/db/table-classes.ts` assigns every table exactly one of five classes (append-only, mutable-audited, derived, global, operational), and the RLS, grant and trigger SQL is *generated* from it. CI fails when a migration adds an unregistered table. Identity tables and the tenant-membership bridge are `global` (no tenant policy — the session resolves before a Tenant is known).
+- **One identity bridge:** `resolveRequestContext` reads `tenant_membership` and validates the session's explicit active tenant on every request; nothing else reads that table. Better Auth's session cookie cache is disabled. Role, membership and revocation changes go through app use cases, never through the auth adapter, so they land in audit.
+- **Append-only enforcement is double:** no UPDATE/DELETE grant, plus a BEFORE UPDATE OR DELETE trigger. The only exception path is a `maintenance` role with an explicit maintenance flag.
+- **Watermark discipline:** any append to a watermarked table takes `pg_advisory_xact_lock` in its two-argument form (namespace 1 for a Project key, 2 for a Tenant key) *before* allocating a sequence value. Long work happens before the lock.
+- **Arithmetic:** effort is `bigint` milli-hours, money is integer JPY, ratios are `{num, den}` carried unreduced with threshold comparisons done by cross-multiplication at a single comparison site. Rounding happens only in the presentation module. Every jsonb read/write of stored values goes through one codec that renders bigint as a decimal string — `JSON.stringify` must never meet a bigint, and "identical" always means identical in the codec's canonical form, never column text.
+- **Clock and config:** wall time comes only from a `Clock` port; `Date.now()`, bare `new Date()` and `process.env` are ESLint errors outside the clock adapter and the config module. Configuration is parsed once by a zod schema that fails boot naming any missing key. In fixture mode the clock returns the later of the newest fixture timestamp and a configured anchor, and the seed uses the same clock so demos do not go stale.
+- **Use-case results:** use cases return a result type carrying a code from a closed enum plus a message key; the domain returns codes, never prose, and server actions map keys through i18n. Zod validates every inbound boundary. IDs are app-generated UUIDv7. Plan dates are `date`; instants are `timestamptz` in UTC.
+- **Local run traps, decided not discovered:** mount the Postgres volume one level above the habitual path (Postgres 18 declares it there and silently ignores the old mount, losing the database on teardown); declare `allowBuilds` because pnpm inherits strict dependency builds; declare `"types": ["node"]` where needed because TypeScript 6 defaults to none; export next-intl middleware from `proxy.ts`; configure Better Auth's Next cookies plugin or session cookies are silently never set. pg-boss's schema is installed and migrated by the owner role during migrate, and the app role starts it with auto-migration disabled holding only DML grants.
+- **Leave the doomed columns alone.** Epic 2 owns a single pre-production migration that drops the legacy date columns and creates the status-event table. Epic 1 registers and wraps the 17 existing tables and creates the event tables it needs — and nothing in Epic 1 needs the status-event table.
+
+## UX & Interaction Patterns
+
+- Desktop-first (designed for 1280px+, supported to 1024px). App frame is a 48px top bar (project switcher, snapshot pin, user menu, sidebar toggle) over a collapsible left sidebar and a content area; the admin surfaces this epic builds — Organisation, Resources & Rates, Users, Audit log — are reached from the user menu, not the project sidebar.
+- Visual direction is "Ledger Paper, lighter": white sheets on a neutral near-white ground, structure from hairline rules and alignment rather than cards or shadows, one type family (IBM Plex Sans JP), one action colour. Figures are tabular, right-aligned and weighted heavier than body text. No gradients, illustrations, emoji or celebratory motion.
+- Microcopy is plain, factual and blame-free; numbers first, then meaning. Dates render `19 Sep 2026` in English and `2026/09/19` in Japanese, always in the Project time zone (default JST), formatted through Intl.
+- Accessibility floor is WCAG 2.1 AA: never colour alone, real tables with headers, visible focus rings, navigation landmarks with a skip link, and reduced-motion respected.
+- Text sorting goes through a single comparison helper that applies NFKC width normalisation before code-point ordering, so full-width and half-width Japanese forms sort together.
+
+## Cross-Story Dependencies
+
+- The stories are strictly ordered and each builds only on earlier ones. 1.1 (workspace, local run, gates) precedes everything; 1.2 (registry, RLS, `withTenant`, the cross-tenant harness, the rewiring of the eight direct-db files, arithmetic and codec discipline) is the foundation for all later data work; 1.3 establishes the audit mechanism that 1.4, 1.5, 1.6 and 1.7 rely on; 1.7 reads what 1.3 writes.
+- 1.4 creates the identity tables and request-context resolution that 1.5's role checks depend on; 1.4's password reset depends on the mail port, whose production infrastructure is Epic 8's.
+- 1.6 must create the Project-default-rate table and register it in the table-class registry — it does not exist today.
+- 1.8's fixture is the single measurement shape for Epic 2's recalculation budget, Epic 5's snapshot budget and Epic 6's Review load budget; Epic 5 extends the same generator with Tickets rather than building a second one.
+- Epic 1 deliberately leaves the legacy Work Package date columns in place; Epic 2's first story removes them in one migration and creates the status-event table. Epic 2 also disposes of the remaining demo-spike files.
