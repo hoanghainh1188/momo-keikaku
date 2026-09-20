@@ -1064,6 +1064,8 @@ So that no module can change a scheduling input without a recalculation, and no 
 **When** its imports are checked
 **Then** it may not import `domain/attribution`, so no evidence-derived figure can become a scheduling input without an import edge CI rejects (AR-1, AR-52)
 
+*Sizing note for `bmad-sprint-planning`: this is the heaviest story in the plan — the fence, `schedule_run`, the size measurement, the retention rule and the three closure tests. It is written as one story because the fence and the run are one transaction and splitting them would leave a half-closed trigger set, but it is the first candidate if a story has to fit a smaller session.*
+
 ### Story 2.10: Work Packages, actual dates and Custom Fields, edited through the fence
 
 As a PM,
@@ -1373,6 +1375,433 @@ So that a missed date comes with the chain that caused it instead of a badge nob
 **Given** a structural edit that left an illegal edge
 **When** the Plan renders
 **Then** a band at the top reads "This plan cannot be scheduled. 2 dependencies are invalid." with the offending edges named and each one's fix, and the grid shows **the last good schedule with every derived date marked stale** — never a guess, never blanks (UX-DR23, FR-6a, **Core**)
+## Epic 3: The client's Excel WBS becomes a live plan in one session
+
+A PM can upload a real client .xlsx, choose the sheet and header row, map columns with header-based suggestions in English and Japanese, and see every row in a mandatory preview before anything is written — with its level, the duration derived from an imported start/finish pair, the dependencies and constraints read, the progress read, which of the three scheduling states each row will arrive in, and the dates the scheduler will produce. A mid-flight project therefore arrives mid-flight. A later version of the same file re-imports as a diff that separates input changes from the date movement they caused.
+
+*Eight stories. FRs: FR-9, FR-10, FR-11. This epic has a genuine risk boundary of its own — AD-13 records that **ExcelJS fit is a spike, not an assumption** — which is why story 3.1 exists before any import feature is written.*
+
+### Story 3.1: Prove the workbook reader against real client files
+
+As the founder,
+I want three real Japanese WBS workbooks parsed through the port before any import feature is built,
+So that a library that cannot read my clients' files is discovered in the first story rather than the tenth.
+
+**Acceptance Criteria:**
+
+**Given** three real Japanese WBS workbooks with merged headers, shared formulas, Japanese text and date cells
+**When** they are parsed through `WorkbookPort` over ExcelJS
+**Then** the test asserts the **merge ranges** and the **cached formula results** it read, and the non-streaming API is used — the streaming `WorkbookReader` has historically weak merge support and is not used (AR-25)
+
+**Given** the parse
+**When** it reads a formula cell
+**Then** it reads the **cached result** and never evaluates the formula, and macros are never executed (AR-24, NFR-S8)
+
+**Given** an uploaded file
+**When** limits are checked
+**Then** they are checked **before ExcelJS sees it**: 10 MB file size, and a 50 MB unpacked total read from the **zip central directory** rather than by decompressing, because ExcelJS has no zip-bomb guard and reads the whole workbook into memory (AR-24)
+
+**Given** a workbook that passes those two limits
+**When** its cells are counted at parse time
+**Then** a workbook above 1,000,000 non-empty cells is rejected, against a nominal grid ceiling of 20,000 rows × 200 columns (AR-24)
+
+**Given** a rejected upload
+**When** the PM sees it
+**Then** the message states the limit that was exceeded, inline (UX-DR23)
+
+**Given** the spike's result
+**When** ExcelJS proves unable to read the corpus
+**Then** the recorded fallback is **SheetJS CE from `cdn.sheetjs.com`** — explicitly *not* npm `xlsx@0.18.5`, which is frozen and carries prototype-pollution and ReDoS advisories — and `WorkbookPort` is what makes the swap local (spine *Open Questions*)
+
+### Story 3.2: Upload a workbook and map its columns
+
+As a PM,
+I want to upload an .xlsx, pick the sheet and header row, and map each column to a field with suggestions,
+So that a client's own spreadsheet becomes structured data without me retyping it.
+
+**Acceptance Criteria:**
+
+**Given** an .xlsx upload
+**When** it is stored
+**Then** it goes through `BlobStore` and its parse lands in an `import_draft` row, which this story creates as class `mutable_audited` because nothing in `domain` compute reads it (AR-24, AR-38, measured baseline)
+
+**Given** a workbook with several candidate sheets
+**When** the PM reaches step 1
+**Then** a sheet chooser shows row counts and the first rows of each sheet, and **nothing is committed** (FR-9, UX-DR23)
+
+**Given** the chosen sheet
+**When** the PM confirms the header row
+**Then** the row preview shows what each candidate header row contains (UX-DR21)
+
+**Given** the columns
+**When** the mapper renders
+**Then** each row shows the header text, sample values and a suggested field **with its reason** — "suggested from header 開始日" — and unmapped columns default to "Create Custom Field" (UX-DR21, FR-9)
+
+**Given** the mappable field set
+**When** the PM maps
+**Then** it is: WBS code or indentation level, name, start, finish, **duration, predecessors, lag, constraint type, constraint date**, **actual start, actual finish, percent complete**, effort, assignee, milestone, or a Custom Field (FR-9)
+
+**Given** English and Japanese headers
+**When** suggestions are computed
+**Then** both are matched (FR-9)
+
+**Given** any cell content
+**When** it reaches the preview or any other screen
+**Then** it is treated as untrusted and escaped wherever displayed (FR-10, NFR-S8)
+
+### Story 3.3: What the importer derives, and the one date it is allowed to keep
+
+As a PM,
+I want an imported start/finish pair turned into a duration rather than into typed dates,
+So that the plan the file becomes is a working plan and not a picture of one.
+
+**Acceptance Criteria:**
+
+**Given** an imported start/finish pair and a mapped duration column
+**When** the import is interpreted
+**Then** **the duration column wins**, and the imported dates are kept as reference Custom Fields named after their source columns (FR-9)
+
+**Given** an imported start/finish pair and **no** duration column
+**When** it is interpreted
+**Then** the duration is the working-day count from the imported start to the imported finish inclusive, on the Project's calendar, and the imported dates are kept as reference Custom Fields (FR-9)
+
+**Given** a row carrying only one of the pair, or a finish before its start
+**When** it is interpreted
+**Then** it is flagged in the preview and imported **with no duration**, which makes it a "not schedulable yet" row rather than a guess (FR-9, FR-6b)
+
+**Given** any imported date
+**When** the import is interpreted
+**Then** **it never becomes a constraint automatically** — a plan of three hundred *must start on* constraints is a typed schedule wearing a different hat (FR-9)
+
+**Given** a row mapped as a **milestone**
+**When** it is interpreted
+**Then** it takes **duration 0**, the working-day derivation does not run on it so a single date cannot become a duration of 1, and its imported date becomes a ***must finish on* constraint** — the one narrow, deliberate exception, stated rather than inferred, because without it every imported milestone would lose the date the client cares about most (FR-9, §3)
+
+**Given** a mapped predecessor column
+**When** it is read
+**Then** it is a list of WBS codes or WP names each with an optional lag in working days, applied as FR-6a dependencies; codes matching no WP, and links FR-6a rejects, are listed in the preview with their rows and reasons and are **never dropped silently** (FR-9, FR-6a)
+
+**Given** a mapped constraint-type column
+**When** it is read
+**Then** an unrecognised value is flagged, **never guessed** (FR-9)
+
+**Given** hierarchy, dates and merged cells
+**When** they are read
+**Then** hierarchy comes from WBS codes (1, 1.1, 1.1.1) or from indentation; the Western and Japanese date forms in the founder's files are parsed, for example `2026/10/01` and `10月1日`; and merged cells are unmerged with each cell taking the merged value (FR-9)
+
+### Story 3.4: The import carries the project's progress
+
+As a PM,
+I want actual start, actual finish and percent complete imported like any other column,
+So that a four-month-old project arrives mid-flight instead of arriving as though nothing had happened.
+
+**Acceptance Criteria:**
+
+**Given** mapped actual start and actual finish columns
+**When** they are imported
+**Then** they are written as the WP's **actual dates** — the one kind of date the importer writes — and FR-6b reads them as the record of what already happened and never moves them (FR-9, AR-42)
+
+**Given** a row with an actual finish and no actual start
+**When** it is interpreted
+**Then** it is flagged; a row whose actual finish precedes its actual start is flagged and **neither date is imported** (FR-9)
+
+**Given** a mapped percent complete column
+**When** it is imported
+**Then** it is written as a Percent Complete override with the reason recorded as imported from the file and the row, so it is audited and marked PM-adjusted like any other override, and it stands until the PM clears it (FR-9, FR-30)
+
+**Given** a percent complete value outside 0–100, or one on a WP with an actual finish that is not 100
+**When** it is interpreted
+**Then** it is flagged and **never guessed** (FR-9)
+
+**Given** each imported row
+**When** its state is derived
+**Then** a row with an actual finish arrives **complete**, one with an actual start only arrives **in progress**, and one with neither arrives **remaining** (FR-9, FR-6b)
+
+**Given** an imported percent complete on an in-progress WP
+**When** the schedule is computed
+**Then** FR-6b uses it to derive remaining duration, so the WP arrives with the right amount of work left rather than all of it (FR-9, FR-6b)
+
+### Story 3.5: Nothing is written until the PM confirms
+
+As a PM,
+I want to see every row exactly as it will be imported, with the dates the scheduler will produce,
+So that a misread WBS is caught before it corrupts every number downstream.
+
+**Acceptance Criteria:**
+
+**Given** any import
+**When** it reaches the preview
+**Then** the PM sees every row with its level, its values and any flagged problems, and can correct values, levels and column mappings in place, with levels changeable by `Tab` and `Shift+Tab` (FR-10, UX-DR21)
+
+**Given** a Project with no Project start or no Data Date
+**When** the preview opens
+**Then** it asks for both before it will commit, proposing the **earliest imported start** as the Project start and **today** as the Data Date
+**And** the Data Date is **never proposed from the file's contents**, because the latest imported date is the plan's intended end, often a year out, and accepting it would schedule every remaining WP after the plan's own finish. Where the file carried actual dates the preview also offers the latest imported actual date as an alternative, and says which of the two it is proposing (FR-10, FR-43)
+
+**Given** the confirmed Project start and Data Date
+**When** the schedule preview renders
+**Then** it shows the duration derived for every row, the dependencies and constraints read, the progress read, and **the dates the scheduler will produce**
+**And** the PM corrects durations, links, constraints, progress and levels — **never a planned date**, because no planned date is imported (FR-10)
+
+**Given** the progress preview
+**When** it renders
+**Then** it shows per row the actual start, actual finish and percent complete it read, which of the three states the row will arrive in, and the remaining duration that follows; and **totals for the file**: how many rows arrive complete, in progress and remaining
+**And** a plan whose rows are all *remaining* on a project the PM knows is mid-flight is visible **before** it is committed, not after the first Baseline has pinned it (FR-10)
+
+**Given** every *must finish on* constraint created from a milestone row
+**When** the preview renders
+**Then** each is listed with its row and its date and **can be cleared individually** before committing (FR-10, FR-9)
+
+**Given** assignees that match no Resource
+**When** the preview renders
+**Then** they are listed and the PM creates or links a Resource for each (FR-10, UX-DR21)
+
+**Given** the counts bar
+**When** it renders
+**Then** it reports rows read, rows imported and rows skipped, **with a reason for each skipped row** (FR-10)
+
+**Given** flagged rows
+**When** the PM reviews them
+**Then** a "Show only flagged" filter exists, Confirm stays enabled because flags are warnings, and only blocking errors — no name, unparseable hierarchy — disable Confirm, with a count (UX-DR23)
+
+### Story 3.6: Confirming commits once, through the fence
+
+As a PM,
+I want the confirmed import written in one transaction with exactly one recalculation,
+So that importing 208 rows does not run the scheduler 208 times or leave the plan half-written.
+
+**Acceptance Criteria:**
+
+**Given** `confirmImport(draftId, draftVersion)`
+**When** it runs
+**Then** it is **the only code path that writes `work_package` rows from a file**, it writes its audit entry in the same transaction, and no code path commits an import without an explicit PM confirmation (AR-24, FR-10)
+
+**Given** the committed diff
+**When** the recalculation runs
+**Then** `confirmImport` calls it **once, after the whole diff commits** — never per row — and it is one of the **exactly two callers of `recalculateProject` that are not a PM edit**, the other being the operator's calendar-version publication (AR-24, AR-54)
+
+**Given** the import
+**When** it writes
+**Then** it writes scheduling inputs and actual dates and **never a derived date**, going through `app/schedule.applyPlanChange` like every other input writer (AR-42, AR-43)
+
+**Given** a diff that would turn a mapped leaf WP into a summary
+**When** confirm is attempted
+**Then** it is refused and the conflict is surfaced for the PM to resolve, because only leaf WPs are mappable (AR-18)
+
+**Given** the commit
+**When** it completes
+**Then** the audit trail records the import with its actor, its time and the file it came from (NFR-A1)
+
+### Story 3.7: Re-import shows a diff, and says what it did not touch
+
+As a PM,
+I want a new version of the same file to arrive as a reviewable diff,
+So that the client's updated spreadsheet does not silently erase the scheduling work I did in the tool.
+
+**Acceptance Criteria:**
+
+**Given** a re-import
+**When** WPs are matched
+**Then** they are matched by WBS code, or by name within the same parent where there is no code, and pairs that cannot be matched are shown for the PM to resolve as "pick a match" or "treat as new/removed" (FR-11, UX-DR21)
+
+**Given** a field that is imported
+**When** it differs
+**Then** the re-imported value wins, and the diff lists **every value that overwrites an edit made in the tool** (FR-11)
+
+**Given** the diff
+**When** it renders
+**Then** it has four filters — Added, Changed, Removed, Unmatched — and changed rows show old → new per field (UX-DR21)
+
+**Given** planned dates
+**When** the diff renders
+**Then** **no planned date is written by the re-import**; the diff shows the resulting date movement in a **separate section** from the input changes that caused it, so the PM sees cause and effect rather than a wall of moved dates (FR-11)
+
+**Given** an actual date or a Percent Complete override
+**When** the corresponding column is mapped and the cell is empty
+**Then** it is cleared, and **every such clearing is listed in the diff as its own line**; where the column is **not** mapped, the WP's recorded progress is left untouched (FR-11)
+
+**Given** no predecessor column mapped
+**When** the re-import runs
+**Then** **the dependency graph is left untouched and the diff says so explicitly**, rather than silently erasing scheduling work the PM did in the tool. A dependency is removed only when a predecessor column is mapped and no longer names it (FR-11)
+
+**Given** a re-import
+**When** it commits
+**Then** it **never changes a Baseline**, and removed WPs' Mappings are handled as in FR-5 (FR-11)
+
+### Story 3.8: The acceptance corpus of ten real client files
+
+As the founder,
+I want the importer measured against ten of my own real WBS files,
+So that "it imports Excel" is a number rather than a claim.
+
+**Acceptance Criteria:**
+
+**Given** at least 10 real WBS files from the founder's projects
+**When** each is imported
+**Then** **100% of rows land at the correct level with 5 or fewer manual corrections** in the preview (FR-9, SM-4)
+
+**Given** the corpus
+**When** it is stored
+**Then** it is **not in the repository**: it lives in a Japan-region, access-controlled bucket or a local-only path, and its tests run under a local-only tag that CI skips (AR-41, NFR-S4)
+
+**Given** the corpus
+**When** it is assembled
+**Then** it includes **mid-flight files carrying actual dates and a percent-complete column**, because progress import is what makes the Data Date work on day one (addendum A.3)
+
+**Given** a corpus run
+**When** it reports
+**Then** the correction count per file is recorded, because SM-4 tracks it as a secondary success metric (SM-4)
+
+## Epic 4: A Baseline that can explain itself years later
+
+A PM can set a Baseline from the Current Plan and Re-baseline with a mandatory reason, linking Change Request candidates. Every version is kept with its author, time and reason, and any two versions compare **as plans, not only as rows**. An automated test re-derives a Baseline's dates, Float, constraint violations and critical path from its pinned inputs alone, on any machine and at any later date.
+
+*Five stories. FRs: FR-15, FR-16. This epic is where NFR-C1 stops being a sentence and becomes a test.*
+
+### Story 4.1: Set a Baseline that points at the run behind it
+
+As a PM,
+I want a Baseline to pin the inputs a schedule was derived from, not only the dates it produced,
+So that a plan I baselined last October can still explain itself next year.
+
+**Acceptance Criteria:**
+
+**Given** the Current Plan and its latest `schedule_run`
+**When** the PM sets a Baseline
+**Then** `baseline_version.schedule_run_seq` is a real foreign key to that run, and the inputs are pinned **by reference, not by a second copy** — the run already carries the durations, constraints, actual dates, Recorded Percent Complete, dependency graph, three Project settings and calendar version that produced those dates (AR-22, FR-15)
+
+**Given** `baseline_wp`
+**When** it is written
+**Then** it keeps only the cost projection that PV, BAC and Divergence read — per leaf WP the derived dates, the planned effort, the assigned Resources, the milestone flag, the Catch-all flag and the Rate-derived cost — so the pinned input set has exactly one representation (AR-22, FR-15)
+
+**Given** AD-5's retention rule
+**When** a Baseline references a run
+**Then** that run's `inputs` can never be deleted while the Baseline exists, which is what makes the reference permanent rather than a dangling pointer (AR-11)
+
+**Given** a Plan with any leaf WP missing a duration, or a Project with no Project start
+**When** a Baseline is attempted
+**Then** it is **refused with the blocking WPs shown**, because the result would not be re-derivable
+**And** *Set Baseline* is disabled while any "not schedulable yet" row exists, with the count and a link into the exceptions rail (FR-15, UX-DR23)
+
+**Given** a recorded Baseline
+**When** anything tries to change it
+**Then** it cannot be edited: `baseline_version` and `baseline_wp` are `append_only`, enforced by the missing grant and the trigger (FR-15, AR-9)
+
+**Given** a Project before its first Baseline
+**When** the Review is opened
+**Then** it shows "No Baseline yet. EVM starts once you set one." with *Set Baseline*, and the Unplanned Work section still shows Unmapped Work (FR-15, UX-DR23)
+
+### Story 4.2: The re-derivation test
+
+As the founder,
+I want an automated test that reproduces a Baseline's schedule from its pinned inputs alone,
+So that NFR-C1 is a gate rather than a sentence in a document.
+
+**Acceptance Criteria:**
+
+**Given** a Baseline version's pinned run
+**When** the test runs
+**Then** it evaluates `recalculate(run.inputs, prevRun.inputs)` and compares the result to `run.outputs`, reproducing that version's **dates, Float, constraint violations and critical path exactly** (FR-15, AR-51)
+
+**Given** the test
+**When** it reads its inputs
+**Then** it reads the run and **never the Current Plan** (AR-22, FR-15)
+
+**Given** the comparison
+**When** it is made
+**Then** it compares through the **AD-4 codec's canonical decoded form, not stored bytes** — `jsonb` reorders keys and renormalises numbers, so a test that diffs column text will flake (AR-8, AR-26)
+
+**Given** the critical path
+**When** it is compared
+**Then** it is compared as an **ordered** set, which is exactly what OQ-13's tie-break rule exists to make reproducible (AR-55, FR-15)
+
+**Given** a golden Baseline recorded under an earlier `engine_version`
+**When** the gate runs after a scheduler change
+**Then** it re-derives that Baseline under **its own** recorded version, so a bug fix does not turn every historical run red (AR-51)
+
+**Given** the gate
+**When** CI runs
+**Then** it blocks merge (AR-35)
+
+### Story 4.3: Re-baseline, with a reason and a history
+
+As a PM,
+I want to Re-baseline with a mandatory reason and keep every version,
+So that the Baseline moves only when I decide it should, and the record says why.
+
+**Acceptance Criteria:**
+
+**Given** a Re-baseline
+**When** it is recorded
+**Then** a reason is **mandatory**, and the PM can link Change Request candidates to it (FR-16)
+
+**Given** every Baseline version
+**When** the history is read
+**Then** each is kept with its author, its time and its reason (FR-16)
+
+**Given** a Re-baseline
+**When** it commits
+**Then** it takes the AD-20 per-Project lock before allocating its `seq`, so a snapshot ingest spanning it cannot attribute an entry to the wrong active Baseline (AR-37, AR-15)
+
+**Given** hours recorded before a Re-baseline on a newly baselined WP
+**When** they are judged
+**Then** they **stay Unplanned Work**, because baselined status is judged against the Baseline version active when the entry was recorded — a Re-baseline never erases Unplanned history (FR-30, FR-16)
+
+**Given** a Re-baseline
+**When** it commits
+**Then** it produces its audit row (NFR-A1)
+
+### Story 4.4: Compare two versions as plans, not only as rows
+
+As a PM,
+I want a comparison that shows a removed dependency, not just the hundred WPs it moved,
+So that a plan that shifted three weeks always has a recorded reason.
+
+**Acceptance Criteria:**
+
+**Given** any two Baseline versions
+**When** they are compared
+**Then** the comparison is WP by WP **and** per Project lists: dependencies added and removed, lags changed, constraints added, changed and removed, durations changed, actual dates recorded or corrected, Percent Complete changed, milestone flags changed, the Holiday Calendar version, and any change to the Project start, Project finish or Data Date (FR-16)
+
+**Given** a dependency removed between two versions
+**When** the comparison renders
+**Then** it appears — because **a dependency is an edge, not a WP attribute**, and a WP-by-WP diff can otherwise show WP 2.4 and everything after it moving three weeks while showing no reason anywhere (FR-16)
+
+**Given** any WP whose dates differ between two versions
+**When** the comparison renders
+**Then** it names **at least one input change from that list that accounts for it**; a plan that moved for no recorded reason is the failure this requirement exists to prevent (FR-16)
+
+**Given** the two versions
+**When** WPs are matched across them
+**Then** they are matched on `wp_id`, with `wbs_code` used only to sort, because a re-parent may renumber (AR-55)
+
+**Given** a Published Snapshot
+**When** it is recorded
+**Then** it records the Baseline version it used (FR-16)
+
+### Story 4.5: Baseline comparison as columns on the Plan grid
+
+As a PM,
+I want the active Baseline's dates beside the Current Plan's with the difference,
+So that I can see what moved without a chart R0 does not have.
+
+**Acceptance Criteria:**
+
+**Given** the Plan grid's **Baseline compare** preset
+**When** it renders
+**Then** it shows Baseline start, derived start and Δ; Baseline finish, derived finish and Δ; Baseline duration, duration and Δ; and Baseline effort, effort and Δ — **as columns, because R0 has no bars to draw them on** (FR-7, UX-DR4, **Core**)
+
+**Given** a Project with no Baseline
+**When** the preset is selected
+**Then** it is disabled with "No Baseline yet", and the other presets work normally — the Current Plan schedules without one (UX-DR23)
+
+**Given** Divergence
+**When** it is computed
+**Then** it compares `baseline_wp` with the **pinned `schedule_run`** — its `outputs` for dates and its `inputs` for effort — and never with `wp_schedule` or a `work_package` column, both of which AD-10's closure rule puts out of reach of a compute function (AR-22)
+
+**Given** the preset
+**When** it is sized
+**Then** it fits the grid's own width like the other two sized presets, and adding a column to it takes width from another (UX-DR4, **Core**)
 ---
 
 ## Carried to `bmad-sprint-planning` (not decided here)
