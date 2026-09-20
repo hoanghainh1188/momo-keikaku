@@ -4,11 +4,34 @@
  * in the demo — the build brief defers the scheduler).
  *
  * Idempotent: it truncates the demo tables first.
+ *
+ * WHICH ROLE THIS RUNS AS — decided in this story, recorded here because the answer is not
+ * obvious. It keeps the OWNING role (DATABASE_URL), for two reasons that the restricted
+ * application role cannot satisfy:
+ *
+ *   1. It TRUNCATEs. TRUNCATE is not in any class's grant in `table-classes.ts` and must
+ *      not be: an application role that can empty `audit_log` makes the append-only
+ *      argument false.
+ *   2. It writes the `tenant` row itself, which is `global` — the application role holds
+ *      SELECT there and nothing else, because a Tenant is provisioned by the owner (and,
+ *      from story 1.3, by a use case that audits it), never by a request.
+ *
+ * It still runs every write inside `withTenant`, on `tx`. That is not decoration: it is
+ * what makes the seed exercise the same path the application does, so a policy that would
+ * reject an application write shows up here rather than in production. The owner is
+ * subject to FORCE row-level security like anyone else; only a superuser is not, and the
+ * local/CI `momo` role happens to be one — which is precisely why the isolation gates in
+ * `rls.test.ts` connect as the application role instead.
+ *
+ * The composition root is `scripts/seed.ts`: this module takes its handle as an argument
+ * because `packages/db` may not read the environment.
  */
 import { sql } from 'drizzle-orm';
-import { getDb, getPool } from './client';
+import type { Db } from './client';
 import { buildDemoState } from './fixtures';
 import * as s from './schema';
+import { MAINTENANCE_SETTING } from './table-classes';
+import { withTenant, type Tx } from './with-tenant';
 
 const TRUNCATE_ORDER = [
   'audit_log',
@@ -34,26 +57,65 @@ async function chunked<T>(rows: T[], size: number, fn: (batch: T[]) => Promise<u
   for (let i = 0; i < rows.length; i += size) await fn(rows.slice(i, i + size));
 }
 
-export async function seed(): Promise<void> {
-  const db = getDb();
+/**
+ * @param db the OWNING role's handle — see the module note. `scripts/seed.ts` builds it
+ *   from `config.DATABASE_URL`.
+ */
+export async function seed(db: Db): Promise<void> {
   const state = buildDemoState();
+  const tenantId = state.fixture.tenant.id;
+  // One transaction, one tenant: the truncate and all 16 inserts either land together or
+  // not at all, and every one of them is issued with `app.tenant_id` bound.
+  await withTenant(db, tenantId, (tx) => seedInTenant(tx, state));
+}
+
+async function seedInTenant(tx: Tx, state: ReturnType<typeof buildDemoState>): Promise<void> {
   const f = state.fixture;
   const tenantId = f.tenant.id;
 
-  await db.execute(sql.raw(`TRUNCATE ${TRUNCATE_ORDER.join(', ')} RESTART IDENTITY CASCADE`));
+  // TRUNCATE is exempt from row-level security by design — it is a table-level operation, so
+  // no policy filters it — which means the truncate below would destroy EVERY Tenant's rows,
+  // not just this one's. Re-seeding one Tenant must never be able to empty another's ledger.
+  //
+  // Refusing is the guard rather than a tenant-scoped DELETE, on purpose: the truncate carries
+  // `RESTART IDENTITY`, and the identity counters are what make a re-seed reproduce the same
+  // `baseline_version.seq` the fixture's ledger entries were recorded against. A DELETE would
+  // leave those counters where they were, so the second seed would stamp a different active
+  // Baseline sequence and silently reclassify the Actuals — exactly the kind of wrong figure
+  // this story is upstream of. So: assert this is a single-Tenant database, and say whose
+  // rows are in the way when it is not.
+  const others = await tx.execute<{ id: string }>(
+    sql`SELECT id FROM tenant WHERE id <> ${tenantId} ORDER BY id`,
+  );
+  if (others.rows.length > 0) {
+    throw new Error(
+      `Refusing to seed: this database also holds ${others.rows.length} other Tenant(s) — ` +
+        `${others.rows.map((row) => row.id).join(', ')}. The seed TRUNCATEs, and TRUNCATE is ` +
+        'exempt from row-level security, so it would destroy their rows too. Drop the database, ' +
+        'or delete those Tenants deliberately, then seed again.',
+    );
+  }
 
-  await db.insert(s.tenant).values({ id: tenantId, name: f.tenant.name });
-  await db
+  // The append-only tables now carry a BEFORE TRUNCATE trigger as well as a BEFORE
+  // UPDATE OR DELETE one, and a trigger is a property of the table, so it refuses the owner
+  // too. Opening the maintenance hatch is the honest way through: re-seeding IS maintenance,
+  // and saying so in one transaction-scoped setting is better than a table that any statement
+  // can empty. The setting is reset at COMMIT, like the tenant.
+  await tx.execute(sql`SELECT set_config(${MAINTENANCE_SETTING}, 'on', true)`);
+  await tx.execute(sql.raw(`TRUNCATE ${TRUNCATE_ORDER.join(', ')} RESTART IDENTITY CASCADE`));
+
+  await tx.insert(s.tenant).values({ id: tenantId, name: f.tenant.name });
+  await tx
     .insert(s.department)
     .values({ id: f.department.id, tenantId, name: f.department.name });
 
   // No auth in the demo: a single seeded PM session (build brief non-goal).
-  await db.insert(s.appUser).values([
+  await tx.insert(s.appUser).values([
     { id: 'user-linh', tenantId, email: 'linh@momo-digital.example', name: 'Nguyen Thi Linh', role: 'pm' },
     { id: 'user-hoang', tenantId, email: 'hoang@momo-digital.example', name: 'Hoang Hai', role: 'tenant_admin' },
   ]);
 
-  await db.insert(s.project).values({
+  await tx.insert(s.project).values({
     id: f.project.id,
     tenantId,
     departmentId: f.department.id,
@@ -69,7 +131,7 @@ export async function seed(): Promise<void> {
     demoAnchor: new Date(state.anchor),
   });
 
-  await db.insert(s.resource).values(
+  await tx.insert(s.resource).values(
     f.resources.map((r) => ({
       id: r.id,
       tenantId,
@@ -79,7 +141,7 @@ export async function seed(): Promise<void> {
       trackerAccountIds: [r.accountId],
     })),
   );
-  await db.insert(s.rateEntry).values(
+  await tx.insert(s.rateEntry).values(
     f.resources.map((r) => ({
       tenantId,
       resourceId: r.id,
@@ -88,7 +150,7 @@ export async function seed(): Promise<void> {
     })),
   );
 
-  await db.insert(s.workPackage).values(
+  await tx.insert(s.workPackage).values(
     state.wps.map((w) => ({
       id: w.id,
       tenantId,
@@ -109,7 +171,7 @@ export async function seed(): Promise<void> {
     })),
   );
 
-  const [bv] = await db
+  const [bv] = await tx
     .insert(s.baselineVersion)
     .values({
       id: f.baseline.id,
@@ -121,7 +183,7 @@ export async function seed(): Promise<void> {
     })
     .returning({ seq: s.baselineVersion.seq });
 
-  await db.insert(s.baselineWp).values(
+  await tx.insert(s.baselineWp).values(
     f.baseline.wps.map((b, i) => ({
       id: `blwp-${i}`,
       tenantId,
@@ -135,7 +197,7 @@ export async function seed(): Promise<void> {
   );
 
   const connectorId = 'con-fixture-ec2';
-  await db.insert(s.connector).values({
+  await tx.insert(s.connector).values({
     id: connectorId,
     tenantId,
     projectId: f.project.id,
@@ -144,7 +206,7 @@ export async function seed(): Promise<void> {
     spaceLabel: 'osaka-retail.backlog.jp (fixture replay)',
   });
 
-  await db.insert(s.mappingRule).values(
+  await tx.insert(s.mappingRule).values(
     f.mappingRules.map((r) => ({
       id: r.id,
       tenantId,
@@ -159,7 +221,7 @@ export async function seed(): Promise<void> {
 
   // --- the replayed Connector
   for (const snap of state.snapshots) {
-    await db.insert(s.trackerSnapshot).values({
+    await tx.insert(s.trackerSnapshot).values({
       id: snap.snapshotId,
       tenantId,
       connectorId,
@@ -173,7 +235,7 @@ export async function seed(): Promise<void> {
   // snapshots so period deltas can be inspected. (Retention/compaction: TODO.)
   for (const snap of state.snapshots.slice(-2)) {
     await chunked(snap.tickets, 500, (batch) =>
-      db.insert(s.ticketObservation).values(
+      tx.insert(s.ticketObservation).values(
         batch.map((t) => ({
           id: `${snap.snapshotId}-${t.trackerIssueId}`,
           tenantId,
@@ -200,7 +262,7 @@ export async function seed(): Promise<void> {
     state.snapshots[state.snapshots.length - 1]!.snapshotId;
 
   await chunked(state.ledger, 500, (batch) =>
-    db.insert(s.actualsLedgerEntry).values(
+    tx.insert(s.actualsLedgerEntry).values(
       batch.map((e) => ({
         seq: e.seq,
         id: `led-${e.seq}`,
@@ -219,7 +281,7 @@ export async function seed(): Promise<void> {
   );
 
   await chunked(state.mappingEvents, 500, (batch) =>
-    db.insert(s.mappingEvent).values(
+    tx.insert(s.mappingEvent).values(
       batch.map((m) => ({
         seq: m.seq,
         id: `map-${m.seq}`,
@@ -235,7 +297,7 @@ export async function seed(): Promise<void> {
     ),
   );
 
-  await db.insert(s.auditLog).values({
+  await tx.insert(s.auditLog).values({
     tenantId,
     actor: 'system:seed',
     action: 'demo.seed',
@@ -256,12 +318,3 @@ export async function seed(): Promise<void> {
   );
 }
 
-const isMain = process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()!);
-if (isMain) {
-  seed()
-    .then(() => getPool().end())
-    .catch((err) => {
-      console.error(err);
-      process.exit(1);
-    });
-}

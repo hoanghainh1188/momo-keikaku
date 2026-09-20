@@ -7,18 +7,32 @@
 # test (AD-5), the ComputationInputs closure test (AD-10), the concurrency test (AD-20),
 # and the six scheduler gates (AD-26/27/28).
 #
-# The ESLint clock/env rules are now here — story 1.1 slice B1 added them. Every other
-# entry still needs code that does not exist yet, and most need a Postgres service. They
-# belong to Epic 1 story 1.2 (the registry, RLS and the rewiring the dependency-cruiser
-# gate waits on) and Epic 2 story 2.1 (the migration). Adding them before their code
-# exists would make CI red on day one for a reason nobody could fix that day — which is
-# the failure epics.md warns about for the dependency-cruiser gate specifically.
+# The ESLint clock/env rules are now here — story 1.1 slice B1 added them. Story 1.2
+# slice 1 added four more, all carried by `pnpm test` against the prepared service below:
+#
+#   * the unregistered-table assertion (packages/db/src/rls.test.ts) — every table in the
+#     `public` schema is classed in packages/db/src/table-classes.ts, and the failure names
+#     the table;
+#   * the FORCE-RLS assertion (same file) — read from `pg_class.relrowsecurity`,
+#     `pg_class.relforcerowsecurity` and `pg_policies`, never assumed;
+#   * the tenant-isolation sabotages (same file) — a read with no tenant returns nothing,
+#     and a read inside tenant A does not see tenant B, as the RESTRICTED application role,
+#     because FORCE does nothing against a superuser;
+#   * the append-only DB test (same file) — the missing grant refuses with 42501, the
+#     trigger refuses the maintenance role with MOMO1 until `app.maintenance` is set.
+#
+# Still absent: dependency-cruiser (it waits on the next slice rewiring the eight apps/web
+# files onto use cases), the cross-tenant harness enumerating every read use case (the next
+# slice; NFR-S1 is NOT discharged by what is here), the golden Published Snapshot recompute
+# per formulaVersion, the compaction-then-recompute test, the ComputationInputs closure
+# test, the concurrency test and the six scheduler gates. Adding a gate before its code
+# exists would make CI red on day one for a reason nobody could fix that day — which is the
+# failure epics.md warns about for the dependency-cruiser gate specifically.
 #
 # So this file gates on what is real: lint, all three typechecks and the test suite.
 # Measured on 2026-09-20 — `pnpm lint` exits 0, all three typechecks exit 0, and
-# `pnpm test` passes 72 tests across 7 files against the prepared Postgres service below
-# (53 across 4 before story 1.1 slice B2; that slice added apps/worker/src/worker-round-trip.test.ts,
-# scripts/pgboss-migrate.test.ts and packages/app/src/config.test.ts).
+# `pnpm test` passes 96 tests across 10 files against the prepared Postgres service below
+# (72 across 7 before story 1.2 slice 1, 53 across 4 before story 1.1 slice B2).
 #
 # Every gate here has been watched to fail, because a gate nobody has seen fail is
 # indistinguishable from a green light:
@@ -40,6 +54,11 @@
 #     percent-decoding, relaxing APP_DATABASE_URL to a zod `.default()` (which still
 #     typechecks), and removing APP_DATABASE_URL under REQUIRE_DB=1. The full table is in
 #     spec-1-1-pgboss-roles.md.
+#   * tests (isolation) — each assertion was watched to fail by sabotaging the thing it
+#     covers: dropping FORCE on one table, dropping its policy, creating a table outside the
+#     registry, reading without `withTenant`, reading tenant A's rows inside `withTenant(B)`,
+#     granting the app role UPDATE on an append-only table, and dropping the append-only
+#     trigger. The full table is in spec-1-2-rls-and-withtenant.md.
 
 # THESE GATES REPORT; THEY DO NOT BLOCK. The repository is private on a free plan, so
 # GitHub refuses branch protection ("Upgrade to GitHub Pro or make this repository
@@ -94,13 +113,16 @@ jobs:
       DATABASE_URL: postgres://momo:momo@localhost:55433/momo_keikaku
       # The restricted `app` role, created by the prepare step below from this very string:
       # `pnpm pgboss:migrate` reads the role name and password out of it, so the role the
-      # worker connects as and the role the migrator creates cannot disagree. It is NOT a
-      # second name for DATABASE_URL — it holds DML on the `pgboss` schema and nothing
-      # else, and has no grant on any application table until story 1.2's table-class
-      # registry generates them.
+      # worker connects as and the role the migrator creates cannot disagree, and
+      # `pnpm db:policies` grants to the same name for the same reason. It is NOT a second
+      # name for DATABASE_URL: it is a non-owner without BYPASSRLS, holding DML on the
+      # `pgboss` schema plus exactly the per-table privileges the table-class registry
+      # states — no UPDATE or DELETE on any append-only table, and no TRUNCATE anywhere.
+      # From story 1.2 on it is also the role `apps/web` and the round-trip test connect as.
       APP_DATABASE_URL: postgres://momo_app:momo_app@localhost:55433/momo_keikaku
       # Turns an unreachable database into a failure instead of a skip. Without it the
-      # round-trip tests would pass by not running, which is the same as not having them.
+      # round-trip tests and the isolation gates would pass by not running, which is the
+      # same as not having them.
       REQUIRE_DB: '1'
 
     steps:
@@ -169,16 +191,26 @@ jobs:
       # role USAGE plus DML and nothing else. It runs here rather than inside the worker
       # because the worker's whole point is that it *cannot* do this.
       #
-      # It runs TWICE on purpose. Idempotence is an acceptance criterion of story 1.1 slice
-      # B2, and a criterion checked by hand once is not a gate: the second run is what fails
-      # the build the day a non-idempotent statement is added to that script.
-      - name: Prepare database (schema + seed + pgboss roles/schema)
+      # `db:policies` is story 1.2's step and is the reason this order matters. It applies
+      # the row-level security, the grants and the append-only triggers GENERATED from
+      # packages/db/src/table-classes.ts, so it must run after `drizzle-kit push` (the
+      # tables have to exist) and after `pgboss:migrate` (the application role it grants to
+      # has to exist). The seed runs last, because it is the first thing that exercises the
+      # policies it now writes under.
+      #
+      # Both steps run TWICE on purpose. Idempotence is an acceptance criterion — of story
+      # 1.1 slice B2 for the migrator and of this slice for the policies — and a criterion
+      # checked by hand once is not a gate: the second run is what fails the build the day a
+      # non-idempotent statement is added to either script.
+      - name: Prepare database (schema + roles + RLS/grants/triggers + seed)
         if: always()
         run: |
           pnpm exec drizzle-kit push --force
+          pnpm pgboss:migrate
+          pnpm pgboss:migrate
+          pnpm db:policies
+          pnpm db:policies
           pnpm seed
-          pnpm pgboss:migrate
-          pnpm pgboss:migrate
 
       # `always()` throughout so one failure does not hide the others. Every signal
       # lands on the same run.

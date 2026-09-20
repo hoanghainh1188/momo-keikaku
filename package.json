@@ -5,13 +5,14 @@
   "scripts": {
     "demo": "tsx scripts/demo.ts",
     "db:up": "docker compose -f infra/docker-compose.yml up -d --wait",
-    "db:reset": "tsx packages/db/src/reset.ts",
-    "seed": "tsx packages/db/src/seed.ts",
+    "seed": "tsx scripts/seed.ts",
     "pgboss:migrate": "tsx scripts/pgboss-migrate.ts",
     "dev": "pnpm --filter @momo/web dev",
     "test": "vitest run",
     "lint": "eslint . --max-warnings 0",
-    "typecheck": "tsc --noEmit -p tsconfig.json --pretty false"
+    "typecheck": "tsc --noEmit -p tsconfig.json --pretty false",
+    "db:policies": "tsx scripts/db-policies.ts",
+    "db:sql": "tsx scripts/db-policies.ts --write"
   },
   "devDependencies": {
     "@types/node": "^24.13.6",

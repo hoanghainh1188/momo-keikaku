@@ -1,4 +1,5 @@
 import { loadReview } from '@momo/db';
+import { webDb, WEB_TENANT_ID } from '@/server/db';
 import { hours } from '@momo/domain';
 import { Section } from '@/components/ui';
 
@@ -11,7 +12,7 @@ export default async function ConnectorsPage({
   params: Promise<{ projectId: string }>;
 }) {
   const { projectId } = await params;
-  const { bundle, review } = await loadReview(projectId);
+  const { bundle, review } = await loadReview(webDb(), WEB_TENANT_ID, projectId);
   const c = bundle.meta.connector;
   return (
     <div className="sheet">

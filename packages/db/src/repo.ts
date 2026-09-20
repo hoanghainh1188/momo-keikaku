@@ -17,10 +17,24 @@ import {
   type SnapshotRead,
   type WorkPackage,
 } from '@momo/domain';
-import { getDb } from './client';
+import type { Db } from './client';
 import * as s from './schema';
+import { withTenant, type Tx } from './with-tenant';
 
 export const DEMO_PROJECT_ID = 'prj-ec2';
+
+/**
+ * The demo Tenant `seed.ts` writes.
+ *
+ * Exported as a NAME, not as a default. Every read below runs inside `withTenant`, which
+ * needs a Tenant before it can read the Project that would have told it which one, so the
+ * caller states it — and `tenantId` is a required parameter precisely because this story's
+ * thesis is that the Tenant is never remembered in application code. A default here would
+ * mean a forgotten Tenant silently reads `ten-momo`, which is the bug wearing the fix's
+ * clothes. Story 1.4 replaces each call site's use of this constant with the Tenant on the
+ * RequestContext.
+ */
+export const DEMO_TENANT_ID = 'ten-momo';
 
 export interface ProjectBundle {
   project: ProjectConfig;
@@ -46,16 +60,26 @@ export interface ProjectBundle {
  * AD-10: capture a fully resolved ComputationInputs value once, then compute.
  * Nothing below reads the clock; "now" is the Project's demo anchor.
  */
-export async function loadProjectBundle(projectId = DEMO_PROJECT_ID): Promise<ProjectBundle> {
-  const db = getDb();
+export async function loadProjectBundle(
+  db: Db,
+  tenantId: string,
+  projectId: string = DEMO_PROJECT_ID,
+): Promise<ProjectBundle> {
+  // Everything below is issued on `tx`, inside the transaction `withTenant` opened with
+  // `app.tenant_id` bound. On the bare `db` handle each of these 15 selects would return
+  // zero rows as the application role, because the isolation policy would compare
+  // `tenant_id` against a setting nothing had set.
+  return withTenant(db, tenantId, (tx) => loadBundleInTenant(tx, projectId));
+}
 
-  const [p] = await db.select().from(s.project).where(eq(s.project.id, projectId));
+async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBundle> {
+  const [p] = await tx.select().from(s.project).where(eq(s.project.id, projectId));
   if (!p) throw new Error(`project ${projectId} not found — run \`pnpm demo\` to seed`);
-  const [ten] = await db.select().from(s.tenant).where(eq(s.tenant.id, p.tenantId));
-  const [dep] = await db.select().from(s.department).where(eq(s.department.id, p.departmentId));
-  const [con] = await db.select().from(s.connector).where(eq(s.connector.projectId, projectId));
+  const [ten] = await tx.select().from(s.tenant).where(eq(s.tenant.id, p.tenantId));
+  const [dep] = await tx.select().from(s.department).where(eq(s.department.id, p.departmentId));
+  const [con] = await tx.select().from(s.connector).where(eq(s.connector.projectId, projectId));
 
-  const wpRows = await db
+  const wpRows = await tx
     .select()
     .from(s.workPackage)
     .where(eq(s.workPackage.projectId, projectId))
@@ -77,12 +101,12 @@ export async function loadProjectBundle(projectId = DEMO_PROJECT_ID): Promise<Pr
     assignedResourceIds: w.assignedResourceIds,
   }));
 
-  const bvRows = await db
+  const bvRows = await tx
     .select()
     .from(s.baselineVersion)
     .where(eq(s.baselineVersion.projectId, projectId))
     .orderBy(asc(s.baselineVersion.seq));
-  const blWps = await db.select().from(s.baselineWp);
+  const blWps = await tx.select().from(s.baselineWp);
 
   const baselineVersions: BaselineVersion[] = bvRows.map((b) => ({
     seq: Number(b.seq),
@@ -101,8 +125,8 @@ export async function loadProjectBundle(projectId = DEMO_PROJECT_ID): Promise<Pr
   }));
   const activeBaselineSeq = Math.max(...baselineVersions.map((b) => b.seq));
 
-  const resRows = await db.select().from(s.resource).where(eq(s.resource.tenantId, p.tenantId));
-  const rateRows = await db.select().from(s.rateEntry).orderBy(asc(s.rateEntry.seq));
+  const resRows = await tx.select().from(s.resource).where(eq(s.resource.tenantId, p.tenantId));
+  const rateRows = await tx.select().from(s.rateEntry).orderBy(asc(s.rateEntry.seq));
   const resources: Resource[] = resRows.map((r) => ({
     id: r.id,
     name: r.name,
@@ -113,14 +137,14 @@ export async function loadProjectBundle(projectId = DEMO_PROJECT_ID): Promise<Pr
       .map((x) => ({ effectiveFrom: x.effectiveFrom, yenPerHour: x.yenPerHour })),
   }));
 
-  const [latestSnap] = await db
+  const [latestSnap] = await tx
     .select()
     .from(s.trackerSnapshot)
     .orderBy(desc(s.trackerSnapshot.observedAt))
     .limit(1);
   if (!latestSnap) throw new Error('no Tracker Snapshot — run the seed');
 
-  const obsRows = await db
+  const obsRows = await tx
     .select()
     .from(s.ticketObservation)
     .where(eq(s.ticketObservation.snapshotId, latestSnap.id));
@@ -145,7 +169,7 @@ export async function loadProjectBundle(projectId = DEMO_PROJECT_ID): Promise<Pr
     })),
   };
 
-  const ledgerRows = await db
+  const ledgerRows = await tx
     .select()
     .from(s.actualsLedgerEntry)
     .orderBy(asc(s.actualsLedgerEntry.seq));
@@ -161,7 +185,7 @@ export async function loadProjectBundle(projectId = DEMO_PROJECT_ID): Promise<Pr
       e.activeBaselineVersionSeq === null ? null : Number(e.activeBaselineVersionSeq),
   }));
 
-  const mapRows = await db
+  const mapRows = await tx
     .select()
     .from(s.mappingEvent)
     .where(eq(s.mappingEvent.projectId, projectId))
@@ -176,7 +200,7 @@ export async function loadProjectBundle(projectId = DEMO_PROJECT_ID): Promise<Pr
     actor: m.actor,
   }));
 
-  const dispRows = await db
+  const dispRows = await tx
     .select()
     .from(s.dispositionEvent)
     .where(eq(s.dispositionEvent.projectId, projectId))
@@ -191,7 +215,7 @@ export async function loadProjectBundle(projectId = DEMO_PROJECT_ID): Promise<Pr
     actor: d.actor,
   }));
 
-  const ruleRows = await db
+  const ruleRows = await tx
     .select()
     .from(s.mappingRule)
     .where(eq(s.mappingRule.projectId, projectId))
@@ -264,8 +288,10 @@ export async function loadProjectBundle(projectId = DEMO_PROJECT_ID): Promise<Pr
 }
 
 export async function loadReview(
-  projectId = DEMO_PROJECT_ID,
+  db: Db,
+  tenantId: string,
+  projectId: string = DEMO_PROJECT_ID,
 ): Promise<{ bundle: ProjectBundle; review: ReviewResult }> {
-  const bundle = await loadProjectBundle(projectId);
+  const bundle = await loadProjectBundle(db, tenantId, projectId);
   return { bundle, review: computeReview(bundle.input) };
 }

@@ -26,6 +26,9 @@
       ],
       "@momo/db": [
         "../../packages/db/src/index.ts"
+      ],
+      "@momo/app": [
+        "../../packages/app/src/index.ts"
       ]
     },
     "isolatedModules": true

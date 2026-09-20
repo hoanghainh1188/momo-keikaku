@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { loadReview } from '@momo/db';
+import { webDb, WEB_TENANT_ID } from '@/server/db';
 import { hours, hoursSigned, present, share, yen } from '@momo/domain';
 import { HealthBadge, Internal, MetricCell, Section, UnplannedChip } from '@/components/ui';
 import { ScopeLedgerBar } from '@/components/scope-ledger-bar';
@@ -13,7 +14,7 @@ export default async function ReviewPage({
   params: Promise<{ projectId: string }>;
 }) {
   const { projectId } = await params;
-  const { bundle, review: r } = await loadReview(projectId);
+  const { bundle, review: r } = await loadReview(webDb(), WEB_TENANT_ID, projectId);
   const p = bundle.project;
   const period = bundle.input.period;
   const leafWps = bundle.wps.filter((w) => w.isLeaf && !w.isMilestone);
