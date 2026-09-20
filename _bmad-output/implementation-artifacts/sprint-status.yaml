@@ -1,0 +1,130 @@
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created, ready for development
+#   - in-progress: Developer actively working on implementation
+#   - review: Implementation complete, ready for review
+#   - done: Story completed
+
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+
+# Action Item Status:
+#   - open: Committed during a retrospective, not yet addressed
+#   - in-progress: Actively being worked on
+#   - done: Completed
+
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when its first story starts (via build's sprint sync)
+# - Stories can be worked in parallel if team capacity allows
+# - Developer typically creates the next story after the previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+# - Retrospective appends its action items to action_items; the status view surfaces open ones
+generated: 09-20-2026 16:55
+last_updated: 09-20-2026 16:55
+project: momo-keikaku
+project_key: NOKEY
+tracking_system: file-system
+story_location: _bmad-output/implementation-artifacts
+development_status:
+  epic-1: backlog
+  1-1-one-command-brings-the-whole-system-up: backlog
+  1-2-nothing-crosses-a-tenant-and-the-data-layer-is-what-proves-i: backlog
+  1-3-the-organisation-and-the-record-of-who-changed-it: backlog
+  1-4-sign-in-and-be-revoked: backlog
+  1-5-roles-decide-what-each-person-can-reach: backlog
+  1-6-resources-and-the-dated-rates-behind-every-money-figure: backlog
+  1-7-the-tenant-admin-can-read-the-audit-log: backlog
+  1-8-a-load-fixture-worth-measuring-against: backlog
+  1-9-every-string-is-externalised-and-the-currency-is-fixed: backlog
+  epic-1-retrospective: optional
+
+  epic-2: backlog
+  2-1-the-scheduling-schema-lands-in-one-migration: backlog
+  2-2-the-demo-spike-is-disposed-of-file-by-file: backlog
+  2-3-one-canonical-order-for-everything-the-scheduler-reports: backlog
+  2-4-the-four-graph-rules-are-invariants-not-entry-checks: backlog
+  2-5-the-forward-pass-a-slip-moves-the-tasks-that-depend-on-it: backlog
+  2-6-the-backward-pass-float-and-the-critical-path: backlog
+  2-7-constraints-are-soft-reported-and-stay-on-their-own-work-pac: backlog
+  2-8-the-golden-scheduler-corpus: backlog
+  2-9-one-path-writes-dates-and-the-run-is-the-record: backlog
+  2-10-work-packages-actual-dates-and-custom-fields-edited-through: backlog
+  2-11-the-three-project-schedule-settings: backlog
+  2-12-the-holiday-calendar-and-its-dated-versions: backlog
+  2-13-the-plan-tree-grid-and-its-schedule-preset: backlog
+  2-14-dependencies-and-constraints-are-created-and-explained-on-th: backlog
+  2-15-the-schedule-strip-and-the-what-moved-band: backlog
+  2-16-the-schedule-exceptions-rail-and-its-three-explainers: backlog
+  epic-2-retrospective: optional
+
+  epic-3: backlog
+  3-1-prove-the-workbook-reader-against-real-client-files: backlog
+  3-2-upload-a-workbook-and-map-its-columns: backlog
+  3-3-what-the-importer-derives-and-the-one-date-it-is-allowed-to: backlog
+  3-4-the-import-carries-the-project-s-progress: backlog
+  3-5-nothing-is-written-until-the-pm-confirms: backlog
+  3-6-confirming-commits-once-through-the-fence: backlog
+  3-7-re-import-shows-a-diff-and-says-what-it-did-not-touch: backlog
+  3-8-the-acceptance-corpus-of-ten-real-client-files: backlog
+  epic-3-retrospective: optional
+
+  epic-4: backlog
+  4-1-set-a-baseline-that-points-at-the-run-behind-it: backlog
+  4-2-the-re-derivation-test: backlog
+  4-3-re-baseline-with-a-reason-and-a-history: backlog
+  4-4-compare-two-versions-as-plans-not-only-as-rows: backlog
+  4-5-baseline-comparison-as-columns-on-the-plan-grid: backlog
+  epic-4-retrospective: optional
+
+  epic-5: backlog
+  5-1-one-port-to-every-tracker-and-a-fixture-that-replays-like-on: backlog
+  5-2-connect-a-backlog-space-read-only: backlog
+  5-3-a-paginated-read-is-complete-or-it-is-not-a-read: backlog
+  5-4-snapshots-run-on-a-schedule-the-pm-can-see: backlog
+  5-5-one-writer-builds-the-actuals-ledger: backlog
+  5-6-the-ledger-stays-correct-as-tickets-appear-move-and-vanish: backlog
+  5-7-a-connector-with-no-hours-says-so-and-stays-saying-it: backlog
+  5-8-tracker-accounts-become-people-retroactively: backlog
+  5-9-map-a-ticket-to-a-work-package-and-never-move-the-plan: backlog
+  5-10-rules-keep-new-tickets-mapped-and-still-never-move-the-plan: backlog
+  5-11-coverage-per-connector-in-tickets-and-in-hours: backlog
+  5-12-catch-all-work-packages-counted-once: backlog
+  5-13-nothing-in-scope-is-silently-excluded: backlog
+  5-14-approximate-figures-say-they-are-approximate: backlog
+  5-15-the-ticket-half-of-the-load-fixture: backlog
+  epic-5-retrospective: optional
+
+  epic-6: backlog
+  6-1-every-figure-comes-from-pinned-inputs-and-a-test-proves-it: backlog
+  6-2-evm-in-hours-with-unplanned-work-carrying-no-earned-value: backlog
+  6-3-the-formulas-and-the-one-eac-method-r0-ships: backlog
+  6-4-the-evidence-and-the-plan-are-made-to-face-each-other: backlog
+  6-5-three-health-indicators-each-showing-its-rule: backlog
+  6-6-the-forecast-and-both-finish-dates: backlog
+  6-7-the-reconciliation-review-pinned-and-in-one-fixed-order: backlog
+  6-8-every-date-that-moved-carries-its-cause: backlog
+  6-9-disposition-every-unmapped-ticket-before-anything-leaves: backlog
+  epic-6-retrospective: optional
+
+  epic-7: backlog
+  7-1-the-fixed-layout-xlsx-report: backlog
+  7-2-a-raw-export-that-can-recompute-every-number: backlog
+  7-3-a-raw-export-that-can-re-derive-the-schedule: backlog
+  epic-7-retrospective: optional
+
+  epic-8: backlog
+  8-1-production-in-tokyo-one-image-two-roles: backlog
+  8-2-migrations-run-before-the-services-roll: backlog
+  8-3-the-operator-can-see-the-system-without-reading-customer-dat: backlog
+  8-4-backups-exist-and-the-restore-is-written-down: backlog
+  8-5-a-tenant-s-data-can-be-deleted-within-30-days: backlog
+  epic-8-retrospective: optional
