@@ -249,7 +249,6 @@ export async function seed(): Promise<void> {
     at: new Date(state.anchor),
   });
 
-  // eslint-disable-next-line no-console
   console.log(
     `seeded: ${state.wps.length} WPs, ${f.baseline.wps.length} baseline WPs, ` +
       `${state.snapshots.length} snapshots, ${state.ledger.length} ledger entries, ` +

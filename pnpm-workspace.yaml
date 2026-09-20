@@ -1,6 +1,12 @@
 packages:
   - 'apps/*'
   - 'packages/*'
+  # `packages/db/auth` is the single sanctioned Better Auth <-> Drizzle binding and the one
+  # carve-out in the import rules, so it is its own unit nested inside `packages/db` rather
+  # than a sibling under `packages/*`. The glob above does not reach one level deeper, so it
+  # is named explicitly; without this line its package.json would be decorative and nothing
+  # could depend on `@momo/db-auth`.
+  - 'packages/db/auth'
 
 # pnpm 12 defaults `strictDepBuilds: true`, so a dependency that wants to run an install
 # script and is not listed here makes `pnpm install` FAIL rather than warn — and pnpm
