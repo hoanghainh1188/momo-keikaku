@@ -1,5 +1,5 @@
 ---
-stepsCompleted: [1]
+stepsCompleted: [1, 2]
 inputDocuments:
   - _bmad-output/planning-artifacts/prds/prd-momo-keikaku-2026-09-19/prd.md
   - _bmad-output/planning-artifacts/prds/prd-momo-keikaku-2026-09-19/addendum.md
@@ -233,11 +233,131 @@ From `EXPERIENCE.md` and `DESIGN.md`, which **resolve OQ-11's design half** (PR 
 
 ### FR Coverage Map
 
-{{requirements_coverage_map}}
+All 36 frozen §8.1 entries, each mapped to exactly one epic. No entry appears twice and none is unmapped.
+
+| FR | Epic | What the epic covers of it |
+|---|---|---|
+| FR-1 | Epic 1 | Tenant, Department, Program, Project hierarchy; PM assignment; the per-read isolation proof |
+| FR-2 | Epic 1 | Tenant Admin and PM roles, permissions, Rate visibility, edit and publish authority (Client Viewer is R1) |
+| FR-3 | Epic 1 | Email + password and Google sign-in, configurable idle expiry, revocation on next request (magic link and Microsoft are R1) |
+| FR-4 | Epic 1 | English UI with every string externalised, a JA catalog present, JPY fixed once a Rate exists |
+| FR-5 | Epic 2 | Create, edit, move and delete WPs; leaf-only scheduling inputs; roll-up; PM-owned actual dates; **no typed planned dates** |
+| FR-6a | Epic 2 | FS dependencies with lag between leaf WPs, duration and constraint capture, the four graph rules as invariants |
+| FR-6b | Epic 2 | The closed trigger set, forward and backward pass, progress-aware scheduling, Float, critical path, soft constraints, out-of-sequence, determinism |
+| FR-7 | Epic 2 | The tree grid as the single R0 scheduling surface, with every column the engine produces (the Gantt is R1) |
+| FR-8 | Epic 2 | Custom Fields of four types as columns and grouping axes, to the tested bound of 100 per Project |
+| FR-9 | Epic 3 | Upload, sheet and header choice, column mapping with EN/JA suggestions, duration derivation, progress columns, the narrow milestone-constraint exception |
+| FR-10 | Epic 3 | The mandatory preview: no commit without confirmation, Project start and Data Date, the schedule and progress previews, counts, untrusted content |
+| FR-11 | Epic 3 | Re-import with a diff that separates input changes from the date movement they caused; links and progress survive an ambiguous re-import |
+| FR-12 | Epic 1 | Resources with a home Department; Tenant-Admin-only dated Rate history and Project default Rates; retroactive corrections by recomputation |
+| FR-13 | Epic 5 | Tracker Account to Resource linking with suggestions; Unattributed hours at the Project default Rate |
+| FR-14 | Epic 2 | JP and VN calendars, Project-specific non-working days, and the dated append-only version history **over the national tables** |
+| FR-15 | Epic 4 | Set Baseline pinning inputs not only outputs, the automated re-derivation test, no partial pinning |
+| FR-16 | Epic 4 | Re-baseline with a mandatory reason, full version history, and comparison **as plans** including the graph diff |
+| FR-17 | Epic 5 | Backlog Connector, read-only, client-side approval recorded, hours detected from data, credential rotation, error notification |
+| FR-19 | Epic 5 | Scheduled and on-demand snapshots, the interval, freshness, lossless failure, the stored-field whitelist, retention |
+| FR-20 | Epic 5 | Scope completeness: the four mutually exclusive figures summing to total ledger hours, per Period and Connector |
+| FR-21 | Epic 5 | Manual mapping, remapping and unmapping; attribution follows the current Mapping; **mapping never moves the plan** |
+| FR-22 | Epic 5 | Mapping Rules in strict priority order, live on every snapshot, manual always winning, preview before save, logged flips |
+| FR-23 | Epic 5 | Mapping coverage per Connector, with Ticket share and hours share reported separately |
+| FR-24 | Epic 5 | Catch-all WPs measured as Level of Effort when baselined, overflow as Unplanned Work counted once |
+| FR-25 | Epic 5 | Ledger entries from snapshot deltas, Period assignment, negative deltas kept and costed, corrections as new entries |
+| FR-26 | Epic 5 | Every person-level and day-level breakdown labelled approximate with its reason; no ranking of people |
+| FR-27 | Epic 5 | Ticket-Count Mode: what is still computed, what reads "unavailable" rather than zero, mixed-Connector coverage |
+| FR-28 | Epic 6 | The Reconciliation Review, pinned to one snapshot, with the **seven-cause** date-movement list and the Data Date offer |
+| FR-29 | Epic 6 | The four Dispositions, the *Plan* WP proposal from work already done, "new hours since disposition", group semantics |
+| FR-30 | Epic 6 | EVM in hours with Typical EAC, Observed vs Recorded Percent Complete, Unplanned Work with no earned value, both CPIs |
+| FR-31 | Epic 6 | Three Health Indicators and the overall status, both milestone rules, negative Float, the constraint-violation rule, thresholds with overrides |
+| FR-32 | Epic 6 | The effort forecast and **both** finish dates — computed and trend — labelled, with the gap named when they disagree |
+| FR-38 | Epic 7 | Fixed-layout xlsx report of the current PM view, with formula prefixes neutralised |
+| FR-39 | Epic 7 | Raw export complete enough to recompute every metric **and re-derive the schedule** outside the tool |
+| FR-42 | Epic 5 | Opening Balances in exactly two cases, later first sightings as deltas, left scope, moves within scope, one owner, the sum invariant |
+| FR-43 | Epic 2 | Project start, optional Project finish and Data Date as Project settings; the Data Date as the only thing that advances the plan |
+
+**Count check:** 36 rows. Epic 1 covers 5 (FR-1, 2, 3, 4, 12); Epic 2 covers 7 (FR-5, 6a, 6b, 7, 8, 14, 43); Epic 3 covers 3 (FR-9, 10, 11); Epic 4 covers 2 (FR-15, 16); Epic 5 covers 12 (FR-13, 17, 19, 20, 21, 22, 23, 24, 25, 26, 27, 42); Epic 6 covers 5 (FR-28, 29, 30, 31, 32); Epic 7 covers 2 (FR-38, 39). 5 + 7 + 3 + 2 + 12 + 5 + 2 = **36**.
+
+**NFRs are not separately epic'd**, because none of them is deliverable on its own: each is an acceptance criterion on the stories of the epic whose behaviour it constrains. Where an NFR needs work that no FR story would otherwise carry, it lands in Epic 1's substrate stories — NFR-S1, S2, S3, S8, D1, A1, C1's integer and codec discipline, I1's externalisation and O1's operator view — with NFR-P1 measured in Epic 2 (recalculation), Epic 5 (snapshot throughput) and Epic 6 (Review load), NFR-R1 in Epic 5, and NFR-U1 on every surface story. NFR-S5, NFR-S7 and NFR-R2's restore rehearsal are R1 and appear nowhere here.
 
 ## Epic List
 
-{{epics_list}}
+**Seven epics, 36 FR entries, no FR in two epics and none in none.** Ordered so that each one is standalone: it delivers complete functionality for its domain, it may build on the epics before it, and **no epic requires a later epic to function**.
+
+Context assessment behind the count: the architecture spine (AD-1 … AD-30) and both UX spines are final and merged, and the CI gate list is fixed, so the outcome is largely certain and the guidance is to prefer fewer, larger epics. Epics were merged where they would have churned the same files — the Connector and the Mapping layer both live in `domain/attribution` and `app/mapping`, EVM and the Review share one compute pipeline and one surface, and FR-5, FR-7, FR-8, FR-43, FR-6a and FR-6b are all **one surface** in `EXPERIENCE.md`, so splitting the engine from the grid it feeds would have torn a single surface across two epics.
+
+### Epic 1: A Tenant, its people, and nothing leaking between them
+
+A Tenant Admin can stand up the organisation — Departments, Programs, Projects, PM assignments, Resources and their dated Rate history — invite PMs, and sign in with email and password or Google. Every read is covered by an automated proof that no other Tenant's data comes back, and every action that changes reported numbers or who can see them is already in the audit log. The English UI ships with every string externalised and a Japanese catalog in place, so R1 is a translation rather than a refactor.
+
+**FRs covered:** FR-1, FR-2 (Tenant Admin and PM only), FR-3 (email + password and Google), FR-4 (English UI, all strings externalised), FR-12
+
+**Implementation notes.** This is where the substrate lands, because FR-1's own testable consequence *is* the isolation proof: the workspace and its import fences (AR-1, AR-2), the `table-classes.ts` registry that generates RLS, grants and triggers (AR-38), `FORCE ROW LEVEL SECURITY` and `withTenant` (AR-4), the cross-tenant harness (AR-5), the integer and codec discipline (AR-6, AR-8), append-only enforcement (AR-9), the audit-in-the-same-transaction rule (AR-26), the identity bridge (AR-40), the `Clock` port (AR-27), SES mail — which is **R0, not R1**, because FR-3's password reset needs it (AR-33) — and the one-command local run with its four decided version traps (AR-30, AR-31). It replaces the demo spike's `packages/db` files; the full 46-file reconciliation is settled in Epic 2.
+
+### Epic 2: A plan that re-dates itself when the work slips
+
+A PM can build a Plan by hand and have it schedule itself. Leaf WPs carry a duration, finish-to-start dependencies with lag, and one of three constraint types; the Project carries a start, an optional finish and a Data Date; the calendar carries JP and VN working days with a dated version history. **A slipped task moves the tasks that depend on it**, Float and the critical path are always current, negative Float shows as a negative number against a Project finish the PM set, and every constraint violation, out-of-sequence link and un-schedulable WP is listed with the chain behind it. The tree grid is the single scheduling surface and carries every column the engine produces.
+
+**FRs covered:** FR-5, FR-6a, FR-6b, FR-7 (tree grid only — the Gantt is R1), FR-8, FR-14, FR-43
+
+**Implementation notes.** The riskiest epic: this capability has no line of code today, and it is the reason the plan can leave Excel. Four things fix its internal order.
+
+1. **AD-30's single migration is story 1 and blocks every other story in this epic.** It is one pre-production migration that adds four tables and the input columns, drops `work_package.start`, `.finish`, `.completed_at` and `.milestone_done_at`, and rewrites `baseline_version` and `baseline_wp`. Three clauses Drizzle 0.45.2 cannot emit are hand-written SQL with CI assertions (AR-59). The expand/contract exemption is **spent here, once**.
+2. **The demo-spike disposal is story 2**, immediately after the migration that breaks the spike, and carries the complete 46-file E-3 reconciliation table.
+3. **The engine is pure, so it is built and proved before any database work.** `domain/schedule.recalculate(inputs, prevInputs) → outputs` reads nothing but its arguments (AR-47), so the passes, Float, the critical path, violations and out-of-sequence handling are testable with no DB at all. `compareWp` (AR-55) comes first because the engine's ordered outputs need it.
+4. **The golden scheduler corpus is its own story, not an acceptance criterion elsewhere.** Of AD-19's six scheduler gates, five test internal consistency; only the corpus of hand-computed expected outputs tests whether the engine is **right** (AR-35). Folding it into another story's AC would hide the one gate that could catch a wrong answer.
+
+**Risk gate inside this epic.** The story that first persists a `schedule_run` measures the real payload against AD-26's measured 385 kB raw / ~141 kB stored / ~152 kB WAL, and exercises AD-5's retention-by-reference rule. If the recalculation misses NFR-P1's 300 ms p95, AD-27 fixes the lever — **lock granularity, never a background path** — and that is a fence-shape change, so it must surface here rather than in Epic 6.
+
+### Epic 3: The client's Excel WBS becomes a live plan in one session
+
+A PM can upload a real client .xlsx, choose the sheet and header row, map columns with header-based suggestions in English and Japanese, and see every row in a mandatory preview before anything is written — with its level, the duration derived from an imported start/finish pair, the dependencies and constraints read, the progress read, which of the three scheduling states each row will arrive in, and the dates the scheduler will produce. A mid-flight project therefore arrives mid-flight. A later version of the same file re-imports as a diff that separates input changes from the date movement they caused.
+
+**FRs covered:** FR-9, FR-10, FR-11
+
+**Implementation notes.** Genuine risk boundary of its own: AD-13 records that **ExcelJS fit is a spike, not an assumption**, so the first import story parses three real Japanese WBS workbooks through `WorkbookPort` and asserts merge ranges and cached formula results, with SheetJS CE as the named fallback. Limits are checked from the zip central directory **before ExcelJS sees the file** (AR-24). The importer writes scheduling inputs and actual dates and **never a derived date**; `confirmImport` calls the recalculation **once**, after the whole diff commits (AR-24, AR-54). The acceptance corpus of 10 real client files is **not in the repo** and its tests run under a local-only tag (AR-41).
+
+### Epic 4: A Baseline that can explain itself years later
+
+A PM can set a Baseline from the Current Plan and Re-baseline with a mandatory reason, linking Change Request candidates. Every version is kept with its author, time and reason, and any two versions compare **as plans, not only as rows** — dependencies added and removed, lags, constraints, durations, actual dates, progress, milestone flags, the calendar version and the three Project settings — so no WP can move between versions without a recorded input change that accounts for it. An automated test re-derives a Baseline's dates, Float, constraint violations and critical path from its pinned inputs alone, on any machine, at any later date.
+
+**FRs covered:** FR-15, FR-16
+
+**Implementation notes.** The Baseline **points at a `schedule_run`; it does not re-copy the inputs** (AR-22), and `baseline_wp` keeps only the cost projection that PV, BAC and Divergence read. Retention-by-reference makes the pointer permanent (AR-11). The re-derivation test runs under each run's **own** recorded `engine_version`, so a later scheduler fix does not turn history red (AR-51), and compares through the codec's canonical form rather than column text (AR-8). A Baseline is refused while any leaf WP has no duration or the Project has no Project start.
+
+### Epic 5: The work actually done arrives from Backlog and lands on the plan
+
+A PM can connect a Project to a Backlog space read-only, record who on the client side approved it, and watch an always-on snapshot service build an append-only Actuals Ledger from snapshot deltas — with hours a Ticket already had recorded as an Opening Balance so a project connected mid-flight shows no false spike. They can link Tracker Accounts to Resources, map Tickets to leaf WPs by hand or by priority-ordered rule, flag Catch-all WPs, and see coverage per Connector. Every in-scope Ticket is either mapped or reported as unmapped, nothing is silently excluded, and a space that exposes no hours runs honestly in Ticket-Count Mode rather than showing zeros.
+
+**FRs covered:** FR-13, FR-17, FR-19, FR-20, FR-21, FR-22, FR-23, FR-24, FR-25, FR-26, FR-27, FR-42
+
+**Implementation notes.** The largest epic by FR count, and one journey (UJ-2) across one set of modules — `adapters/backlog-http`, `app/ingest`, `app/mapping`, `domain/attribution` — which is why it is not split. The invariant this epic must not break is the one the whole product rests on: **mapping, remapping and hourly background rule evaluation change attribution and never a date** (AR-52's reachability test). Paginated completeness is read `sort=created&order=asc` with Count Issues before and after, because Backlog's default `updated desc` silently skips Tickets while still looking finished (AR-13); `left_scope` needs **two** consecutive complete reads (AR-15); the measurement basis latches with hysteresis N = 3 in both directions, with no confirmation screen (AR-17, founder decision A3); and unmapping is `release` only in R0 (AR-18, founder decision A4). **OQ-2 is still open** — whether the five target Backlog spaces expose actual hours — and this epic handles both answers, but the fixture scenarios should be re-recorded once the founder checks.
+
+### Epic 6: Thursday's teirei report in twenty minutes
+
+A PM can open the Reconciliation Review for any Reporting Period, pinned to one Tracker Snapshot, and read the four report pages they used to rebuild by hand every week. Honest EVM in effort hours with Unplanned Work carrying actual effort and no earned value; both CPIs side by side; three Health Indicators and an overall status, each showing the rule behind its colour; the forecast with the two finish dates and the gap between them named; every WP whose dates moved carrying one of seven causes; and the evidence and the plan made to face each other, so a WP the Tickets say is 60% done and the plan treats as untouched is visible rather than assumed. They then disposition every Unmapped Ticket — Map, Plan, Change Request candidate or Explain — and advance the Data Date deliberately.
+
+**FRs covered:** FR-28, FR-29, FR-30 (Typical EAC only), FR-31, FR-32
+
+**Implementation notes.** Every figure is `compute(inputs, formulaVersion)` and the closure test enforces that each one comes from an append-only source `ComputationInputs` pins (AR-19). **The Review's pin is split** — Tracker-side inputs stay frozen so numbers do not move under the PM, while PM-authored watermarks **and `schedule_run_seq`** are re-captured after each write, because three of them are recalculation triggers and freezing the run would show new EVM against a superseded schedule (AR-20). Formulas come from `docs/references/` and were checked against them: CV, SV, CPI, SPI, TCPI and Typical EAC = BAC / CPI. `recordDisposition` is the only Disposition writer and stores the **explicit Ticket list at record time** (AR-39). FR-28's cause list is closed at **seven**, and there is deliberately no cause for a mapping change, because a mapping change cannot move a date.
+
+### Epic 7: The numbers and the plan both leave the tool
+
+A PM can export a fixed-layout xlsx report of the current PM view — EVM, Health Indicators, Unplanned Work, the forecast, milestones and the WP table — and a raw export of everything behind it. The raw export is complete enough to recompute every EVM metric outside the tool **and to re-derive the schedule**: the dependency graph with lags, durations, constraints, actual dates, progress, the calendar version and its history, the Data Date and its history, and each Baseline with the inputs it pinned. A PM leaving momo-keikaku takes a working plan, not a picture of one.
+
+**FRs covered:** FR-38 (R0: fixed layout of the current PM view), FR-39
+
+**Implementation notes.** Small epic, but it is the claim an Excel refugee will actually test, and the stronger half of the no-lock-in promise. Every xlsx and CSV writer goes through one `safeCell()` that neutralises the four formula prefixes (AR-29). The raw export ships only the snapshots whose observations survived compaction, and says so on the export (AR-10). Exports are an audited action (NFR-A1).
+
+### Epic order and what each one needs
+
+| Epic | Needs | Delivers standalone | Does **not** need |
+|---|---|---|---|
+| 1 | — | A Tenant, its org, its people, sign-in, isolation proof, audit | 2–7 |
+| 2 | 1 (a Project to plan) | A hand-built Plan that schedules itself, on one surface | 3–7. WPs can be created by hand, which is `EXPERIENCE.md`'s own empty state |
+| 3 | 2 (something to import into) | A real client .xlsx becoming that Plan | 4–7 |
+| 4 | 2 (a `schedule_run` to pin) | A re-derivable Baseline history | 5–7 |
+| 5 | 1 (Resources), 2 (leaf WPs to map to), 4 (to judge baselined-ness) | Actual hours arriving and attributed | 6, 7. Before the first Baseline everything is non-baselined, which is the designed "No Baseline yet" state |
+| 6 | 1, 2, 4, 5 | The weekly review and Dispositions | 7 |
+| 7 | 2, 4, 5, 6 | Both exports | — |
 
 ---
 
