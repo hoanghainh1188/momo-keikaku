@@ -1,5 +1,5 @@
 ---
-stepsCompleted: [1, 2, 3]
+stepsCompleted: [1, 2, 3, 4]
 inputDocuments:
   - _bmad-output/planning-artifacts/prds/prd-momo-keikaku-2026-09-19/prd.md
   - _bmad-output/planning-artifacts/prds/prd-momo-keikaku-2026-09-19/addendum.md
@@ -595,7 +595,11 @@ So that the tool is usable day to day and closing an account actually closes it.
 
 **Given** a Tenant Admin revoking a user
 **When** that user makes their next request
-**Then** it is refused, and the revocation is an `app` use case that is audited — never a write through the Better Auth adapter (AR-40, NFR-A1)
+**Then** it is refused, and the revocation is an `app` use case that is audited — never a write through the Better Auth adapter (FR-3, AR-40, NFR-A1)
+
+**Given** the R0 sign-in methods
+**When** they are built
+**Then** they are **email + password and Google**; the email magic link and Microsoft account are R1, and **SAML and SCIM are out of scope**, added only if a client's security check sheet requires them (FR-3, §8.1)
 
 **Given** a user who has forgotten their password
 **When** they request a reset
@@ -652,7 +656,7 @@ So that every hour can be valued at the Rate that was in force when it was recor
 
 **Given** `rate_entry` exists and `project_default_rate_entry` does not
 **When** this story completes
-**Then** `project_default_rate_entry(project_id, effective_from, yen_per_hour, seq)` exists as `append_only`, bitemporal in the same shape as `rate_entry` (AR-19, measured baseline)
+**Then** **this story creates `project_default_rate_entry`**`(project_id, effective_from, yen_per_hour, seq)` as class `append_only`, bitemporal in the same shape as `rate_entry`, and registers it in the table-class registry so its RLS, grants and trigger are generated (AR-19, AR-38, measured baseline)
 
 **Given** an hour recorded on a date
 **When** it is valued
@@ -988,7 +992,7 @@ So that I know where a slip actually costs me the end date.
 
 **Given** §8.3's cut order
 **When** a cut is considered
-**Then** this story is **item 2**, and it is taken **only after item 1** (story 2.7), never before — dropping Float while the two extra constraint types are still in scope leaves violations reported with no Float behind them (§8.3)
+**Then** this story is **item 2** of the cut order. **Build order and cut order run opposite ways here:** this story is built *before* story 2.7 and depends on nothing in it, while a *cut* removes 2.7 first and only then this one — because dropping Float while the two extra constraint types are still in scope leaves violations reported with no Float behind them (§8.3)
 
 ### Story 2.7: Constraints are soft, reported, and stay on their own Work Package
 
@@ -1152,7 +1156,7 @@ So that the plan reflects the project, and a mid-flight project is scheduled on 
 
 **Given** a Recorded Percent Complete typed on the Plan grid
 **When** it commits
-**Then** it is written to `pct_override_event` through the fence as an ordinary input edit and triggers a recalculation. **FR-30's audited override — the mandatory reason and the Observed-versus-Recorded comparison — is Epic 6's**, and this story does not build it (AR-42, FR-6b)
+**Then** it is written to `pct_override_event` — **which this story creates**, as class `append_only` and registered in the table-class registry — through the fence as an ordinary input edit, and it triggers a recalculation. **FR-30's audited override — the mandatory reason and the Observed-versus-Recorded comparison — is Epic 6's**, and this story does not build it (AR-42, FR-6b)
 
 **Given** Custom Fields
 **When** a PM defines them
@@ -1208,7 +1212,7 @@ So that adding a client holiday in November cannot change what an October Baseli
 
 **Given** a Project's Holiday Calendar
 **When** it is configured
-**Then** it uses Japanese national holidays, Vietnamese national holidays including Tết, or both, and the PM can add Project-specific non-working days, written to `calendar_day_event` (FR-14)
+**Then** it uses Japanese national holidays, Vietnamese national holidays including Tết, or both, and the PM can add Project-specific non-working days, written to `calendar_day_event` — **which this story creates**, as class `append_only` and registered in the table-class registry (FR-14, AR-38)
 
 **Given** a calendar version
 **When** it is created
@@ -2128,11 +2132,11 @@ So that the actuals are honest from the first snapshot rather than after two wee
 
 **Given** a second Connector whose scope overlaps an owned Ticket
 **When** it is observed
-**Then** the result is a `connector_overlap` record and **not a ledger entry**, the conflict is shown to the PM, and the hours are not counted twice (FR-42, AR-15)
+**Then** the result is a `connector_overlap` record — **which this story creates**, as class `derived`, owned by the module that owns its source — and **not a ledger entry**; the conflict is shown to the PM, and the hours are not counted twice (FR-42, AR-15, AR-38)
 
 **Given** an overlap
 **When** ownership transfers
-**Then** it transfers **only** through a PM-confirmed resolution recorded as an append-only `connector_ownership_event`: the ledger stays on the Ticket, no Opening Balance is written, and only `owner_connector_id` moves. An owner Connector being deleted or losing scope does **not** transfer ownership by itself (AR-15)
+**Then** it transfers **only** through a PM-confirmed resolution recorded in `connector_ownership_event` — **which this story creates**, as class `append_only`: the ledger stays on the Ticket, no Opening Balance is written, and only `owner_connector_id` moves. An owner Connector being deleted or losing scope does **not** transfer ownership by itself (AR-15)
 
 **Given** every in-scope Ticket
 **When** the invariant is checked
@@ -2169,7 +2173,7 @@ So that I never read a zero that means "we do not know".
 
 **Given** "Resolved"
 **When** it is evaluated
-**Then** it comes from the Connector's Resolved status set at `connector_setting_seq_max` — created by this story — applied to the observation's `statusId` (AR-17, AR-19)
+**Then** it comes from the Connector's Resolved status set, held in `connector_setting_event` — **which this story creates**, as class `append_only` — read at `connector_setting_seq_max` and applied to the observation's `statusId` (AR-17, AR-19, AR-38)
 
 **Given** a Project with both an hours Connector and a count Connector
 **When** AC-based metrics are computed
@@ -2249,7 +2253,7 @@ So that I can reconcile for an hour without the plan shifting underneath the rev
 
 **Given** `mapping_head`
 **When** it is maintained
-**Then** it is a `derived` index kept in the same transaction and **never the source of truth** (AR-18, AR-38)
+**Then** **this story creates it** as class `derived` — an index kept in the same transaction, rebuildable from `mapping_event`, and **never the source of truth** (AR-18, AR-38)
 
 **Given** Tickets and WPs
 **When** the PM maps by pointing
@@ -2608,7 +2612,7 @@ So that a client can see why a project is amber rather than being told that it i
 
 **Given** the thresholds
 **When** they are resolved
-**Then** a threshold resolves as a Project override at `setting_seq_max`, else the Tenant default at `tenant_setting_seq_max` — created by this story — in **one function in `domain/health`**, and the resolved value with its source is stored in the snapshot inputs because FR-31 shows the override next to the indicator (FR-31, AR-19, founder decision A1)
+**Then** a threshold resolves as a Project override at `setting_seq_max`, else the Tenant default held in `tenant_setting_event` — **which this story creates**, as class `append_only` — read at `tenant_setting_seq_max`, resolved in **one function in `domain/health`**, and the resolved value with its source is stored in the snapshot inputs because FR-31 shows the override next to the indicator (FR-31, AR-19, founder decision A1)
 
 **Given** the default thresholds
 **When** they are applied
@@ -3084,6 +3088,84 @@ Recorded rather than written into any acceptance criterion, per PRD §7.3. **Thi
 | CA-8 | Deriving an actual date from tracker evidence, in any surface | First observed activity is display-only evidence with a one-click fill (§3, FR-5, FR-21, FR-22). Writing it is the failure the whole invariant exists to prevent |
 | CA-9 | Dropping FR-32's trend finish | `review-readiness.md` Part 5 recommends it as a cut ahead of §8.3 item 1, but it is **not in the cut order**. Adding a cut to the order is a PRD edit |
 
+## Step 4 — validation record
+
+Every check below was run **by script against the document and the repository**, not read by eye. Where a check found something, what it found and what was done about it is recorded rather than quietly fixed.
+
+### 1. FR coverage
+
+| Check | Result |
+|---|---|
+| FRs in the coverage map | 36 rows, no duplicates, nothing missing or extra against §8.1 |
+| FRs referenced by at least one story's acceptance criteria | **36 / 36**, with 320 references in total |
+| FRs referenced only once or twice | FR-8 and FR-23 — both have a dedicated home (FR-8 in story 2.10, FR-23 in story 5.11) whose criteria cover every consequence the FR states. Thin is not the same as uncovered |
+
+**Found and fixed during this pass:** FR-4 appeared in the coverage map and in **no story at all**. Story **1.9** was added for it. NFR-S1 was implemented by story 1.2 and never named in it; it is now named, with a criterion saying it is discharged there rather than restated on every later story. FR-3 was referenced once; the sign-in methods and the SAML/SCIM exclusion are now explicit criteria in story 1.4.
+
+### 2. Architecture implementation
+
+**Starter template: none.** The architecture spine fixes a paradigm — modular monolith, hexagonal, pure functional core — and no starter. Epic 1 Story 1.1 is therefore the workspace, the version traps and the one-command local run, and **Epic 2 Story 2.1 is AD-30's single migration**, which blocks every other story in that epic.
+
+**Tables are created only where a story needs one.** Twenty-three tables the repository lacks were traced to a creating story, and **every one has exactly one**:
+
+| Story | Creates |
+|---|---|
+| 1.3 | `program` |
+| 1.4 | Better Auth `user`, `session`, `account`, `verification`, and `tenant_membership` |
+| 1.6 | `project_default_rate_entry` |
+| **2.1** | `wp_dependency`, `schedule_run`, `wp_schedule`, `holiday_calendar_version`, **`wp_status_event`** |
+| 2.10 | `pct_override_event` |
+| 2.12 | `calendar_day_event` |
+| 3.2 | `import_draft` |
+| 5.1 | `ticket`, `tracker_account` |
+| 5.2 | `connector_scope_event` |
+| 5.5 | `project_setting_event` |
+| 5.6 | `connector_ownership_event`, `connector_overlap` |
+| 5.7 | `connector_setting_event`, `measurement_basis_event` |
+| 5.8 | `tracker_account_link_event` |
+| 5.9 | `mapping_head` |
+| 5.12 | `wp_flag_event` |
+| 6.5 | `tenant_setting_event` |
+| 8.5 | `operator_audit` |
+
+**Found and fixed during this pass:** six of these tables were referenced by the story that needs them but never declared as created by it — `pct_override_event`, `calendar_day_event`, `project_default_rate_entry`, `connector_setting_event`, `connector_ownership_event`, `connector_overlap` and `mapping_head`. Each now says so, with its class and its registry entry. `tenant_setting_event` was declared only in Epic 6's preamble and is now declared in story 6.5.
+
+### 3. Story quality
+
+| Check | Result |
+|---|---|
+| Stories | **70**, numbering contiguous within every epic |
+| Story shape — "As a / I want / So that" plus an Acceptance Criteria block | **70 / 70** |
+| Given / When / Then balance within every story | **70 / 70** balanced, minimum 3 criteria |
+| Acceptance criteria per story | min 3, max 13, mean 6.9 |
+| Heaviest stories | 2.13 (13), 2.9 (12), 6.9 (12), 5.4 (11), 6.5 (11) |
+
+Story **2.9** is flagged in place as the heaviest and the first candidate for splitting; it is written whole because the fence and the run are one transaction, and splitting them would leave a half-closed trigger set.
+
+### 4. Epic structure and file churn
+
+Epics are named for what a person can then do, not for a layer: the one epic with no FRs, Epic 8, exists because a **scope bullet** had no owner, not because a technical layer wanted one.
+
+Modules touched by more than two epics, and why each is incidental rather than churn:
+
+| Module | Epics | Assessment |
+|---|---|---|
+| `packages/db` | 1, 2, 5 | Each adds **distinct** tables and none rewrites another's. AD-38's table-class registry exists precisely so RLS, grants and triggers are *generated* rather than hand-edited per epic, which is what would have made this churn |
+| `domain/attribution` | 2, 5, 6 | **One owner, two readers.** Epic 5 owns it; Epic 6 reads it; Epic 2 names it only as a **forbidden import**, which is the AD-1 fence that keeps evidence out of the scheduler |
+
+Every two-epic overlap — `packages/app`, `packages/domain`, `domain/present`, `domain/schedule`, `domain/calendar` — is the same one-owner-one-reader shape. **Epic 8 touches no shared domain module**, as a deployment epic should not.
+
+Consolidation was considered and taken twice at step 2: the Connector and the Mapping layer merged into Epic 5 because they are one journey over one set of modules, and EVM merged into Epic 6 because it shares the Review's compute pipeline and surface. Splitting the engine from the grid it feeds was rejected because `EXPERIENCE.md` makes them one surface.
+
+### 5. Dependency validation
+
+**Forward dependencies: none.** One story reference points forward — story 2.6 naming story 2.7 — and it is the §8.3 **cut** order, not a build order. The criterion now says so outright: *"Build order and cut order run opposite ways here."* Two further hits were false positives from an epic preamble following the previous epic's last story.
+
+**Epic independence** is the table in *Epic order and what each one needs*. The two qualifications it carries are real and stated there rather than smoothed over: Epic 2 is standalone to run but only its Schedule preset is complete without Epics 4 to 6, and Epic 5 is standalone to run but not fully acceptance-testable before Epic 4 exists.
+
+### What this pass did not do
+
+It did not estimate, and it did not take §8.3's first cut. Both belong to `bmad-sprint-planning`, along with the four items in *Carried to `bmad-sprint-planning`* above. It also did not edit the PRD: the stale passages recorded in *Documentation inconsistencies found, not fixed here* are `bmad-prd`'s to fix.
 ## Invariants every story below must respect
 
 Restated from the PRD and the spine, as a checklist for story review. A story that contradicts one of these is wrong, not a variant.
