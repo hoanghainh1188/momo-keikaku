@@ -68,3 +68,5 @@ Legend for **Blocks**: what cannot move until this is answered.
 - OQ-7 competitive watch: whether to fund a Tempo trial and a Jellyfish demo, the Crowd Log trigger, and re-rating the eng-intelligence watch to Swarmia-weighted monthly.
 - R6 battlecard wording: Tempo does have a "No Account" view, and no BigPicture edition can be named for baselines after 2026-08-04.
 - D2: reviewing the 30 UX assumptions and the architecture assumption tags.
+
+- D1 superseded 2026-09-20: the founder chose to merge PR #1 whole, so the demo spike code is on main. It is still a spike — sprint planning decides what survives. packages/domain and its golden tests are the parts worth keeping; apps/web has no auth, no RLS and only TODO-marked AD-20/AD-21 conventions.
