@@ -14,9 +14,13 @@
 # the failure epics.md warns about for the dependency-cruiser gate specifically.
 #
 # So this file gates on what is real: typecheck and the test suite. Measured on
-# 2026-09-20 — `pnpm typecheck` exits 0, and `pnpm test` passes 46 tests across 3 files
+# 2026-09-20 — both typechecks exit 0, and `pnpm test` passes 46 tests across 3 files
 # with DATABASE_URL pointing at a dead port, so no database service is needed yet.
 # Add a `services: postgres` block when the first test needs one.
+#
+# The typecheck gate was verified non-vacuous: injecting `const x: number = "str"` into
+# packages/domain/src/units.ts makes it fail with TS2322. A gate nobody has seen fail is
+# indistinguishable from a green light.
 
 name: CI
 
@@ -70,10 +74,18 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
-      - name: Typecheck
+      # Two typecheck steps, because the root tsconfig excludes `apps`. Without the
+      # second one a type error in apps/web would reach main unnoticed — Next.js only
+      # catches it at `next build`, which CI does not run. Both are plain `tsc --noEmit`,
+      # so neither emits into the source tree.
+      - name: Typecheck (packages, scripts)
         run: pnpm typecheck
 
-      # `always()` so a typecheck failure does not hide the test result. Both signals
+      - name: Typecheck (apps/web)
+        if: always()
+        run: pnpm --filter @momo/web typecheck
+
+      # `always()` throughout so one failure does not hide the others. All three signals
       # land on the same run.
       - name: Tests
         if: always()
