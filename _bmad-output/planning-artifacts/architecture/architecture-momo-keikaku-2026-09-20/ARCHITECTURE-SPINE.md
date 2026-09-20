@@ -7,13 +7,15 @@ paradigm: 'modular monolith, hexagonal (ports & adapters) around a pure function
 scope: 'momo-keikaku v1: builds R0 and fixes the invariants that R1 and Post-Q1 must not break'
 status: final
 created: '2026-09-20'
-updated: '2026-09-20'
-binds: [FR-1, FR-2, FR-3, FR-4, FR-5, FR-6, FR-7, FR-8, FR-9, FR-10, FR-11, FR-12, FR-13, FR-14, FR-15, FR-16, FR-17, FR-18, FR-19, FR-20, FR-21, FR-22, FR-23, FR-24, FR-25, FR-26, FR-27, FR-28, FR-29, FR-30, FR-31, FR-32, FR-33, FR-34, FR-35, FR-36, FR-37, FR-38, FR-39, FR-40, FR-41, FR-42, NFR-S1, NFR-S2, NFR-S3, NFR-S4, NFR-S5, NFR-S6, NFR-S7, NFR-S8, NFR-D1, NFR-A1, NFR-R1, NFR-R2, NFR-P1, NFR-I1, NFR-U1, NFR-O1]
+updated: '2026-09-20 (scheduling update)'
+binds: [FR-1, FR-2, FR-3, FR-4, FR-5, FR-6a, FR-6b, FR-7, FR-8, FR-9, FR-10, FR-11, FR-12, FR-13, FR-14, FR-15, FR-16, FR-17, FR-18, FR-19, FR-20, FR-21, FR-22, FR-23, FR-24, FR-25, FR-26, FR-27, FR-28, FR-29, FR-30, FR-31, FR-32, FR-33, FR-34, FR-35, FR-36, FR-37, FR-38, FR-39, FR-40, FR-41, FR-42, FR-43, NFR-S1, NFR-S2, NFR-S3, NFR-S4, NFR-S5, NFR-S6, NFR-S7, NFR-S8, NFR-D1, NFR-A1, NFR-C1, NFR-R1, NFR-R2, NFR-P1, NFR-I1, NFR-U1, NFR-O1]
 sources:
+  - _bmad-output/planning-artifacts/sprint-change-proposal-2026-09-20.md (A-1 … A-6)
   - _bmad-output/planning-artifacts/prds/prd-momo-keikaku-2026-09-19/prd.md
   - _bmad-output/planning-artifacts/prds/prd-momo-keikaku-2026-09-19/addendum.md
   - docs/references/ (EVM formula source, via PRD FR-30)
 companions: []
+resolves: [OQ-13]
 reviews_applied:
   - reviews/review-rubric.md
   - reviews/review-adversarial.md
@@ -23,14 +25,16 @@ reviews_applied:
 
 # Architecture Spine: momo-keikaku
 
-This spine was produced headless, overnight, and then amended to apply the findings of four reviews (rubric, adversarial, reconcile-inputs, tech-currency); the resolution trail is in `reviews/resolution.md`. Every call tagged `[ASSUMPTION]` was made on the founder's behalf and is waiting for morning review. Vocabulary follows PRD §3. Code names use the Glossary terms verbatim (for example `WorkPackage`, `TrackerSnapshot`, `ActualsLedgerEntry`, `PublishedSnapshot`).
+**Against PRD §7.3, this update sits in the left-hand column: it resolves OQ-13 and decomposes FR-6a, FR-6b and FR-43. It adds no FR, no NFR and no target beyond PRD §5.**
+
+This spine was produced headless, overnight, and then amended to apply the findings of four reviews (rubric, adversarial, reconcile-inputs, tech-currency); the resolution trail is in `reviews/resolution.md`. On 2026-09-20 it was updated with the founder present to carry the scheduler that `sprint-change-proposal-2026-09-20.md` restored to R0 — AD-25 through AD-30, with earlier decisions amended in place and their IDs unchanged. Every call tagged `[ASSUMPTION]` was made on the founder's behalf and is waiting for review. Vocabulary follows PRD §3. Code names use the Glossary terms verbatim (for example `WorkPackage`, `TrackerSnapshot`, `ActualsLedgerEntry`, `PublishedSnapshot`).
 
 ## Design Paradigm
 
 **Modular monolith, hexagonal (ports & adapters), with a pure functional core.** [ASSUMPTION]
 
 - **One TypeScript codebase and one PostgreSQL database.** The codebase runs as two roles: `web` (Next.js) and `worker` (the always-on snapshot scheduler and job runner).
-- **Functional core** (`packages/domain`): ledger derivation, attribution, Reporting Periods, calendars, EVM, Health, forecast and import interpretation. Every function is pure (inputs → outputs), does no I/O and never reads the clock.
+- **Functional core** (`packages/domain`): ledger derivation, attribution, Reporting Periods, calendars, **schedule recalculation**, EVM, Health, forecast and import interpretation. Every function is pure (inputs → outputs), does no I/O and never reads the clock.
 - **Application layer** (`packages/app`): use cases, the port interfaces, `RequestContext`, authorisation and audit. It orchestrates each call: load inputs through ports, call the core, persist through ports.
 - **Adapters** (`packages/db`, `packages/adapters`, `apps/web`, `apps/worker`): Postgres/Drizzle, the Backlog HTTP client, fixture replay, Excel, blob storage, mail, the clock, and the inbound HTTP/UI and job entry points.
 - **Shared leaves** (`packages/i18n`): message catalogs, imported by both roles. It depends on nothing.
@@ -42,7 +46,7 @@ flowchart LR
     WRK[apps/worker<br/>pg-boss schedules and jobs]
   end
   APP[packages/app<br/>use cases, ports, RequestContext, authz, audit]
-  DOM[packages/domain<br/>pure core: ledger, attribution, EVM, health, periods, import rules]
+  DOM[packages/domain<br/>pure core: ledger, attribution, schedule, EVM, health, periods, import rules]
   I18N[packages/i18n<br/>en/ja catalogs]
   subgraph outbound[Outbound adapters]
     DB[packages/db<br/>Drizzle schema, migrations, RLS, withTenant, repositories, db/auth]
@@ -72,6 +76,7 @@ Arrows show allowed imports. Nothing imports `apps/*`. `domain` and `i18n` impor
   - `Date.now()`, `new Date()` without arguments and `process.env` are forbidden outside `packages/adapters/clock` and `packages/app/config`. dependency-cruiser cannot see calls, so this is enforced by ESLint `no-restricted-syntax` (`NewExpression[callee.name='Date'][arguments.length=0]`, `CallExpression[callee.object.name='Date'][callee.property.name='now']`) and `no-restricted-properties` for `process.env`, with file-scoped overrides for the two allowed modules.
   - **One carve-out:** `packages/db/auth` is the only sanctioned Better Auth ↔ Drizzle binding, exported to `apps/web` as an adapter that implements `IdentityPort` (AD-23). Role, membership and revocation changes never go through it; they go through `app` use cases so AD-14 still holds.
   - Message catalogs live in `packages/i18n/{en,ja}.json`, not under `apps/web`, so the worker can render mail (FR-17, FR-36) without importing an app.
+  - **Two scheduling edges are forbidden outright** (AD-25, AD-27): `domain/schedule` may not import `domain/attribution`, so nothing derived from Tracker evidence can become a scheduling input by accident; and `db/repositories/schedule` may not be imported outside `packages/app/schedule`, so the scheduler stays the only writer of derived dates.
 
 ### AD-2: One runtime topology: web + worker + Postgres, with no other stateful service
 
@@ -95,7 +100,7 @@ Arrows show allowed imports. Nothing imports `apps/*`. `domain` and `i18n` impor
 
 ### AD-4: Numbers are exact integers until presentation
 
-- **Binds:** FR-12, FR-25, FR-30, FR-31, FR-35, FR-39
+- **Binds:** FR-6b, FR-12, FR-25, FR-30, FR-31, FR-35, FR-39
 - **Prevents:** floating-point drift that makes a recomputed Published Snapshot differ from the one stored (FR-35); two modules rounding differently; a threshold compared against a rounded value in one module and an exact one in another.
 - **Rule:**
   - Effort is stored and summed as integer **milli-hours** (`bigint`; 1 h = 1000). Ticket counts are integers.
@@ -105,6 +110,7 @@ Arrows show allowed imports. Nothing imports `apps/*`. `domain` and `i18n` impor
   - **Threshold comparisons use the exact value, never the rounded one**, by cross-multiplication: `spi ≥ 0.95` is `num × 100 ≥ den × 95`. A single `compareRatio(ratio, { num, den })` in `domain/health` is the only comparison site, so 0.9496 can never be green in one module and amber in another.
   - **Fractional spreads** (PV per working day across a WP's Baseline window, a BAC split across Resources) are allocated in integer milli-hours by **largest remainder**, with ties broken deterministically by (date ascending), then (resource id ascending). No module divides and rounds independently.
   - Rounding happens only in `packages/domain/present`: ratios to 2 decimals, hours to 1 decimal, yen to integer. That module is the only rounding site for both the UI and Published Snapshot outputs. [ASSUMPTION]
+  - **The schedule obeys the same discipline.** Durations, lags and Float are whole working days as integers; there is no partial day anywhere. Remaining duration is `ceil(duration_days × (1 − recorded_pct))` clamped to at least 1, evaluated as integer arithmetic over the `Ratio` form of the Recorded Percent Complete so it cannot drift between two recomputations (FR-6b, AD-27).
   - **Serialisation:** `JSON.stringify` throws on `bigint`, so every `jsonb` write and read of stored outputs and inputs goes through one codec in `packages/domain/present/codec`, which renders `bigint` as a decimal **string** and `Ratio` as `{ num: string, den: string }`. The reproduction test compares through the same codec, so equality is exact.
 
 ### AD-5: Append-only stores are enforced by the database
@@ -112,13 +118,14 @@ Arrows show allowed imports. Nothing imports `apps/*`. `domain` and `i18n` impor
 - **Binds:** FR-12, FR-15, FR-16, FR-19, FR-21, FR-22, FR-25, FR-35, FR-39, FR-42, NFR-A1, NFR-D1
 - **Prevents:** a "quick fix" UPDATE on a ledger row that silently changes history and every past figure; a maintenance job quietly deleting the inputs a Published Snapshot pins.
 - **Rule:**
-  - These tables are insert-only: `baseline_version`, `baseline_wp`, `tracker_snapshot`, `ticket_observation`, `actuals_ledger_entry`, `mapping_event`, `rate_entry`, `project_default_rate_entry`, `tenant_setting_event`, `project_setting_event`, `wp_status_event`, `wp_flag_event`, `calendar_day_event`, `tracker_account_link_event`, `connector_scope_event`, `connector_setting_event`, `measurement_basis_event`, `connector_ownership_event`, `visibility_policy_event`, `pct_override_event`, `disposition_event`, `audit_log` and `published_snapshot`. The full classification of every table is AD-21.
+  - These tables are insert-only: `baseline_version`, `baseline_wp`, `tracker_snapshot`, `ticket_observation`, `actuals_ledger_entry`, `mapping_event`, `rate_entry`, `project_default_rate_entry`, `tenant_setting_event`, `project_setting_event`, `wp_status_event`, `wp_flag_event`, `calendar_day_event`, `holiday_calendar_version`, `schedule_run`, `tracker_account_link_event`, `connector_scope_event`, `connector_setting_event`, `measurement_basis_event`, `connector_ownership_event`, `visibility_policy_event`, `pct_override_event`, `disposition_event`, `audit_log` and `published_snapshot`. The full classification of every table is AD-21.
   - The application role has no `UPDATE`/`DELETE` grant on these tables, and a `BEFORE UPDATE OR DELETE` trigger raises an error.
   - **Two sanctioned exceptions, both through the `maintenance` role and nothing else:** the FR-19 compaction job and `purgeTenant` (NFR-D1, NFR-S6). The trigger allows a statement only when `current_setting('app.maintenance', true) = 'on'`, and only the `maintenance` role is granted the ability to set it. Both jobs write to a non-tenant `operator_audit` table.
   - **Compaction (FR-19) deletes only `ticket_observation` rows.** It never deletes a `tracker_snapshot` header row, so `actuals_ledger_entry.prev_snapshot_id` and `snapshot_id` keep their referents. It retains the observation set of any snapshot that is referenced by a `published_snapshot.inputs`, by any ledger entry, by an open Review, by an unexpired export, by the first snapshot of a Reporting Period, or that is the Connector's latest. FR-39 exports only the snapshots whose observations are retained, and says so on the export.
+  - **Compaction may also delete a `schedule_run` (AD-26)**, and only one that no `baseline_version`, `published_snapshot`, open Review or unexpired export references and that is not among its Project's last two runs. A retained run is never partially deleted: its `inputs` are what FR-15's re-derivation test and FR-35's reproduction test read.
   - A CI test runs compaction over the golden corpus and then recomputes every golden Published Snapshot, asserting byte-identical output through the AD-4 codec.
   - Corrections are new rows. Current state is the latest row by `seq` **at or below the pinned watermark**, and watermark validity is AD-20.
-  - The only mutable planning state is the Current Plan structure (`work_package` names, dates, effort, parentage, custom field definitions and values), along with configuration tables such as `connector`, `mapping_rule` and `tracker_account`. Every change to those is mirrored into `audit_log`. Any attribute of a WP that a domain function reads is **not** mutable state; it is an event (AD-21).
+  - The only mutable planning state is the Current Plan's **inputs** — `work_package` names, parentage, effort, duration, constraint, actual dates, custom field definitions and values, and the `wp_dependency` edges — along with configuration tables such as `connector`, `mapping_rule` and `tracker_account`. **Derived dates are not in that set and are not columns on `work_package` at all** (AD-25). Every change to those is mirrored into `audit_log`. Any attribute of a WP that a domain function reads is **not** mutable state; it is an event (AD-21).
   - Each append-only table has a `seq bigint` (identity) used as a high-water mark under the discipline in AD-20.
 
 ### AD-6: Trackers are reached only through `TrackerPort`, and adapters are swappable per Connector
@@ -193,13 +200,14 @@ Arrows show allowed imports. Nothing imports `apps/*`. `domain` and `i18n` impor
   - **Resource and Rate.** The Resource is the link for `entry.assignee_account_id` in `tracker_account_link_event` at `link_seq_max`; an unlinked account or a null assignee is Unattributed and costed at the Project default Rate from `project_default_rate_entry` at `project_default_rate_seq_max` (FR-13). A late link is therefore **retroactive in live views and pinned in Published Snapshots**, exactly as Rates behave. The Rate effective date is `effectiveDate = localDate(window_end, project.tz)` — computed in `domain/attribution` and nowhere else, so UTC/JST never splits the money.
   - **Catch-all overflow (FR-24)** is cumulative per Catch-all WP in `(window_end, seq)` order, against the Baseline hours of each entry's `active_baseline_version_id`. The entry that crosses the cap is prorated; each part is costed at its own entry's Rate. Negative deltas are taken LIFO from the overflow. Golden tests cover the crossing entry and a negative delta straddling the cap.
   - A negative delta is costed at the Resource and Rate of the Ticket's most recent positive entry, resolved through the same link function. All of this lives in `packages/domain/attribution` and nowhere else.
+  - **None of this touches a date.** Mapping, unmapping, rule evaluation and the Catch-all overflow change attribution, Unplanned Work and EVM, and they never call `recalculate` and never write an actual date (FR-21, FR-22). AD-27's reachability test is what holds that true as the module grows.
 
 ### AD-10: Every reported figure is `compute(inputs, formulaVersion)`, and Published Snapshots store the inputs
 
 - **Binds:** FR-12, FR-16, FR-28, FR-30, FR-31, FR-32, FR-35, FR-38, FR-39
 - **Prevents:** a Published Snapshot that can't be reproduced; a Reconciliation Review whose numbers shift while the PM reads it; a retroactive Rate correction that rewrites published money; a PM unticking "complete" and silently changing last month's figures.
 - **Rule:**
-  - **The closure rule:** *any value read by `domain/evm`, `domain/health`, `domain/forecast` or `domain/attribution` must come from an append-only source that `ComputationInputs` pins.* A test enumerates the exported domain function signatures and fails if any input type is not reachable from `ComputationInputs`. This is what makes FR-35 mechanical rather than aspirational.
+  - **The closure rule:** *any value read by `domain/evm`, `domain/health`, `domain/forecast`, `domain/attribution` or `domain/schedule` must come from an append-only source that `ComputationInputs` pins.* For `domain/schedule` that source is `schedule_run.inputs` and nothing else (AD-26). A test enumerates the exported domain function signatures and fails if any input type is not reachable from `ComputationInputs`. This is what makes FR-35 mechanical rather than aspirational.
   - `ComputationInputs` is a fully resolved value:
     - the pinned `tracker_snapshot_id` per Connector, and `ledger_seq_max`;
     - `mapping_seq_max`, `baseline_version_id`, `rate_seq_max`, `project_default_rate_seq_max`, `pct_override_seq_max`, `disposition_seq_max`;
@@ -207,6 +215,7 @@ Arrows show allowed imports. Nothing imports `apps/*`. `domain` and `i18n` impor
     - `wp_status_seq_max` (WP marked complete and its actual finish, Milestone done date), `wp_flag_seq_max` (Catch-all), `link_seq_max` (Tracker Account → Resource), `calendar_seq_max`;
     - `connector_scope_seq_max`, `connector_setting_seq_max` (the Resolved status set), `basis_seq_max`;
     - the Visibility Policy value and `visibility_seq_max` (FR-35 requires the policy used to be stored);
+    - `schedule_run_seq` — the recalculation whose `outputs` this computation displays, and whose `inputs` re-derive it (AD-26, FR-15, FR-35);
     - the Reporting Period bounds, the project time zone, the calendar id and version, the `asOf`, and the `formulaVersion`.
   - **Which entries.** Ledger entries are filtered by `snapshot_id ≤ the pinned snapshot` **per Connector**. `ledger_seq_max` is stored only as an assertion that the recompute saw the same row set; it is never the filter. Two filters for one thing is how two builders diverge.
   - **The Review's pin is split (FR-29, UJ-3).** Tracker-side inputs — the pinned snapshot per Connector and therefore the ledger — stay frozen for the life of the Review, so the numbers do not move under the PM. PM-authored watermarks (`mapping_seq_max`, `disposition_seq_max`, `pct_override_seq_max`, `setting_seq_max`, `wp_status_seq_max`, `wp_flag_seq_max`) are **re-captured after each successful write by this PM in this Review**, so a *Map* Disposition drops Unplanned Work immediately, as UJ-3 requires. Publish always captures fresh inputs and shows a diff if anything moved since the Review opened.
@@ -219,10 +228,11 @@ Arrows show allowed imports. Nothing imports `apps/*`. `domain` and `i18n` impor
 - **Binds:** FR-5, FR-11, FR-14, FR-15, FR-16, FR-24, FR-29, FR-30
 - **Prevents:** plan edits or re-imports mutating a Baseline; EVM reading PV from the Current Plan; a PM editing the Holiday Calendar and silently re-spreading past PV.
 - **Rule:**
-  - `setBaseline` and `rebaseline` copy the Current Plan's leaf WPs (dates, effort, assigned Resources, the milestone flag, the Catch-all flag and the Rate-derived cost) into a new immutable `baseline_version` and its `baseline_wp` rows. `rebaseline` requires a reason and may link Change Request candidates.
-  - **The calendar is copied too.** `baseline_version` stores the resolved working-day set for its window (national holidays plus Project-specific non-working days at `calendar_seq_max`). PV therefore spreads over the calendar as it stood at Baseline time, and a later FR-14 edit cannot re-spread published PV. Live Divergence and forecasts use the current calendar and say so.
+  - `setBaseline` and `rebaseline` pin the Project's current `schedule_run_seq` on a new immutable `baseline_version`, and copy the cost projection into its `baseline_wp` rows: per leaf WP the derived dates, the effort, the assigned Resources, the milestone flag, the Catch-all flag and the Rate-derived cost. `rebaseline` requires a reason and may link Change Request candidates.
+  - **The inputs are pinned by reference, not by a second copy** (AD-26). The referenced run carries the duration, constraint, actual dates, Recorded Percent Complete, dependency graph, the three Project settings and the Holiday Calendar version that produced those dates, so FR-15's re-derivation test reads the run and never the Current Plan. AD-5's retention rule makes the reference permanent. **A Baseline cannot be recorded while any leaf WP has no duration or the Project has no Project start** (FR-15), because the result would not be re-derivable; the blocking WPs are shown.
+  - **The calendar is pinned the same way.** The run carries `holiday_calendar_version_seq` (AD-29), whose resolved non-working-day set is immutable, so PV spreads over the calendar as it stood at Baseline time and a later FR-14 edit cannot re-spread published PV. Live Divergence and forecasts use the current version and say so.
   - The Catch-all flag is captured in `baseline_wp` **and** tracked live in `wp_flag_event`; attribution judges an entry against the flag at `wp_flag_seq_max`, and PV/BAC read the Baseline copy.
-  - PV and BAC read only `baseline_wp`. Divergence compares `baseline_wp` with `work_package`.
+  - PV and BAC read only `baseline_wp`. Divergence compares `baseline_wp` with the current `wp_schedule` (AD-25) for dates and with `work_package` for effort, and FR-28 attributes each movement from the `cause` of the runs in between (AD-26).
   - `work_package` has a stable `id` that `baseline_wp.wp_id` and `mapping_event.wp_id` reference. A deleted WP is soft-deleted (`deleted_at`) so history resolves. FR-5 deletion reassigns Mappings through `mapping_event` with `source = 'release'` (AD-9).
 
 ### AD-12: Role-scoped use-case surfaces; Client Viewers read only stored client payloads
@@ -246,6 +256,7 @@ Arrows show allowed imports. Nothing imports `apps/*`. `domain` and `i18n` impor
   - **Limits are checked before ExcelJS sees the file**, because ExcelJS has no zip-bomb guard and reads the whole workbook into memory: 10 MB file size, and a 50 MB unpacked total read from the **zip central directory** rather than by decompressing. After parse-time counting, a workbook above 1,000,000 non-empty cells is rejected; the nominal grid ceiling is 20,000 rows × 200 columns. [ASSUMPTION]
   - **ExcelJS fit is a spike, not an assumption.** The first import story parses three real Japanese WBS workbooks (merged headers, shared formulas, JA text, date cells) through `WorkbookPort` and asserts merge ranges and cached formula results. The non-streaming API is the supported path; the streaming `WorkbookReader` has historically weak merge support and is not used.
   - Interpretation (header suggestion, hierarchy, dates) is pure `domain/import`.
+  - **An import writes scheduling inputs and actual dates, never a derived date** (FR-9, FR-11, AD-25). An imported start/finish pair becomes a duration, or reference Custom Fields where a duration column was mapped; an imported milestone target becomes a `must_finish_on` constraint; actual start, actual finish and percent complete are written as inputs. `confirmImport` then calls `recalculate` **once**, after the whole diff commits (AD-27).
   - `confirmImport(draftId, draftVersion)` is the only code path that writes `work_package` rows from a file. It writes the audit entry in the same transaction and refuses a diff that would turn a mapped leaf into a summary (AD-9).
   - Re-import produces a diff draft, and the same confirm rule applies.
   - AI interpretation (Post-Q1) plugs in as another producer of `import_draft` and never commits.
@@ -263,7 +274,7 @@ Arrows show allowed imports. Nothing imports `apps/*`. `domain` and `i18n` impor
 - **Rule:**
   - Wall time comes only from the `Clock` port. Snapshot time is the adapter's `observedAt`.
   - **Fixture time coherence (the demo).** With `CLOCK_MODE=fixture` (never in production) the `Clock` returns `max(latest fixture observedAt, FIXTURE_TIME_ANCHOR)` in **both** roles, and `db/seed` creates the Baseline, Rates and calendar through that same clock. Without this, every fixture snapshot is weeks old: the freshness badge is permanently stale, the 24-hour warning always fires, the "current" Reporting Period is empty, and every ledger entry gets a null active Baseline so the demo shows 100% Unplanned Work that no mapping can clear.
-  - `periodOf` and the working-day math live only in `domain/calendar`. Holiday data (JP and VN, 2026–2028) is a versioned static dataset in the repo.
+  - `periodOf` and the working-day math live only in `domain/calendar`, which takes the non-working-day set as an argument and never reads a table. Holiday data (JP and VN, 2026–2028) is a versioned static dataset in the repo; what a schedule is computed against is the resolved calendar **version** of AD-29.
   - **Period and PV inputs are events, not mutable config.** `project.tz`, `teireiWeekday` and Project-specific non-working days are written as `project_setting_event` / `calendar_day_event` and pinned by `setting_seq_max` / `calendar_seq_max` (AD-10). "Calendar version" in `ComputationInputs` covers both the national dataset version and the Project days.
   - **The schedule is an hourly tick, and the handler decides.** Cron cannot express "a JP or VN working day", so the worker registers `schedule('snapshot-tick', '0 * * * *', data, { tz: 'Asia/Tokyo' })` with `missed: 'skip'` (so an outage does not replay a backlog of ticks), and the handler asks `domain/calendar` whether this hour is inside the 09:00–19:00 JST business window on a JP or VN working day (covering 08:00–17:00 ICT). Inside it, every Connector due is enqueued hourly; outside it, every 6 hours. On-demand snapshots are enqueued by the web role into the same `stately` queue (AD-7). [ASSUMPTION]
 
@@ -350,14 +361,14 @@ flowchart TB
   - **Backups and restore.** RDS automated backups, 30 days, in-region. The documented restore is point-in-time recovery into a new instance, re-point the services, then cut over. **A restore rehearsal runs before R1 and its result is recorded** (NFR-R2).
   - **Blob lifecycle.** Uploaded workbooks are customer data: S3 bucket in Tokyo, SSE, versioning **off**, no cross-region replication, and a lifecycle rule expiring objects after N days (default 90). `purgeTenant` deletes that Tenant's blobs in the same run (NFR-D1). [ASSUMPTION: N = 90]
   - **Key rotation.** See AD-16: `key_id` per ciphertext plus a re-encryption maintenance job.
-  - **CI gates.** CI must run, and block merge on: `dependency-cruiser`, the ESLint clock/env rules, the cross-tenant harness (AD-3), the append-only DB test (AD-5), the FORCE-RLS assertion (AD-3), the golden Published Snapshot recompute for every registered `formulaVersion` (AD-10), the compaction-then-recompute test (AD-5), the `ComputationInputs` closure test (AD-10) and the concurrency test (AD-20).
+  - **CI gates.** CI must run, and block merge on: `dependency-cruiser`, the ESLint clock/env rules, the cross-tenant harness (AD-3), the append-only DB test (AD-5), the FORCE-RLS assertion (AD-3), the golden Published Snapshot recompute for every registered `formulaVersion` (AD-10), the compaction-then-recompute test (AD-5), the `ComputationInputs` closure test (AD-10), the concurrency test (AD-20), and the four scheduler gates: the trigger call-site test and the `recalculate` reachability test (AD-27), the shuffled-input determinism test (AD-28), and the re-derivation test that runs `recalculate(run.inputs)` against `run.outputs` for every golden Baseline and Published Snapshot (AD-26, FR-15, FR-35).
 
 ### AD-20: Watermarks are commit-ordered, enforced by a per-Project write lock
 
 - **Binds:** FR-21, FR-22, FR-25, FR-35, FR-42; AD-5, AD-7, AD-9, AD-10
 - **Prevents:** the defect that silently breaks every reproducibility promise in this spine — Postgres assigns an identity `seq` at INSERT time, not at COMMIT time, so a long transaction can commit rows *below* a watermark that was captured after it started.
 - **Rule:**
-  - **Every write to a watermarked (append-only) table takes `pg_advisory_xact_lock(hashtext(tenant_id || ':' || project_id))` before allocating any `seq`.** That includes the ingest transaction (AD-7), every `mapping` append (AD-9), Dispositions (AD-22), Baselines, Rates, overrides, settings, flags, links and scope events. Tenant-scoped tables with no Project (for example `tenant_setting_event`) use the Tenant key.
+  - **Every write to a watermarked (append-only) table takes `pg_advisory_xact_lock(hashtext(tenant_id || ':' || project_id))` before allocating any `seq`.** That includes the ingest transaction (AD-7), every `mapping` append (AD-9), Dispositions (AD-22), **every `schedule_run` and `holiday_calendar_version` append (AD-26, AD-29)**, Baselines, Rates, overrides, settings, flags, links and scope events. Tenant-scoped tables with no Project (for example `tenant_setting_event`) use the Tenant key.
   - **`ComputationInputs` is captured under `pg_advisory_xact_lock_shared` on the same key.** A watermark captured this way is valid: no transaction holding a lower `seq` can still commit after it, because it could not have allocated that `seq` without the exclusive lock.
   - The ingest transaction is singleton per Connector (AD-7), but a Project may have several Connectors, so this lock — not the queue policy — is what orders a Project's events.
   - Long-running work is done **before** the lock is taken: the full tracker read, parsing and rule preview all happen outside the transaction, so the lock is held for the write only.
@@ -376,6 +387,7 @@ flowchart TB
     | `derived` | rebuildable index of append-only truth (`mapping_head`, `ticket`, `connector_overlap`) | FORCE, tenant policy | written only by the module that owns its source |
     | `global` | not tenant-owned; identity only (`user`, `session`, `account`, `verification`, `tenant_membership`) | no tenant policy; reached only through `IdentityPort` (AD-23) | `app/authz` and `db/auth` |
     | `operational` | non-tenant machinery (`pgboss.*`, operator metrics, `operator_audit`, fixture cursor) | no tenant policy | worker and maintenance |
+  - **Classification of the scheduling tables (AD-25, AD-26, AD-29):** `schedule_run` and `holiday_calendar_version` → `append_only`; `wp_schedule` → `derived`, owned by `app/schedule`; `wp_dependency` → `mutable_audited`.
   - **Classification of the previously unclassified tables:** `ticket`, `mapping_head`, `connector_overlap` → `derived`; `ticket_observation` → `append_only` (it holds the Percent Complete inputs, AD-5); `import_draft` → `mutable_audited` (it is a draft, and nothing in `domain` compute reads it); `tracker_account`, `resource`, `risk`, `connector`, `mapping_rule`, `work_package` → `mutable_audited`; the Client View open log and notification opt-outs → `append_only` and `mutable_audited` respectively; the fixture cursor and pg-boss tables → `operational`; Better Auth tables and `tenant_membership` → `global`.
   - **The event tables that make AD-10's closure rule true.** Each is `append_only` with a `seq` pinned in `ComputationInputs`:
     - `wp_status_event` — WP marked complete (which lifts the 99% cap and sets the actual finish, FR-30/FR-5) and Milestone done date (the FR-31 Schedule amber rule);
@@ -390,7 +402,7 @@ flowchart TB
     - `project_setting_event` — tz, teirei weekday, EAC Method (FR-32);
     - `visibility_policy_event` — the Visibility Policy (FR-34, FR-35);
     - `connector_ownership_event` — Ticket ownership transfers (FR-42).
-  - A `work_package` column may be mutable only if no domain compute function reads it. The AD-10 closure test is what enforces that, and the registry is where the answer is written down.
+  - A `work_package` column may be mutable only if no domain compute function reads it. The AD-10 closure test is what enforces that, and the registry is where the answer is written down. **This is why derived dates left `work_package`** (AD-25): FR-28's Divergence reads them, so as mutable columns they broke this rule. The scheduling *inputs* stay mutable because `domain/schedule` reads them only through `schedule_run.inputs`, never from the table.
 
 ### AD-22: Dispositions have one writer and one stored shape
 
@@ -423,6 +435,87 @@ flowchart TB
   - Fixture Tickets carry `tracker_kind = 'fixture'` (AD-6), so they can never collide with live Backlog identities, and the recorded adapter kind on each snapshot blocks a mixed history.
   - The FR-9 acceptance corpus of real client WBS workbooks is **not** in the repo. It lives in a Japan-region, access-controlled bucket or a local-only path, and its tests run under a local-only tag that CI skips.
   - Fixture scenarios cover, at minimum: hours, no-hours (Ticket-Count Mode), page shift, leave-and-return, and a Connector scope change.
+### AD-25: Derived dates are not a column on `work_package`, and `domain/schedule` is their only producer
+
+- **Binds:** FR-5, FR-6a, FR-6b, FR-7, FR-9, FR-11, FR-15, FR-21, FR-22, FR-28, FR-29, FR-43
+- **Prevents:** the importer, a Disposition, the Mapping layer or a PM edit assigning a planned date; a grep-based promise that a raw SQL write walks straight past; a mutable `work_package` column that FR-28's Divergence reads, which AD-21 forbids.
+- **Rule:**
+  - **`work_package` has no `start` or `finish` column.** Both are dropped (AD-30). Derived dates live in `wp_schedule(tenant_id, project_id, wp_id, schedule_run_seq, early_start, early_finish, late_start, late_finish, float_days, is_critical, state, not_schedulable_reason, stale)`, class `derived` (AD-21) — a projection of the latest `schedule_run`, rebuildable from it and never the referent of anything pinned. A module that does not own the schedule has no column to write, so the single write path is structural rather than a convention. The A-3 grep test stays as a cheap second net, not as the mechanism.
+  - **One writer.** Only `packages/app/schedule.recalculate(projectId)` writes `wp_schedule` and `schedule_run`. Its repository is exported to nothing else, the application role holds INSERT/UPDATE on those two tables through that path only, and `dependency-cruiser` forbids importing `db/repositories/schedule` outside `app/schedule`.
+  - **Scheduling inputs are a separate thing from derived dates, and they have their own writers.** On `work_package` (class `mutable_audited`, and read by no compute module — AD-21): `duration_days integer NULL`, `constraint_type text NOT NULL DEFAULT 'asap'` over the closed set `asap | must_start_on | must_finish_on`, `constraint_date date NULL`, `actual_start date NULL`, `actual_finish date NULL`. `completed_at` and `milestone_done_at` are **dropped**: PRD §3 settles that a WP has one finish date and that "done" means it has an `actual_finish`.
+  - **Leaf-only inputs are a table constraint, not a code check** (FR-5): `CHECK (is_leaf OR (duration_days IS NULL AND constraint_type = 'asap' AND constraint_date IS NULL AND actual_start IS NULL AND actual_finish IS NULL))`. Giving a leaf WP a child therefore fails at the database unless the same edit resolves where its inputs go.
+  - **Dependencies:** `wp_dependency(tenant_id, project_id, predecessor_wp_id, successor_wp_id, type, lag_days, seq)`, class `mutable_audited`. `type` is a closed enum whose only value R0 accepts is `FS`; `SS | FF | SF` are reserved so the column never has to change. `UNIQUE (tenant_id, project_id, predecessor_wp_id, successor_wp_id)`, and the composite foreign keys keep both endpoints inside one Project, which is how FR-6a's cross-project rejection is enforced rather than remembered.
+  - **Leaf-only endpoints are enforced declaratively too.** `work_package` carries `UNIQUE (tenant_id, project_id, id, is_leaf)`; `wp_dependency` carries `pred_is_leaf` and `succ_is_leaf`, both `NOT NULL DEFAULT true CHECK (…)`, with composite foreign keys into that key. Turning a leaf that has edges into a summary then fails the foreign key by itself — no trigger, and no invariant that only runs when someone remembers to call it.
+  - **The three Project settings (FR-43)** are plain columns on `project`: `project_start date NULL`, `project_finish date NULL`, `data_date date NULL`. They are deliberately *not* events, unlike `project_setting_event`'s tz and teirei weekday: those reach `domain/attribution` directly, while these reach compute only through `schedule_run.inputs` (AD-26), which is what pins them. Every change is audited with its previous value (NFR-A1, AD-14) and triggers a recalculation (AD-27).
+  - **A milestone has no date column.** It is a leaf with `duration_days = 0` and `is_milestone`, and its target is a `must_finish_on` constraint (PRD §3), so it is captured, scheduled, violated, exported and baselined through exactly the paths every other constraint uses.
+  - **FR-6a's four graph rules live in one pure function.** `domain/schedule/validate(plan, edges)` returns the offending cycles, ancestor/descendant pairs, summary endpoints and cross-project links. `app/plan` calls it on every structural edit and `recalculate` calls it before the passes, so they are invariants of the Plan rather than entry checks — the distinction FR-6a insists on, made true by there being one implementation and two call sites.
+
+### AD-26: Every recalculation is an append-only `schedule_run`, and that is what pins a schedule
+
+- **Binds:** FR-6b, FR-15, FR-16, FR-28, FR-35, FR-43, NFR-C1
+- **Prevents:** the doctrine breach this whole change exists to close — a Baseline that pins the dates it produced with no inputs behind them; a re-derivation test that quietly reads the Current Plan and so passes for the wrong reason; a Reconciliation Review with no referent for "moved since the previous Review".
+- **Rule:**
+  - `schedule_run(seq, tenant_id, project_id, cause, actor, at, inputs jsonb, outputs jsonb, engine_version, anchor, computed_finish)`, class `append_only`, appended by `app/schedule` under the AD-20 per-Project lock in the same transaction as the edit that caused it. `cause` is one of FR-28's seven, recorded when the run is written and never inferred afterwards.
+  - **`inputs` is the complete resolved set, and it is the only thing the passes read.** Per leaf WP: `wp_id`, `wbs_code`, `parent_id`, `duration_days`, `constraint_type`, `constraint_date`, `is_milestone`, `actual_start`, `actual_finish`, `recorded_pct`. Per Project: the dependency edges with their lags and `seq`, the Project start, the Project finish, the Data Date, and `holiday_calendar_version_seq` (AD-29). `outputs` carries the per-WP result, the constraint-violation rows with their days late and driving chain, the out-of-sequence rows, the "not schedulable yet" block, the critical path as an ordered list, and the computed finish. Both go through the AD-4 codec.
+  - **The re-derivation test and the reproduction test are the same function.** `recalculate(run.inputs) === run.outputs`, compared through that codec. FR-15 runs it over a Baseline's run and FR-35 over a Published Snapshot's run. Neither reads the Current Plan, which is exactly what FR-15 demands and what a copy-at-pin design could not give.
+  - **`ComputationInputs` gains `schedule_run_seq`,** and AD-10's closure rule extends to `domain/schedule`: every value it reads must be reachable from `schedule_run.inputs`, and the closure test enumerates its exported signatures alongside the other four modules.
+  - **A Baseline references a run; it does not re-copy the inputs.** `baseline_version` stores `schedule_run_seq`. `baseline_wp` keeps only the cost projection PV, BAC and Divergence read — `start`, `finish`, `baseline_mh`, `is_milestone`, `is_catch_all` — so the pinned input set has one representation rather than two that can drift apart. FR-15's "the Baseline records the inputs" is satisfied by reference to an immutable append-only row, which AD-5's retention rule makes permanent.
+  - **Retention.** Compaction may delete a `schedule_run` only when no `baseline_version`, `published_snapshot`, open Review or unexpired export references it and it is not among its Project's last two runs. Nothing about a retained run is ever partially deleted.
+  - **FR-28's date movement** is a diff of two runs' `outputs`, attributed from the `cause` of each run between them. FR-16's plan-level comparison — dependencies added and removed, lags, constraints, durations, actual dates, progress, milestone flags, calendar version and the three Project settings — is a diff of two runs' `inputs`. Both are one function over one shape, so the WP-by-WP diff and the graph diff cannot disagree.
+  - **Size, stated rather than discovered:** about 25 KB per run for a 500-WP Project after TOAST compression, so an editing day costs a few hundred KB per Project. [ASSUMPTION: measured in the first scheduler story; if it is materially worse, the lever is dropping `outputs` for unreferenced runs, never dropping `inputs`.]
+
+### AD-27: The recalculation trigger set is closed, and both ends of it are tested
+
+- **Binds:** FR-6b, FR-9, FR-11, FR-14, FR-19, FR-21, FR-22, FR-29, FR-30, FR-43, NFR-C1, NFR-P1
+- **Prevents:** the failure the founder named — a background job re-dating a plan while nobody is looking; the hourly snapshot pipeline reaching the scheduler through an input it happens to change; a displayed schedule stale against the inputs it was derived from.
+- **Rule:**
+  - **The closed set.** `app/schedule.recalculate` is called from exactly the use cases FR-6b lists: a duration; a dependency added, removed or re-lagged; a constraint; a WP created, deleted, moved or re-parented; an actual start or actual finish; a **Recorded** Percent Complete, imported or set as an audited PM override and never the Observed figure; a Holiday Calendar version; and the Project start, Project finish or Data Date. `confirmImport` and the re-import confirm call it **once, after the whole diff commits**, never per row.
+  - **Two tests, one per direction.** A *call-site* test enumerates the callers of `recalculate` and fails on any caller outside that list. A *reachability* test walks the static call graph from `ingestSnapshot`, `evaluateRules`, every `mapping` use case and every pg-boss handler, and fails if `recalculate` is reachable from any of them. Addendum A.5 proposed only the second; on its own it cannot close the set, because the snapshot path never calls the function — it changes an input the function reads.
+  - **The input side is closed structurally, not by vigilance.** The only evidence-derived figure that could reach the scheduler is the Observed Percent Complete, and `schedule_run.inputs` carries `recorded_pct` alone — a field the Observed figure has no writer for. `domain/schedule` does not import `domain/attribution`, enforced by `dependency-cruiser`. This is the mechanism behind the PRD's "a new evidence-derived figure added later is not a new trigger; it inherits this rule": a future figure cannot become a scheduling input without a new import edge that CI rejects.
+  - **Execution is synchronous and inside the edit's own transaction,** under the AD-20 per-Project exclusive lock. FR-6b's "one recalculation covers the whole Project, never a subgraph" and "recalculations of the same Project are serialised" then hold by construction, and a partially stale plan is unreachable rather than merely unlikely. **The consequence, stated:** a snapshot ingest for the same Project waits behind a PM edit for up to NFR-P1's budget. At 500 WPs and 300 ms p95 that is acceptable; should a measured run exceed it, the first lever is the granularity of the ingest lock, never moving the recalculation into a job — FR-6b forbids a background path, and NFR-P1's budget is written for interactive edits only.
+  - **An edit that cannot be scheduled is not persisted.** Validation (AD-25) and the passes run in the same transaction as the edit, so a rejected cycle, an ancestor/descendant link or a summary endpoint rolls the edit back with its reason. The Plan is therefore never left in a state it cannot be scheduled from.
+  - **There is exactly one path to FR-6a's "last good schedule marked stale":** a new Holiday Calendar version whose range no longer covers the plan (AD-29). The version commits, because it is append-only history that must not be lost; the recalculation halts and writes no run; `wp_schedule` keeps the last good run with `stale = true`; and the PM is shown the WPs and the range the plan needs. Reading those two PRD sentences any other way produces a plan the PM cannot repair, so this is the reading the build follows.
+  - **Remaining duration is derived at every run and never stored** — `duration_days × (1 − recorded_pct)`, rounded up in whole working days and clamped to at least one (FR-6b) — so it cannot drift from the progress figure behind it.
+
+### AD-28: One canonical order, and it is the answer to OQ-13
+
+- **Binds:** FR-6a, FR-6b, FR-7, FR-15, FR-16, FR-35, NFR-C1
+- **Prevents:** precisely the defect OQ-13 names — a critical path that compares equal on one machine and not on another, years after anyone remembers why; a "driving predecessor" that changes between two runs over identical inputs.
+- **Rule:**
+  - `compareWp(a, b)` in `domain/schedule/order` is the **only** ordering site for anything the scheduler reports. It compares `wbs_code` segment by segment — each dot-separated segment as an integer where it parses as one, otherwise through `domain/text.compareNfkc` (NFR-I1) — and falls back to `wp_id` where the codes are equal or absent. Both keys live in `schedule_run.inputs`, so a re-derivation years later orders by the codes that were in force then, not by today's.
+  - Everything the passes report goes through it:
+    - **The driving predecessor.** Where several predecessors tie on the value that set a WP's early start, `outputs` records **all** of them, ordered by `compareWp`; the chain the UI names is the first. Naming one of several drivers and hiding the rest is how a PM spends a morning chasing the wrong link.
+    - **The critical path**, emitted as a list ordered by early start ascending, then `compareWp` — which is what FR-15's and FR-35's ordered-set comparisons actually read.
+    - **The constraint-violation list** (FR-6b, worst first): working days late descending, then `compareWp`.
+    - **The out-of-sequence list** and the "not schedulable yet" block: `compareWp`.
+    - **A rejected cycle** (FR-6a) is rotated to begin at its `compareWp`-minimum WP and listed from there, so the same cycle is always named the same way and two error messages for one defect never look like two defects.
+  - The forward and backward passes are `max` and `min` reductions, so their *dates* are already independent of traversal order. `compareWp` fixes the order of everything **reported**, which is where an undocumented tie-break actually surfaces.
+  - **A WBS code orders; it never identifies.** A re-parent may renumber codes, so an old run's pinned codes and today's can differ. Every comparison between two runs or two Baselines — FR-16's WP-by-WP diff and its graph diff alike — matches on `wp_id`, and uses `wbs_code` only to sort the result. A code is a label in `schedule_run.inputs`, not a key.
+  - A test recalculates one Project N times over shuffled input orderings and asserts byte-identical `outputs` through the AD-4 codec. This is the assertion NFR-C1 asked for and OQ-13 said no document yet carried.
+
+### AD-29: A Holiday Calendar version is a resolved set of days, never a name plus a moving table
+
+- **Binds:** FR-14, FR-6b, FR-15, FR-35, NFR-C1
+- **Prevents:** a correction to the 2027 Japanese substitute-holiday table silently changing what an October Baseline re-derives to — the same failure the Rate history was versioned to stop, surviving in the 95% of the calendar that is national data.
+- **Rule:**
+  - `holiday_calendar_version(seq, tenant_id, project_id, non_working_days, range_start, range_end, national_sets, national_dataset_version, reason, actor, at)`, class `append_only`. `non_working_days` is the **fully resolved** set of non-working dates over `[range_start, range_end]` — national tables and Project-specific days already merged. A version is never edited.
+  - Three things create a version, each with its author or source, its time and an optional reason (FR-14): a Project-specific non-working day added or removed; a change to which national calendars are in use; and **any correction or extension of the JP or VN national tables themselves**. The third is what makes the versioning real rather than decorative, and it is an operator action that appends one new version per affected Project.
+  - `calendar_day_event` stays as the audit record of the PM's own edits (NFR-A1) and as the input a new version is built from. The **version** is what `schedule_run.inputs` and `ComputationInputs` pin. The national dataset remains a versioned static dataset in the repo (AD-15) and its id is recorded on each version as provenance.
+  - Working-day arithmetic stays in `domain/calendar` (AD-15) and takes the resolved set as an argument. `domain/schedule` never reads the dataset, so there is one place a holiday can be interpreted.
+  - **Outside the range the scheduler stops rather than guesses** (FR-6b): a pass that would place a date beyond `range_end` halts, writes no run, and reports the WPs and the range needed. Extending the range is an operator action that appends a new version. AD-27 governs what the Plan shows meanwhile.
+  - AD-11's copy of the resolved working-day set onto `baseline_version` is **withdrawn**: the Baseline's `schedule_run_seq` already reaches `holiday_calendar_version_seq`, and two copies of one pinned set is how two builders diverge.
+
+### AD-30: The scheduling schema lands in one pre-production migration, and that is the last of its kind
+
+- **Binds:** AD-19, AD-21, AD-25, AD-26, AD-29; FR-5, FR-6a, FR-6b, FR-14, FR-15, FR-43
+- **Prevents:** a half-migrated schema in which `work_package.start` still exists and a story quietly writes it; an expand/contract dance paid for data that nobody has; and a later "while we're here" claiming the same exemption.
+- **Rule:**
+  - **One migration, before any client data exists.** PRD §13 records migrations as pre-production, so this is cost to size rather than risk to manage. It **adds** `wp_dependency`, `schedule_run`, `wp_schedule` and `holiday_calendar_version`; the `work_package` columns `duration_days`, `constraint_type`, `constraint_date`, `actual_start`, `actual_finish`, and the `UNIQUE (tenant_id, project_id, id, is_leaf)` key; and `project.project_start`, `.project_finish`, `.data_date`. It **drops** `work_package.start`, `.finish`, `.completed_at` and `.milestone_done_at`. It **rewrites** `baseline_version` to carry `schedule_run_seq` and `baseline_wp` down to AD-26's cost projection.
+  - Every new table is registered in `packages/db/table-classes.ts` in the same change, and the RLS, grants and triggers are generated from it (AD-21) — `schedule_run` and `holiday_calendar_version` as `append_only`, `wp_schedule` as `derived`, `wp_dependency` as `mutable_audited`. CI already fails on a table that is not in the registry, so none of them can arrive silently.
+  - **The demo catches up in the same change, and the rest of the gap is named rather than hidden.** The repository's 17-table schema is a subset of this spine's model: besides the scheduling slice it is still missing AD-21's event tables and the AD-3 RLS, grants and triggers it marks as a demo deviation. This migration closes the scheduling slice only. The remainder stays an outstanding item on the build, recorded here so nobody reads the schema as the target.
+  - The seed, the fixtures and the golden corpus are regenerated in the same commit. A Baseline seeded before this migration is **deleted, not migrated**: it pinned outputs with no inputs behind them, which is the defect the change exists to remove, and migrating it would fabricate the inputs it never had.
+  - **From the next migration onward AD-19's expand/contract discipline binds.** This one is exempt because nothing is deployed and no client data exists. The exemption is written down here so that it is spent once.
+
 
 ## Consistency Conventions
 
@@ -432,9 +525,11 @@ flowchart TB
 | DB naming | `snake_case`, singular table names; `*_id` foreign keys; `seq` for append order; `*_event` for append-only history; `*_mh` for milli-hours; `*_jpy` for yen; `observed_at`, `recorded_at` and `created_at` are `timestamptz`. |
 | Table classes | Every table is registered in `packages/db/table-classes.ts` with exactly one class (AD-21). RLS, grants and triggers are generated from it. |
 | IDs | UUIDv7, generated in the app (deliberately, not Postgres 18's native `uuidv7()`, because ingest needs ids before insert to stay idempotent). Tracker ids are stored as text (`tracker_issue_id`) and never used as primary keys. |
-| Dates and time | Instants are `timestamptz` in UTC. WP start and finish are `date` with no time zone. Reporting Periods are resolved in `project.tz` (default `Asia/Tokyo`). Rate effective dates are `localDate(window_end, project.tz)`. The wire format is ISO 8601. |
+| Dates and time | Instants are `timestamptz` in UTC. Every plan date — derived, actual, constraint, and the three Project settings — is `date` with no time zone, because a plan date is a working day and not a moment. Reporting Periods are resolved in `project.tz` (default `Asia/Tokyo`). Rate effective dates are `localDate(window_end, project.tz)`. The wire format is ISO 8601. |
 | Units in APIs and types | Effort is `mh: bigint` (milli-hours) in domain and DB and a `number` of hours only after `present`. Money is `jpy: bigint`. Ratios are `{ num: bigint, den: bigint }`. Every metric carries a `unit`. |
 | JSON of domain values | `jsonb` reads and writes of `inputs`/`outputs` go through the single codec in `domain/present/codec`: `bigint` → decimal string, `Ratio` → `{num, den}` strings. `JSON.stringify` on a `bigint` is a lint error. |
+| Scheduling units | Duration, lag, Float and "days late" are whole **working days** as integers, counted on the pinned Holiday Calendar version (AD-29). Calendar days never appear in a scheduling figure. A date is a plan date only if `domain/schedule` produced it (AD-25). |
+| Ordering | Anything the scheduler reports — the critical path, a driving chain, a violation list, a rejected cycle — is ordered by the single `compareWp` in `domain/schedule/order` (AD-28). No module sorts WPs its own way. |
 | Watermarks | Captured only under the shared AD-20 lock. Entry selection uses the pinned `snapshot_id` per Connector; `ledger_seq_max` is an assertion, never a filter. |
 | Errors | Use cases return `Result<T, AppError>`, where `AppError = { code, messageKey, details? }` and `code` comes from a closed enum. Server actions map `messageKey` through i18n. Authorisation failures surface as `not_found`. Exceptions are reserved for bugs and infrastructure failures. |
 | Validation | Zod at every inbound boundary: server actions, route handlers, job payloads, fixture files and adapter responses. The domain trusts its typed inputs. |
@@ -480,9 +575,9 @@ momo-keikaku/
     web/                 # Next.js: (pm) and (admin) route groups; /c (client, R1); proxy.ts; server actions
     worker/              # pg-boss boot, schedules, job handlers → app use cases
   packages/
-    domain/              # pure: attribution, ledger derivation, evm, health, forecast, calendar, import, present (+codec), text
+    domain/              # pure: attribution, ledger derivation, schedule (passes, validate, order), evm, health, forecast, calendar, import, present (+codec), text
     app/                 # use cases, ports, RequestContext, authz, audit, config
-    db/                  # drizzle schema, migrations, table-classes.ts, rls.sql, grants.sql, triggers.sql, withTenant, repositories, seed
+    db/                  # drizzle schema, migrations, table-classes.ts, rls.sql, grants.sql, triggers.sql, withTenant, repositories (repositories/schedule is app/schedule's alone), seed
     db/auth/             # the single sanctioned Better Auth ↔ Drizzle binding (IdentityPort)
     adapters/            # backlog-http, fixture-replay, excel, blob-fs, blob-s3, mailer-console, mailer-ses, clock
     i18n/                # en.json, ja.json — imported by web and worker
@@ -518,6 +613,14 @@ erDiagram
   RESOURCE ||--o{ RATE_ENTRY : priced_by
   PROJECT ||--o{ PROJECT_DEFAULT_RATE_ENTRY : priced_by
   PROJECT ||--o{ WORK_PACKAGE : current_plan
+  WORK_PACKAGE ||--o{ WP_DEPENDENCY : predecessor_of
+  WORK_PACKAGE ||--o{ WP_DEPENDENCY : successor_of
+  PROJECT ||--o{ SCHEDULE_RUN : recalculated_by
+  SCHEDULE_RUN ||--o{ WP_SCHEDULE : latest_projection
+  WORK_PACKAGE ||--|| WP_SCHEDULE : derived_dates
+  PROJECT ||--o{ HOLIDAY_CALENDAR_VERSION : working_days
+  SCHEDULE_RUN }o--|| HOLIDAY_CALENDAR_VERSION : computed_against
+  BASELINE_VERSION }o--|| SCHEDULE_RUN : pins
   WORK_PACKAGE ||--o{ WP_STATUS_EVENT : progresses
   WORK_PACKAGE ||--o{ WP_FLAG_EVENT : flagged_by
   PROJECT ||--o{ BASELINE_VERSION : baselined_by
@@ -543,17 +646,59 @@ erDiagram
   TENANT ||--o{ AUDIT_LOG : logs
 ```
 
+```mermaid
+flowchart TB
+  subgraph trig[The closed trigger set, FR-6b]
+    E1[duration, dependency, lag or constraint]
+    E2[WP created, deleted, moved or re-parented]
+    E3[actual start or actual finish]
+    E4[Recorded Percent Complete: imported or audited override]
+    E5[Project start, Project finish or Data Date]
+    E6[new Holiday Calendar version]
+  end
+  subgraph nev[Never a trigger: AD-27 reachability test]
+    N1[Tracker Snapshot, ledger entry]
+    N2[Mapping, remapping, rule firing]
+    N3[Observed Percent Complete]
+  end
+  E1 --> UC
+  E2 --> UC
+  E3 --> UC
+  E4 --> UC
+  E5 --> UC
+  E6 --> UC
+  N1 --> ATT[attribution, Unplanned Work, EVM]
+  N2 --> ATT
+  N3 --> ATT
+  ATT --> NOD[no WP date moves]
+  UC[app/schedule.recalculate: one transaction, AD-20 lock]
+  UC --> V[domain/schedule/validate: FR-6a invariants]
+  V -->|offending edges| RB[transaction rolls back, edit rejected with its reason]
+  V -->|clean| FW[forward pass: Data Date, Project start, predecessor finish plus lag]
+  FW --> BW[backward pass: anchor is Project finish, else computed finish]
+  BW --> FL[Float, critical path, violations, out-of-sequence: ordered by compareWp AD-28]
+  FL --> RUN[(schedule_run, append-only: inputs plus outputs)]
+  RUN --> PROJ[wp_schedule: derived projection for the tree grid]
+  RUN -.pinned by.-> BL[baseline_version]
+  RUN -.pinned by.-> PS[published_snapshot]
+  RUN -.re-run inputs, compare outputs.-> T[FR-15 re-derivation and FR-35 reproduction]
+```
+
 ## Capability → Architecture Map
 
 | Capability / Area | Lives in | Governed by |
 | --- | --- | --- |
 | FR-1–FR-3 tenancy, roles, sign-in | `db` (RLS), `app/authz`, `db/auth` | AD-3, AD-12, AD-23 |
 | FR-4, NFR-I1 language | `packages/i18n`, `domain/text` | i18n convention, AD-1 |
-| FR-5, FR-7, FR-8 Plan, tree/Gantt, Custom Fields | `app/plan`, `work_package`, `wp_status_event`, `apps/web/(pm)/plan` | AD-11, AD-5, AD-21 |
-| FR-6 (Post-Q1, document-only) | not built in v1; no data shape reserved beyond the Plan model | AD-11 |
+| FR-5, FR-8 Plan authoring, Custom Fields | `app/plan`, `work_package`, `wp_status_event`, `apps/web/(pm)/plan` | AD-11, AD-5, AD-21, AD-25 |
+| FR-6a dependency, duration, constraint capture | `wp_dependency`, `work_package` input columns, `domain/schedule/validate`, `app/plan` | AD-25, AD-21, AD-14 |
+| FR-6b schedule recalculation | `domain/schedule` (passes, order), `app/schedule`, `schedule_run`, `wp_schedule` | AD-25, AD-26, AD-27, AD-28, AD-4 |
+| FR-7 plan tree grid (R0); Gantt (R1) | `apps/web/(pm)/plan` over `wp_schedule` | AD-25, AD-28 |
+| FR-43 Project schedule settings | `project.project_start`, `.project_finish`, `.data_date`, `app/schedule` | AD-25, AD-27, AD-14 |
+| NFR-C1 determinism and re-derivability | `domain/present/codec`, `schedule_run`, `domain/schedule/order` | AD-4, AD-26, AD-28, AD-10 |
 | FR-9–FR-11, FR-41 Excel import | `adapters/excel`, `domain/import`, `app/import` | AD-13, AD-16, AD-24 |
-| FR-12–FR-14 Resources, Rates, Tracker Accounts, calendars | `app/resources`, `rate_entry`, `project_default_rate_entry`, `tracker_account_link_event`, `calendar_day_event`, `domain/calendar` | AD-4, AD-9, AD-10, AD-15, AD-21 |
-| FR-15, FR-16 Baselines | `app/baseline`, `baseline_version` | AD-11, AD-5 |
+| FR-12–FR-14 Resources, Rates, Tracker Accounts, calendars | `app/resources`, `rate_entry`, `project_default_rate_entry`, `tracker_account_link_event`, `calendar_day_event`, `holiday_calendar_version`, `domain/calendar` | AD-4, AD-9, AD-10, AD-15, AD-21, AD-29 |
+| FR-15, FR-16 Baselines | `app/baseline`, `baseline_version`, `baseline_wp`, the pinned `schedule_run` | AD-11, AD-5, AD-26 |
 | FR-17–FR-19, FR-42 Connectors, snapshots, lifecycle | `adapters/backlog-http`, `adapters/fixture-replay`, `app/ingest`, `apps/worker` | AD-6, AD-7, AD-15, AD-20 |
 | FR-20–FR-24 scope completeness, Mapping, Rules, Catch-all | `app/mapping`, `domain/attribution`, `connector_scope_event` | AD-9, AD-20, AD-21 |
 | FR-25–FR-27 ledger, approximation, Ticket-Count Mode | `domain/attribution`, `domain/evm` | AD-7, AD-8, AD-9 |
@@ -571,7 +716,9 @@ erDiagram
 
 ## Deferred
 
-- **UI kit, styling and Gantt rendering.** These belong to the UX workflow (DESIGN.md) and don't affect data or boundaries.
+- **UI kit, styling and Gantt rendering.** These belong to the UX workflow (DESIGN.md) and don't affect data or boundaries. R0 ships one scheduling surface, the tree grid over `wp_schedule` (FR-7); the Gantt and the build-versus-buy question behind it are R1.
+- **The scheduling capabilities R0 deliberately excludes** (PRD §8.3, FR-6b): resource levelling; the SS, FF and SF link types with lead; effort-driven scheduling; constraint types beyond the three in FR-5; recovery behaviour when a constraint is violated, beyond reporting it; the what-if sandbox; cross-project links; and layered client, department and person calendars. Two shapes reserve room and no more: `wp_dependency.type` already carries `SS | FF | SF` as values the R0 writer rejects, and `holiday_calendar_version` already stores a resolved set rather than a calendar name. Nothing else is pre-built for them.
+- **Taking §8.3's first cut costs no migration.** If `bmad-sprint-planning` drops the two extra constraint types, `constraint_type` narrows to the one accepted value `asap`, the violation path in `outputs` goes unused and the columns stay. The cut is a scope decision, not a schema decision.
 - **Incremental `updatedSince` reads.** Deferred until full reads approach Backlog's plan-dependent Search limit. Revisit when a Connector exceeds about 5,000 Tickets or Search headroom falls below 50%. The guard that holds today is in AD-7.
 - **Caching or materialising computed metrics.** Deferred until NFR-P1 is measured against 5 × 500 WPs × 2,000 Tickets. Any cache must be keyed by the `ComputationInputs` hash (AD-10).
 - **IaC tool, CI provider and deploy pipeline.** Pick at the first staging deploy. AD-18 fixes the topology and AD-19 fixes the migration, alerting and CI-gate rules that the pipeline must implement.
@@ -585,6 +732,8 @@ erDiagram
 
 ## Open Questions
 
+- **OQ-13 (PRD) is closed by AD-28.** The tie-break rule is `compareWp` — WBS code by segment, then `wp_id` — applied at one site to everything the scheduler reports, with a shuffled-input determinism test asserting it. FR-15's re-derivation test and FR-35's reproduction test now compare an ordered set that a document defines.
+- **CONFIRM — `schedule_run` size and retention.** AD-26 estimates about 25 KB per run and AD-5 keeps a run only while something references it or it is among a Project's last two. Both are set here rather than measured; the first scheduler story measures the real size against a 500-WP Project and the retention window can then move without touching the model.
 - **OQ-2 (PRD): Backlog hours on the five target projects.** Still open. The architecture handles both answers (AD-8), but the fixture scenarios should be re-recorded (anonymised, AD-24) from the real spaces once the founder checks them.
 - **ExcelJS maintenance.** The last release was 2023-10-19, with only a 4.4.1 prerelease since. It sits behind `WorkbookPort` (AD-13). If the FR-9 acceptance corpus exposes bugs, the fallback is **SheetJS CE from `cdn.sheetjs.com`** — *not* npm `xlsx@0.18.5`, which is frozen and carries prototype-pollution and ReDoS advisories.
 - **Upload limits, the cell ceiling and the business-hours window** (AD-13, AD-15, AD-19) are defaults set overnight. The founder should confirm them.
