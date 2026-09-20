@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { loadReview } from '@momo/db';
-import { hours, hoursSigned, present, ratio, share, yen } from '@momo/domain';
+import { hours, hoursSigned, present, share, yen } from '@momo/domain';
 import { HealthBadge, Internal, MetricCell, Section, UnplannedChip } from '@/components/ui';
 import { ScopeLedgerBar } from '@/components/scope-ledger-bar';
 import { DispositionRail } from '@/components/disposition-rail';
@@ -620,5 +620,3 @@ function GroupRows({
     </>
   );
 }
-
-export { ratio };

@@ -95,7 +95,6 @@ export async function mapTickets(formData: FormData): Promise<void> {
   const at = await anchorOf(projectId);
   await appendMappings(projectId, ticketIds, wpId, at);
   await recordDisposition(projectId, 'map', ticketIds, wpId, null, at);
-  revalidatePath('/p/[projectId]/review', 'page');
   revalidatePath(`/p/${projectId}/review`);
   revalidatePath(`/p/${projectId}/mapping`);
 }
