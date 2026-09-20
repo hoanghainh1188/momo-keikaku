@@ -1,0 +1,2107 @@
+{
+ "anchor": "2026-09-16T09:00:00.000Z",
+ "tenant": {
+  "id": "ten-momo",
+  "name": "Momo Digital KK"
+ },
+ "department": {
+  "id": "dep-delivery",
+  "name": "Delivery"
+ },
+ "project": {
+  "id": "prj-ec2",
+  "name": "EC phase 2",
+  "clientName": "大阪リテール株式会社 (Osaka Retail Co., Ltd.)",
+  "contractType": "準委任",
+  "tzOffsetMinutes": 540,
+  "teireiWeekday": 4,
+  "defaultRateYenPerHour": 4000,
+  "eacMethod": "typical",
+  "calendar": {
+   "jp": true,
+   "vn": true
+  },
+  "baselineStart": "2026-06-01",
+  "baselineFinish": "2026-11-27"
+ },
+ "resources": [
+  {
+   "id": "res-linh",
+   "name": "Nguyen Thi Linh",
+   "accountId": "bk-1001",
+   "yenPerHour": 6500,
+   "role": "PM / BrSE"
+  },
+  {
+   "id": "res-minh",
+   "name": "Tran Quang Minh",
+   "accountId": "bk-1002",
+   "yenPerHour": 4600,
+   "role": "Tech lead"
+  },
+  {
+   "id": "res-trang",
+   "name": "Le Thu Trang",
+   "accountId": "bk-1003",
+   "yenPerHour": 3900,
+   "role": "Engineer"
+  },
+  {
+   "id": "res-duc",
+   "name": "Pham Minh Duc",
+   "accountId": "bk-1004",
+   "yenPerHour": 3700,
+   "role": "Engineer"
+  },
+  {
+   "id": "res-huy",
+   "name": "Vo Gia Huy",
+   "accountId": "bk-1005",
+   "yenPerHour": 3400,
+   "role": "Engineer"
+  },
+  {
+   "id": "res-nga",
+   "name": "Do Hong Nga",
+   "accountId": "bk-1006",
+   "yenPerHour": 3200,
+   "role": "QA"
+  }
+ ],
+ "unlinkedAccount": "bk-1099",
+ "wps": [
+  {
+   "id": "wp-1",
+   "wbsCode": "1",
+   "name": "Requirements & Design",
+   "parentId": null,
+   "isLeaf": false,
+   "isMilestone": false,
+   "isCatchAll": false,
+   "start": null,
+   "finish": null,
+   "plannedMh": 0,
+   "baselineMh": 0,
+   "completedAt": null,
+   "milestoneDoneAt": null,
+   "assignedResourceIds": []
+  },
+  {
+   "id": "wp-1-1",
+   "wbsCode": "1.1",
+   "name": "Requirements workshops with client",
+   "parentId": "wp-1",
+   "isLeaf": true,
+   "isMilestone": false,
+   "isCatchAll": false,
+   "start": "2026-06-01",
+   "finish": "2026-06-12",
+   "plannedMh": 64000,
+   "baselineMh": 64000,
+   "completedAt": null,
+   "milestoneDoneAt": null,
+   "assignedResourceIds": [
+    "res-minh"
+   ]
+  },
+  {
+   "id": "wp-1-2",
+   "wbsCode": "1.2",
+   "name": "Functional specification (JA)",
+   "parentId": "wp-1",
+   "isLeaf": true,
+   "isMilestone": false,
+   "isCatchAll": false,
+   "start": "2026-06-11",
+   "finish": "2026-06-29",
+   "plannedMh": 96000,
+   "baselineMh": 96000,
+   "completedAt": null,
+   "milestoneDoneAt": null,
+   "assignedResourceIds": [
+    "res-trang"
+   ]
+  },
+  {
+   "id": "wp-1-3",
+   "wbsCode": "1.3",
+   "name": "Screen design & wireframes",
+   "parentId": "wp-1",
+   "isLeaf": true,
+   "isMilestone": false,
+   "isCatchAll": false,
+   "start": "2026-06-21",
+   "finish": "2026-07-09",
+   "plannedMh": 80000,
+   "baselineMh": 80000,
+   "completedAt": null,
+   "milestoneDoneAt": null,
+   "assignedResourceIds": [
+    "res-trang"
+   ]
+  },
+  {
+   "id": "wp-1-4",
+   "wbsCode": "1.4",
+   "name": "Data model & migration plan",
+   "parentId": "wp-1",
+   "isLeaf": true,
+   "isMilestone": false,
+   "isCatchAll": false,
+   "start": "2026-06-21",
+   "finish": "2026-07-02",
+   "plannedMh": 56000,
+   "baselineMh": 56000,
+   "completedAt": null,
+   "milestoneDoneAt": null,
+   "assignedResourceIds": [
+    "res-trang"
+   ]
+  },
+  {
+   "id": "wp-1-5",
+   "wbsCode": "1.5",
+   "name": "Design review sign-off",
+   "parentId": "wp-1",
+   "isLeaf": true,
+   "isMilestone": false,
+   "isCatchAll": false,
+   "start": "2026-07-07",
+   "finish": "2026-07-11",
+   "plannedMh": 24000,
+   "baselineMh": 24000,
+   "completedAt": null,
+   "milestoneDoneAt": null,
+   "assignedResourceIds": [
+    "res-huy"
+   ]
+  },
+  {
+   "id": "wp-2",
+   "wbsCode": "2",
+   "name": "Catalogue & Search",
+   "parentId": null,
+   "isLeaf": false,
+   "isMilestone": false,
+   "isCatchAll": false,
+   "start": null,
+   "finish": null,
+   "plannedMh": 0,
+   "baselineMh": 0,
+   "completedAt": null,
+   "milestoneDoneAt": null,
+   "assignedResourceIds": []
+  },
+  {
+   "id": "wp-2-1",
+   "wbsCode": "2.1",
+   "name": "Product master API",
+   "parentId": "wp-2",
+   "isLeaf": true,
+   "isMilestone": false,
+   "isCatchAll": false,
+   "start": "2026-07-11",
+   "finish": "2026-07-29",
+   "plannedMh": 120000,
+   "baselineMh": 120000,
+   "completedAt": null,
+   "milestoneDoneAt": null,
+   "assignedResourceIds": [
+    "res-minh"
+   ]
+  },
+  {
+   "id": "wp-2-2",
+   "wbsCode": "2.2",
+   "name": "Category tree revamp",
+   "parentId": "wp-2",
+   "isLeaf": true,
+   "isMilestone": false,
+   "isCatchAll": false,
+   "start": "2026-07-15",
+   "finish": "2026-08-02",
+   "plannedMh": 88000,
+   "baselineMh": 88000,
+   "completedAt": null,
+   "milestoneDoneAt": null,
+   "assignedResourceIds": [
+    "res-nga"
+   ]
+  },
+  {
+   "id": "wp-2-3",
+   "wbsCode": "2.3",
+   "name": "Search indexing pipeline",
+   "parentId": "wp-2",
+   "isLeaf": true,
+   "isMilestone": false,
+   "isCatchAll": false,
+   "start": "2026-07-21",
+   "finish": "2026-08-20",
+   "plannedMh": 156400,
+   "baselineMh": 136000,
+   "completedAt": null,
+   "milestoneDoneAt": null,
+   "assignedResourceIds": [
+    "res-nga"
+   ]
+  },
+  {
+   "id": "wp-2-4",
+   "wbsCode": "2.4",
+   "name": "Faceted search UI",
+   "parentId": "wp-2",
+   "isLeaf": true,
+   "isMilestone": false,
+   "isCatchAll": false,
+   "start": "2026-07-31",
+   "finish": "2026-08-18",
+   "plannedMh": 104000,
+   "baselineMh": 104000,
+   "completedAt": null,
+   "milestoneDoneAt": null,
+   "assignedResourceIds": [
+    "res-huy"
+   ]
+  },
+  {
+   "id": "wp-2-5",
+   "wbsCode": "2.5",
+   "name": "Product detail page",
+   "parentId": "wp-2",
+   "isLeaf": true,
+   "isMilestone": false,
+   "isCatchAll": false,
+   "start": "2026-08-04",
+   "finish": "2026-08-22",
+   "plannedMh": 96000,
+   "baselineMh": 96000,
+   "completedAt": null,
+   "milestoneDoneAt": null,
+   "assignedResourceIds": [
+    "res-trang"
+   ]
+  },
+  {
+   "id": "wp-2-6",
+   "wbsCode": "2.6",
+   "name": "Image CDN integration",
+   "parentId": "wp-2",
+   "isLeaf": true,
+   "isMilestone": false,
+   "isCatchAll": false,
+   "start": "2026-08-10",
+   "finish": "2026-08-21",
+   "plannedMh": 48000,
+   "baselineMh": 48000,
+   "completedAt": null,
+   "milestoneDoneAt": null,
+   "assignedResourceIds": [
+    "res-trang"
+   ]
+  },
+  {
+   "id": "wp-2-7",
+   "wbsCode": "2.7",
+   "name": "Catalogue unit tests",
+   "parentId": "wp-2",
+   "isLeaf": true,
+   "isMilestone": false,
+   "isCatchAll": false,
+   "start": "2026-08-16",
+   "finish": "2026-08-27",
+   "plannedMh": 56000,
+   "baselineMh": 56000,
+   "completedAt": null,
+   "milestoneDoneAt": null,
+   "assignedResourceIds": [
+    "res-trang"
+   ]
+  },
+  {
+   "id": "wp-3",
+   "wbsCode": "3",
+   "name": "Cart & Checkout",
+   "parentId": null,
+   "isLeaf": false,
+   "isMilestone": false,
+   "isCatchAll": false,
+   "start": null,
+   "finish": null,
+   "plannedMh": 0,
+   "baselineMh": 0,
+   "completedAt": null,
+   "milestoneDoneAt": null,
+   "assignedResourceIds": []
+  },
+  {
+   "id": "wp-3-1",
+   "wbsCode": "3.1",
+   "name": "Cart service refactor",
+   "parentId": "wp-3",
+   "isLeaf": true,
+   "isMilestone": false,
+   "isCatchAll": false,
+   "start": "2026-08-20",
+   "finish": "2026-09-07",
+   "plannedMh": 112000,
+   "baselineMh": 112000,
+   "completedAt": null,
+   "milestoneDoneAt": null,
+   "assignedResourceIds": [
+    "res-minh"
+   ]
+  },
+  {
+   "id": "wp-3-2",
+   "wbsCode": "3.2",
+   "name": "Checkout flow (guest)",
+   "parentId": "wp-3",
+   "isLeaf": true,
+   "isMilestone": false,
+   "isCatchAll": false,
+   "start": "2026-08-25",
+   "finish": "2026-09-29",
+   "plannedMh": 147200,
+   "baselineMh": 128000,
+   "completedAt": null,
+   "milestoneDoneAt": null,
+   "assignedResourceIds": [
+    "res-duc"
+   ]
+  },
+  {
+   "id": "wp-3-3",
+   "wbsCode": "3.3",
+   "name": "Checkout flow (member)",
+   "parentId": "wp-3",
+   "isLeaf": true,
+   "isMilestone": false,
+   "isCatchAll": false,
+   "start": "2026-08-31",
+   "finish": "2026-09-18",
+   "plannedMh": 96000,
+   "baselineMh": 96000,
+   "completedAt": null,
+   "milestoneDoneAt": null,
+   "assignedResourceIds": [
+    "res-duc"
+   ]
+  },
+  {
+   "id": "wp-3-4",
+   "wbsCode": "3.4",
+   "name": "Address & delivery slots",
+   "parentId": "wp-3",
+   "isLeaf": true,
+   "isMilestone": false,
+   "isCatchAll": false,
+   "start": "2026-09-04",
+   "finish": "2026-09-22",
+   "plannedMh": 72000,
+   "baselineMh": 72000,
+   "completedAt": null,
+   "milestoneDoneAt": null,
+   "assignedResourceIds": [
+    "res-trang"
+   ]
+  },
+  {
+   "id": "wp-3-5",
+   "wbsCode": "3.5",
+   "name": "Tax & consumption tax rules",
+   "parentId": "wp-3",
+   "isLeaf": true,
+   "isMilestone": false,
+   "isCatchAll": false,
+   "start": "2026-09-08",
+   "finish": "2026-09-19",
+   "plannedMh": 56000,
+   "baselineMh": 56000,
+   "completedAt": null,
+   "milestoneDoneAt": null,
+   "assignedResourceIds": [
+    "res-nga"
+   ]
+  },
+  {
+   "id": "wp-3-6",
+   "wbsCode": "3.6",
+   "name": "Order confirmation mail (JA)",
+   "parentId": "wp-3",
+   "isLeaf": true,
+   "isMilestone": false,
+   "isCatchAll": false,
+   "start": "2026-09-12",
+   "finish": "2026-09-23",
+   "plannedMh": 40000,
+   "baselineMh": 40000,
+   "completedAt": null,
+   "milestoneDoneAt": null,
+   "assignedResourceIds": [
+    "res-duc"
+   ]
+  },
+  {
+   "id": "wp-3-7",
+   "wbsCode": "3.7",
+   "name": "Checkout integration tests",
+   "parentId": "wp-3",
+   "isLeaf": true,
+   "isMilestone": false,
+   "isCatchAll": false,
+   "start": "2026-09-18",
+   "finish": "2026-09-29",
+   "plannedMh": 64000,
+   "baselineMh": 64000,
+   "completedAt": null,
+   "milestoneDoneAt": null,
+   "assignedResourceIds": [
+    "res-minh"
+   ]
+  },
+  {
+   "id": "wp-4",
+   "wbsCode": "4",
+   "name": "Payment & Coupon",
+   "parentId": null,
+   "isLeaf": false,
+   "isMilestone": false,
+   "isCatchAll": false,
+   "start": null,
+   "finish": null,
+   "plannedMh": 0,
+   "baselineMh": 0,
+   "completedAt": null,
+   "milestoneDoneAt": null,
+   "assignedResourceIds": []
+  },
+  {
+   "id": "wp-4-1",
+   "wbsCode": "4.1",
+   "name": "GMO payment gateway",
+   "parentId": "wp-4",
+   "isLeaf": true,
+   "isMilestone": false,
+   "isCatchAll": false,
+   "start": "2026-09-12",
+   "finish": "2026-10-14",
+   "plannedMh": 138000,
+   "baselineMh": 120000,
+   "completedAt": null,
+   "milestoneDoneAt": null,
+   "assignedResourceIds": [
+    "res-duc"
+   ]
+  },
+  {
+   "id": "wp-4-2",
+   "wbsCode": "4.2",
+   "name": "Convenience-store payment",
+   "parentId": "wp-4",
+   "isLeaf": true,
+   "isMilestone": false,
+   "isCatchAll": false,
+   "start": "2026-09-20",
+   "finish": "2026-10-08",
+   "plannedMh": 80000,
+   "baselineMh": 80000,
+   "completedAt": null,
+   "milestoneDoneAt": null,
+   "assignedResourceIds": [
+    "res-nga"
+   ]
+  },
+  {
+   "id": "wp-4-3",
+   "wbsCode": "4.3",
+   "name": "Refund & cancellation",
+   "parentId": "wp-4",
+   "isLeaf": true,
+   "isMilestone": false,
+   "isCatchAll": false,
+   "start": "2026-09-24",
+   "finish": "2026-10-12",
+   "plannedMh": 72000,
+   "baselineMh": 72000,
+   "completedAt": null,
+   "milestoneDoneAt": null,
+   "assignedResourceIds": [
+    "res-trang"
+   ]
+  },
+  {
+   "id": "wp-4-4",
+   "wbsCode": "4.4",
+   "name": "Point programme integration",
+   "parentId": "wp-4",
+   "isLeaf": true,
+   "isMilestone": false,
+   "isCatchAll": false,
+   "start": "2026-09-28",
+   "finish": "2026-10-16",
+   "plannedMh": 88000,
+   "baselineMh": 88000,
+   "completedAt": null,
+   "milestoneDoneAt": null,
+   "assignedResourceIds": [
+    "res-duc"
+   ]
+  },
+  {
+   "id": "wp-4-5",
+   "wbsCode": "4.5",
+   "name": "Payment reconciliation batch",
+   "parentId": "wp-4",
+   "isLeaf": true,
+   "isMilestone": false,
+   "isCatchAll": false,
+   "start": "2026-10-04",
+   "finish": "2026-10-15",
+   "plannedMh": 64000,
+   "baselineMh": 64000,
+   "completedAt": null,
+   "milestoneDoneAt": null,
+   "assignedResourceIds": [
+    "res-minh"
+   ]
+  },
+  {
+   "id": "wp-4-6",
+   "wbsCode": "4.6",
+   "name": "Payment security review",
+   "parentId": "wp-4",
+   "isLeaf": true,
+   "isMilestone": false,
+   "isCatchAll": false,
+   "start": "2026-10-10",
+   "finish": "2026-10-21",
+   "plannedMh": 40000,
+   "baselineMh": 40000,
+   "completedAt": null,
+   "milestoneDoneAt": null,
+   "assignedResourceIds": [
+    "res-trang"
+   ]
+  },
+  {
+   "id": "wp-5",
+   "wbsCode": "5",
+   "name": "Integration & Migration",
+   "parentId": null,
+   "isLeaf": false,
+   "isMilestone": false,
+   "isCatchAll": false,
+   "start": null,
+   "finish": null,
+   "plannedMh": 0,
+   "baselineMh": 0,
+   "completedAt": null,
+   "milestoneDoneAt": null,
+   "assignedResourceIds": []
+  },
+  {
+   "id": "wp-5-1",
+   "wbsCode": "5.1",
+   "name": "ERP order interface",
+   "parentId": "wp-5",
+   "isLeaf": true,
+   "isMilestone": false,
+   "isCatchAll": false,
+   "start": "2026-09-28",
+   "finish": "2026-10-23",
+   "plannedMh": 104000,
+   "baselineMh": 104000,
+   "completedAt": null,
+   "milestoneDoneAt": null,
+   "assignedResourceIds": [
+    "res-minh"
+   ]
+  },
+  {
+   "id": "wp-5-2",
+   "wbsCode": "5.2",
+   "name": "Inventory sync batch",
+   "parentId": "wp-5",
+   "isLeaf": true,
+   "isMilestone": false,
+   "isCatchAll": false,
+   "start": "2026-10-06",
+   "finish": "2026-10-24",
+   "plannedMh": 80000,
+   "baselineMh": 80000,
+   "completedAt": null,
+   "milestoneDoneAt": null,
+   "assignedResourceIds": [
+    "res-trang"
+   ]
+  },
+  {
+   "id": "wp-5-3",
+   "wbsCode": "5.3",
+   "name": "Legacy data migration scripts",
+   "parentId": "wp-5",
+   "isLeaf": true,
+   "isMilestone": false,
+   "isCatchAll": false,
+   "start": "2026-10-10",
+   "finish": "2026-10-28",
+   "plannedMh": 96000,
+   "baselineMh": 96000,
+   "completedAt": null,
+   "milestoneDoneAt": null,
+   "assignedResourceIds": [
+    "res-huy"
+   ]
+  },
+  {
+   "id": "wp-5-4",
+   "wbsCode": "5.4",
+   "name": "Migration rehearsal",
+   "parentId": "wp-5",
+   "isLeaf": true,
+   "isMilestone": false,
+   "isCatchAll": false,
+   "start": "2026-10-18",
+   "finish": "2026-10-29",
+   "plannedMh": 56000,
+   "baselineMh": 56000,
+   "completedAt": null,
+   "milestoneDoneAt": null,
+   "assignedResourceIds": [
+    "res-trang"
+   ]
+  },
+  {
+   "id": "wp-5-5",
+   "wbsCode": "5.5",
+   "name": "Interface specification (JA)",
+   "parentId": "wp-5",
+   "isLeaf": true,
+   "isMilestone": false,
+   "isCatchAll": false,
+   "start": "2026-10-02",
+   "finish": "2026-10-13",
+   "plannedMh": 40000,
+   "baselineMh": 40000,
+   "completedAt": null,
+   "milestoneDoneAt": null,
+   "assignedResourceIds": [
+    "res-minh"
+   ]
+  },
+  {
+   "id": "wp-6",
+   "wbsCode": "6",
+   "name": "QA & UAT",
+   "parentId": null,
+   "isLeaf": false,
+   "isMilestone": false,
+   "isCatchAll": false,
+   "start": null,
+   "finish": null,
+   "plannedMh": 0,
+   "baselineMh": 0,
+   "completedAt": null,
+   "milestoneDoneAt": null,
+   "assignedResourceIds": []
+  },
+  {
+   "id": "wp-6-1",
+   "wbsCode": "6.1",
+   "name": "Test plan & cases",
+   "parentId": "wp-6",
+   "isLeaf": true,
+   "isMilestone": false,
+   "isCatchAll": false,
+   "start": "2026-09-24",
+   "finish": "2026-10-12",
+   "plannedMh": 72000,
+   "baselineMh": 72000,
+   "completedAt": null,
+   "milestoneDoneAt": null,
+   "assignedResourceIds": [
+    "res-minh"
+   ]
+  },
+  {
+   "id": "wp-6-2",
+   "wbsCode": "6.2",
+   "name": "System test cycle 1",
+   "parentId": "wp-6",
+   "isLeaf": true,
+   "isMilestone": false,
+   "isCatchAll": false,
+   "start": "2026-10-14",
+   "finish": "2026-11-01",
+   "plannedMh": 128000,
+   "baselineMh": 128000,
+   "completedAt": null,
+   "milestoneDoneAt": null,
+   "assignedResourceIds": [
+    "res-duc"
+   ]
+  },
+  {
+   "id": "wp-6-3",
+   "wbsCode": "6.3",
+   "name": "System test cycle 2",
+   "parentId": "wp-6",
+   "isLeaf": true,
+   "isMilestone": false,
+   "isCatchAll": false,
+   "start": "2026-10-26",
+   "finish": "2026-11-13",
+   "plannedMh": 96000,
+   "baselineMh": 96000,
+   "completedAt": null,
+   "milestoneDoneAt": null,
+   "assignedResourceIds": [
+    "res-huy"
+   ]
+  },
+  {
+   "id": "wp-6-4",
+   "wbsCode": "6.4",
+   "name": "Client UAT support",
+   "parentId": "wp-6",
+   "isLeaf": true,
+   "isMilestone": false,
+   "isCatchAll": false,
+   "start": "2026-11-07",
+   "finish": "2026-11-25",
+   "plannedMh": 80000,
+   "baselineMh": 80000,
+   "completedAt": null,
+   "milestoneDoneAt": null,
+   "assignedResourceIds": [
+    "res-trang"
+   ]
+  },
+  {
+   "id": "wp-6-5",
+   "wbsCode": "6.5",
+   "name": "Performance test",
+   "parentId": "wp-6",
+   "isLeaf": true,
+   "isMilestone": false,
+   "isCatchAll": false,
+   "start": "2026-11-03",
+   "finish": "2026-11-14",
+   "plannedMh": 56000,
+   "baselineMh": 56000,
+   "completedAt": null,
+   "milestoneDoneAt": null,
+   "assignedResourceIds": [
+    "res-trang"
+   ]
+  },
+  {
+   "id": "wp-7",
+   "wbsCode": "7",
+   "name": "Release & Support",
+   "parentId": null,
+   "isLeaf": false,
+   "isMilestone": false,
+   "isCatchAll": false,
+   "start": null,
+   "finish": null,
+   "plannedMh": 0,
+   "baselineMh": 0,
+   "completedAt": null,
+   "milestoneDoneAt": null,
+   "assignedResourceIds": []
+  },
+  {
+   "id": "wp-7-1",
+   "wbsCode": "7.1",
+   "name": "Release preparation & runbook",
+   "parentId": "wp-7",
+   "isLeaf": true,
+   "isMilestone": false,
+   "isCatchAll": false,
+   "start": "2026-11-15",
+   "finish": "2026-11-26",
+   "plannedMh": 48000,
+   "baselineMh": 48000,
+   "completedAt": null,
+   "milestoneDoneAt": null,
+   "assignedResourceIds": [
+    "res-duc"
+   ]
+  },
+  {
+   "id": "wp-7-2",
+   "wbsCode": "7.2",
+   "name": "Go-live",
+   "parentId": "wp-7",
+   "isLeaf": true,
+   "isMilestone": true,
+   "isCatchAll": false,
+   "start": "2026-11-27",
+   "finish": "2026-11-27",
+   "plannedMh": 0,
+   "baselineMh": 0,
+   "completedAt": null,
+   "milestoneDoneAt": null,
+   "assignedResourceIds": [
+    "res-duc"
+   ]
+  },
+  {
+   "id": "wp-7-3",
+   "wbsCode": "7.3",
+   "name": "Support & miscellaneous (catch-all)",
+   "parentId": "wp-7",
+   "isLeaf": true,
+   "isMilestone": false,
+   "isCatchAll": true,
+   "start": "2026-07-11",
+   "finish": "2026-10-14",
+   "plannedMh": 80000,
+   "baselineMh": 80000,
+   "completedAt": null,
+   "milestoneDoneAt": null,
+   "assignedResourceIds": [
+    "res-minh"
+   ]
+  },
+  {
+   "id": "wp-M1",
+   "wbsCode": "8.M1",
+   "name": "Design sign-off",
+   "parentId": null,
+   "isLeaf": true,
+   "isMilestone": true,
+   "isCatchAll": false,
+   "start": "2026-07-09",
+   "finish": "2026-07-09",
+   "plannedMh": 0,
+   "baselineMh": 0,
+   "completedAt": null,
+   "milestoneDoneAt": "2026-07-13",
+   "assignedResourceIds": []
+  },
+  {
+   "id": "wp-M2",
+   "wbsCode": "8.M2",
+   "name": "Catalogue feature complete",
+   "parentId": null,
+   "isLeaf": true,
+   "isMilestone": true,
+   "isCatchAll": false,
+   "start": "2026-08-23",
+   "finish": "2026-08-23",
+   "plannedMh": 0,
+   "baselineMh": 0,
+   "completedAt": null,
+   "milestoneDoneAt": "2026-08-31",
+   "assignedResourceIds": []
+  },
+  {
+   "id": "wp-M3",
+   "wbsCode": "8.M3",
+   "name": "Checkout feature complete",
+   "parentId": null,
+   "isLeaf": true,
+   "isMilestone": true,
+   "isCatchAll": false,
+   "start": "2026-09-08",
+   "finish": "2026-09-08",
+   "plannedMh": 0,
+   "baselineMh": 0,
+   "completedAt": null,
+   "milestoneDoneAt": null,
+   "assignedResourceIds": []
+  }
+ ],
+ "baseline": {
+  "id": "bl-1",
+  "seq": 1,
+  "reason": "Initial Baseline agreed with client at design sign-off",
+  "recordedAt": "2026-06-05T02:00:00.000Z",
+  "wps": [
+   {
+    "wpId": "wp-1-1",
+    "start": "2026-06-01",
+    "finish": "2026-06-12",
+    "baselineMh": 64000,
+    "isMilestone": false
+   },
+   {
+    "wpId": "wp-1-2",
+    "start": "2026-06-11",
+    "finish": "2026-06-29",
+    "baselineMh": 96000,
+    "isMilestone": false
+   },
+   {
+    "wpId": "wp-1-3",
+    "start": "2026-06-21",
+    "finish": "2026-07-09",
+    "baselineMh": 80000,
+    "isMilestone": false
+   },
+   {
+    "wpId": "wp-1-4",
+    "start": "2026-06-21",
+    "finish": "2026-07-02",
+    "baselineMh": 56000,
+    "isMilestone": false
+   },
+   {
+    "wpId": "wp-1-5",
+    "start": "2026-07-07",
+    "finish": "2026-07-11",
+    "baselineMh": 24000,
+    "isMilestone": false
+   },
+   {
+    "wpId": "wp-2-1",
+    "start": "2026-07-11",
+    "finish": "2026-07-29",
+    "baselineMh": 120000,
+    "isMilestone": false
+   },
+   {
+    "wpId": "wp-2-2",
+    "start": "2026-07-15",
+    "finish": "2026-08-02",
+    "baselineMh": 88000,
+    "isMilestone": false
+   },
+   {
+    "wpId": "wp-2-3",
+    "start": "2026-07-21",
+    "finish": "2026-08-20",
+    "baselineMh": 136000,
+    "isMilestone": false
+   },
+   {
+    "wpId": "wp-2-4",
+    "start": "2026-07-31",
+    "finish": "2026-08-18",
+    "baselineMh": 104000,
+    "isMilestone": false
+   },
+   {
+    "wpId": "wp-2-5",
+    "start": "2026-08-04",
+    "finish": "2026-08-22",
+    "baselineMh": 96000,
+    "isMilestone": false
+   },
+   {
+    "wpId": "wp-2-6",
+    "start": "2026-08-10",
+    "finish": "2026-08-21",
+    "baselineMh": 48000,
+    "isMilestone": false
+   },
+   {
+    "wpId": "wp-2-7",
+    "start": "2026-08-16",
+    "finish": "2026-08-27",
+    "baselineMh": 56000,
+    "isMilestone": false
+   },
+   {
+    "wpId": "wp-3-1",
+    "start": "2026-08-20",
+    "finish": "2026-09-07",
+    "baselineMh": 112000,
+    "isMilestone": false
+   },
+   {
+    "wpId": "wp-3-2",
+    "start": "2026-08-25",
+    "finish": "2026-09-29",
+    "baselineMh": 128000,
+    "isMilestone": false
+   },
+   {
+    "wpId": "wp-3-3",
+    "start": "2026-08-31",
+    "finish": "2026-09-18",
+    "baselineMh": 96000,
+    "isMilestone": false
+   },
+   {
+    "wpId": "wp-3-4",
+    "start": "2026-09-04",
+    "finish": "2026-09-22",
+    "baselineMh": 72000,
+    "isMilestone": false
+   },
+   {
+    "wpId": "wp-3-5",
+    "start": "2026-09-08",
+    "finish": "2026-09-19",
+    "baselineMh": 56000,
+    "isMilestone": false
+   },
+   {
+    "wpId": "wp-3-6",
+    "start": "2026-09-12",
+    "finish": "2026-09-23",
+    "baselineMh": 40000,
+    "isMilestone": false
+   },
+   {
+    "wpId": "wp-3-7",
+    "start": "2026-09-18",
+    "finish": "2026-09-29",
+    "baselineMh": 64000,
+    "isMilestone": false
+   },
+   {
+    "wpId": "wp-4-1",
+    "start": "2026-09-12",
+    "finish": "2026-10-14",
+    "baselineMh": 120000,
+    "isMilestone": false
+   },
+   {
+    "wpId": "wp-4-2",
+    "start": "2026-09-20",
+    "finish": "2026-10-08",
+    "baselineMh": 80000,
+    "isMilestone": false
+   },
+   {
+    "wpId": "wp-4-3",
+    "start": "2026-09-24",
+    "finish": "2026-10-12",
+    "baselineMh": 72000,
+    "isMilestone": false
+   },
+   {
+    "wpId": "wp-4-4",
+    "start": "2026-09-28",
+    "finish": "2026-10-16",
+    "baselineMh": 88000,
+    "isMilestone": false
+   },
+   {
+    "wpId": "wp-4-5",
+    "start": "2026-10-04",
+    "finish": "2026-10-15",
+    "baselineMh": 64000,
+    "isMilestone": false
+   },
+   {
+    "wpId": "wp-4-6",
+    "start": "2026-10-10",
+    "finish": "2026-10-21",
+    "baselineMh": 40000,
+    "isMilestone": false
+   },
+   {
+    "wpId": "wp-5-1",
+    "start": "2026-09-28",
+    "finish": "2026-10-23",
+    "baselineMh": 104000,
+    "isMilestone": false
+   },
+   {
+    "wpId": "wp-5-2",
+    "start": "2026-10-06",
+    "finish": "2026-10-24",
+    "baselineMh": 80000,
+    "isMilestone": false
+   },
+   {
+    "wpId": "wp-5-3",
+    "start": "2026-10-10",
+    "finish": "2026-10-28",
+    "baselineMh": 96000,
+    "isMilestone": false
+   },
+   {
+    "wpId": "wp-5-4",
+    "start": "2026-10-18",
+    "finish": "2026-10-29",
+    "baselineMh": 56000,
+    "isMilestone": false
+   },
+   {
+    "wpId": "wp-5-5",
+    "start": "2026-10-02",
+    "finish": "2026-10-13",
+    "baselineMh": 40000,
+    "isMilestone": false
+   },
+   {
+    "wpId": "wp-6-1",
+    "start": "2026-09-24",
+    "finish": "2026-10-12",
+    "baselineMh": 72000,
+    "isMilestone": false
+   },
+   {
+    "wpId": "wp-6-2",
+    "start": "2026-10-14",
+    "finish": "2026-11-01",
+    "baselineMh": 128000,
+    "isMilestone": false
+   },
+   {
+    "wpId": "wp-6-3",
+    "start": "2026-10-26",
+    "finish": "2026-11-13",
+    "baselineMh": 96000,
+    "isMilestone": false
+   },
+   {
+    "wpId": "wp-6-4",
+    "start": "2026-11-07",
+    "finish": "2026-11-25",
+    "baselineMh": 80000,
+    "isMilestone": false
+   },
+   {
+    "wpId": "wp-6-5",
+    "start": "2026-11-03",
+    "finish": "2026-11-14",
+    "baselineMh": 56000,
+    "isMilestone": false
+   },
+   {
+    "wpId": "wp-7-1",
+    "start": "2026-11-15",
+    "finish": "2026-11-26",
+    "baselineMh": 48000,
+    "isMilestone": false
+   },
+   {
+    "wpId": "wp-7-2",
+    "start": "2026-11-27",
+    "finish": "2026-11-27",
+    "baselineMh": 0,
+    "isMilestone": true
+   },
+   {
+    "wpId": "wp-7-3",
+    "start": "2026-07-11",
+    "finish": "2026-10-14",
+    "baselineMh": 80000,
+    "isMilestone": false
+   },
+   {
+    "wpId": "wp-M1",
+    "start": "2026-07-09",
+    "finish": "2026-07-09",
+    "baselineMh": 0,
+    "isMilestone": true
+   },
+   {
+    "wpId": "wp-M2",
+    "start": "2026-08-23",
+    "finish": "2026-08-23",
+    "baselineMh": 0,
+    "isMilestone": true
+   },
+   {
+    "wpId": "wp-M3",
+    "start": "2026-09-08",
+    "finish": "2026-09-08",
+    "baselineMh": 0,
+    "isMilestone": true
+   }
+  ]
+ },
+ "mappingRules": [
+  {
+   "id": "rule-support",
+   "priority": 1,
+   "name": "Backlog category “Support” → 7.3 Support & miscellaneous",
+   "wpId": "wp-7-3",
+   "match": {
+    "field": "category",
+    "value": "Support"
+   }
+  },
+  {
+   "id": "rule-qa",
+   "priority": 2,
+   "name": "Backlog category “QA” → 6.2 System test cycle 1",
+   "wpId": "wp-6-2",
+   "match": {
+    "field": "category",
+    "value": "QA"
+   }
+  }
+ ],
+ "seedMappings": [
+  {
+   "ticketId": "bk-issue-1001",
+   "wpId": "wp-1-1",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1002",
+   "wpId": "wp-1-1",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1003",
+   "wpId": "wp-1-1",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1004",
+   "wpId": "wp-1-1",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1005",
+   "wpId": "wp-1-2",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1006",
+   "wpId": "wp-1-2",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1007",
+   "wpId": "wp-1-2",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1008",
+   "wpId": "wp-1-2",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1009",
+   "wpId": "wp-1-2",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1010",
+   "wpId": "wp-1-3",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1011",
+   "wpId": "wp-1-3",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1012",
+   "wpId": "wp-1-3",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1013",
+   "wpId": "wp-1-3",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1014",
+   "wpId": "wp-1-3",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1015",
+   "wpId": "wp-1-3",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1016",
+   "wpId": "wp-1-4",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1017",
+   "wpId": "wp-1-4",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1018",
+   "wpId": "wp-1-4",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1019",
+   "wpId": "wp-1-4",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1020",
+   "wpId": "wp-1-4",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1021",
+   "wpId": "wp-1-4",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1022",
+   "wpId": "wp-1-5",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1023",
+   "wpId": "wp-1-5",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1024",
+   "wpId": "wp-1-5",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1025",
+   "wpId": "wp-1-5",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1026",
+   "wpId": "wp-1-5",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1027",
+   "wpId": "wp-1-5",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1028",
+   "wpId": "wp-2-1",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1029",
+   "wpId": "wp-2-1",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1030",
+   "wpId": "wp-2-1",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1031",
+   "wpId": "wp-2-1",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1032",
+   "wpId": "wp-2-1",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1033",
+   "wpId": "wp-2-1",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1034",
+   "wpId": "wp-2-2",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1035",
+   "wpId": "wp-2-2",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1036",
+   "wpId": "wp-2-2",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1037",
+   "wpId": "wp-2-2",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1038",
+   "wpId": "wp-2-2",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1039",
+   "wpId": "wp-2-3",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1040",
+   "wpId": "wp-2-3",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1041",
+   "wpId": "wp-2-3",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1042",
+   "wpId": "wp-2-4",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1043",
+   "wpId": "wp-2-4",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1044",
+   "wpId": "wp-2-4",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1045",
+   "wpId": "wp-2-4",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1046",
+   "wpId": "wp-2-4",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1047",
+   "wpId": "wp-2-5",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1048",
+   "wpId": "wp-2-5",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1049",
+   "wpId": "wp-2-5",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1050",
+   "wpId": "wp-2-5",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1051",
+   "wpId": "wp-2-5",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1052",
+   "wpId": "wp-2-5",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1053",
+   "wpId": "wp-2-6",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1054",
+   "wpId": "wp-2-6",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1055",
+   "wpId": "wp-2-6",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1056",
+   "wpId": "wp-2-6",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1057",
+   "wpId": "wp-2-6",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1058",
+   "wpId": "wp-2-7",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1059",
+   "wpId": "wp-2-7",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1060",
+   "wpId": "wp-2-7",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1061",
+   "wpId": "wp-3-1",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1062",
+   "wpId": "wp-3-1",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1063",
+   "wpId": "wp-3-1",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1064",
+   "wpId": "wp-3-1",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1065",
+   "wpId": "wp-3-2",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1066",
+   "wpId": "wp-3-2",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1067",
+   "wpId": "wp-3-2",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1068",
+   "wpId": "wp-3-2",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1069",
+   "wpId": "wp-3-2",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1070",
+   "wpId": "wp-3-2",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1071",
+   "wpId": "wp-3-3",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1072",
+   "wpId": "wp-3-3",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1073",
+   "wpId": "wp-3-3",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1074",
+   "wpId": "wp-3-3",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1075",
+   "wpId": "wp-3-3",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1076",
+   "wpId": "wp-3-3",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1077",
+   "wpId": "wp-3-4",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1078",
+   "wpId": "wp-3-4",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1079",
+   "wpId": "wp-3-4",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1080",
+   "wpId": "wp-3-4",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1081",
+   "wpId": "wp-3-4",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1082",
+   "wpId": "wp-3-4",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1083",
+   "wpId": "wp-3-5",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1084",
+   "wpId": "wp-3-5",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1085",
+   "wpId": "wp-3-5",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1086",
+   "wpId": "wp-3-5",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1087",
+   "wpId": "wp-3-5",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1088",
+   "wpId": "wp-3-5",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1089",
+   "wpId": "wp-3-6",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1090",
+   "wpId": "wp-3-6",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1091",
+   "wpId": "wp-3-6",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1092",
+   "wpId": "wp-3-6",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1093",
+   "wpId": "wp-3-7",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1094",
+   "wpId": "wp-3-7",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1095",
+   "wpId": "wp-3-7",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1096",
+   "wpId": "wp-3-7",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1097",
+   "wpId": "wp-4-1",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1098",
+   "wpId": "wp-4-1",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1099",
+   "wpId": "wp-4-1",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1100",
+   "wpId": "wp-4-1",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1101",
+   "wpId": "wp-4-1",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1102",
+   "wpId": "wp-4-1",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1103",
+   "wpId": "wp-4-2",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1104",
+   "wpId": "wp-4-2",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1105",
+   "wpId": "wp-4-2",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1106",
+   "wpId": "wp-4-3",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1107",
+   "wpId": "wp-4-3",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1108",
+   "wpId": "wp-4-3",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1109",
+   "wpId": "wp-4-3",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1110",
+   "wpId": "wp-4-3",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1111",
+   "wpId": "wp-4-3",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1112",
+   "wpId": "wp-4-4",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1113",
+   "wpId": "wp-4-4",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1114",
+   "wpId": "wp-4-4",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1115",
+   "wpId": "wp-4-4",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1116",
+   "wpId": "wp-4-4",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1117",
+   "wpId": "wp-4-5",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1118",
+   "wpId": "wp-4-5",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1119",
+   "wpId": "wp-4-5",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1120",
+   "wpId": "wp-4-6",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1121",
+   "wpId": "wp-4-6",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1122",
+   "wpId": "wp-4-6",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1123",
+   "wpId": "wp-5-1",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1124",
+   "wpId": "wp-5-1",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1125",
+   "wpId": "wp-5-1",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1126",
+   "wpId": "wp-5-1",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1127",
+   "wpId": "wp-5-1",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1128",
+   "wpId": "wp-5-1",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1129",
+   "wpId": "wp-5-2",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1130",
+   "wpId": "wp-5-2",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1131",
+   "wpId": "wp-5-2",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1132",
+   "wpId": "wp-5-2",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1133",
+   "wpId": "wp-5-2",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1134",
+   "wpId": "wp-5-3",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1135",
+   "wpId": "wp-5-3",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1136",
+   "wpId": "wp-5-3",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1137",
+   "wpId": "wp-5-3",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1138",
+   "wpId": "wp-5-3",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1139",
+   "wpId": "wp-5-4",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1140",
+   "wpId": "wp-5-4",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1141",
+   "wpId": "wp-5-4",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1142",
+   "wpId": "wp-5-4",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1143",
+   "wpId": "wp-5-4",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1144",
+   "wpId": "wp-5-4",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1145",
+   "wpId": "wp-5-5",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1146",
+   "wpId": "wp-5-5",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1147",
+   "wpId": "wp-5-5",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1148",
+   "wpId": "wp-6-1",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1149",
+   "wpId": "wp-6-1",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1150",
+   "wpId": "wp-6-1",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1151",
+   "wpId": "wp-6-1",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1152",
+   "wpId": "wp-6-1",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1153",
+   "wpId": "wp-6-2",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1154",
+   "wpId": "wp-6-2",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1155",
+   "wpId": "wp-6-2",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1156",
+   "wpId": "wp-6-2",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1157",
+   "wpId": "wp-6-2",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1158",
+   "wpId": "wp-6-3",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1159",
+   "wpId": "wp-6-3",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1160",
+   "wpId": "wp-6-3",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1161",
+   "wpId": "wp-6-4",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1162",
+   "wpId": "wp-6-4",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1163",
+   "wpId": "wp-6-4",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1164",
+   "wpId": "wp-6-4",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1165",
+   "wpId": "wp-6-4",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1166",
+   "wpId": "wp-6-4",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1167",
+   "wpId": "wp-6-5",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1168",
+   "wpId": "wp-6-5",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1169",
+   "wpId": "wp-6-5",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1170",
+   "wpId": "wp-7-1",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1171",
+   "wpId": "wp-7-1",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1172",
+   "wpId": "wp-7-1",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1173",
+   "wpId": "wp-7-1",
+   "source": "manual"
+  },
+  {
+   "ticketId": "bk-issue-1174",
+   "wpId": "wp-7-1",
+   "source": "manual"
+  }
+ ]
+}

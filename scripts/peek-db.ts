@@ -1,0 +1,11 @@
+import { loadReview } from '../packages/db/src/repo.js';
+import { getPool } from '../packages/db/src/client.js';
+import { hours, present, share } from '../packages/domain/src/index.js';
+const { review: r, bundle } = await loadReview();
+console.log('anchor', bundle.meta.anchor, 'snapshot age(min)', bundle.meta.snapshotAgeMinutes);
+console.log('SPI', present(r.evm.spi).text, 'CPI all-in', present(r.evm.cpiAllIn).text, 'CPI planned', present(r.evm.cpiPlannedScope).text, 'TCPI', present(r.evm.tcpi).text);
+console.log('BAC', hours(r.evm.bacMh), 'PV', hours(r.evm.pvMh), 'EV', hours(r.evm.evMh), 'AC', hours(r.evm.acMh));
+console.log('unplanned period', hours(r.unplanned.period.unplannedMh), r.unplanned.sharePeriod && share(r.unplanned.sharePeriod));
+console.log('components', r.unplanned.components.map(c=>`${c.label}=${hours(c.mh)}`).join(' | '));
+console.log('health', r.health.indicators.map(i=>`${i.key}:${i.colour}`).join(' '), '->', r.health.overall);
+await getPool().end();

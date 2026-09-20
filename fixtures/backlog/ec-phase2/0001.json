@@ -1,0 +1,1185 @@
+{
+ "scenario": "ec-phase2",
+ "page": 1,
+ "observedAtOffsetHours": -842,
+ "recordedObservedAt": "2026-08-11T09:00:00.000Z",
+ "hoursFieldPresent": true,
+ "tickets": [
+  {
+   "trackerIssueId": "bk-issue-1001",
+   "key": "EC2-1001",
+   "title": "Implement requirements workshops with client (1/4)",
+   "statusId": "Closed",
+   "resolved": true,
+   "estimateMh": 18848,
+   "actualMh": 16032,
+   "assigneeAccountId": "bk-1006",
+   "issueTypeId": "Task",
+   "categoryIds": [
+    "Development"
+   ],
+   "milestoneIds": [
+    "Phase2-Sprint1"
+   ],
+   "createdAt": "2026-06-01T01:00:00.000Z"
+  },
+  {
+   "trackerIssueId": "bk-issue-1002",
+   "key": "EC2-1002",
+   "title": "Refactor requirements workshops with client (2/4)",
+   "statusId": "Closed",
+   "resolved": true,
+   "estimateMh": 19225,
+   "actualMh": 21644,
+   "assigneeAccountId": "bk-1003",
+   "issueTypeId": "Task",
+   "categoryIds": [
+    "Development"
+   ],
+   "milestoneIds": [
+    "Phase2-Sprint1"
+   ],
+   "createdAt": "2026-06-04T01:00:00.000Z"
+  },
+  {
+   "trackerIssueId": "bk-issue-1003",
+   "key": "EC2-1003",
+   "title": "Write tests for requirements workshops with client (3/4)",
+   "statusId": "Closed",
+   "resolved": true,
+   "estimateMh": 14460,
+   "actualMh": 17318,
+   "assigneeAccountId": "bk-1002",
+   "issueTypeId": "Task",
+   "categoryIds": [
+    "Development"
+   ],
+   "milestoneIds": [
+    "Phase2-Sprint1"
+   ],
+   "createdAt": "2026-06-08T01:00:00.000Z"
+  },
+  {
+   "trackerIssueId": "bk-issue-1004",
+   "key": "EC2-1004",
+   "title": "Review requirements workshops with client (4/4)",
+   "statusId": "Closed",
+   "resolved": true,
+   "estimateMh": 11467,
+   "actualMh": 9778,
+   "assigneeAccountId": "bk-1006",
+   "issueTypeId": "Task",
+   "categoryIds": [
+    "Development"
+   ],
+   "milestoneIds": [
+    "Phase2-Sprint1"
+   ],
+   "createdAt": "2026-06-11T01:00:00.000Z"
+  },
+  {
+   "trackerIssueId": "bk-issue-1005",
+   "key": "EC2-1005",
+   "title": "Implement functional specification (ja) (1/5)",
+   "statusId": "Closed",
+   "resolved": true,
+   "estimateMh": 15051,
+   "actualMh": 14775,
+   "assigneeAccountId": "bk-1099",
+   "issueTypeId": "Task",
+   "categoryIds": [
+    "Development"
+   ],
+   "milestoneIds": [
+    "Phase2-Sprint1"
+   ],
+   "createdAt": "2026-06-11T01:00:00.000Z"
+  },
+  {
+   "trackerIssueId": "bk-issue-1006",
+   "key": "EC2-1006",
+   "title": "Refactor functional specification (ja) (2/5)",
+   "statusId": "Closed",
+   "resolved": true,
+   "estimateMh": 21531,
+   "actualMh": 26356,
+   "assigneeAccountId": "bk-1004",
+   "issueTypeId": "Task",
+   "categoryIds": [
+    "Development"
+   ],
+   "milestoneIds": [
+    "Phase2-Sprint1"
+   ],
+   "createdAt": "2026-06-15T01:00:00.000Z"
+  },
+  {
+   "trackerIssueId": "bk-issue-1007",
+   "key": "EC2-1007",
+   "title": "Write tests for functional specification (ja) (3/5)",
+   "statusId": "Closed",
+   "resolved": true,
+   "estimateMh": 27545,
+   "actualMh": 35570,
+   "assigneeAccountId": "bk-1005",
+   "issueTypeId": "Task",
+   "categoryIds": [
+    "Development"
+   ],
+   "milestoneIds": [
+    "Phase2-Sprint1"
+   ],
+   "createdAt": "2026-06-20T01:00:00.000Z"
+  },
+  {
+   "trackerIssueId": "bk-issue-1008",
+   "key": "EC2-1008",
+   "title": "Review functional specification (ja) (4/5)",
+   "statusId": "Closed",
+   "resolved": true,
+   "estimateMh": 13291,
+   "actualMh": 13563,
+   "assigneeAccountId": "bk-1005",
+   "issueTypeId": "Task",
+   "categoryIds": [
+    "Development"
+   ],
+   "milestoneIds": [
+    "Phase2-Sprint1"
+   ],
+   "createdAt": "2026-06-24T01:00:00.000Z"
+  },
+  {
+   "trackerIssueId": "bk-issue-1009",
+   "key": "EC2-1009",
+   "title": "Fix spec gap in functional specification (ja) (5/5)",
+   "statusId": "Closed",
+   "resolved": true,
+   "estimateMh": 18581,
+   "actualMh": 19876,
+   "assigneeAccountId": null,
+   "issueTypeId": "Task",
+   "categoryIds": [
+    "Development"
+   ],
+   "milestoneIds": [
+    "Phase2-Sprint2"
+   ],
+   "createdAt": "2026-06-28T01:00:00.000Z"
+  },
+  {
+   "trackerIssueId": "bk-issue-1010",
+   "key": "EC2-1010",
+   "title": "Implement screen design & wireframes (1/6)",
+   "statusId": "Closed",
+   "resolved": true,
+   "estimateMh": 11304,
+   "actualMh": 10571,
+   "assigneeAccountId": null,
+   "issueTypeId": "Task",
+   "categoryIds": [
+    "Development"
+   ],
+   "milestoneIds": [
+    "Phase2-Sprint1"
+   ],
+   "createdAt": "2026-06-21T01:00:00.000Z"
+  },
+  {
+   "trackerIssueId": "bk-issue-1011",
+   "key": "EC2-1011",
+   "title": "Refactor screen design & wireframes (2/6)",
+   "statusId": "Closed",
+   "resolved": true,
+   "estimateMh": 15028,
+   "actualMh": 11891,
+   "assigneeAccountId": "bk-1003",
+   "issueTypeId": "Task",
+   "categoryIds": [
+    "Development"
+   ],
+   "milestoneIds": [
+    "Phase2-Sprint1"
+   ],
+   "createdAt": "2026-06-25T01:00:00.000Z"
+  },
+  {
+   "trackerIssueId": "bk-issue-1012",
+   "key": "EC2-1012",
+   "title": "Write tests for screen design & wireframes (3/6)",
+   "statusId": "Closed",
+   "resolved": true,
+   "estimateMh": 19649,
+   "actualMh": 15316,
+   "assigneeAccountId": "bk-1002",
+   "issueTypeId": "Task",
+   "categoryIds": [
+    "Development"
+   ],
+   "milestoneIds": [
+    "Phase2-Sprint1"
+   ],
+   "createdAt": "2026-06-28T01:00:00.000Z"
+  },
+  {
+   "trackerIssueId": "bk-issue-1013",
+   "key": "EC2-1013",
+   "title": "Review screen design & wireframes (4/6)",
+   "statusId": "Closed",
+   "resolved": true,
+   "estimateMh": 10728,
+   "actualMh": 9431,
+   "assigneeAccountId": "bk-1099",
+   "issueTypeId": "Task",
+   "categoryIds": [
+    "Development"
+   ],
+   "milestoneIds": [
+    "Phase2-Sprint1"
+   ],
+   "createdAt": "2026-07-02T01:00:00.000Z"
+  },
+  {
+   "trackerIssueId": "bk-issue-1014",
+   "key": "EC2-1014",
+   "title": "Fix spec gap in screen design & wireframes (5/6)",
+   "statusId": "Closed",
+   "resolved": true,
+   "estimateMh": 12717,
+   "actualMh": 14185,
+   "assigneeAccountId": "bk-1003",
+   "issueTypeId": "Task",
+   "categoryIds": [
+    "Development"
+   ],
+   "milestoneIds": [
+    "Phase2-Sprint2"
+   ],
+   "createdAt": "2026-07-05T01:00:00.000Z"
+  },
+  {
+   "trackerIssueId": "bk-issue-1015",
+   "key": "EC2-1015",
+   "title": "Document screen design & wireframes (6/6)",
+   "statusId": "Closed",
+   "resolved": true,
+   "estimateMh": 10574,
+   "actualMh": 10345,
+   "assigneeAccountId": "bk-1004",
+   "issueTypeId": "Task",
+   "categoryIds": [
+    "Development"
+   ],
+   "milestoneIds": [
+    "Phase2-Sprint2"
+   ],
+   "createdAt": "2026-07-09T01:00:00.000Z"
+  },
+  {
+   "trackerIssueId": "bk-issue-1016",
+   "key": "EC2-1016",
+   "title": "Implement data model & migration plan (1/6)",
+   "statusId": "Closed",
+   "resolved": true,
+   "estimateMh": 11829,
+   "actualMh": 14256,
+   "assigneeAccountId": "bk-1005",
+   "issueTypeId": "Task",
+   "categoryIds": [
+    "Development"
+   ],
+   "milestoneIds": [
+    "Phase2-Sprint1"
+   ],
+   "createdAt": "2026-06-21T01:00:00.000Z"
+  },
+  {
+   "trackerIssueId": "bk-issue-1017",
+   "key": "EC2-1017",
+   "title": "Refactor data model & migration plan (2/6)",
+   "statusId": "Closed",
+   "resolved": true,
+   "estimateMh": 5310,
+   "actualMh": 4503,
+   "assigneeAccountId": "bk-1006",
+   "issueTypeId": "Task",
+   "categoryIds": [
+    "Development"
+   ],
+   "milestoneIds": [
+    "Phase2-Sprint1"
+   ],
+   "createdAt": "2026-06-23T01:00:00.000Z"
+  },
+  {
+   "trackerIssueId": "bk-issue-1018",
+   "key": "EC2-1018",
+   "title": "Write tests for data model & migration plan (3/6)",
+   "statusId": "Closed",
+   "resolved": true,
+   "estimateMh": 10326,
+   "actualMh": 9290,
+   "assigneeAccountId": "bk-1003",
+   "issueTypeId": "Task",
+   "categoryIds": [
+    "Development"
+   ],
+   "milestoneIds": [
+    "Phase2-Sprint1"
+   ],
+   "createdAt": "2026-06-25T01:00:00.000Z"
+  },
+  {
+   "trackerIssueId": "bk-issue-1019",
+   "key": "EC2-1019",
+   "title": "Review data model & migration plan (4/6)",
+   "statusId": "Closed",
+   "resolved": true,
+   "estimateMh": 10050,
+   "actualMh": 11872,
+   "assigneeAccountId": "bk-1004",
+   "issueTypeId": "Task",
+   "categoryIds": [
+    "Development"
+   ],
+   "milestoneIds": [
+    "Phase2-Sprint1"
+   ],
+   "createdAt": "2026-06-28T01:00:00.000Z"
+  },
+  {
+   "trackerIssueId": "bk-issue-1020",
+   "key": "EC2-1020",
+   "title": "Fix spec gap in data model & migration plan (5/6)",
+   "statusId": "Closed",
+   "resolved": true,
+   "estimateMh": 7462,
+   "actualMh": 5795,
+   "assigneeAccountId": "bk-1002",
+   "issueTypeId": "Task",
+   "categoryIds": [
+    "Development"
+   ],
+   "milestoneIds": [
+    "Phase2-Sprint1"
+   ],
+   "createdAt": "2026-06-30T01:00:00.000Z"
+  },
+  {
+   "trackerIssueId": "bk-issue-1021",
+   "key": "EC2-1021",
+   "title": "Document data model & migration plan (6/6)",
+   "statusId": "Closed",
+   "resolved": true,
+   "estimateMh": 11023,
+   "actualMh": 10169,
+   "assigneeAccountId": "bk-1099",
+   "issueTypeId": "Task",
+   "categoryIds": [
+    "Development"
+   ],
+   "milestoneIds": [
+    "Phase2-Sprint1"
+   ],
+   "createdAt": "2026-07-02T01:00:00.000Z"
+  },
+  {
+   "trackerIssueId": "bk-issue-1022",
+   "key": "EC2-1022",
+   "title": "Implement design review sign-off (1/6)",
+   "statusId": "Closed",
+   "resolved": true,
+   "estimateMh": 4616,
+   "actualMh": 3778,
+   "assigneeAccountId": "bk-1005",
+   "issueTypeId": "Task",
+   "categoryIds": [
+    "Development"
+   ],
+   "milestoneIds": [
+    "Phase2-Sprint1"
+   ],
+   "createdAt": "2026-07-07T01:00:00.000Z"
+  },
+  {
+   "trackerIssueId": "bk-issue-1023",
+   "key": "EC2-1023",
+   "title": "Refactor design review sign-off (2/6)",
+   "statusId": "Closed",
+   "resolved": true,
+   "estimateMh": 4851,
+   "actualMh": 5491,
+   "assigneeAccountId": "bk-1099",
+   "issueTypeId": "Task",
+   "categoryIds": [
+    "Development"
+   ],
+   "milestoneIds": [
+    "Phase2-Sprint1"
+   ],
+   "createdAt": "2026-07-08T01:00:00.000Z"
+  },
+  {
+   "trackerIssueId": "bk-issue-1024",
+   "key": "EC2-1024",
+   "title": "Write tests for design review sign-off (3/6)",
+   "statusId": "Closed",
+   "resolved": true,
+   "estimateMh": 4472,
+   "actualMh": 4990,
+   "assigneeAccountId": "bk-1006",
+   "issueTypeId": "Task",
+   "categoryIds": [
+    "Development"
+   ],
+   "milestoneIds": [
+    "Phase2-Sprint1"
+   ],
+   "createdAt": "2026-07-09T01:00:00.000Z"
+  },
+  {
+   "trackerIssueId": "bk-issue-1025",
+   "key": "EC2-1025",
+   "title": "Review design review sign-off (4/6)",
+   "statusId": "Closed",
+   "resolved": true,
+   "estimateMh": 3966,
+   "actualMh": 4981,
+   "assigneeAccountId": "bk-1003",
+   "issueTypeId": "Task",
+   "categoryIds": [
+    "Development"
+   ],
+   "milestoneIds": [
+    "Phase2-Sprint1"
+   ],
+   "createdAt": "2026-07-09T01:00:00.000Z"
+  },
+  {
+   "trackerIssueId": "bk-issue-1026",
+   "key": "EC2-1026",
+   "title": "Fix spec gap in design review sign-off (5/6)",
+   "statusId": "Closed",
+   "resolved": true,
+   "estimateMh": 2939,
+   "actualMh": 3490,
+   "assigneeAccountId": "bk-1003",
+   "issueTypeId": "Task",
+   "categoryIds": [
+    "Development"
+   ],
+   "milestoneIds": [
+    "Phase2-Sprint1"
+   ],
+   "createdAt": "2026-07-10T01:00:00.000Z"
+  },
+  {
+   "trackerIssueId": "bk-issue-1027",
+   "key": "EC2-1027",
+   "title": "Document design review sign-off (6/6)",
+   "statusId": "Closed",
+   "resolved": true,
+   "estimateMh": 3156,
+   "actualMh": 3114,
+   "assigneeAccountId": "bk-1006",
+   "issueTypeId": "Task",
+   "categoryIds": [
+    "Development"
+   ],
+   "milestoneIds": [
+    "Phase2-Sprint1"
+   ],
+   "createdAt": "2026-07-11T01:00:00.000Z"
+  },
+  {
+   "trackerIssueId": "bk-issue-1028",
+   "key": "EC2-1028",
+   "title": "Implement product master api (1/6)",
+   "statusId": "Closed",
+   "resolved": true,
+   "estimateMh": 23197,
+   "actualMh": 19355,
+   "assigneeAccountId": "bk-1002",
+   "issueTypeId": "Task",
+   "categoryIds": [
+    "Development"
+   ],
+   "milestoneIds": [
+    "Phase2-Sprint1"
+   ],
+   "createdAt": "2026-07-11T01:00:00.000Z"
+  },
+  {
+   "trackerIssueId": "bk-issue-1029",
+   "key": "EC2-1029",
+   "title": "Refactor product master api (2/6)",
+   "statusId": "Closed",
+   "resolved": true,
+   "estimateMh": 21423,
+   "actualMh": 24796,
+   "assigneeAccountId": "bk-1004",
+   "issueTypeId": "Task",
+   "categoryIds": [
+    "Development"
+   ],
+   "milestoneIds": [
+    "Phase2-Sprint1"
+   ],
+   "createdAt": "2026-07-15T01:00:00.000Z"
+  },
+  {
+   "trackerIssueId": "bk-issue-1030",
+   "key": "EC2-1030",
+   "title": "Write tests for product master api (3/6)",
+   "statusId": "Closed",
+   "resolved": true,
+   "estimateMh": 19867,
+   "actualMh": 24037,
+   "assigneeAccountId": "bk-1005",
+   "issueTypeId": "Task",
+   "categoryIds": [
+    "Development"
+   ],
+   "milestoneIds": [
+    "Phase2-Sprint1"
+   ],
+   "createdAt": "2026-07-18T01:00:00.000Z"
+  },
+  {
+   "trackerIssueId": "bk-issue-1031",
+   "key": "EC2-1031",
+   "title": "Review product master api (4/6)",
+   "statusId": "Closed",
+   "resolved": true,
+   "estimateMh": 22061,
+   "actualMh": 24743,
+   "assigneeAccountId": "bk-1002",
+   "issueTypeId": "Task",
+   "categoryIds": [
+    "Development"
+   ],
+   "milestoneIds": [
+    "Phase2-Sprint1"
+   ],
+   "createdAt": "2026-07-22T01:00:00.000Z"
+  },
+  {
+   "trackerIssueId": "bk-issue-1032",
+   "key": "EC2-1032",
+   "title": "Fix spec gap in product master api (5/6)",
+   "statusId": "Closed",
+   "resolved": true,
+   "estimateMh": 15703,
+   "actualMh": 19480,
+   "assigneeAccountId": "bk-1004",
+   "issueTypeId": "Task",
+   "categoryIds": [
+    "Development"
+   ],
+   "milestoneIds": [
+    "Phase2-Sprint2"
+   ],
+   "createdAt": "2026-07-25T01:00:00.000Z"
+  },
+  {
+   "trackerIssueId": "bk-issue-1033",
+   "key": "EC2-1033",
+   "title": "Document product master api (6/6)",
+   "statusId": "Closed",
+   "resolved": true,
+   "estimateMh": 17750,
+   "actualMh": 20862,
+   "assigneeAccountId": null,
+   "issueTypeId": "Task",
+   "categoryIds": [
+    "Development"
+   ],
+   "milestoneIds": [
+    "Phase2-Sprint2"
+   ],
+   "createdAt": "2026-07-29T01:00:00.000Z"
+  },
+  {
+   "trackerIssueId": "bk-issue-1034",
+   "key": "EC2-1034",
+   "title": "Implement category tree revamp (1/5)",
+   "statusId": "Closed",
+   "resolved": true,
+   "estimateMh": 20320,
+   "actualMh": 21414,
+   "assigneeAccountId": "bk-1002",
+   "issueTypeId": "Task",
+   "categoryIds": [
+    "Development"
+   ],
+   "milestoneIds": [
+    "Phase2-Sprint1"
+   ],
+   "createdAt": "2026-07-15T01:00:00.000Z"
+  },
+  {
+   "trackerIssueId": "bk-issue-1035",
+   "key": "EC2-1035",
+   "title": "Refactor category tree revamp (2/5)",
+   "statusId": "Closed",
+   "resolved": true,
+   "estimateMh": 21911,
+   "actualMh": 27963,
+   "assigneeAccountId": "bk-1099",
+   "issueTypeId": "Task",
+   "categoryIds": [
+    "Development"
+   ],
+   "milestoneIds": [
+    "Phase2-Sprint1"
+   ],
+   "createdAt": "2026-07-19T01:00:00.000Z"
+  },
+  {
+   "trackerIssueId": "bk-issue-1036",
+   "key": "EC2-1036",
+   "title": "Write tests for category tree revamp (3/5)",
+   "statusId": "Closed",
+   "resolved": true,
+   "estimateMh": 12506,
+   "actualMh": 13694,
+   "assigneeAccountId": "bk-1099",
+   "issueTypeId": "Task",
+   "categoryIds": [
+    "Development"
+   ],
+   "milestoneIds": [
+    "Phase2-Sprint1"
+   ],
+   "createdAt": "2026-07-24T01:00:00.000Z"
+  },
+  {
+   "trackerIssueId": "bk-issue-1037",
+   "key": "EC2-1037",
+   "title": "Review category tree revamp (4/5)",
+   "statusId": "Closed",
+   "resolved": true,
+   "estimateMh": 15140,
+   "actualMh": 15872,
+   "assigneeAccountId": "bk-1002",
+   "issueTypeId": "Task",
+   "categoryIds": [
+    "Development"
+   ],
+   "milestoneIds": [
+    "Phase2-Sprint1"
+   ],
+   "createdAt": "2026-07-28T01:00:00.000Z"
+  },
+  {
+   "trackerIssueId": "bk-issue-1038",
+   "key": "EC2-1038",
+   "title": "Fix spec gap in category tree revamp (5/5)",
+   "statusId": "Closed",
+   "resolved": true,
+   "estimateMh": 18123,
+   "actualMh": 16552,
+   "assigneeAccountId": "bk-1005",
+   "issueTypeId": "Task",
+   "categoryIds": [
+    "Development"
+   ],
+   "milestoneIds": [
+    "Phase2-Sprint2"
+   ],
+   "createdAt": "2026-08-01T01:00:00.000Z"
+  },
+  {
+   "trackerIssueId": "bk-issue-1039",
+   "key": "EC2-1039",
+   "title": "Implement search indexing pipeline (1/3)",
+   "statusId": "Closed",
+   "resolved": true,
+   "estimateMh": 63614,
+   "actualMh": 80616,
+   "assigneeAccountId": "bk-1002",
+   "issueTypeId": "Task",
+   "categoryIds": [
+    "Development"
+   ],
+   "milestoneIds": [
+    "Phase2-Sprint1"
+   ],
+   "createdAt": "2026-07-21T01:00:00.000Z"
+  },
+  {
+   "trackerIssueId": "bk-issue-1040",
+   "key": "EC2-1040",
+   "title": "Refactor search indexing pipeline (2/3)",
+   "statusId": "In Progress",
+   "resolved": false,
+   "estimateMh": 27937,
+   "actualMh": 16884,
+   "assigneeAccountId": "bk-1006",
+   "issueTypeId": "Task",
+   "categoryIds": [
+    "Development"
+   ],
+   "milestoneIds": [
+    "Phase2-Sprint1"
+   ],
+   "createdAt": "2026-08-02T01:00:00.000Z"
+  },
+  {
+   "trackerIssueId": "bk-issue-1042",
+   "key": "EC2-1042",
+   "title": "Implement faceted search ui (1/5)",
+   "statusId": "Closed",
+   "resolved": true,
+   "estimateMh": 16246,
+   "actualMh": 18692,
+   "assigneeAccountId": "bk-1004",
+   "issueTypeId": "Task",
+   "categoryIds": [
+    "Development"
+   ],
+   "milestoneIds": [
+    "Phase2-Sprint1"
+   ],
+   "createdAt": "2026-07-31T01:00:00.000Z"
+  },
+  {
+   "trackerIssueId": "bk-issue-1043",
+   "key": "EC2-1043",
+   "title": "Refactor faceted search ui (2/5)",
+   "statusId": "Closed",
+   "resolved": true,
+   "estimateMh": 12170,
+   "actualMh": 10551,
+   "assigneeAccountId": "bk-1004",
+   "issueTypeId": "Task",
+   "categoryIds": [
+    "Development"
+   ],
+   "milestoneIds": [
+    "Phase2-Sprint1"
+   ],
+   "createdAt": "2026-08-04T01:00:00.000Z"
+  },
+  {
+   "trackerIssueId": "bk-issue-1044",
+   "key": "EC2-1044",
+   "title": "Write tests for faceted search ui (3/5)",
+   "statusId": "In Progress",
+   "resolved": false,
+   "estimateMh": 21547,
+   "actualMh": 8818,
+   "assigneeAccountId": "bk-1004",
+   "issueTypeId": "Task",
+   "categoryIds": [
+    "Development"
+   ],
+   "milestoneIds": [
+    "Phase2-Sprint1"
+   ],
+   "createdAt": "2026-08-09T01:00:00.000Z"
+  },
+  {
+   "trackerIssueId": "bk-issue-1047",
+   "key": "EC2-1047",
+   "title": "Implement product detail page (1/6)",
+   "statusId": "Closed",
+   "resolved": true,
+   "estimateMh": 11363,
+   "actualMh": 11294,
+   "assigneeAccountId": "bk-1005",
+   "issueTypeId": "Task",
+   "categoryIds": [
+    "Development"
+   ],
+   "milestoneIds": [
+    "Phase2-Sprint1"
+   ],
+   "createdAt": "2026-08-04T01:00:00.000Z"
+  },
+  {
+   "trackerIssueId": "bk-issue-1048",
+   "key": "EC2-1048",
+   "title": "Refactor product detail page (2/6)",
+   "statusId": "In Progress",
+   "resolved": false,
+   "estimateMh": 17892,
+   "actualMh": 17175,
+   "assigneeAccountId": "bk-1002",
+   "issueTypeId": "Task",
+   "categoryIds": [
+    "Development"
+   ],
+   "milestoneIds": [
+    "Phase2-Sprint1"
+   ],
+   "createdAt": "2026-08-08T01:00:00.000Z"
+  },
+  {
+   "trackerIssueId": "bk-issue-1049",
+   "key": "EC2-1049",
+   "title": "Write tests for product detail page (3/6)",
+   "statusId": "Open",
+   "resolved": false,
+   "estimateMh": 9970,
+   "actualMh": 0,
+   "assigneeAccountId": "bk-1005",
+   "issueTypeId": "Task",
+   "categoryIds": [
+    "Development"
+   ],
+   "milestoneIds": [
+    "Phase2-Sprint1"
+   ],
+   "createdAt": "2026-08-11T01:00:00.000Z"
+  },
+  {
+   "trackerIssueId": "bk-issue-1053",
+   "key": "EC2-1053",
+   "title": "Implement image cdn integration (1/5)",
+   "statusId": "In Progress",
+   "resolved": false,
+   "estimateMh": 7828,
+   "actualMh": 3148,
+   "assigneeAccountId": "bk-1006",
+   "issueTypeId": "Task",
+   "categoryIds": [
+    "Development"
+   ],
+   "milestoneIds": [
+    "Phase2-Sprint1"
+   ],
+   "createdAt": "2026-08-10T01:00:00.000Z"
+  },
+  {
+   "trackerIssueId": "bk-issue-1175",
+   "key": "EC2-1175",
+   "title": "Implement support & miscellaneous (catch-all) (1/16)",
+   "statusId": "Closed",
+   "resolved": true,
+   "estimateMh": 17090,
+   "actualMh": 18673,
+   "assigneeAccountId": "bk-1099",
+   "issueTypeId": "Task",
+   "categoryIds": [
+    "Support"
+   ],
+   "milestoneIds": [
+    "Phase2-Sprint1"
+   ],
+   "createdAt": "2026-07-11T01:00:00.000Z"
+  },
+  {
+   "trackerIssueId": "bk-issue-1176",
+   "key": "EC2-1176",
+   "title": "Refactor support & miscellaneous (catch-all) (2/16)",
+   "statusId": "Closed",
+   "resolved": true,
+   "estimateMh": 14849,
+   "actualMh": 18698,
+   "assigneeAccountId": "bk-1006",
+   "issueTypeId": "Task",
+   "categoryIds": [
+    "Support"
+   ],
+   "milestoneIds": [
+    "Phase2-Sprint1"
+   ],
+   "createdAt": "2026-07-18T01:00:00.000Z"
+  },
+  {
+   "trackerIssueId": "bk-issue-1177",
+   "key": "EC2-1177",
+   "title": "Write tests for support & miscellaneous (catch-all) (3/16)",
+   "statusId": "Closed",
+   "resolved": true,
+   "estimateMh": 11644,
+   "actualMh": 13116,
+   "assigneeAccountId": "bk-1006",
+   "issueTypeId": "Task",
+   "categoryIds": [
+    "Support"
+   ],
+   "milestoneIds": [
+    "Phase2-Sprint2"
+   ],
+   "createdAt": "2026-07-25T01:00:00.000Z"
+  },
+  {
+   "trackerIssueId": "bk-issue-1178",
+   "key": "EC2-1178",
+   "title": "Review support & miscellaneous (catch-all) (4/16)",
+   "statusId": "Closed",
+   "resolved": true,
+   "estimateMh": 13992,
+   "actualMh": 14136,
+   "assigneeAccountId": "bk-1006",
+   "issueTypeId": "Task",
+   "categoryIds": [
+    "Support"
+   ],
+   "milestoneIds": [
+    "Phase2-Sprint2"
+   ],
+   "createdAt": "2026-08-01T01:00:00.000Z"
+  },
+  {
+   "trackerIssueId": "bk-issue-1179",
+   "key": "EC2-1179",
+   "title": "Fix spec gap in support & miscellaneous (catch-all) (5/16)",
+   "statusId": "In Progress",
+   "resolved": false,
+   "estimateMh": 12836,
+   "actualMh": 2941,
+   "assigneeAccountId": "bk-1002",
+   "issueTypeId": "Task",
+   "categoryIds": [
+    "Support"
+   ],
+   "milestoneIds": [
+    "Phase2-Sprint3"
+   ],
+   "createdAt": "2026-08-09T01:00:00.000Z"
+  },
+  {
+   "trackerIssueId": "bk-issue-1192",
+   "key": "EC2-1192",
+   "title": "Cart total mismatches when coupon + point used",
+   "statusId": "Closed",
+   "resolved": true,
+   "estimateMh": null,
+   "actualMh": 4985,
+   "assigneeAccountId": "bk-1099",
+   "issueTypeId": "Bug",
+   "categoryIds": [
+    "Bug"
+   ],
+   "milestoneIds": [],
+   "createdAt": "2026-06-15T01:00:00.000Z"
+  },
+  {
+   "trackerIssueId": "bk-issue-1194",
+   "key": "EC2-1194",
+   "title": "Search facet count wrong after re-index",
+   "statusId": "In Progress",
+   "resolved": false,
+   "estimateMh": null,
+   "actualMh": 9798,
+   "assigneeAccountId": "bk-1006",
+   "issueTypeId": "Bug",
+   "categoryIds": [
+    "Bug"
+   ],
+   "milestoneIds": [],
+   "createdAt": "2026-07-31T01:00:00.000Z"
+  },
+  {
+   "trackerIssueId": "bk-issue-1195",
+   "key": "EC2-1195",
+   "title": "Order mail missing 税込 line",
+   "statusId": "Closed",
+   "resolved": true,
+   "estimateMh": null,
+   "actualMh": 9899,
+   "assigneeAccountId": "bk-1004",
+   "issueTypeId": "Bug",
+   "categoryIds": [
+    "Bug"
+   ],
+   "milestoneIds": [],
+   "createdAt": "2026-06-27T01:00:00.000Z"
+  },
+  {
+   "trackerIssueId": "bk-issue-1196",
+   "key": "EC2-1196",
+   "title": "Session drops on payment return from GMO",
+   "statusId": "Closed",
+   "resolved": true,
+   "estimateMh": null,
+   "actualMh": 8147,
+   "assigneeAccountId": "bk-1004",
+   "issueTypeId": "Bug",
+   "categoryIds": [
+    "Bug"
+   ],
+   "milestoneIds": [],
+   "createdAt": "2026-07-15T01:00:00.000Z"
+  },
+  {
+   "trackerIssueId": "bk-issue-1198",
+   "key": "EC2-1198",
+   "title": "Stock shows 0 for pre-order items",
+   "statusId": "In Progress",
+   "resolved": false,
+   "estimateMh": null,
+   "actualMh": 4226,
+   "assigneeAccountId": "bk-1004",
+   "issueTypeId": "Bug",
+   "categoryIds": [
+    "Bug"
+   ],
+   "milestoneIds": [],
+   "createdAt": "2026-07-31T01:00:00.000Z"
+  },
+  {
+   "trackerIssueId": "bk-issue-1200",
+   "key": "EC2-1200",
+   "title": "Guest checkout loses delivery slot",
+   "statusId": "Closed",
+   "resolved": true,
+   "estimateMh": null,
+   "actualMh": 8673,
+   "assigneeAccountId": "bk-1006",
+   "issueTypeId": "Bug",
+   "categoryIds": [
+    "Bug"
+   ],
+   "milestoneIds": [],
+   "createdAt": "2026-07-21T01:00:00.000Z"
+  },
+  {
+   "trackerIssueId": "bk-issue-1201",
+   "key": "EC2-1201",
+   "title": "Point balance not rolled back on refund",
+   "statusId": "Closed",
+   "resolved": true,
+   "estimateMh": null,
+   "actualMh": 10386,
+   "assigneeAccountId": "bk-1006",
+   "issueTypeId": "Bug",
+   "categoryIds": [
+    "Bug"
+   ],
+   "milestoneIds": [],
+   "createdAt": "2026-06-19T01:00:00.000Z"
+  },
+  {
+   "trackerIssueId": "bk-issue-1202",
+   "key": "EC2-1202",
+   "title": "Coupon rule: stackable campaign coupons",
+   "statusId": "In Progress",
+   "resolved": false,
+   "estimateMh": 8801,
+   "actualMh": 9707,
+   "assigneeAccountId": "bk-1005",
+   "issueTypeId": "Task",
+   "categoryIds": [
+    "Feature-Request"
+   ],
+   "milestoneIds": [],
+   "createdAt": "2026-07-27T01:00:00.000Z"
+  },
+  {
+   "trackerIssueId": "bk-issue-1203",
+   "key": "EC2-1203",
+   "title": "Coupon rule: per-member usage limit",
+   "statusId": "Closed",
+   "resolved": true,
+   "estimateMh": 8482,
+   "actualMh": 9979,
+   "assigneeAccountId": "bk-1003",
+   "issueTypeId": "Task",
+   "categoryIds": [
+    "Feature-Request"
+   ],
+   "milestoneIds": [],
+   "createdAt": "2026-07-09T01:00:00.000Z"
+  },
+  {
+   "trackerIssueId": "bk-issue-1206",
+   "key": "EC2-1206",
+   "title": "Coupon rule migration for legacy codes",
+   "statusId": "Closed",
+   "resolved": true,
+   "estimateMh": 8146,
+   "actualMh": 9584,
+   "assigneeAccountId": "bk-1002",
+   "issueTypeId": "Task",
+   "categoryIds": [
+    "Feature-Request"
+   ],
+   "milestoneIds": [],
+   "createdAt": "2026-06-27T01:00:00.000Z"
+  },
+  {
+   "trackerIssueId": "bk-issue-1207",
+   "key": "EC2-1207",
+   "title": "Coupon rule regression tests",
+   "statusId": "Closed",
+   "resolved": true,
+   "estimateMh": 8068,
+   "actualMh": 9492,
+   "assigneeAccountId": "bk-1099",
+   "issueTypeId": "Task",
+   "categoryIds": [
+    "Feature-Request"
+   ],
+   "milestoneIds": [],
+   "createdAt": "2026-07-11T01:00:00.000Z"
+  },
+  {
+   "trackerIssueId": "bk-issue-1208",
+   "key": "EC2-1208",
+   "title": "Client staging DB reset lost test data",
+   "statusId": "In Progress",
+   "resolved": false,
+   "estimateMh": null,
+   "actualMh": 5523,
+   "assigneeAccountId": "bk-1004",
+   "issueTypeId": "Task",
+   "categoryIds": [
+    "Infrastructure"
+   ],
+   "milestoneIds": [],
+   "createdAt": "2026-07-29T01:00:00.000Z"
+  },
+  {
+   "trackerIssueId": "bk-issue-1209",
+   "key": "EC2-1209",
+   "title": "Staging deploy blocked by expired certificate",
+   "statusId": "Closed",
+   "resolved": true,
+   "estimateMh": null,
+   "actualMh": 6639,
+   "assigneeAccountId": "bk-1002",
+   "issueTypeId": "Task",
+   "categoryIds": [
+    "Infrastructure"
+   ],
+   "milestoneIds": [],
+   "createdAt": "2026-06-13T01:00:00.000Z"
+  },
+  {
+   "trackerIssueId": "bk-issue-1211",
+   "key": "EC2-1211",
+   "title": "VPN access issues for client staging",
+   "statusId": "In Progress",
+   "resolved": false,
+   "estimateMh": null,
+   "actualMh": 934,
+   "assigneeAccountId": "bk-1005",
+   "issueTypeId": "Task",
+   "categoryIds": [
+    "Infrastructure"
+   ],
+   "milestoneIds": [],
+   "createdAt": "2026-08-10T01:00:00.000Z"
+  },
+  {
+   "trackerIssueId": "bk-issue-1212",
+   "key": "EC2-1212",
+   "title": "Rebuild staging search index after outage",
+   "statusId": "In Progress",
+   "resolved": false,
+   "estimateMh": null,
+   "actualMh": 366,
+   "assigneeAccountId": "bk-1004",
+   "issueTypeId": "Task",
+   "categoryIds": [
+    "Infrastructure"
+   ],
+   "milestoneIds": [],
+   "createdAt": "2026-08-10T01:00:00.000Z"
+  }
+ ]
+}
