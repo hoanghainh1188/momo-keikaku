@@ -96,17 +96,17 @@ Feeding tracker hours into linked plan tasks is already a commodity: Ceptah, TPG
 The protagonists are illustrative, drafted from the brief. The founder should replace them with a real week on one of the five target projects.
 
 - **UJ-1. Linh turns the client's Excel WBS into a live plan on day one.** *(R0)*
-  - **Persona + context:** Linh is a BrSE/PM in Hanoi running a Japanese e-commerce client's phase 2. The client sent their own Excel WBS. It has merged cells, Japanese headers, and a custom 担当会社 (responsible company) column.
+  - **Persona + context:** Linh is a BrSE/PM in Hanoi running a Japanese e-commerce client's phase 2. The project is four months old. The client sent their own Excel WBS. It has merged cells, Japanese headers, a 進捗率 (percent complete) column, a 実績開始 / 実績終了 (actual start / actual finish) pair, and a custom 担当会社 (responsible company) column.
   - **Entry state:** Linh is signed in as a PM, on an empty project page.
   - **Path:**
     1. She uploads the .xlsx file.
-    2. The system suggests a mapping from columns to fields, based on the headers: WBS code, name, start, finish, effort and assignee. The file carries no duration column and no predecessor column, which is the common case for a client WBS.
+    2. The system suggests a mapping from columns to fields, based on the headers: WBS code, name, start, finish, effort, assignee, actual start, actual finish and percent complete. The file carries no duration column and no predecessor column, which is the common case for a client WBS.
     3. She confirms the mapping. The extra columns become Custom Fields.
-    4. The Import Preview shows every row with its level and flags problems, such as dates it could not read or assignees it does not know. It also shows what it derived from each imported start/finish pair: a duration in working days, with the original dates kept as reference columns (FR-9).
-    5. She fixes one date column's format, sets the Project start and the Data Date, and confirms.
-    6. The scheduler runs and the plan gets its dates. Because the file carried no dependencies, every WP is as-soon-as-possible; she adds the six links that matter and watches the WPs downstream of them move.
-    7. She sets the Baseline, which pins the durations, dependencies, constraints, calendar version and Data Date behind those dates, not only the dates.
-  - **Climax:** the WBS appears as a tree with a Gantt view. Summary dates and effort roll up, the critical path is marked, and the Baseline is recorded.
+    4. The Import Preview shows every row with its level and flags problems, such as dates it could not read or assignees it does not know. It also shows what it derived from each imported start/finish pair — a duration in working days, with the original dates kept as reference columns — and, separately, the progress it read: which rows arrive complete, which in progress, and with what percent complete (FR-9, FR-10).
+    5. She fixes one date column's format, sets the Project start, accepts today as the Data Date, and confirms.
+    6. The scheduler runs and the plan gets its dates. Finished work keeps the actual dates the file carried, work in progress is scheduled over what is left of it, and only remaining work is placed after the Data Date. Because the file carried no dependencies, every WP is as-soon-as-possible; she adds the six links that matter and watches the WPs downstream of them move.
+    7. She sets the Baseline, which pins the durations, dependencies, constraints, actual dates, calendar version and Data Date behind those dates, not only the dates.
+  - **Climax:** the WBS appears as a tree grid carrying derived dates, predecessors, Float and the critical-path marker. Summary dates and effort roll up, the work already done is where it actually happened, and the Baseline is recorded.
   - **Resolution:** Linh keeps the plan current in momo-keikaku, by editing it there or by re-importing.
   - **Edge case:** if the workbook has several candidate sheets, the preview asks which one is the WBS. Nothing is committed until she confirms.
 
@@ -176,21 +176,23 @@ The protagonists are illustrative, drafted from the brief. The founder should re
 - **Program** — an optional grouping of Projects inside one Department. A Project's Program belongs to the Project's owning Department. The hierarchy is Tenant > Department > Program > Project > Work Package.
 - **Project** — one client engagement. It has one owning Department, one or more assigned PMs, one Plan, a Baseline history, zero or more Connectors, one Visibility Policy, and the three scheduling settings below (FR-43).
 - **Project start** — the date the forward pass uses as its origin. It is a Project setting, it is mandatory before a Project can be scheduled, and it is not a WP field (FR-43).
-- **Project finish** — an optional contractual or committed finish date the PM sets. When it is set, the backward pass runs from it, which makes Float absolute and allows it to go negative. When it is not set, the backward pass runs from the **computed finish** — the latest derived finish in the Plan — which makes Float relative. The two are never conflated: wherever this PRD says *Project finish* it means the date the PM set, and the computed one is always named as such (FR-43, FR-6b).
-- **Data Date** — the as-of boundary between what has happened and what is still planned, set per Project (FR-43). Completed work keeps its actual dates; the forward pass schedules only remaining work, and never earlier than the Data Date. It is a scheduling input, so Baselines and Published Snapshots pin it.
+- **Project finish** — an optional contractual or committed finish date the PM sets. When it is set, the backward pass runs from it, which makes Float absolute and allows it to go negative. When it is not set, the backward pass runs from the **computed finish** — the latest derived finish in the Plan — which makes Float relative. The backward pass anchors on one of these two and on nothing else, never on a Constraint (FR-6b). This PRD uses exactly two names for the two dates — *Project finish* for the date the PM set, and *computed finish* for the derived one — and no third name anywhere.
+- **Data Date** — the as-of boundary between what has happened and what is still planned, set per Project (FR-43). Completed work keeps its actual dates; the forward pass schedules only remaining work, and never earlier than the Data Date. It is a scheduling input, so Baselines and Published Snapshots pin it. **It is the only thing that advances the plan through time**: no Tracker Snapshot, Mapping change or ledger entry moves it or any derived date (FR-21, FR-22).
+- **Actual start / actual finish** — the dates on which a leaf WP's work really started and really finished. They are scheduling inputs the PM owns: typed on the WP, imported with the plan (FR-9), or accepted from a proposal (FR-5). They are dates, not timestamps of a click, and nothing derives them from tracker activity. FR-6b reads them and never moves them.
+- **First observed activity** — the date of a WP's earliest ledger entry across its Mapped Tickets. It is **display-only evidence**, offered as a proposed actual start that the PM accepts or ignores. It is never itself an actual date and never reaches the scheduler (FR-5, FR-21).
 - **Contract Type** — 請負 (fixed-scope) or 準委任/labo (time-and-materials or dedicated team). It is informational only in v1.
 - **Plan** — the Project's WBS, a tree of Work Packages. The **Current Plan** is the living, editable version of it.
 - **Work Package (WP)** — a node in the Plan. A leaf WP carries planned effort, a Duration and any Constraint, and is the only kind of WP the scheduler schedules; its dates are derived by the scheduler, not typed. A summary WP carries no Duration, Constraint or Dependency: its dates and effort are a pure roll-up of its children, an output of the passes and never an input to them (FR-5, FR-6b).
 - **Duration** — how many working days a WP occupies. Distinct from planned effort: 40 hours may be 5 days for one Resource or 2 days for two and a half. R0 schedules on Duration.
 - **Dependency** — a finish-to-start link from one leaf WP to another, with a lag in working days. R0 supports this one type, between leaf WPs only; SS, FF and SF are Post-Q1.
-- **Constraint** — a PM instruction that pins a leaf WP against the scheduler: *as soon as possible* (the default), *must start on*, or *must finish on*. All three are **soft**: the scheduler never draws a plan in which a successor starts before its predecessor finishes, so where a constraint and the dependency graph disagree the graph wins on the dates and the constraint is reported as a violation on the WP, with the chain that caused it (FR-6b).
-- **Float** — a WP's latest start minus its earliest start: how far it can slip before the Project finish moves. It is **negative** when the plan cannot meet a Project finish the PM set, or a *must finish on* Constraint, and a negative value is shown as it is rather than clamped to zero.
-- **Critical Path** — the WPs whose Float equals the **minimum Float in the Project**: zero on a plan with slack, negative on a plan that is already late. It is deliberately not defined as zero Float, because a late plan has no zero-Float WPs and the most critical work would drop off the path exactly when the plan is in trouble. Any slip on a critical-path WP moves the Project finish.
-- **Milestone** — a leaf WP with zero duration, flagged as a milestone, with a done date. A milestone's **target date is a *must finish on* Constraint**, not a fourth date field: it is captured, scheduled, violated, exported and baselined exactly like any other constraint (FR-5, FR-6a). A milestone therefore carries a derived date from the passes, a target date that is its constraint, and a Baseline date that is the derived date pinned at the last Baseline — three distinct things by construction, none of them typed into a date field.
+- **Constraint** — a PM instruction that pins a leaf WP against the scheduler: *as soon as possible* (the default), *must start on*, or *must finish on*. All three are **soft**: the scheduler never draws a plan in which a successor starts before its predecessor finishes, so where a constraint and the dependency graph disagree the graph wins on the dates. The constraint is then reported as a **violation on the WP that carries it** — how many working days late it is, and the chain that drove it — and it changes no other WP's Float (FR-6b).
+- **Float** — a WP's latest start minus its earliest start: how far it can slip before the **computed finish** moves, or before a **Project finish** the PM set is missed. It is **negative** only when the plan cannot meet a Project finish the PM set, and a negative value is shown as it is rather than clamped to zero. A *must finish on* Constraint the plan cannot meet is a violation on its own WP and makes Float negative nowhere.
+- **Critical Path** — the chain that drives the finish the backward pass anchored on: the WPs whose Float equals the **minimum Float measured against that finish** — zero on a plan with slack, negative on a plan that cannot meet a Project finish the PM set. It is deliberately not defined as zero Float, because a late plan has no zero-Float WPs and the most critical work would drop off the path exactly when the plan is in trouble. It is equally deliberately not defined against Constraints: one missed *must finish on* must not be able to push the chain that actually decides when the project ends off the path (FR-6b). Any slip on a critical-path WP moves the computed finish.
+- **Milestone** — a leaf WP with zero duration, flagged as a milestone. A milestone's **target date is a *must finish on* Constraint**, not a date field of its own: it is captured, scheduled, violated, exported and baselined exactly like any other constraint (FR-5, FR-6a). A milestone therefore carries a derived date from the passes, a target date that is its constraint, an **actual finish** recorded when the work is done — there is no separate "done date", and "done" means the WP has an actual finish (FR-5) — and a Baseline date that is the derived date pinned at the last Baseline. None of them is typed into a planned-date field.
 - **Baseline** — an immutable, versioned record, taken at a point in time, of every WP's planned dates and effort, the scheduling inputs those dates were derived from (Duration, Dependencies with their lags, Constraints, the actual dates in force, the Project start, the Project finish, the Data Date and the Holiday Calendar version), plus the cost derived from Rates. The pinned set is listed in full in FR-15. It is stored on the **Baseline Ledger**. A **Re-baseline** is a PM action that records a new Baseline version with a mandatory reason.
 - **Baseline hours** — a leaf WP's planned effort in the active Baseline. A WP with no Baseline hours is *non-baselined*.
 - **BAC (Budget at Completion)** — the Project-level sum of Baseline hours over all baselined leaf WPs. Its money form sums each leaf WP's Baseline hours × the Rate in effect at the Baseline date. The hours are split equally across the WP's assigned Resources, and unassigned WPs use the Project default Rate.
-- **Percent Complete** — a leaf WP's share of work done, derived from Ticket completion as defined in FR-30 and never from burned effort.
+- **Percent Complete** — a leaf WP's share of work done, derived from Ticket completion as defined in FR-30 and never from burned effort. It can also be imported with the plan or set by the PM as an audited override (FR-9, FR-30). It is a scheduling input as well as an EVM input: FR-6b derives a WP's remaining duration from it.
 - **Level of Effort (LOE)** — the PMI convention for support work with no deliverable: EV equals PV.
 - **EAC Method** — the per-Project choice of EAC formula (FR-30).
 - **Resource** — a person with a home Department and a Rate history with effective dates.
@@ -222,7 +224,7 @@ The protagonists are illustrative, drafted from the brief. The founder should re
 - **Teirei** (定例) — the regular status meeting with the client, usually weekly.
 - **Reporting Period** — the window a report covers, measured in the Project's time zone (default JST). Its length is set per Project — weekly (the default, aligned to the teirei day), biweekly or monthly — because clients report on different cadences (founder decision, 2026-09-20, closing OQ-6). Changing the length applies from the next Period; past Periods keep their boundaries.
 - **Reconciliation Review** — the PM-only view of one Reporting Period, pinned to one Tracker Snapshot.
-- **Divergence** — the differences between the Baseline, the Current Plan and actuals, per WP. Every date difference carries its cause — *edited*, *moved by a predecessor*, *calendar changed* or *data date advanced* — so a recalculation that shifts a long tail of WPs nobody touched does not have to be triaged by hand (FR-28).
+- **Divergence** — the differences between the Baseline, the Current Plan and actuals, per WP. Every date difference carries its cause — *edited*, *moved by a predecessor*, *calendar changed*, *data date advanced*, *actual dates recorded* or *progress changed* — so a recalculation that shifts a long tail of WPs nobody touched does not have to be triaged by hand (FR-28).
 - **EVM Metrics** — PV, EV, AC, SV, SPI, CV, CPI, EAC, ETC, VAC and TCPI, as defined in FR-30. They are measured in effort hours (工数). Money is a derived layer shown only in PM and internal views.
 - **Health Indicator** — a computed green, amber or red status for Schedule, Effort/Cost, or Unplanned Work. The **overall status** combines the three (FR-31).
 - **Visibility Policy** — the per-Project configuration of what Client Viewers see.
@@ -231,7 +233,7 @@ The protagonists are illustrative, drafted from the brief. The founder should re
 - **Risk / Issue** — an item the PM records on a Project or WP (FR-37). It is internal by default, and the PM can mark it client-visible.
 - **Import Preview** — the mandatory confirmation screen for every Excel import.
 - **Custom Field** — a WP field defined by the user.
-- **Holiday Calendar** — non-working days: JP and VN national holidays plus days off specific to the Project. It has a dated, append-only version history, like Rates, so a past schedule re-derives against the calendar that was in force when it was taken (FR-14).
+- **Holiday Calendar** — non-working days: JP and VN national holidays plus days off specific to the Project. It has a dated, append-only version history, like Rates, covering both the Project's own days off **and the national holiday tables themselves**, so a past schedule re-derives against the calendar that was in force when it was taken (FR-14).
 - **Roles** — Tenant Admin, PM (holds a seat), Internal Viewer, and Client Viewer.
 - **PM Seat** — the unit of pricing. Viewers never consume one.
 - **R0 / R1 / Post-Q1** — the release tags defined in §8.
@@ -290,7 +292,12 @@ Each user can choose English or Japanese. Dates and numbers follow the chosen lo
 
 ### 4.2 Plan (WBS) Authoring and Scheduling
 
-**Description:** The PM builds a Plan either by importing it (4.3) or by creating it in the tool. The PM keeps it current by editing it or re-importing it. **The plan is scheduler-owned:** the PM supplies duration, dependencies and constraints, and the scheduler derives every date and recalculates the moment one of those changes (FR-6b). No other part of the system writes a WP date — not the importer, not a Disposition, not the PM. Realises UJ-1.
+**Description:** The PM builds a Plan either by importing it (4.3) or by creating it in the tool. The PM keeps it current by editing it or re-importing it. **The plan is scheduler-owned:** the PM supplies the scheduling inputs — duration, dependencies, constraints, progress and the dates on which work actually started and finished — and the scheduler derives every *planned* date from them and recalculates the moment one of them changes (FR-6b). Realises UJ-1.
+
+Two statements make that precise, and the rest of this PRD is written so that both are literally true:
+
+- **One writer of derived dates.** `FR-6b` is the only producer of a WP's planned start and finish. Not the importer (FR-9), not a re-import (FR-11), not a Disposition (FR-29), not the Mapping layer (FR-21, FR-22), not a Tracker Snapshot (FR-19), not the PM.
+- **Actual dates are inputs, not derived dates, and they have exactly two writers.** A leaf WP's actual start and actual finish are written by the PM — typed on the WP or accepted from a proposal (FR-5) — and by the Excel import the PM confirms (FR-9, FR-10). Nothing else writes them: ledger activity is shown as evidence beside them and never becomes them, so no background job can move the plan (FR-21, FR-22).
 
 #### FR-43: Project schedule settings — *R0*
 
@@ -299,8 +306,9 @@ Each Project carries the three scheduling settings that live above WP level: a *
 **Consequences (testable):**
 - **Project start** is mandatory before a Project can be scheduled. A Project with none shows a "no project start yet" state in place of dates, and FR-6b does not run. Import proposes the earliest imported start, which the PM confirms (FR-10).
 - **Project finish** is optional, and is the contractual or committed date. Setting it moves no WP: it changes only the backward pass's origin (FR-6b), which is what makes Float absolute rather than relative and what allows a plan that cannot meet the date to show negative Float. The UI always says which finish a displayed Float was computed against.
-- **Data Date** is the as-of boundary between work done and work remaining. It defaults to the Project start when the Project is created, and the PM advances it — in practice at the Reporting Period boundary, during the Reconciliation Review. **It is never advanced automatically**, because advancing it re-dates every remaining WP.
-- **A Data Date is never set earlier than the latest actual finish in the Plan.** An attempt is rejected with the WPs that block it, because the scheduler would otherwise have to place completed work in the future.
+- **Data Date** is the as-of boundary between work done and work remaining. **A Project is created with none.** It is set in the same action that sets the Project start — in the FR-10 preview on the import path, or in Project settings — and it **defaults to today**, never to a date read out of the plan's contents. Thereafter the PM advances it, in practice at the Reporting Period boundary, during the Reconciliation Review. **It is never advanced automatically**, because advancing it re-dates every remaining WP.
+- **The Data Date is the only thing that advances the plan through time.** Connecting a Tracker, taking a Tracker Snapshot, mapping or remapping a Ticket, and a Mapping Rule firing in the background all leave every WP date exactly where it was (FR-21, FR-22). The schedule moves when the PM moves it.
+- **A Data Date is never set earlier than the latest actual finish in the Plan.** An attempt is rejected with the WPs that block it, because the scheduler would otherwise have to place completed work in the future. Actual finishes are dates the PM recorded or imported (FR-5, FR-9), so this rule constrains the PM's own record of the past, not a clock reading.
 - **Every change to any of the three triggers a full recalculation** (FR-6b) and is recorded in the audit trail with its author, its time and its previous value (NFR-A1).
 - **Pinned:** all three are pinned into every Baseline version (FR-15) and into every Published Snapshot (FR-35), because they are scheduling inputs rather than display settings.
 
@@ -311,17 +319,21 @@ A PM can create, edit, move and delete WPs. For each **leaf** WP the PM sets:
 - duration in working days;
 - planned effort in hours (distinct from duration — 40 hours may be 5 days for one Resource or 2 days for two and a half);
 - an optional scheduling constraint (default *as soon as possible*);
+- an optional **actual start** and **actual finish**;
 - assigned Resources;
 - Custom Field values;
 - the milestone flag.
 
-**Start and finish dates are not typed.** They are derived by FR-6b from duration, dependencies, constraints, the Data Date (FR-43) and the working-day calendar. A PM who wants to pin a date does so with a constraint, which the scheduler applies and reports on.
+**Planned start and finish dates are not typed.** They are derived by FR-6b from duration, dependencies, constraints, progress, the actual dates, the Data Date (FR-43) and the working-day calendar. A PM who wants to pin a planned date does so with a constraint, which the scheduler applies and reports on.
 
 **Consequences (testable):**
 - **Scheduling inputs are leaf-only:** duration, constraints and dependencies can be held only on a leaf WP. Giving a leaf WP a child is therefore an edit the PM must resolve in the same action — the tool asks which child takes the duration, constraint and links, or confirms that they are dropped — and no code path leaves a scheduling input on a summary WP.
 - **Roll-up:** a summary WP's dates are the earliest start and the latest finish among its descendants, and its effort is their sum. Summary dates are an output of the recalculation and are never read back into it (FR-6b).
 - **Deleting a WP with Mappings:** the PM must choose a target WP for those Mappings, or confirm that they become unmapped. Mapping Rules that target the deleted WP are disabled and flagged.
-- **Actual dates:** a WP's actual start is the time of its first ledger entry. Its actual finish is set when the PM marks it complete. Both are inputs to FR-6b, which never moves them.
+- **Deleting a leaf WP with dependencies:** its incoming and outgoing edges are deleted with it and are listed in the confirmation, with the WPs at the other end. **They are never re-linked predecessor-to-successor**, because an edge the PM never drew is an edge nobody can explain later; the PM re-links deliberately if the chain still holds.
+- **Moving or re-parenting a WP re-validates the graph.** FR-6a's rules are invariants of the Plan, not checks that run only when a link is drawn, so a move that would leave an illegal edge behind — a summary endpoint, or an ancestor/descendant pair — is an edit the PM must resolve in the same action, exactly like giving a leaf WP a child.
+- **Actual dates are PM-owned inputs, not observations.** A leaf WP's actual start and actual finish are dates the PM sets, imports with the plan (FR-9), or accepts from a proposal. Marking a WP complete asks for its actual finish and proposes today, which the PM can change to the date the work really finished. Where the WP has Mapped Tickets, the **first observed activity** — the date of its earliest ledger entry — is shown beside the actual start field as evidence and offered as a one-click fill. **It is never written as the actual start by the system.** Both actual dates are inputs to FR-6b, which reads them and never moves them.
+- **An actual finish cannot precede its actual start.** An attempt is rejected with the reason. An actual date later than the Data Date is neither accepted silently nor rejected: the PM is asked to advance the Data Date to cover it in the same action, because the two are one statement about how far the plan has got (FR-43).
 
 #### FR-6a: Dependency, duration and constraint capture — *R0*
 
@@ -332,39 +344,52 @@ A PM can add finish-to-start dependencies between leaf WPs with a lag in working
 - **A dependency with an endpoint on a summary WP is rejected at entry**, with the reason. A summary WP's dates are a roll-up, not a schedulable quantity (FR-5).
 - **A dependency whose endpoints are in an ancestor/descendant relationship is rejected at entry.** This check is separate from the cycle check and cannot be replaced by it: the cycle check runs over the dependency graph, and an ancestor/descendant link is a cycle only once the roll-up edges are taken into account.
 - A dependency between WPs in different Projects is rejected in R0.
+- **These are invariants, not entry checks.** Entry is where they are usually enforced, but the same four rules are validated by every recalculation (FR-6b) and by every structural edit — a move, a re-parent, a delete, an import or a re-import — because a move can turn a legal link into an ancestor/descendant link or a leaf endpoint into a summary endpoint without any link being touched (FR-5). A Plan that violates one is never scheduled: the recalculation stops, names the offending edges, and shows the last good schedule marked stale.
 - Importing a plan whose dependency columns reference unknown WPs reports them in the Import Preview rather than discarding them silently.
 
 #### FR-6b: Schedule recalculation — *R0*
 
-The schedule is recalculated automatically whenever a duration, dependency, constraint, calendar version, Data Date, Project start or Project finish changes. **A WP that slips moves the WPs that depend on it.** No user action is required, and no other part of the system writes WP dates.
+The schedule is recalculated automatically whenever a scheduling input changes. The complete trigger list is: a duration; a dependency added, removed or re-lagged; a constraint; a WP created, deleted, moved or re-parented; an **actual start or actual finish**; a **Percent Complete** that FR-6b reads as progress; a calendar version; and the Data Date, Project start or Project finish. **A WP that slips moves the WPs that depend on it.** No user action is required, and no other part of the system writes a planned WP date.
+
+**What is not a trigger, by design.** A Tracker Snapshot, a ledger entry, a Mapping or remapping, and a Mapping Rule firing in the background change attribution, Unplanned Work and EVM — and no WP date. The plan does not move while nobody is looking at it, so NFR-P1's 300 ms budget covers PM edits and never a background job, and a displayed schedule is never stale against its inputs (NFR-C1).
 
 **Consequences (testable):**
 - **What is scheduled:** leaf WPs only. Summary dates are rolled up from the result and are never read back in (FR-5).
 - **Scope and concurrency of a recalculation:** one recalculation covers the whole Project, never a subgraph, so no partially stale plan is ever displayed. Recalculations of the same Project are serialised: an edit arriving during a recalculation is applied to that recalculation's result, never interleaved with it. NFR-P1 sets the latency budget.
 - **Progress awareness — the Data Date (FR-43).** Each leaf WP is one of three things, and the scheduler treats each differently:
   - **complete** — it has an actual finish. Its dates *are* its actual dates. The scheduler never moves them, and it passes its actual finish to its successors.
-  - **in progress** — it has an actual start and no actual finish. Its start is its actual start. It is scheduled forward over its *remaining* duration — its duration less the working days already elapsed, and never fewer than one working day — from no earlier than the Data Date.
+  - **in progress** — it has an actual start and no actual finish. Its start is its actual start. It is scheduled forward over its **remaining duration** from no earlier than the Data Date.
   - **remaining** — it has neither. The passes place it, and it never starts earlier than the Data Date.
 
-  Importing a mid-flight project therefore never re-dates work already done, and the critical path is the critical path of the work that is left. Every one of the founder's target projects is mid-flight, so this is the normal case, not an edge case.
+  Importing a mid-flight project therefore never re-dates work already done, and the critical path is the critical path of the work that is left. Every one of the founder's target projects is mid-flight, so this is the normal case, not an edge case. **The actual dates that drive this come from the PM and from the import** (FR-5, FR-9), so a project that started before momo-keikaku saw it arrives with its progress intact, before any Connector exists.
+- **Remaining duration is derived from progress, not from elapsed time.** It is `duration × (1 − Percent Complete)`, rounded up to whole working days and never fewer than one. Percent Complete is FR-30's figure — from Ticket completion, from an import, or from an audited PM override — and never burned effort. Elapsed calendar time is deliberately not used: a WP 90% through its calendar window and 10% done would otherwise forecast one day remaining, which is the dishonest arithmetic this product exists to remove. Remaining duration is always derived, never stored, so it cannot drift from the inputs behind it.
 - **Forward pass:** each remaining WP's earliest start is the latest of the Data Date, the Project start (FR-43) and every predecessor's finish plus lag, counted in working days on the Project's Holiday Calendar version (FR-14).
-- **Backward pass:** each WP's latest start and finish are derived backwards through the same graph — from the **Project finish** where the PM has set one, and otherwise from the **computed finish**, the latest derived finish in the Plan. Which origin was used is shown wherever Float is shown, because the two produce different Float and the difference is visible to the client on the Gantt.
-- **Float** is latest start minus earliest start, and **may be negative**. The **critical path** is the set of WPs whose Float equals the minimum Float in the Project — zero on a plan with slack, negative on a plan that cannot meet its Project finish. It is never the zero-Float set. It is identified on both the tree and the Gantt (FR-7).
-- **Constraints are soft, and a violation is reported rather than hidden.** A *must start on* or *must finish on* date is applied as a lower or upper bound on that WP's dates wherever the dependency graph allows it. Where it does not, **the graph wins**: the scheduler never draws a successor starting before its predecessor finishes. The WP is then flagged with a constraint violation that names the date asked for, the date derived, the difference in working days, and the predecessor chain that forced it. A *must finish on* the plan cannot meet also produces negative Float on that WP and on every WP upstream of it, which is how a violation reaches the critical path instead of sitting in a badge nobody reads.
-- **Determinism:** the same pinned inputs always produce the same dates. Ordering is explicit and ties are broken deterministically, consistent with the integer-arithmetic discipline in NFR-C1.
-- **Milestones** are zero-duration leaf WPs and participate in the passes normally. A milestone's target date is its *must finish on* constraint (§3), so a missed target is a constraint violation and negative Float, like any other.
+- **Backward pass:** each WP's latest start and finish are derived backwards through the same graph from **one anchor and one only** — the **Project finish** where the PM has set one, and otherwise the **computed finish**, the latest derived finish in the Plan. **Constraints are never anchors.** Which of the two was used is shown wherever Float is shown, because the two produce different Float and the difference reaches the client on a published schedule (FR-34).
+- **Float** is latest start minus earliest start, and **may be negative** — but only ever because the plan cannot meet a Project finish the PM set. The **critical path** is the set of WPs whose Float equals the minimum Float measured against the anchor above: zero on a plan with slack, negative on a plan that cannot meet its Project finish. It is never the zero-Float set, and it is never displaced by a constraint violation. It is identified in the tree grid (FR-7).
+- **Constraints are soft, and a violation is reported rather than hidden.** A *must start on* or *must finish on* date is applied as a lower or upper bound on that WP's dates wherever the dependency graph allows it. Where it does not, **the graph wins**: the scheduler never draws a successor starting before its predecessor finishes. The WP is then flagged with a constraint violation that names the date asked for, the date derived, **how many working days late it is**, and the predecessor chain that forced it.
+- **A violation stays on the WP that owns it.** An unmet *must finish on* does **not** push negative Float onto that WP or onto anything upstream of it, and does not change any other WP's Float. This is a deliberate choice against the more common CPM behaviour: one constraint missed by six weeks would otherwise give its own chain Float −30 and leave the longest path — the chain that actually decides when the project ends — at Float ≥ 0 and off the critical path, which is exactly the failure §3's *Critical Path* entry exists to avoid. Violations are surfaced as their own ranked list, worst first, alongside the critical path rather than inside it, and the Schedule Health Indicator reads both (FR-31).
+- **Out-of-sequence progress: an actual date always wins.** Real teams start WP 2.4 while WP 2.3 is still open, so an actual start that precedes its predecessor's finish is normal, not an error. The "a successor never starts before its predecessor finishes" invariant binds **remaining work only**; a complete or in-progress WP keeps its actual dates whatever the graph says, its successors are driven from those dates, and the pair is flagged as an out-of-sequence link — named, counted and explained exactly like a constraint violation. The scheduler never rewrites history to preserve an invariant about the future.
+- **A leaf WP with no duration is not scheduled.** FR-9 can create one (a row carrying only half a start/finish pair). It is listed in a "not schedulable yet" block with its reason, it is excluded from both passes and from the critical path, its successors are driven from its predecessors as though it were absent, and it blocks a Baseline (FR-15). It is never silently treated as duration 1 or duration 0.
+- **Outside the calendar's coverage the scheduler stops rather than guesses.** If a pass would place a date beyond the Holiday Calendar's loaded range (FR-14), the recalculation halts and reports the WPs and the range it needs. A schedule computed against assumed working days is not re-derivable and would fail FR-15's test years later.
+- **Determinism:** the same pinned inputs always produce the same dates. Ordering is explicit and ties are broken by the rule recorded in the architecture document (NFR-C1, OQ-13) — not left to iteration order, and not asserted here as though it already existed.
+- **Milestones** are zero-duration leaf WPs and participate in the passes normally. A milestone's target date is its *must finish on* constraint (§3), so a missed target is a constraint violation on that milestone, reported with the days late and the chain behind it.
 
 **Deliberately excluded from R0** — see §8.3. Resource levelling; the SS, FF and SF dependency types; effort-driven scheduling, where duration is derived from effort divided by assignment; constraint types beyond the three in FR-5; recovery behaviour when a constraint is violated, beyond reporting it; and the what-if sandbox.
 
-#### FR-7: Tree and Gantt views — *R0*
+#### FR-7: Plan tree grid — *R0*; Gantt — *R1*
 
-A PM can view the Plan as a tree grid and as a Gantt. The Gantt shows the active Baseline's bars next to the Current Plan's bars, with non-working days shaded.
+**R0 ships exactly one scheduling surface: the tree grid.** A PM views and edits the whole Plan there — the hierarchy, the derived dates and every scheduling input behind them. A Gantt arrives in R1, alongside the client-facing schedule it exists to serve (FR-34).
+
+*Why one.* Two complete dependency- and constraint-editing surfaces is two builds, each under NFR-U1's WCAG 2.1 AA keyboard bar, which most off-the-shelf Gantt components fail (OQ-11). The tree grid is the accessible one, it carries every column the engine produces, and it needs no third-party component — so it is the one R0 builds, and the Gantt is a later addition rather than a cut waiting to be taken.
 
 **Consequences (testable):**
-- **Both surfaces carry the schedule.** The Gantt shows dependency arrows, critical-path emphasis and the Data Date as a vertical line. The tree grid shows a predecessor column, a Float column and a critical-path marker. Dependencies and constraints can be created, edited and deleted from **either** surface, so the tree grid is a complete scheduling surface on its own — which is what makes cut 1 in §8.3 survivable rather than a silent removal of FR-6a.
-- **Constraint violations** (FR-6b) are marked on the WP in both surfaces, and the explanation — date asked for, date derived, the chain that forced it — is reachable from the marker.
+- **The tree grid is the complete scheduling surface.** It shows, per WP: the derived start and finish, the actual start and actual finish, duration, Percent Complete, a predecessor column with lags, the constraint type and date, a Float column and a critical-path marker. Dependencies and constraints are created, edited and deleted there. Nothing FR-6a captures or FR-6b produces is reachable only from a Gantt.
+- **Progress is visible as progress.** Each WP reads as complete, in progress or remaining (FR-6b), and the Data Date is shown on the surface as the boundary between the two halves of the plan.
+- **Baseline comparison** is shown as columns — the active Baseline's dates beside the Current Plan's, with the difference — because R0 has no bars to draw them on.
+- **Constraint violations** (FR-6b) are marked on the WP, and the explanation — date asked for, date derived, working days late, the chain that forced it — is reachable from the marker. **Out-of-sequence links** are marked the same way.
 - **Negative Float** is displayed as a negative number, never as zero or blank.
-- The design of this surface, and the build-versus-buy decision for the Gantt component under NFR-U1, are open and are handed to `bmad-ux` (OQ-11). This PRD states what the surface must carry, not how it looks.
+- **Gantt (R1):** bars for the Current Plan against the active Baseline, dependency arrows, critical-path emphasis, the Data Date as a vertical line, and non-working days shaded. It is a second view of the same data, not a second source of truth, and it adds no scheduling capability the tree grid lacks.
+- The design of the tree grid is open and is handed to `bmad-ux` (OQ-11). This PRD states what the surface must carry, not how it looks. The build-versus-buy decision for a Gantt component moves to R1 with the Gantt.
 - The views meet NFR-P1.
 
 #### FR-8: Custom Fields — *R0*
@@ -372,7 +397,7 @@ A PM can view the Plan as a tree grid and as a Gantt. The Gantt shows the active
 A PM can define Custom Fields of type text, number, date or single-select. They can be used as columns and grouping axes.
 
 **Consequences (testable):**
-- The product sets no limit on the number of Custom Fields. A Project with 100 Custom Fields still meets NFR-P1.
+- **The tested bound is the bound.** A Project with 100 Custom Fields meets NFR-P1, and that is the limit R0 owes. The product does not block the 101st, but it warns that behaviour beyond the tested bound is untested, and no further engineering is in R0 scope (§7.3). "No limit" was an unbounded promise inside a frozen scope.
 
 ### 4.3 Excel Import
 
@@ -387,17 +412,22 @@ In every release, nothing is committed until the PM confirms the mandatory Impor
 A PM can:
 - upload an .xlsx file;
 - choose the sheet and the header row;
-- map each column to a field: WBS code or indentation level, name, start, finish, **duration, predecessors, lag, constraint type, constraint date**, effort, assignee, milestone, or a Custom Field.
+- map each column to a field: WBS code or indentation level, name, start, finish, **duration, predecessors, lag, constraint type, constraint date**, **actual start, actual finish, percent complete**, effort, assignee, milestone, or a Custom Field.
 
 The system suggests mappings by matching English and Japanese headers.
 
 **Consequences (testable):**
-- **Imported dates never become WP dates.** The importer writes no WP start or finish; nothing outside the scheduler does (FR-6b). An imported start/finish pair is converted instead:
+- **Imported planned dates never become WP dates.** The importer writes no derived start or finish; nothing outside the scheduler does (FR-6b). An imported start/finish pair is converted instead:
   - where a duration column is also mapped, the duration column wins, and the imported dates are kept as reference Custom Fields named after their source columns;
   - where it is not, each WP's duration is derived as the working-day count from the imported start to the imported finish inclusive, on the Project's Holiday Calendar (FR-14), and the imported dates are kept as reference Custom Fields;
   - a row carrying only one of the pair, or a finish before its start, is flagged in the Import Preview and imported with no duration.
 
   **Imported dates are never turned into constraints automatically.** A plan of three hundred *must start on* constraints is a typed schedule wearing a different hat, which is the failure FR-5 exists to remove. The PM adds constraints deliberately.
+- **The import carries progress, because every real plan is mid-flight.** Three further columns can be mapped, and each is confirmed in the FR-10 preview like everything else:
+  - **actual start** and **actual finish** are imported as the WP's actual dates (FR-5). They are the one kind of date the importer does write, and they are not planned dates: FR-6b reads them as the record of what already happened and never moves them. Without them a four-month-old project would arrive with every leaf marked *remaining* and the scheduler would re-date finished work forward from the Data Date — the failure the Data Date exists to prevent. A row with an actual finish and no actual start is flagged; a row whose actual finish precedes its actual start is flagged and neither is imported.
+  - **percent complete** is imported as a Percent Complete override on that WP (FR-30), with the reason recorded as imported from the file and the row, so it is audited and marked PM-adjusted like any other override. It stands until the PM clears it, at which point FR-30's evidence-based figure takes over. FR-6b uses it to derive remaining duration, so an in-progress WP arrives with the right amount of work left rather than all of it. A value outside 0–100, or one on a WP with an actual finish that is not 100, is flagged in the preview and never guessed.
+  - A row that carries an actual finish arrives **complete**; one with an actual start only arrives **in progress**; one with neither arrives **remaining** (FR-6b). The preview states which of the three each row will be.
+- **Milestone rows are the one deliberate exception to the no-auto-constraint rule.** A row mapped as a milestone takes **duration 0** — the working-day derivation above does not run on it, so a single date cannot become a duration of 1 — and its imported date becomes a ***must finish on* constraint**, which is what a milestone target is in this product (§3). Where a milestone row carries both a start and a finish, the finish is the target. This exception is narrow and is stated rather than inferred: without it, every imported milestone would lose the date the client cares about most, and both of FR-31's milestone rules would have nothing to fire on until the PM retyped each target by hand. The preview lists every constraint created this way, and the PM can clear any of them before committing.
 - **Predecessors:** a mapped predecessor column is read as a list of WBS codes or WP names, each with an optional lag in working days, and is applied as FR-6a dependencies. Codes matching no WP, and links FR-6a rejects — cycles, ancestor/descendant pairs, summary endpoints, cross-project links — are listed in the Import Preview with their rows and reasons, and are never dropped silently.
 - **Constraints:** a mapped constraint-type column is read as one of the three types in FR-5. An unrecognised value is flagged in the preview, never guessed.
 - **Hierarchy:** read from WBS codes (1, 1.1, 1.1.1) or from indentation.
@@ -411,8 +441,10 @@ Before anything is committed, the PM sees every row as it will be imported, with
 
 **Consequences (testable):**
 - **Confirmation:** no code path commits an import without an explicit PM confirmation.
-- **Project settings:** if the Project has no Project start or Data Date, the preview asks for both before it will commit, proposing the earliest and the latest imported date respectively (FR-43).
-- **Schedule preview:** the preview shows the duration derived for every row, the dependencies and constraints it read, and — once the Project start and Data Date are confirmed — the dates the scheduler will produce. The PM corrects durations, links, constraints and levels in the preview. **The PM never corrects a date**, because no date is imported.
+- **Project settings:** if the Project has no Project start or Data Date, the preview asks for both before it will commit. It proposes the **earliest imported start** as the Project start, and **today** as the Data Date. The Data Date is never proposed from the file's contents: the latest imported date is the plan's intended *end*, often a year out, and accepting it would schedule every remaining WP after the plan's own finish (FR-43, §3). Where the file carried actual dates, the preview also offers the latest imported actual date as an alternative, and says which of the two it is proposing.
+- **Schedule preview:** the preview shows the duration derived for every row, the dependencies and constraints it read, the progress it read, and — once the Project start and Data Date are confirmed — the dates the scheduler will produce. The PM corrects durations, links, constraints, progress and levels in the preview. **The PM never corrects a planned date**, because no planned date is imported.
+- **Progress preview:** the preview shows, per row, the actual start, the actual finish and the percent complete it read; which of FR-6b's three states the row will arrive in; and the remaining duration that follows. Totals are shown for the file: how many rows arrive complete, in progress and remaining. A plan whose rows are all *remaining* on a project the PM knows is mid-flight is visible before it is committed, not after the first Baseline has pinned it.
+- **Milestone constraints:** every *must finish on* constraint created from a milestone row (FR-9) is listed, with its row and its date, and can be cleared individually before committing.
 - **Unknown assignees:** assignees that do not match a Resource are listed. The PM creates or links a Resource for each one.
 - **Counts:** the preview reports rows read, rows imported and rows skipped, with a reason for each skipped row.
 - **Untrusted content:** cell content is treated as untrusted. Formulas and macros are never executed, and text is escaped wherever it is displayed.
@@ -424,7 +456,8 @@ A PM can import a new version of the file into an existing Plan and review a dif
 **Consequences (testable):**
 - **Matching WPs:** WPs are matched by WBS code. Without a code, they are matched by name within the same parent. Pairs that cannot be matched are shown for the PM to resolve.
 - **Conflicts:** for imported fields, the re-imported value wins. The diff lists every value that overwrites an edit made in the tool.
-- **Dates are not an imported field.** A re-import can overwrite durations, dependencies and constraints, and the diff shows each of those; it never writes a WP date. Dates change only because FR-6b recomputed them, and the diff shows the resulting date movement in a separate section from the input changes that caused it, so the PM can see cause and effect rather than a wall of moved dates.
+- **Planned dates are not an imported field.** A re-import can overwrite durations, dependencies, constraints, actual dates and percent complete, and the diff shows each of those; it never writes a planned WP date. Planned dates change only because FR-6b recomputed them, and the diff shows the resulting date movement in a separate section from the input changes that caused it, so the PM can see cause and effect rather than a wall of moved dates.
+- **Actual dates and progress are only ever moved forward by a re-import, never erased by silence.** A re-import clears an actual date or a Percent Complete override only where the corresponding column is mapped and the cell is empty, and every such clearing is listed in the diff as its own line. An unmapped progress column leaves the WP's recorded progress untouched, exactly as an unmapped predecessor column leaves the graph untouched.
 - **Links made in the tool survive an ambiguous re-import.** A re-import removes a dependency only when a predecessor column is mapped and no longer names it. If no predecessor column is mapped, the dependency graph is left untouched and the diff says so explicitly, rather than silently erasing scheduling work the PM did in the tool.
 - **Baseline:** a re-import never changes a Baseline.
 - **Removed WPs:** their Mappings are handled as in FR-5.
@@ -467,10 +500,10 @@ A PM can link Tracker Accounts to Resources. The system suggests links by matchi
 Each Project's Holiday Calendar uses Japanese national holidays, Vietnamese national holidays (including Tết), or both. The PM can add Project-specific non-working days, such as the client company's own holidays.
 
 **Consequences (testable):**
-- The calendar data covers 2026–2028.
+- The national calendar data covers 2026–2028. A schedule that would run past the loaded range does not fall back to assumed working days: FR-6b halts and reports the range it needs, and the range is extended as an operator action.
 - All working-day calculations exclude the Project's non-working days.
-- **Dated, append-only history.** Every change — adding or removing a Project-specific non-working day, or changing which national calendars are in use — creates a new calendar **version**, with its author, time and an optional reason. Earlier versions are never edited or deleted. This is the same treatment Rates get (FR-12), and for the same reason: a schedule pinned to "the calendar" by name is not pinned at all.
-- **Past schedules re-derive against the version they were taken with.** A Baseline pins the calendar version in force when it was taken (FR-15); a Published Snapshot pins the version it was computed with (FR-35). Adding a client holiday in November therefore cannot change what an October Baseline re-derives to.
+- **Dated, append-only history over the whole calendar, national tables included.** Three kinds of change create a new calendar **version**, each with its author or source, its time and an optional reason: adding or removing a Project-specific non-working day; changing which national calendars are in use; and **any correction or extension of the JP or VN national holiday tables themselves**. Earlier versions are never edited or deleted. The national tables are the point: Japan legislates holidays year by year and substitute holidays move, they are 95% of the calendar, and a "version" that tracked only the PM's own days off would let a system-data update silently change what every past Baseline re-derives to — D-3's failure surviving in most of the calendar. A version therefore identifies the effective non-working-day set in full, not a name plus a moving table.
+- **Past schedules re-derive against the version they were taken with.** A Baseline pins the calendar version in force when it was taken (FR-15); a Published Snapshot pins the version it was computed with (FR-35). Adding a client holiday in November, or correcting a 2027 Japanese substitute holiday in December, therefore cannot change what an October Baseline re-derives to, and FR-15's re-derivation test cannot fail because system data moved under it.
 - **The Current Plan always uses the latest version.** Creating a version triggers a recalculation (FR-6b), and the resulting date movement appears in the Reconciliation Review with the cause *calendar changed* (FR-28).
 
 **Out of Scope:** layered client, department and person calendars (Post-Q1).
@@ -486,8 +519,8 @@ A PM can set a Baseline from the Current Plan.
 **Consequences (testable):**
 - A Baseline cannot be edited after it is recorded.
 - Before the first Baseline, the Project shows a "no baseline yet" state instead of EVM Metrics.
-- **A Baseline pins inputs, not only outputs.** Every Baseline version records, per leaf WP: its planned dates, its planned effort, **and** the inputs those dates came from — duration, constraint type, constraint date, the milestone flag, and the actual start and actual finish the WP had at that moment. Per Project it records the complete dependency graph with its lags as it stood, the Holiday Calendar version (FR-14), and the Project start, Project finish and Data Date (FR-43). Actual dates and the Data Date are pinned because FR-6b reads them; a pinned set that omits them cannot re-derive the plan it claims to explain.
-- **Re-derivation test:** re-running FR-6b over a Baseline version's pinned inputs alone — with no reference to the Current Plan — reproduces that version's dates, Float and critical path exactly, on any machine and at any later date (NFR-C1). This is an automated test, not a claim in prose.
+- **A Baseline pins inputs, not only outputs.** Every Baseline version records, per leaf WP: its planned dates, its planned effort, **and** the inputs those dates came from — duration, constraint type, constraint date, the milestone flag, the actual start and actual finish, and the **Percent Complete** the WP had at that moment. Per Project it records the complete dependency graph with its lags as it stood, the Holiday Calendar version (FR-14), and the Project start, Project finish and Data Date (FR-43). Actual dates, progress and the Data Date are pinned because FR-6b reads them — progress drives remaining duration, so a Baseline without it cannot reproduce a single in-progress WP's dates. A pinned set that omits any of them cannot re-derive the plan it claims to explain.
+- **Re-derivation test:** re-running FR-6b over a Baseline version's pinned inputs alone — with no reference to the Current Plan — reproduces that version's dates, Float, constraint violations and critical path exactly, on any machine and at any later date (NFR-C1). The test compares the critical path as an ordered set, so it depends on the tie-break rule being written down rather than emergent (OQ-13). This is an automated test, not a claim in prose.
 - **No partial pinning.** A Baseline cannot be recorded while any leaf WP is missing a duration, or while the Project has no Project start, because the result would not be re-derivable. The PM is shown the blocking WPs.
 
 #### FR-16: Re-baseline with history — *R0*
@@ -497,7 +530,7 @@ A PM can Re-baseline. A reason is mandatory, and the PM can link Change Request 
 **Consequences (testable):**
 - Every Baseline version is kept, with its author, time and reason.
 - Any two versions can be compared WP by WP.
-- **Any two versions can also be compared as plans, not only as rows.** A dependency is an edge, not a WP attribute, so a WP-by-WP diff can show that WP 2.4 and everything after it moved three weeks while showing no reason anywhere: the removed link between 2.3 and 2.4 has no row. The comparison therefore also lists, per Project: dependencies added and removed, lags changed, constraints added, changed and removed, durations changed, milestone flags changed, the Holiday Calendar version, and any change to the Project start, Project finish or Data Date (FR-43).
+- **Any two versions can also be compared as plans, not only as rows.** A dependency is an edge, not a WP attribute, so a WP-by-WP diff can show that WP 2.4 and everything after it moved three weeks while showing no reason anywhere: the removed link between 2.3 and 2.4 has no row. The comparison therefore also lists, per Project: dependencies added and removed, lags changed, constraints added, changed and removed, durations changed, actual dates recorded or corrected, Percent Complete changed, milestone flags changed, the Holiday Calendar version, and any change to the Project start, Project finish or Data Date (FR-43).
 - **Every date change is attributable.** For any WP whose dates differ between two Baseline versions, the comparison names at least one input change from the list above that accounts for it. A plan that moved for no recorded reason is the failure this requirement exists to prevent.
 - Every Published Snapshot records the Baseline version it used.
 
@@ -581,6 +614,7 @@ A PM can map one or many Tickets to a leaf WP, remap them, or unmap them.
 **Consequences (testable):**
 - **One WP per Ticket:** a Ticket maps to at most one leaf WP.
 - **Attribution follows the current Mapping:** all of a Ticket's ledger entries are attributed to the WP it is mapped to now. Remapping moves them, and Unplanned Work updates immediately.
+- **Mapping never moves the plan.** Mapping, remapping and unmapping change attribution, Unplanned Work, Percent Complete's evidence and every EVM figure — and no WP date. They do not write a WP's actual start or actual finish and they do not trigger a recalculation (FR-5, FR-6b). The WP's **first observed activity** is recomputed and shown beside its actual start as evidence, and the PM may take it with one click; until the PM does, the schedule is exactly where it was. This is what lets the PM reconcile for an hour without the plan shifting underneath the review.
 - **No rewriting:** the ledger itself is never rewritten. Attribution is computed from the ledger and the Mapping history.
 - **Published Snapshots:** they freeze the attribution in force when they were published (FR-35).
 - **Audit:** every Mapping change is recorded with its author and time (NFR-A1).
@@ -593,6 +627,7 @@ A PM can define Mapping Rules on Ticket attributes, in priority order:
 
 **Consequences (testable):**
 - **Rules are live:** on every Tracker Snapshot, each Ticket without a manual Mapping is re-evaluated against the rules in priority order.
+- **Live rules never move the plan.** Re-evaluation runs hourly and unattended (FR-19), so it is the one part of the system that could re-date a plan while nobody is watching. It cannot: it changes attribution only, it writes no actual date, and it triggers no recalculation (FR-5, FR-6b, FR-21). A PM who opens the tool on Monday sees the dates they left on Friday, with the hours behind them updated.
 - **Manual wins:** a manual Mapping always overrides a rule.
 - **Priority:** rule priorities form a strict order. No two rules share a priority.
 - **Preview:** before saving a new, edited or deleted rule, the PM sees a preview of the Tickets and hours that would move.
@@ -663,7 +698,7 @@ A PM can open the Reconciliation Review for any Reporting Period. It shows:
 
 **Consequences (testable):**
 - The Review is pinned to a specific Tracker Snapshot, and that snapshot's time is shown.
-- **Date movement carries its cause.** Every WP whose Current Plan dates have moved since the previous Review is marked *edited* (a scheduling input on this WP changed), *moved by a predecessor* (only upstream inputs changed), *calendar changed* (FR-14) or *data date advanced* (FR-43). Derived dates mean one duration edit can move a hundred WPs; without the cause, the PM would triage those hundred by hand every week.
+- **Date movement carries its cause, and the list is complete.** Every WP whose Current Plan dates have moved since the previous Review is marked with one of exactly six causes: *edited* (a duration, dependency or constraint on this WP changed), *moved by a predecessor* (only upstream inputs changed), *calendar changed* (FR-14), *data date advanced* (FR-43), *actual dates recorded* (the PM recorded or corrected an actual start or actual finish, marking a WP complete included — FR-5), or *progress changed* (a Percent Complete the scheduler reads moved, so remaining duration moved — FR-6b, FR-30). Derived dates mean one duration edit can move a hundred WPs; without the cause, the PM would triage those hundred by hand every week. There is no cause for a mapping change, because a mapping change cannot move a date (FR-21, FR-22) — the blank cause column that would otherwise appear is designed out rather than explained away.
 - The Review shows the Project's Data Date and offers to advance it to the Period boundary. Advancing it is an explicit PM action (FR-43).
 - Unmapped Work is grouped by Tracker attribute and can be expanded to individual Tickets, with hours (and money, in PM views).
 - Every number links to the Tickets or WPs behind it.
@@ -676,8 +711,8 @@ A PM can record a Disposition for any Unmapped Ticket or group of them.
 **Consequences (testable):**
 - ***Map*** creates Mappings. Because attribution follows FR-21, those hours leave Unplanned Work.
 - ***Plan*** creates a leaf WP in the Current Plan and maps the Tickets to it. Its hours count as Unplanned Work until a Re-baseline includes that WP. Hours recorded before that Re-baseline stay Unplanned Work (FR-30).
-  - **It does not move the plan.** The WP is created with no dependencies and an *as soon as possible* constraint, so the recalculation it triggers touches nothing but the WP itself. The PM never has to stop reconciling, minutes before publishing, to do scheduling.
-  - **Its dates come from the work already done.** Its mapped Tickets carry ledger entries, so it has an actual start — the time of its first ledger entry (FR-5) — and FR-6b therefore treats it as *in progress* and pins it there rather than placing it in the future. Its derived start equals its actual start by construction. Its duration defaults to the working days from that actual start to the Data Date, and the PM can change it.
+  - **It does not move the plan, and neither does any other Disposition.** The WP is created with no dependencies and an *as soon as possible* constraint, so the recalculation it triggers touches nothing but the WP itself. *Map*, *Change Request candidate* and *Explain* change no WP date at all, because mapping does not (FR-21). The PM never has to stop reconciling, minutes before publishing, to do scheduling.
+  - **Its dates come from the work already done, once the PM says so.** Its mapped Tickets carry ledger entries, so the action proposes an actual start from their **first observed activity** (FR-5) and a duration of the working days from there to the Data Date. The PM accepts or changes both in the same dialog. On acceptance FR-6b treats the WP as *in progress* and pins it at that actual start rather than placing it in the future; if the PM clears the proposal, the WP is *remaining* and is placed after the Data Date, which is equally honest and equally local. Either way the proposal is a proposal: nothing writes an actual date behind the PM's back.
   - **Linking it into the graph is a later, deliberate act**, done from the plan surface. That is the point at which the rest of the plan may move, and it is outside the Reconciliation Review.
 - ***Change Request candidate*** collects the Tickets and their hours into a list the PM can export.
 - ***Explain*** attaches a note. Client Viewers see the note only when a Published Snapshot includes it.
@@ -708,8 +743,9 @@ The system computes EVM Metrics at WP level and at Project level as of any date.
   - *count basis*, used when any Mapped Ticket has no estimate: resolved Tickets ÷ Mapped Tickets;
   - *no Mapped Tickets:* 0%, flagged "no evidence".
 - **Estimates:** Ticket estimates are read from the latest Tracker Snapshot. A change in EV caused by an estimate edit is flagged in the Review.
-- **Caps and flags:** Percent Complete is capped at 99% until the PM marks the WP complete. A WP with fewer than three Mapped Tickets is flagged "low evidence".
-- **PM override:** the PM can override Percent Complete, but a reason is required. The override is written to the audit trail and marked "PM-adjusted" in the Published Snapshot. The marker is always shown to Client Viewers next to the Health Indicators it affects, and no Visibility Policy setting can hide it.
+- **Caps and flags:** Percent Complete is capped at 99% until the WP has an actual finish (FR-5), which is what "complete" means. A WP with fewer than three Mapped Tickets is flagged "low evidence".
+- **Percent Complete is also a scheduling input.** FR-6b derives a WP's remaining duration from it, so every rule in this section — the bases, the cap, the flags and the override audit — governs the plan's dates as well as its EVM. A PM override therefore moves dates, and the movement appears in the Review with the cause *progress changed* (FR-28).
+- **PM override:** the PM can override Percent Complete, but a reason is required. An imported percent complete is written as such an override, with the file and row as its reason (FR-9), so nothing enters the numbers or the schedule unaudited. The override is written to the audit trail and marked "PM-adjusted" in the Published Snapshot. The marker is always shown to Client Viewers next to the Health Indicators it affects, and no Visibility Policy setting can hide it.
 - **EV:** Baseline hours × Percent Complete. If EV falls, for example because a Ticket was reopened, the drop is flagged in the Review.
 
 *Unplanned Work in EVM*
@@ -765,11 +801,12 @@ The system computes three Health Indicators and an overall status:
 
 - **Unplanned Work basis:** the indicator uses the Reporting Period's share, excluding Opening Balances. The cumulative share is shown next to it.
 - **TCPI rule:** Effort/Cost is red if the TCPI threshold is crossed, whatever the CPI. TCPI > 1.1 means the remaining work must be done more than 10% more efficiently than planned, which the references treat as a red flag. The current CPI is shown next to TCPI for comparison.
-- **Milestone slip, actual:** Schedule is at least amber when any Milestone is past its Baseline date and not done, whatever the SPI.
+- **Milestone slip, actual:** Schedule is at least amber when any Milestone is past its Baseline date and has no actual finish — which is what "not done" means (§3, FR-5) — whatever the SPI.
 - **Milestone slip, forecast:** Schedule is at least amber when a Milestone's **derived** date (FR-6b) is later than its Baseline date, even though that date has not yet passed. This is a deliberate R0 decision, not an oversight left for later: the scheduler knows about the slip before the date arrives, and an indicator that waits for the date to pass is worth less than the engine that computed it. The indicator names which of the two rules fired.
-- **Negative Float:** Schedule is red when the Project's minimum Float is negative — the plan cannot meet the Project finish or a *must finish on* constraint (FR-6b, FR-43) — whatever the SPI. Where no Project finish is set, Float is relative, this rule cannot fire, and the indicator says so rather than implying the plan is safe.
+- **Negative Float:** Schedule is red when the Project's minimum Float is negative — the plan cannot meet a **Project finish** the PM set (FR-6b, FR-43) — whatever the SPI. Where no Project finish is set, Float is relative, this rule cannot fire, and the indicator says so rather than implying the plan is safe.
+- **Constraint violation:** Schedule is at least amber when any *must finish on* constraint is unmet, and **red** when the unmet constraint belongs to a Milestone. This is a separate rule from negative Float on purpose: a violation stays on its own WP and never makes Float negative elsewhere (FR-6b), so without this rule a missed contractual date could sit outside every indicator. The indicator names the worst violation and how many working days late it is.
 - **Overall status:** the worst of the three indicators. It is never green while Schedule is red, even when CPI > 1 (pmi-techniques v2).
-- **Late in a project:** SPI converges to 1, so SV and both finish dates from FR-32 — the scheduled finish and the trend finish — are always shown next to it.
+- **Late in a project:** SPI converges to 1, so SV and both finish dates from FR-32 — the computed finish and the trend finish — are always shown next to it.
 - **Transparency:** the rule behind each colour is shown next to it.
 
 #### FR-32: Forecast — *R0*
@@ -779,10 +816,10 @@ The system shows the forecast effort at completion and, next to it, the two fini
 **Consequences (testable):**
 - The effort forecast is the EAC from the Project's selected EAC Method, so it includes Unplanned Work.
 - **Two finish dates exist, and both are shown, together and labelled.** They answer different questions and they will disagree:
-  - the **scheduled finish** — the Project's derived finish from FR-6b, computed from the real dependency graph, the Data Date and the remaining durations. This is the plan's own answer, it is the one the Schedule Health Indicator uses (FR-31), and it is the one behind the dates on the schedule Client Viewers see when the schedule is published (FR-34);
+  - the **computed finish** — the Project's derived finish from FR-6b, computed from the real dependency graph, the Data Date and the remaining durations. It is the same quantity §3 and FR-6b name, under the same name and no other: this PRD has two finish dates the scheduler touches, the *Project finish* the PM set and the *computed finish*, and a third label for either of them would be a third date to a reader. This is the plan's own answer, it is the one the Schedule Health Indicator uses (FR-31), and it is the one behind the dates on the schedule Client Viewers see when the schedule is published (FR-34);
   - the **trend finish** = Baseline start + (Baseline duration in working days ÷ SPI) — what the date becomes if the remaining plan keeps running at the efficiency observed so far. While EV < BAC it is never earlier than the next working day after the as-of date. When SPI is 0 or unavailable, no trend finish is shown.
 - **Terms and rounding:** "Baseline start" is the Project start pinned in the active Baseline (FR-43), and "Baseline duration" is the working days from it to the Baseline's latest finish. The division is evaluated in whole working days and rounded up, so the figure stays inside NFR-C1's integer discipline and cannot drift between recomputations.
-- The UI labels the trend finish as a simple trend heuristic, not a PMI formula, and labels the scheduled finish as the scheduler's output. **Where the two disagree, the UI says so and shows the gap**, because that gap is a real signal about the plan and hiding it would be the dishonest kind of simplification this product exists to avoid.
+- The UI labels the trend finish as a simple trend heuristic, not a PMI formula, and labels the computed finish as the scheduler's output. **Where the two disagree, the UI says so and shows the gap**, because that gap is a real signal about the plan and hiding it would be the dishonest kind of simplification this product exists to avoid.
 - A probabilistic forecast with drivers is Post-Q1.
 
 #### FR-33: Department and Program roll-up — *Post-Q1*
@@ -824,7 +861,7 @@ A PM can preview exactly what Client Viewers will see, then publish it as a Publ
 - **Immutable and reproducible:** a Published Snapshot stores:
   - the computed values it displays, **including every derived date, Float and critical-path marking on the schedule it shows**;
   - the Tracker Snapshot, Baseline version, attribution and Visibility Policy it was computed from;
-  - **the scheduling inputs that schedule was derived from**: the dependency graph with its lags, and per WP the duration, constraint, milestone flag, actual start and actual finish, together with the Project start, Project finish, Data Date (FR-43) and Holiday Calendar version (FR-14) in force at publish time;
+  - **the scheduling inputs that schedule was derived from**: the dependency graph with its lags, and per WP the duration, constraint, milestone flag, actual start, actual finish and Percent Complete, together with the Project start, Project finish, Data Date (FR-43) and Holiday Calendar version (FR-14) in force at publish time;
   - any Percent Complete overrides in force;
   - the Health thresholds, the EAC Method, the Reporting Period boundaries and time zone, and the formula version.
 - **Reproduction test:** recomputing a Published Snapshot from its stored inputs and the Actuals Ledger reproduces every displayed figure exactly, **the schedule included** — re-running FR-6b over the snapshot's pinned scheduling inputs reproduces every date it displayed, however far the Current Plan has moved since. A duration edit made on Friday does not change the Gantt published on Thursday. Derived dates are the most volatile thing on the page, so this is where the pinning doctrine matters most.
@@ -867,7 +904,7 @@ A PM can export an xlsx report. It contains EVM Metrics, Health Indicators, Unpl
 #### FR-39: Raw data export — *R0*
 
 A PM can export the following as xlsx or CSV:
-- the Plan, **with every scheduling input**: per WP the duration, constraint type and date, milestone flag, derived dates and actual dates, plus the Project's complete dependency graph with its lags;
+- the Plan, **with every scheduling input**: per WP the duration, constraint type and date, milestone flag, derived dates, actual dates and Percent Complete, plus the Project's complete dependency graph with its lags;
 - the Project start, Project finish and Data Date, with their history (FR-43);
 - the Holiday Calendar and its version history (FR-14);
 - Baseline versions, each with the scheduling inputs it pinned (FR-15);
@@ -881,7 +918,7 @@ A PM can export the following as xlsx or CSV:
 
 **Consequences (testable):**
 - For a given as-of date, the export contains enough data to recompute every EVM Metric outside the tool (no lock-in).
-- **The plan leaves too, not just the numbers.** The export contains enough to re-derive the schedule outside the tool — the graph, the durations, the constraints, the calendar version and the Data Date — so a PM leaving momo-keikaku takes a working plan rather than a picture of one. This is the claim an Excel refugee will actually test, and it is the stronger half of the no-lock-in promise.
+- **The plan leaves too, not just the numbers.** The export contains enough to re-derive the schedule outside the tool — the graph, the durations, the constraints, the actual dates, the progress, the calendar version and the Data Date — so a PM leaving momo-keikaku takes a working plan rather than a picture of one. This is the claim an Excel refugee will actually test, and it is the stronger half of the no-lock-in promise.
 
 ### 4.13 Seats
 
@@ -921,7 +958,8 @@ A Tenant Admin can see and manage PM Seats. Only the PM role consumes a seat (re
 - **NFR-A1 Audit trail.** Every action that changes reported numbers or who can see them is logged with the actor and the time. The Tenant Admin can view the log. Logged actions:
   - publish, supersede and retract;
   - Re-baseline;
-  - scheduling input changes: dependencies added, removed or re-lagged; durations; constraints;
+  - scheduling input changes: dependencies added, removed or re-lagged; durations; constraints; WPs created, deleted, moved or re-parented;
+  - **actual start and actual finish changes**, including marking a WP complete, with the previous value and the source — typed, imported (FR-9), or accepted from a first-observed-activity proposal (FR-5). These are logged as scheduling input changes because FR-6b reads them, and because they are the only dates a human writes;
   - Project start, Project finish and Data Date changes (FR-43);
   - Holiday Calendar version changes (FR-14);
   - Visibility Policy changes;
@@ -937,13 +975,14 @@ A Tenant Admin can see and manage PM Seats. Only the PM role consumes a seat (re
   - exports.
 - **NFR-C1 Computation determinism.** Every derived number — schedule dates and float (FR-6b), ledger totals, and EVM (FR-30, FR-31) — is reproducible: the same pinned inputs always yield the same output, on any machine and at any later date.
   - Money and effort are held and computed in integers, never floating point, so a recomputed Published Snapshot cannot drift from the stored one.
-  - Where an algorithm must choose between equally valid orderings, the tie-break is explicit and documented rather than left to iteration order.
+  - Where an algorithm must choose between equally valid orderings, the tie-break must be explicit and written down rather than left to iteration order. **The rule itself is an architecture deliverable, not a property this PRD can assert** (OQ-13): FR-15's re-derivation test and FR-35's reproduction test both compare the critical path as an ordered set, which is precisely where an undocumented tie-break shows up as a flaky test years later.
+  - Mapping, remapping and background rule evaluation change no derived date (FR-21, FR-22), so a displayed schedule is never stale against the inputs it was derived from.
   - A Baseline stores the inputs a schedule was derived from, not only the dates it produced, so any historical plan can be re-derived and explained. The pinned set is listed in full in FR-15 and includes the Holiday Calendar **version** and the Data Date: pinning a calendar by name rather than by version, or omitting the as-of boundary the forward pass ran from, is not pinning the inputs.
   - Published Snapshots pin the same set (FR-35), because the derived schedule is the most volatile thing they display.
 - **NFR-R1 Snapshot reliability.** Over a month, 99% of scheduled Tracker Snapshots succeed, or are retried successfully within one interval. Failures are visible to the PM.
 - **NFR-R2 Backups.** Daily backups, kept for 30 days. A restore is tested before R1. RPO is 24 hours; RTO is 1 business day.
 - **NFR-P1 Performance.** Measured with 5 Projects, each with 500 WPs and 2,000 Tickets:
-  - the Reconciliation Review, the tree/Gantt view and the Client View load in under 2 s (p75) and under 4 s (p95);
+  - the Reconciliation Review, the plan tree grid and the Client View load in under 2 s (p75) and under 4 s (p95);
   - Plan edits save in under 500 ms (p75) and under 1 s (p95), **including the FR-6b recalculation they trigger**;
   - a full schedule recalculation of a 500-WP Project completes in under 300 ms (p95), so an edit never presents the PM with stale dates;
   - a full Tracker Snapshot of 2,000 Tickets is read and written to the ledger within 5 minutes.
@@ -960,7 +999,10 @@ A Tenant Admin can see and manage PM Seats. Only the PM role consumes a seat (re
   - *Decision rule:* if the first 請負 client objects to Unplanned Work, the Unplanned Work indicator stays in the Health Indicators. For 請負 Projects, the Unplanned Work breakdown and Change Request candidates stay off. If the objection is to the hours figure itself, FR-34 is revisited before the next client is invited.
 - **Scope versus one founder.** v1 is large for one person.
   - *Mitigation:* the R0/R1 split (§8), and the R0 scope freeze in §7.3. The brief requires scope to be cut again if a gate date slips.
-  - *The trigger broke on 2026-09-20 and is re-anchored.* Withdrawing the 2026-12-15 target (§8.1) removed the only event that could fire "cut again if a gate date slips" — a date that does not exist cannot slip — in the same morning that R0 grew three times. Until `bmad-sprint-planning` returns a date, the cut order in §8.3 is triggered instead by the two anchors that still exist: **R1 must start by Q1 2027**, working backwards through the §8.1 gate's four consecutive weekly reports on three projects; and **§7.3**, which stops R0 growing further without a correct-course pass. When sprint planning returns a date (OQ-12), that date becomes the trigger and this paragraph is replaced.
+  - *The trigger broke on 2026-09-20 and is re-anchored on something that can actually fire.* Withdrawing the 2026-12-15 target (§8.1) removed the only event that could fire "cut again if a gate date slips" — a date that does not exist cannot slip — in the same morning that R0 grew three times. An anchor is only a trigger if some named artifact records whether it was met, so this one is written as a procedure with a date, not as an inference for someone to perform.
+    - **The anchor.** R1 is client-facing in Q1 2027 (§8.2). The §8.1 gate needs four consecutive weekly reports on three projects before R1 starts, so R0 must be in real founder use **by 2026-11-30** for R1 to deliver on time. §8.2 and this paragraph state one deadline, not two: R1 *delivers* in Q1 2027, and 2026-11-30 is what that implies for R0.
+    - **The check that fires it.** On the first working day of each month from 2026-10-01, the founder appends one line to §13: the date R0 entered founder use, or "not yet". **The first "not yet" recorded on or after 2026-12-01 fires the §8.3 cut order at item 1**, and each subsequent "not yet" takes the next item. Cutting needs no correct-course pass (§7.3), so the trigger can fire without a gate.
+    - When `bmad-sprint-planning` returns a date (OQ-12), that date becomes the trigger and this bullet is replaced by the date-slip rule the brief asks for.
 - **Import accuracy.** A misread WBS corrupts every number downstream.
   - *Mitigation:* the mandatory Import Preview, the acceptance corpus (FR-9), and deferring AI interpretation to Post-Q1.
 - **Thin moat.** Engineering-intelligence vendors, Crowd Log (クラウドログ) or Lychee Redmine could add a similar view.
@@ -984,11 +1026,24 @@ A Tenant Admin can see and manage PM Seats. Only the PM role consumes a seat (re
 
 ### 7.3 R0 scope is closed
 
-**R0 scope is frozen as of 2026-09-20.** The list in §8.1 is complete. Any further addition to R0 — a requirement, a new consequence that carries real cost, or a "while we are here" — must go through `bmad-correct-course` and produce a sprint change proposal the founder approves, exactly as the scheduler did on 2026-09-20. Nothing is added to R0 inside a PRD edit, a UX session, an architecture session or a build session.
+**R0 scope is frozen as of 2026-09-20.** The list in §8.1 is complete. Any further **addition** to R0 — a new requirement, a new capability, or a "while we are here" — must go through `bmad-correct-course` and produce a sprint change proposal the founder approves, exactly as the scheduler did on 2026-09-20.
+
+**What the freeze does not block.** A freeze that stopped the downstream skills from finishing work R0 already owns would be a freeze on delivery, not on scope — and it would contradict this PRD's own briefs, which hand `bmad-ux` and `bmad-architecture` questions they cannot answer without designing something (OQ-11, OQ-13). The line is therefore drawn between *resolving* and *adding*:
+
+| | Needs no correct-course pass | Needs a correct-course pass |
+|---|---|---|
+| `bmad-ux` | Designing the surface FR-6a, FR-6b and FR-7 already require — including the answer to what the PM sees when one edit moves a hundred dates, and how a violation, an out-of-sequence link or negative Float is explained. Deciding *how* is the job; the cost of *what* is already in R0. | Any new screen, field, state or capability not required by an R0 FR. Wanting a Gantt in R0 is an addition (FR-7 puts it in R1). |
+| `bmad-architecture` | Choosing the tie-break rule (OQ-13), the recalculation trigger mechanics, the schema and the migration — every decision an R0 FR already implies. | Any new FR, NFR or non-functional target beyond §5. |
+| `bmad-create-epics-and-stories` | Decomposing the frozen §8.1 list; writing acceptance criteria that restate an FR's stated consequences. | An acceptance criterion that asserts behaviour no FR states. |
+| `bmad-sprint-planning` | Sizing, and **cutting** (§8.3). | — |
+
+An open question this PRD already owns is resolved by its named owner and written back into the PRD; that is not a scope addition. A requirement nobody wrote down is. Where a downstream session cannot tell which it is holding, it says so and asks, rather than assuming either.
 
 *Why this is a guardrail and not a note.* On 2026-09-20 R0 grew three times in one morning: the scheduler (FR-6a, FR-6b); then two constraint types beyond the ASAP-only boundary the founder had approved (§13); then the progress-aware scheduling, Project schedule settings and calendar versioning those two made necessary (FR-43, FR-14). In the same morning the 2026-12-15 target was withdrawn, which removed §6's only scope-control trigger. Growth with the brake removed is how a solo v1 becomes an eighteen-month v1. The correct-course gate is the brake, and it stays on until `bmad-sprint-planning` has returned a date and a verdict against the frozen list (OQ-12).
 
 This guardrail binds this PRD and every session downstream of it. It does not restrict *cutting* R0: the cut order in §8.3 stays available without a correct-course pass, and so does anything that reduces scope.
+
+*How it is enforced, given that the reviewer is also the founder.* A norm with no artifact behind it is a wish. So: **every downstream artifact produced against this PRD opens with one line naming which column of the table above its output sits in** — "resolves OQ-n / decomposes FR-n", or "adds: correct-course proposal attached". A session that cannot write that line has found a scope addition. This does not make the brake automatic; it makes skipping it a visible omission in a file rather than a decision nobody recorded.
 
 ## 8. MVP Scope and Releases
 
@@ -999,9 +1054,9 @@ This guardrail binds this PRD and every session downstream of it. It does not re
 **Scope:**
 - A single Tenant, with isolation built into the data model.
 - Tenant Admin and PM roles. English UI.
-- Column-mapping Excel import, with the mandatory preview and a diff on re-import.
-- WP editing, tree and Gantt views, Custom Fields and Milestones.
-- **Dependencies, duration and constraints, with automatic schedule recalculation, Float and the minimum-Float critical path** (FR-6a, FR-6b), over a Project start, an optional Project finish and a Data Date (FR-43), so a mid-flight project is scheduled on the work that is left.
+- Column-mapping Excel import, with the mandatory preview and a diff on re-import. The import carries the plan's **progress** — actual start, actual finish and percent complete — so a mid-flight project arrives mid-flight (FR-9, FR-10).
+- WP editing, the plan tree grid (the single R0 scheduling surface — FR-7), Custom Fields and Milestones.
+- **Dependencies, duration and constraints, with automatic schedule recalculation, Float and the critical path to the Project finish** (FR-6a, FR-6b), over a Project start, an optional Project finish and a Data Date (FR-43), so a mid-flight project is scheduled on the work that is left.
 - Resources, Rates, Tracker Account linking and Holiday Calendars.
 - The Baseline Ledger.
 - The Backlog Connector, with snapshots, scope completeness and Ticket lifecycle handling.
@@ -1012,7 +1067,7 @@ This guardrail binds this PRD and every session downstream of it. It does not re
 - A fixed-layout xlsx export and the raw data export.
 - Hosting in a Japan region.
 
-**FRs:** 1, 2 (partial), 3 (partial), 4 (English), 5, 6a, 6b, 7–17, 19–32 (FR-30 with Typical EAC only), 38 (fixed layout of the PM view), 39, 42, 43.
+**FRs:** 1, 2 (partial), 3 (partial), 4 (English), 5, 6a, 6b, 7 (tree grid only — the Gantt is R1), 8–17, 19–32 (FR-30 with Typical EAC only), 38 (fixed layout of the PM view), 39, 42, 43. **That is 36 entries**, counting FR-6a and FR-6b separately — the number, not an adjective, because it is the input to the only sizing decision left (OQ-12).
 
 **This list is frozen (§7.3).** Additions go through `bmad-correct-course`; cuts follow §8.3.
 
@@ -1025,6 +1080,7 @@ R1 starts only after this gate passes. Build capacity is settled (OQ-10, closed)
 ### 8.2 R1 — client-facing (Q1 2027, after the §8.1 gate)
 
 **Scope:**
+- The Gantt (FR-7), alongside the client-facing schedule it serves (FR-34).
 - The Client Viewer role, the Visibility Policy, Publish, and the Client View in English and Japanese.
 - Client-visible Risks.
 - xlsx export of Published Snapshots, including Risks.
@@ -1033,12 +1089,13 @@ R1 starts only after this gate passes. Build capacity is settled (OQ-10, closed)
 - The security check sheet answer document.
 - A tested restore from backup.
 
-**FRs:** 2 (Client Viewer), 3, 4 (Japanese), 34–37, 38 (Published Snapshot export and Risks), 40.
+**FRs:** 2 (Client Viewer), 3, 4 (Japanese), 7 (the Gantt), 34–37, 38 (Published Snapshot export and Risks), 40.
 
 ### 8.3 Post-Q1 (next waves)
 
 **Deferred from the v1 FRs:**
 - AI-assisted import (FR-41).
+- Nothing of the Gantt: it is R1, not Post-Q1 (FR-7, §8.2).
 - The Jira Cloud Connector (FR-18).
 - Template-bound xlsx export (FR-38).
 - Program and Department roll-up, and the Internal Viewer role (FR-33, FR-2).
@@ -1056,7 +1113,7 @@ R1 starts only after this gate passes. Build capacity is settled (OQ-10, closed)
 | Recovery behaviour on a violated constraint — crash, fast-track, re-plan options | R0 reports the violation, its size and the chain that caused it; choosing what to do about it is the Post-Q1 recovery-options work |
 | What-if sandbox | Needs a second plan to compare against; belongs with the recovery options below |
 
-**All three constraint types ship in R0** — *as soon as possible*, *must start on* and *must finish on* (FR-5, FR-6b). This is a deliberate expansion beyond the approved sprint change proposal, which placed the latter two in Post-Q1. It is recorded as a second reversal in §13 rather than left in an exclusion table that would have argued against the scope the PRD had just taken on, and its consequences are specified instead of discovered later: soft-constraint semantics, negative Float, the minimum-Float critical path, and violation reporting that names the predecessor chain. Constraint types **beyond** these three — as-late-as-possible, start-no-earlier-than, standalone deadline flags — stay Post-Q1, because each further type multiplies the conflict cases the UI must explain.
+**All three constraint types ship in R0** — *as soon as possible*, *must start on* and *must finish on* (FR-5, FR-6b). This is a deliberate expansion beyond the approved sprint change proposal, which placed the latter two in Post-Q1. It is recorded as a second reversal in §13 rather than left in an exclusion table that would have argued against the scope the PRD had just taken on, and its consequences are specified instead of discovered later: soft-constraint semantics, negative Float against a Project finish, a critical path anchored on the finish rather than on any constraint, and violation reporting that names the days late and the predecessor chain (FR-6b). Constraint types **beyond** these three — as-late-as-possible, start-no-earlier-than, standalone deadline flags — stay Post-Q1, because each further type multiplies the conflict cases the UI must explain.
 
 **The semantics FR-6b implies are specified, not excluded.** An exclusion list is only honest if it is complete, and the expensive parts of a scheduler are semantics rather than features. Each of the following is in R0 and has a home in the requirements, so that no reader has to infer it:
 
@@ -1064,7 +1121,10 @@ R1 starts only after this gate passes. Build capacity is settled (OQ-10, closed)
 |---|---|
 | Progress-aware scheduling, so a mid-flight plan is not re-dated | The Data Date: FR-43, and FR-6b's complete / in progress / remaining rules |
 | The forward pass's origin and the backward pass's target | Project start and Project finish: FR-43, §3 |
-| Constraint-conflict semantics and negative Float | FR-6b; §3 *Float* and *Critical Path* |
+| Constraint-conflict semantics, negative Float, and keeping a violation off other WPs' Float | FR-6b; §3 *Float* and *Critical Path* |
+| Out-of-sequence progress, where an actual start precedes its predecessor's finish | FR-6b: the actual date wins, the invariant binds remaining work, the pair is flagged |
+| Remaining duration on an in-progress WP | FR-6b: `duration × (1 − Percent Complete)`, from FR-30's progress and never from elapsed time |
+| A producer for actual dates on a project that started before the tool saw it | FR-5 (PM-set) and FR-9/FR-10 (imported and confirmed) |
 | Calendar versioning, so that pinning "the calendar" pins its contents | FR-14's dated, append-only version history |
 | Recalculation scope, concurrency and cost | FR-6b: whole-Project and serialised per Project, inside NFR-P1's budget |
 
@@ -1073,7 +1133,7 @@ R1 starts only after this gate passes. Build capacity is settled (OQ-10, closed)
 - A cross-project load heatmap.
 - A probabilistic forecast with its drivers.
 - Ranked recovery options, including the 36-kyotei overtime check.
-- Layered calendars. `[NOTE FOR PM]` The warning when Tết falls during a JP deadline is cheap and very visible for exactly this user. It could be pulled forward.
+- Layered calendars, including the warning when Tết falls during a JP deadline run-up. It is cheap and very visible for exactly this user, and it is still **Post-Q1**: the 2026-09-20 note suggesting it could be pulled forward is withdrawn, because an open invitation to grow R0 sitting inside the exclusion list is the opposite of §7.3.
 - pptx output.
 - .mpp import, opportunistic. This overrides the .mpp part of research R2.
 - Redmine and then Asana Connectors (research R4).
@@ -1083,17 +1143,20 @@ R1 starts only after this gate passes. Build capacity is settled (OQ-10, closed)
 - A formal change-request workflow.
 - Bill rates, and money in Client Views.
 
-**Cut order if a gate date slips** (the brief requires cutting again):
-1. Gantt → the tree grid alone. The tree keeps the derived date columns, the predecessor column, the Float column and the critical-path marker, and remains a complete dependency- and constraint-editing surface (FR-7). This cut removes the bars, the arrows and the Data Date line, not the capability, and it does **not** execute cut 6.
-2. Re-import diff → replace the whole Plan, with a confirmation.
-3. Custom Fields editor → keep only the fields created by import.
-4. Google sign-in → email and password only.
-5. Raw data export (FR-39) → the Actuals Ledger and Mapping history only.
-6. Float and critical-path display (FR-6b) → keep the forward pass and automatic recalculation, drop the backward pass, the Float column and the critical-path marker. Constraint violations are still reported, without the Float figure behind them, and the Schedule Health Indicator loses its negative-Float rule (FR-31) but keeps both milestone rules.
+**Cut order if a gate date slips** (the brief requires cutting again). **This is the only cut order**, and OQ-12 points at item 1 rather than naming a separate first cut, because two orders in one document is no order at all:
+
+1. **The two extra constraint types** (*must start on*, *must finish on*) → *as soon as possible* only. This is the biggest saving per line cut: it removes negative Float, the finish-anchored critical path's harder half, soft-constraint semantics, violation display and explanation for three types, and most of OQ-11's difficult UI. Milestone targets then need a home, and the cheapest is a milestone-only deadline flag that reports slip without participating in the passes — FR-31's two milestone rules survive on it, and FR-9's milestone import writes it instead of a constraint.
+2. **Float and critical-path display** (FR-6b) → keep the forward pass and automatic recalculation; drop the backward pass, the Float column and the critical-path marker. The Schedule Health Indicator loses its negative-Float rule (FR-31) and keeps both milestone rules. **Item 2 is taken only after item 1**, never before: dropping Float while the two extra constraint types are still in scope would leave constraint violations reported with no Float behind them — precisely the badge nobody reads that FR-6b argues against. Taken in this order, item 1 removes the violations and item 2 then removes only the backward pass.
+3. Re-import diff → replace the whole Plan, with a confirmation.
+4. Custom Fields editor → keep only the fields created by import.
+5. Google sign-in → email and password only.
+6. Raw data export (FR-39) → the Actuals Ledger and Mapping history only.
 
 The wedge is never cut: FR-19–FR-32 (FR-30 with Typical EAC only), FR-34–FR-36 and FR-42.
 
-**FR-6b's forward pass is never cut either.** Automatic recalculation is the reason the plan can live in this tool rather than in Excel; without it the Plan is a static picture and the founder keeps reconciling dates by hand. Cut item 6 exists because the backward pass, while cheap, is separable — recalculation is not. Cuts 1 and 6 are independent by construction: FR-7 requires the tree grid to be a complete scheduling surface precisely so that dropping the Gantt cannot silently drop FR-6a's editing or FR-6b's display. If a later change makes the Gantt the only scheduling surface, item 1 leaves the cut order.
+**FR-6b's forward pass is never cut either.** Automatic recalculation is the reason the plan can live in this tool rather than in Excel; without it the Plan is a static picture and the founder keeps reconciling dates by hand. Item 2 exists because the backward pass, while cheap, is separable — recalculation is not.
+
+**There is no "drop the Gantt" cut, because R0 has no Gantt.** The earlier cut order opened with Gantt → tree grid, which required R0 to build two complete WCAG-AA scheduling surfaces so that the cheapest cut stayed available. That is backwards: an option is only worth preserving when preserving it costs less than exercising it saves. FR-7 therefore ships the tree grid alone in R0 and moves the Gantt to R1 — the cut taken now, at full value, with the build-versus-buy decision off R0's critical path.
 
 ## 9. Non-Goals (Explicit)
 
@@ -1109,7 +1172,7 @@ The wedge is never cut: FR-19–FR-32 (FR-30 with Typical EAC only), FR-34–FR-
 
 **Primary** (all three met by the end of Q1 2027)
 - **SM-1: Reconciliation and reporting time saved.**
-  - *Measure:* the founder's weekly time spent reconciling and building reports, logged for four weeks before adoption (during the R0 build, October–November 2026) and four weeks after (Q1 2027).
+  - *Measure:* the founder's weekly time spent reconciling and building reports, logged for four weeks before adoption (during the R0 build) and four weeks after (Q1 2027). **No month is named here**: the R0 build's dates are OQ-12's to return (§8.1), and a metric that quietly restates the withdrawn 2026-12-15 target would re-import the date the PRD withdrew.
   - *Target:* at least 5 hours per week saved.
   - *Caveat:* a sample of one, self-reported. This is accepted for the user-zero stage.
   - *Validates:* FR-20–FR-32, FR-38.
@@ -1177,13 +1240,19 @@ The wedge is never cut: FR-19–FR-32 (FR-30 with Typical EAC only), FR-34–FR-
    - *Owner:* founder.
    - *Resolve by:* revisit after 2027-01-01.
 10. ~~**OQ-10 Build capacity.**~~ **Closed 2026-09-20.** The founder has **20+ hours per week**. The remaining half of the question — a per-item estimate for R0 — is OQ-12 below.
-11. **OQ-11 The dependency-editing surface is uncosted and undesigned.** The FR-6b engine is cheap: a topological traversal with working-day arithmetic, whose correctness is expressible as table-driven tests. **Its editing surface is neither cheap nor designed** — `DESIGN.md` and `EXPERIENCE.md` mention dependencies nowhere. R0 now owes: dependency creation, editing and deletion on the plan surface, with rejection errors that name the cycle or the ancestor/descendant pair (FR-6a); dependency arrows and critical-path emphasis on the Gantt, and their equivalents in the tree grid (FR-7); constraint display and violation explanation for three constraint types, including negative Float (FR-6b); and an answer to what the PM sees when one edit moves a hundred dates. All of it sits under **NFR-U1**'s WCAG 2.1 AA keyboard access, which most off-the-shelf Gantt components fail — so "buy a Gantt" is an open decision, not an escape hatch. **This PRD deliberately does not invent that design.**
-    - *Owner:* `bmad-ux` for the design; `bmad-sprint-planning` for the cost and the build-versus-buy call.
+11. **OQ-11 The plan surface is uncosted and undesigned.** The FR-6b engine is cheap: a topological traversal with working-day arithmetic, whose correctness is expressible as table-driven tests. **Its editing surface is neither cheap nor designed** — `DESIGN.md` and `EXPERIENCE.md` mention dependencies nowhere. R0 owes **one** surface, the tree grid (FR-7), and on it: dependency creation, editing and deletion, with rejection errors that name the cycle or the ancestor/descendant pair (FR-6a); derived dates, actual dates, progress, Float and the critical-path marker as columns; constraint display and violation explanation for three constraint types, including days late and the chain behind it; out-of-sequence links; negative Float; and an answer to what the PM sees when one edit moves a hundred dates. All of it sits under **NFR-U1**'s WCAG 2.1 AA keyboard access. The Gantt, and with it the build-versus-buy decision for a Gantt component, moved to R1 on 2026-09-20 precisely so that this question is asked once rather than twice. **This PRD deliberately does not invent the design.**
+    - *Owner:* `bmad-ux` for the design; `bmad-sprint-planning` for the cost.
+    - *Not a scope addition:* designing what FR-6a, FR-6b and FR-7 already require is `bmad-ux`'s job and needs no correct-course pass (§7.3). Adding anything those FRs do not require does.
+    - *Sizing:* OQ-12 must size the plan surface as **its own line item**, separately from the engine. The engine being cheap is the reason the surface keeps being costed as though it were.
     - *Resolve by:* before any story that touches the plan surface is estimated.
-12. **OQ-12 R0 is unsized.** R0 is roughly thirty FRs plus a scheduler and its UI: Excel import against a ten-file acceptance corpus, a Backlog connector with snapshot scheduling and lifecycle handling, an append-only ledger, EVM with PMI formulas, health indicators, a forecast, two export formats, tree and Gantt, custom fields, resources, rates, calendars and baselines. At 20+ hours a week, solo. **No Epics or Stories exist**, so no per-item estimate exists for any of it, and the date that would have exposed a mismatch was withdrawn on the same morning the scope grew (§8.1, §6). This is recorded as a gap; this PRD does not guess at estimates.
+12. **OQ-12 R0 is unsized.** R0 is **36 FR entries** (§8.1) plus a scheduler and its UI: Excel import against a ten-file acceptance corpus, a Backlog connector with snapshot scheduling and lifecycle handling, an append-only ledger, EVM with PMI formulas, health indicators, a forecast, two export formats, the plan tree grid, custom fields, resources, rates, calendars and baselines. At 20+ hours a week, solo. **No Epics or Stories exist**, so no per-item estimate exists for any of it, and the date that would have exposed a mismatch was withdrawn on the same morning the scope grew (§8.1, §6). This is recorded as a gap; this PRD does not guess at estimates.
     - *Owner:* `bmad-sprint-planning`, after `bmad-create-epics-and-stories`.
-    - *Required outputs:* (a) a date for §8.1; (b) an explicit re-affirmation or reduction of the frozen §8.1 list against that date; (c) a verdict. If the verdict is CONCERNS or FAIL, **the first cut to consider is the two extra constraint types** (§13), ahead of item 6 of the §8.3 cut order, because ASAP-only removes most of OQ-11's UI surface at a stroke.
+    - *Required outputs:* (a) a date for §8.1; (b) an explicit re-affirmation or reduction of the frozen §8.1 list against that date; (c) a verdict; (d) a separate figure for the plan surface (OQ-11). If the verdict is CONCERNS or FAIL, the first cut is **item 1 of the §8.3 cut order** — the two extra constraint types — which is the same first cut this question used to name separately.
     - *Resolve by:* before step 7 (build) of `sprint-change-proposal-2026-09-20.md` starts.
+13. **OQ-13 The deterministic tie-break rule is asserted but unwritten.** NFR-C1 requires that where the scheduler must choose between equally valid orderings the tie-break is explicit and documented, and FR-6b says ties are broken deterministically. **No document says what the rule is.** FR-15's re-derivation test and FR-35's reproduction test both compare the critical path exactly, which is where an undocumented tie-break surfaces — as a test that passes on one machine and fails on another, years after the decision was made.
+    - *Owner:* `bmad-architecture`, which writes the rule into the architecture document and makes the two tests assert against it.
+    - *Not a scope addition:* the requirement already exists in NFR-C1; only its content is missing (§7.3).
+    - *Resolve by:* before the first scheduler story is estimated.
 
 ## 13. Decision Log (confirmed 2026-09-19)
 
@@ -1235,3 +1304,18 @@ The founder confirmed every inference made in the draft; each is now a decision:
 - **R0 scope is frozen** (§7.3). Any further R0 addition goes through `bmad-correct-course`. §6's cut trigger is re-anchored until a date exists.
 - **The dependency-editing surface and the R0 estimate are open items, not decisions** (OQ-11, OQ-12), handed to `bmad-ux` and `bmad-sprint-planning`. The PRD states what the surface must carry and declines to invent the design or the numbers.
 - **Pre-amendment Baselines are not comparable to later ones** — they pin dates with no inputs behind them and cannot be re-derived. This costs nothing: the build is paused, migrations are pre-production, and no real Baseline exists. It is recorded here only so that a later reader does not go looking for a migration problem that never existed.
+
+**Added 2026-09-20, after the second adversarial review of the scheduling amendment (`review-scheduling-adversarial-2.md`):**
+
+- **The import carries progress** (FR-9, FR-10). Actual start, actual finish and percent complete are mappable columns with the same preview-and-confirm treatment as everything else. Without them the flagship journey — UJ-1, which imports and Baselines a mid-flight project *before* any Connector exists — would arrive with every leaf marked *remaining*, and the scheduler would re-date finished work forward from the Data Date. The Data Date machinery was correct and had no fuel; this is the fuel.
+- **Actual dates are PM-owned inputs, and the ledger never writes them** (FR-5, FR-21, FR-22, FR-29, FR-43, NFR-A1). A WP's actual start is no longer "the time of its first ledger entry". That date is now *first observed activity* — display-only evidence, offered as a one-click proposal. The consequence is the one the founder asked for: Mapping, remapping and hourly Mapping Rule re-evaluation change attribution and never a date, so the plan advances only when the PM advances the Data Date, and §4.2's single-writer statement is literally true rather than nearly true.
+- **All three constraint types stay in R0, and the critical path is fixed by design rather than by removal** (FR-6b, §3). The backward pass anchors only on the Project finish, set or computed; never on a constraint. An unmet *must finish on* is a violation on its own WP — days late, and the chain that drove it — and propagates negative Float nowhere. Float is negative only against a Project finish the PM set. FR-31 gains a separate constraint-violation rule so a missed contractual date still reaches the Health Indicators.
+- **Remaining duration comes from progress, not elapsed time** (FR-6b): `duration × (1 − Percent Complete)`, rounded up, never below one working day. Percent Complete is already computed honestly (FR-30); not using it in the one place a forecast is produced was the inconsistency.
+- **R0 ships one scheduling surface** (FR-7, §8.2, §8.3, OQ-11). The tree grid is it. The Gantt moves to R1, next to the client-facing schedule it serves. Building two complete WCAG-AA editing surfaces in R0 so that the cheapest cut stayed available was paying more to keep an option than exercising it saves; the cut is taken now, at full value.
+- **Out-of-sequence progress is specified** (FR-6b): an actual date always wins, the "a successor never starts before its predecessor finishes" invariant binds remaining work only, and the pair is flagged like a constraint violation. It is guaranteed to fire on the first real import, so it is not left to the build.
+- **Imported milestones keep their target** (FR-9). A milestone row takes duration 0 and its imported date becomes a *must finish on* constraint — one narrow, deliberate exception to "imported dates never become constraints", written as an exception rather than discovered as a gap.
+- **The whole calendar is versioned, national tables included** (FR-14), and FR-6b halts rather than guessing beyond the loaded range.
+- **§7.3's freeze distinguishes resolving from adding** (§7.3, OQ-11, OQ-13). Resolving an open question R0 already owns is the owner's job and needs no correct-course pass; adding a requirement nobody wrote down does. A table names who may do what, every downstream artifact must state which side of it its output sits on, and §8.3's invitation to pull layered calendars forward is withdrawn.
+- **The cut trigger is a procedure, not an inference** (§6): R0 in founder use by 2026-11-30 for R1 to deliver in Q1 2027; a monthly line appended to this log; the first "not yet" on or after 2026-12-01 fires the §8.3 cut order at item 1. §8.2 and §6 now state one deadline between them, not two.
+- **One cut order, reconciled with OQ-12** (§8.3). The two extra constraint types are item 1; Float and critical-path display is item 2 and is never taken before item 1, because that ordering is what stops a cut leaving "a badge nobody reads".
+- **Named and counted rather than approximated:** the frozen §8.1 list is 36 FR entries, not "roughly thirty" (OQ-12); "done date" is the milestone's actual finish and not a fourth date (§3); the tie-break rule NFR-C1 asserts is now an architecture deliverable (OQ-13); FR-6a's graph rules are invariants re-validated on every move, re-parent and recalculation, not entry checks (FR-5, FR-6a); a deleted leaf WP's edges are deleted and listed, never silently re-linked (FR-5); a leaf WP with no duration is excluded from the passes and blocks a Baseline (FR-6b); FR-28's cause list is closed at six; FR-8's "no limit" is replaced by the tested bound; and SM-1 no longer carries the withdrawn R0 build dates.
