@@ -12,6 +12,20 @@ import { spawn, spawnSync } from 'node:child_process';
 import { createConnection } from 'node:net';
 
 const WEB_PORT = Number(process.env.PORT ?? 3101);
+
+// Both keys, checked before anything is started. The hardcoded localhost fallback that
+// used to live in packages/db/src/client.ts and drizzle.config.ts is gone, so `pnpm demo`
+// now needs them in the environment; failing here names them, rather than failing three
+// steps in with a connection error.
+const MISSING = ['DATABASE_URL', 'APP_DATABASE_URL'].filter((key) => !process.env[key]);
+if (MISSING.length > 0) {
+  process.stderr.write(
+    `\n\u001b[31mMissing ${MISSING.join(' and ')}.\u001b[0m Export them first, e.g.\n\n` +
+      `  export DATABASE_URL=postgres://momo:momo@localhost:55433/momo_keikaku\n` +
+      `  export APP_DATABASE_URL=postgres://momo_app:momo_app@localhost:55433/momo_keikaku\n\n`,
+  );
+  process.exit(1);
+}
 const ROOT = new URL('..', import.meta.url).pathname;
 
 function run(label: string, cmd: string, args: string[]): void {
@@ -56,11 +70,14 @@ run('Starting Postgres (docker compose)', 'docker', [
   '--wait',
 ]);
 run('Applying the schema', 'pnpm', ['exec', 'drizzle-kit', 'push', '--force']);
-run('Seeding the demo project and replaying the fixture Connector', 'pnpm', [
-  'exec',
-  'tsx',
-  'packages/db/src/seed.ts',
-]);
+// The roles first: `pgboss:migrate` creates `momo_app` (which `db:policies` grants to and
+// which the web app now connects as), and `db:policies` applies the row-level security,
+// the grants and the append-only triggers generated from the table-class registry. Without
+// both, the web app connects as a role that exists but holds nothing, and every page is
+// empty.
+run('Creating the database roles and the pg-boss schema', 'pnpm', ['pgboss:migrate']);
+run('Applying row-level security, grants and the append-only triggers', 'pnpm', ['db:policies']);
+run('Seeding the demo project and replaying the fixture Connector', 'pnpm', ['seed']);
 
 process.stdout.write(
   `\n[1m▸ Starting the web app[0m\n` +

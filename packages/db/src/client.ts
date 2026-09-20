@@ -2,42 +2,107 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import pg from 'pg';
 import * as schema from './schema';
 
-// The one sanctioned exception to the process.env fence outside packages/app/src/config.ts,
-// and it is temporary. The correct end state is `getDb(connectionString)` taking the value
-// from the parsed config, because `packages/db` implements ports that `packages/app`
-// declares: importing `@momo/app` from here would invert the architecture's import
-// direction, which dependency-cruiser will enforce as soon as story 1.2 turns AD-1 on.
-//
-// Threading the connection string through instead means changing every caller — the eight
-// `apps/web` files that reach `@momo/db` directly, the seed, the scripts and the tests —
-// and those eight files are exactly what story 1.2 rewires onto use cases. Doing it here
-// would mean editing code that is already scheduled to be rewritten. Recorded in
-// deferred-work.md; the disable is one line wide so it cannot silently spread.
-// The hardcoded fallback below is a KNOWN CONTRADICTION with the fail-boot promise in
-// packages/app/src/config.ts: a missing DATABASE_URL connects to a local dev database
-// instead of failing and naming the key — and on a machine where that database exists it
-// connects *successfully, to the wrong place*. drizzle.config.ts carries the identical
-// default and must move with it.
-//
-// Founder decision, 2026-09-20: fold the removal into story 1.2 rather than doing it now.
-// 1.2 already replaces this with `getDb(connectionString)` and rewires the eight apps/web
-// files that reach @momo/db directly, so it touches exactly this line; removing the
-// fallback separately would mean editing code that is about to be rewritten, and it would
-// break `pnpm demo`, which relies on the default rather than exporting the variable.
-export const DATABASE_URL =
-  // eslint-disable-next-line no-restricted-properties -- see above; removed by story 1.2
-  process.env.DATABASE_URL ?? 'postgres://momo:momo@localhost:55433/momo_keikaku';
+/**
+ * The connection is a value, not an ambient fact.
+ *
+ * This module used to export `DATABASE_URL`, read from `process.env` with a hardcoded
+ * `postgres://momo:momo@localhost:55433/momo_keikaku` fallback — the one sanctioned
+ * exception to the environment fence, and a KNOWN CONTRADICTION with the fail-boot promise
+ * in `packages/app/src/config.ts`: on a machine where that database exists, a missing
+ * DATABASE_URL connected *successfully, to the wrong place*. The founder decided on
+ * 2026-09-20 to remove it in this story, because this story introduces
+ * `getDb(connectionString)` and therefore touches exactly that line. `drizzle.config.ts`
+ * carried the identical default and moved with it.
+ *
+ * `packages/db` still does not read the environment: it cannot import `@momo/app` (that
+ * inverts the architecture's import direction — `packages/db` implements ports that
+ * `packages/app` declares), and it must not read `process.env` itself. So the connection
+ * string arrives as an argument, from each composition root:
+ *
+ *   * `apps/web/src/server/db.ts`   — `config.APP_DATABASE_URL`
+ *   * `apps/worker/src/index.ts`    — `config.APP_DATABASE_URL` (through pg-boss)
+ *   * `packages/db/src/seed.ts`     — `DATABASE_URL`, the owner, because it TRUNCATEs
+ *   * the tests and `scripts/`      — whichever role the assertion is about
+ *
+ * Pools are memoised per connection string rather than in a single module-level slot, so
+ * a process that legitimately holds two roles at once — the tests hold the owner and the
+ * application role together — does not silently get one pool pointed at the other's role.
+ */
 
-let pool: pg.Pool | null = null;
+/** Pools by connection string. The key is the identity: a different role is a different pool. */
+const pools = new Map<string, pg.Pool>();
 
-export function getPool(): pg.Pool {
-  if (!pool) pool = new pg.Pool({ connectionString: DATABASE_URL, max: 8 });
+/**
+ * Fails naming the configuration key rather than connecting to a default.
+ *
+ * `undefined` reaches here when a caller passes `config.SOMETHING` from a config object
+ * that was never parsed, or an optional value that was never set. The message names both
+ * keys because which one is missing depends on which role the caller wanted, and the
+ * caller is the only one who knows.
+ */
+function assertConnectionString(connectionString: string | undefined): asserts connectionString is string {
+  if (typeof connectionString !== 'string' || connectionString.trim() === '') {
+    throw new Error(
+      'A PostgreSQL connection string is required and none was given. There is no localhost ' +
+        'default: set DATABASE_URL (the owning role) or APP_DATABASE_URL (the restricted ' +
+        'application role) and pass it in, so a missing key fails here rather than connecting ' +
+        'successfully to the wrong database.',
+    );
+  }
+}
+
+/**
+ * The pool for one connection string, created on first use.
+ *
+ * @param connectionString the role to connect as. See the module note: this is
+ *   `config.APP_DATABASE_URL` for everything the application does, and `DATABASE_URL`
+ *   only where ownership is genuinely required.
+ */
+export function getPool(connectionString: string): pg.Pool {
+  assertConnectionString(connectionString);
+  let pool = pools.get(connectionString);
+  if (!pool) {
+    pool = new pg.Pool({ connectionString, max: 8 });
+    pools.set(connectionString, pool);
+  }
   return pool;
 }
 
-export function getDb() {
-  return drizzle(getPool(), { schema });
+const dbs = new Map<string, ReturnType<typeof drizzle<typeof schema>>>();
+
+/**
+ * The Drizzle handle for one connection string.
+ *
+ * NOTE: the handle this returns is the *bare* handle. It may open transactions, and it may
+ * not issue queries against tenant-owned tables — `withTenant` is the only sanctioned path,
+ * because it is the only one that sets `app.tenant_id`. A lint rule and
+ * `packages/db/src/source-discipline.test.ts` enforce that as a naming convention: a
+ * variable called `db` may not call `select`, `insert`, `update`, `delete` or `execute`,
+ * and the handle `withTenant` hands its callback — called `tx` — is what does.
+ */
+export function getDb(connectionString: string): Db {
+  assertConnectionString(connectionString);
+  let db = dbs.get(connectionString);
+  if (!db) {
+    db = drizzle(getPool(connectionString), { schema });
+    dbs.set(connectionString, db);
+  }
+  return db;
 }
 
-export type Db = ReturnType<typeof getDb>;
+export type Db = ReturnType<typeof drizzle<typeof schema>>;
+
+/**
+ * Closes every pool this module opened.
+ *
+ * For tests and scripts, which hold more than one role and would otherwise leave the
+ * process hanging on open handles. Idempotent.
+ */
+export async function closeAllPools(): Promise<void> {
+  const open = [...pools.values()];
+  pools.clear();
+  dbs.clear();
+  await Promise.all(open.map((pool) => pool.end()));
+}
+
 export { schema };

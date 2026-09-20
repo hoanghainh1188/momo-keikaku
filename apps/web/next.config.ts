@@ -1,7 +1,7 @@
 import type { NextConfig } from 'next';
 
 const config: NextConfig = {
-  transpilePackages: ['@momo/domain', '@momo/db'],
+  transpilePackages: ['@momo/domain', '@momo/db', '@momo/app'],
   serverExternalPackages: ['pg'],
   typescript: { ignoreBuildErrors: false },
   eslint: { ignoreDuringBuilds: true },

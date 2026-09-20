@@ -1,7 +1,7 @@
 import { afterAll, describe, expect, it } from 'vitest';
 import { hours, present, share } from '@momo/domain';
-import { loadReview } from './repo';
-import { DATABASE_URL, getPool } from './client';
+import { DEMO_TENANT_ID, loadReview } from './repo';
+import { closeAllPools, getDb, getPool } from './client';
 
 /**
  * The persistence round trip.
@@ -22,15 +22,25 @@ import { DATABASE_URL, getPool } from './client';
  * imported. Two independent paths asserting the same constants is the whole point; a
  * shared constant would let one path drift and still agree with itself.
  *
+ * It connects as the RESTRICTED application role and reads through `withTenant`, which is
+ * what story 1.2 changed here. Before that it connected as `momo` — a superuser, for whom
+ * FORCE row-level security does nothing — so every figure below would have reproduced
+ * whether the policies existed or not. Now the same figures are evidence that the
+ * tenant-scoped path returns the whole dataset and not a filtered subset of it: if
+ * `withTenant` bound the wrong value, or a policy named the wrong column, these numbers
+ * would come back computed over zero rows.
+ *
  * Requires a seeded database. Set REQUIRE_DB=1 (CI does) to turn an unreachable
  * database into a failure instead of a skip, so this can never pass by not running.
  */
 
 const REQUIRE_DB = process.env.REQUIRE_DB === '1';
+const APP_DATABASE_URL = process.env.APP_DATABASE_URL;
 
 async function databaseReachable(): Promise<boolean> {
+  if (!APP_DATABASE_URL) return false;
   try {
-    const client = await getPool().connect();
+    const client = await getPool(APP_DATABASE_URL).connect();
     client.release();
     return true;
   } catch {
@@ -38,28 +48,38 @@ async function databaseReachable(): Promise<boolean> {
   }
 }
 
+if (REQUIRE_DB && !APP_DATABASE_URL) {
+  throw new Error(
+    'REQUIRE_DB=1 but APP_DATABASE_URL is not set. This test now reads as the restricted ' +
+      'application role — there is no localhost default any more — so it must not be skipped here.',
+  );
+}
+
 const reachable = await databaseReachable();
 
 if (REQUIRE_DB && !reachable) {
   throw new Error(
-    `REQUIRE_DB=1 but the database at ${DATABASE_URL} is unreachable. ` +
+    `REQUIRE_DB=1 but the database at ${APP_DATABASE_URL} is unreachable. ` +
       'This test is the only gate on the ORM/driver/server combination, so it must not be skipped here.',
   );
 }
 
 afterAll(async () => {
-  if (reachable) await getPool().end();
+  if (reachable) await closeAllPools();
 });
+
+/** The handle every assertion below reads through: the application role, not the owner. */
+const db = () => getDb(APP_DATABASE_URL!);
 
 describe.skipIf(!reachable)('persistence round trip — the database reproduces the golden figures', () => {
   it('pins the Review to the same snapshot and measurement basis', async () => {
-    const { review } = await loadReview();
+    const { review } = await loadReview(db(), DEMO_TENANT_ID);
     expect(review.snapshot.id).toBe('snap-ec-phase2-0006');
     expect(review.measurementBasis).toBe('hours');
   });
 
   it('reports the headline EVM figures in effort hours', async () => {
-    const { review } = await loadReview();
+    const { review } = await loadReview(db(), DEMO_TENANT_ID);
     expect(hours(review.evm.bacMh)).toBe('2936.0');
     expect(hours(review.evm.pvMh)).toBe('1459.8');
     expect(hours(review.evm.evMh)).toBe('1330.8');
@@ -67,7 +87,7 @@ describe.skipIf(!reachable)('persistence round trip — the database reproduces 
   });
 
   it('reports SPI, both CPIs and TCPI', async () => {
-    const { review } = await loadReview();
+    const { review } = await loadReview(db(), DEMO_TENANT_ID);
     expect(present(review.evm.spi).text).toBe('0.91');
     expect(present(review.evm.cpiAllIn).text).toBe('0.80');
     expect(present(review.evm.cpiPlannedScope).text).toBe('0.92');
@@ -75,7 +95,7 @@ describe.skipIf(!reachable)('persistence round trip — the database reproduces 
   });
 
   it('reports the forecast and both finish dates', async () => {
-    const { review } = await loadReview();
+    const { review } = await loadReview(db(), DEMO_TENANT_ID);
     expect(present(review.evm.eacMh).text).toBe('3665.6');
     expect(present(review.evm.etcMh).text).toBe('2004.1');
     expect(present(review.evm.vacMh).text).toBe('-729.6');
@@ -84,7 +104,7 @@ describe.skipIf(!reachable)('persistence round trip — the database reproduces 
   });
 
   it('splits Unplanned Work into all three components', async () => {
-    const { review } = await loadReview();
+    const { review } = await loadReview(db(), DEMO_TENANT_ID);
     const by = Object.fromEntries(review.unplanned.components.map((c) => [c.key, hours(c.mh)]));
     expect(by).toEqual({
       unmapped: '166.0',
@@ -95,14 +115,14 @@ describe.skipIf(!reachable)('persistence round trip — the database reproduces 
   });
 
   it('shows Unplanned Work in the amber band for the period', async () => {
-    const { review } = await loadReview();
+    const { review } = await loadReview(db(), DEMO_TENANT_ID);
     expect(share(review.unplanned.sharePeriod!)).toBe('16.8%');
     expect(share(review.unplanned.shareCumulative!)).toBe('13.0%');
     expect(hours(review.unplanned.period.unplannedMh)).toBe('29.1');
   });
 
   it('carries effort across the driver as integral numbers, never strings', async () => {
-    const { review } = await loadReview();
+    const { review } = await loadReview(db(), DEMO_TENANT_ID);
     // The regression this file exists to catch. `schema.ts` declares these columns
     // `bigint({ mode: 'number' })`, and that mode is what converts Postgres int8 into
     // a JS number — node-postgres hands back a *string* otherwise, because int8 does

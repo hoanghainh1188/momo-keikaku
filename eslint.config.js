@@ -102,6 +102,58 @@ const envSyntax = [
   },
 ];
 
+// --- the tenant-isolation bans (story 1.2) ------------------------------------------------
+//
+// Unlike the two above, these are NOT switchable per file group: there is no sanctioned home
+// for either, so they are appended to every group the `fence` builder produces — which is
+// every module ESLint parses here: `apps/**`, `packages/**`, `scripts/**` and the root
+// configs.
+//
+// What that does NOT cover is anything ESLint does not parse: `.sql` files, the CI workflow,
+// `infra/`, Markdown. These are syntax selectors, so they see a string literal and a member
+// call and nothing else. `packages/db/src/source-discipline.test.ts` is the backstop that
+// walks every tracked file regardless of type; between the two, the coverage is the whole
+// repository, and neither claims it alone.
+
+const tenantSyntax = [
+  {
+    // The non-parameterizable `SET LOCAL` form of the tenant setting. Its right-hand side
+    // is not an expression, so it cannot take a bind parameter and the tenant id has to be
+    // interpolated into the statement text — the exact shape of the bug this story exists
+    // to prevent. The sanctioned form is `set_config('app.tenant_id', $1, true)`, which
+    // `withTenant` issues with the value bound.
+    //
+    // The banned phrase is deliberately not spelled out anywhere in this repository, not
+    // even in a message or a comment, so that a plain `grep -r` for it returns nothing at
+    // all. The regex below matches it without containing it.
+    //
+    // The two selectors are the two ways the string can be written: `Literal[value=...]`
+    // catches the quoted form, `TemplateElement` the backtick one, which is how anyone
+    // building SQL by hand would actually write it.
+    selector: "Literal[value=/SET\\s+LOCAL\\s+app\\.tenant_id/i]",
+    message:
+      'The non-parameterizable SET LOCAL form of the tenant setting cannot take a bind parameter, so the tenant id would have to be interpolated into SQL. Use withTenant(), which binds it: set_config(\'app.tenant_id\', $1, true).',
+  },
+  {
+    selector: "TemplateElement[value.raw=/SET\\s+LOCAL\\s+app\\.tenant_id/i]",
+    message:
+      'The non-parameterizable SET LOCAL form of the tenant setting cannot take a bind parameter, so the tenant id would have to be interpolated into SQL. Use withTenant(), which binds it: set_config(\'app.tenant_id\', $1, true).',
+  },
+  {
+    // The bare handle. `getDb(...)` returns a connection with no tenant set, so a query
+    // issued on it reads a tenant-owned table as empty and writes are refused by the
+    // policy's WITH CHECK — a failure that looks like missing data rather than a missing
+    // transaction. The convention the rule enforces is a naming one, and deliberately so:
+    // a variable called `db` may open a transaction and nothing else, and the handle
+    // `withTenant` hands its callback is called `tx`. That makes the violation visible in
+    // a diff, not only to the linter.
+    selector:
+      "CallExpression[callee.type='MemberExpression'][callee.object.name='db'][callee.property.name=/^(select|selectDistinct|selectDistinctOn|insert|update|delete|execute|query|\\$with)$/]",
+    message:
+      'The bare `db` handle may not query tenant-owned tables: nothing has set app.tenant_id on it. Wrap the work in withTenant(db, tenantId, (tx) => …) and issue it on `tx`.',
+  },
+];
+
 /**
  * Builds the rule pair for a file group. Each ban is switched on or off independently,
  * and the surviving entries are re-declared in full because a later flat-config block
@@ -113,7 +165,12 @@ const fence = ({ clock, env }) => ({
     ...(clock ? clockProperties : []),
     ...(env ? envProperties : []),
   ],
-  'no-restricted-syntax': ['error', ...(clock ? clockSyntax : []), ...(env ? envSyntax : [])],
+  'no-restricted-syntax': [
+    'error',
+    ...(clock ? clockSyntax : []),
+    ...(env ? envSyntax : []),
+    ...tenantSyntax,
+  ],
 });
 
 export default tseslint.config(
@@ -149,6 +206,15 @@ export default tseslint.config(
     name: 'momo/fence-config-module',
     files: ['packages/app/src/config.ts'],
     rules: fence({ clock: true, env: false }),
+  },
+  {
+    // Tooling. `scripts/`, `vitest.config.ts` and `drizzle.config.ts` legitimately read the
+    // environment and construct dates, so neither of the original two bans applies — but
+    // the tenant bans have no sanctioned home anywhere, and a migration script is exactly
+    // where a hand-interpolated `SET LOCAL` would otherwise be written.
+    name: 'momo/fence-tooling',
+    files: ['scripts/**/*.ts', 'vitest.config.ts', 'drizzle.config.ts', 'eslint.config.js'],
+    rules: fence({ clock: false, env: false }),
   },
   {
     // Tests may read the environment: `packages/db/src/db-round-trip.test.ts` reads

@@ -212,6 +212,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@momo/app':
+        specifier: workspace:*
+        version: link:../../packages/app
       '@momo/db':
         specifier: workspace:*
         version: link:../../packages/db

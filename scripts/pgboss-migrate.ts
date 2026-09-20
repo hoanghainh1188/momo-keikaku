@@ -85,6 +85,59 @@ interface RoleAttributes {
   readonly rolcanlogin: boolean;
 }
 
+/**
+ * Creates a role if it is absent, and converges its attributes if it is present.
+ *
+ * Exported because story 1.2's `scripts/db-policies.ts` needs the `maintenance` role and
+ * must NOT invent a second role mechanism: one place decides what a momo role is allowed
+ * to be, and both callers go through it. In particular NOBYPASSRLS is re-asserted on every
+ * run — it is the default for a new role, but a default is not a guarantee, and a role
+ * someone granted BYPASSRLS to by hand would otherwise keep it forever, silently defeating
+ * the isolation argument that no other gate can see.
+ *
+ * The password is carried ONLY by the CREATE. `ALTER ROLE ... PASSWORD` would put the
+ * credential into pg_stat_activity and into any `log_statement` capture on every run,
+ * against a security floor that says no credential reaches logs. Rotating a password is
+ * therefore a deliberate operation, not a side effect of re-running a migration.
+ */
+export async function ensureRole(
+  client: pg.Client,
+  role: string,
+  options: { readonly login: boolean; readonly password?: string },
+): Promise<void> {
+  if (!ROLE_NAME_PATTERN.test(role)) {
+    throw new Error(`Refusing to create a role named ${JSON.stringify(role)}.`);
+  }
+  const quoted = pg.escapeIdentifier(role);
+  const login = options.login ? 'LOGIN' : 'NOLOGIN';
+
+  const { rows } = await client.query<RoleAttributes>(
+    `SELECT rolsuper, rolcreatedb, rolcreaterole, rolbypassrls, rolcanlogin
+       FROM pg_catalog.pg_roles WHERE rolname = $1`,
+    [role],
+  );
+  const attributes = rows[0] ?? null;
+
+  if (attributes === null) {
+    const password =
+      options.password === undefined
+        ? ''
+        : ` PASSWORD ${pg.escapeLiteral(options.password)}`;
+    await client.query(`CREATE ROLE ${quoted} ${login} ${ROLE_ATTRIBUTES}${password}`);
+    return;
+  }
+
+  if (
+    attributes.rolsuper ||
+    attributes.rolcreatedb ||
+    attributes.rolcreaterole ||
+    attributes.rolbypassrls ||
+    attributes.rolcanlogin !== options.login
+  ) {
+    await client.query(`ALTER ROLE ${quoted} WITH ${login} ${ROLE_ATTRIBUTES}`);
+  }
+}
+
 export function parseAppRoleIdentity(connectionString: string): AppRoleIdentity {
   let url: URL;
   try {
@@ -204,53 +257,9 @@ async function installedVersion(client: pg.Client): Promise<number | null> {
 
 async function ensureRoles(client: pg.Client, appRole: AppRoleIdentity): Promise<void> {
   const migrator = pg.escapeIdentifier(MIGRATOR_ROLE);
-  const app = pg.escapeIdentifier(appRole.name);
 
-  // ROLE_ATTRIBUTES is re-asserted on every run rather than only at creation. These are the
-  // defaults for a new role, but a default is not a guarantee: a role someone granted
-  // BYPASSRLS to by hand would otherwise keep it forever, silently defeating story 1.2's
-  // isolation argument, and the DDL probe cannot see that.
-  const attributesOf = async (role: string): Promise<RoleAttributes | null> => {
-    const { rows } = await client.query<RoleAttributes>(
-      `SELECT rolsuper, rolcreatedb, rolcreaterole, rolbypassrls, rolcanlogin
-         FROM pg_catalog.pg_roles WHERE rolname = $1`,
-      [role],
-    );
-    return rows[0] ?? null;
-  };
-
-  const migratorAttributes = await attributesOf(MIGRATOR_ROLE);
-  if (migratorAttributes === null) {
-    await client.query(`CREATE ROLE ${migrator} NOLOGIN ${ROLE_ATTRIBUTES}`);
-  } else if (
-    migratorAttributes.rolsuper ||
-    migratorAttributes.rolcreatedb ||
-    migratorAttributes.rolcreaterole ||
-    migratorAttributes.rolbypassrls ||
-    migratorAttributes.rolcanlogin
-  ) {
-    await client.query(`ALTER ROLE ${migrator} WITH NOLOGIN ${ROLE_ATTRIBUTES}`);
-  }
-
-  const appAttributes = await attributesOf(appRole.name);
-  if (appAttributes === null) {
-    // The ONLY statement that carries the password. It is not re-issued on later runs:
-    // `ALTER ROLE ... PASSWORD` would put the credential into pg_stat_activity and into any
-    // `log_statement` capture on every run, against a security floor that says no credential
-    // reaches logs. Rotating the password is therefore a deliberate operation, not a
-    // side effect of re-running a migration.
-    await client.query(
-      `CREATE ROLE ${app} LOGIN ${ROLE_ATTRIBUTES} PASSWORD ${pg.escapeLiteral(appRole.password)}`,
-    );
-  } else if (
-    appAttributes.rolsuper ||
-    appAttributes.rolcreatedb ||
-    appAttributes.rolcreaterole ||
-    appAttributes.rolbypassrls ||
-    !appAttributes.rolcanlogin
-  ) {
-    await client.query(`ALTER ROLE ${app} WITH LOGIN ${ROLE_ATTRIBUTES}`);
-  }
+  await ensureRole(client, MIGRATOR_ROLE, { login: false });
+  await ensureRole(client, appRole.name, { login: true, password: appRole.password });
 
   // The migrator creates the schema, which is a privilege held on the *database*.
   const database = await client.query<{ current_database: string }>('SELECT current_database()');

@@ -12,12 +12,29 @@ quietly absorbed.
 
 ```bash
 pnpm install
+
+# Both are required. There is no localhost default any more: story 1.2 removed the
+# hardcoded fallback from packages/db and drizzle.config.ts, because on a machine where
+# that database happened to exist a missing key connected *successfully, to the wrong
+# place*. Anything that connects now fails naming the key it was not given.
+#
+# DATABASE_URL      the OWNING role — DDL, the seed's TRUNCATE, CREATE POLICY, CREATE ROLE.
+# APP_DATABASE_URL  the restricted role the web app and the worker connect as: a non-owner
+#                   without BYPASSRLS, so row-level security actually applies to it.
+export DATABASE_URL=postgres://momo:momo@localhost:55433/momo_keikaku
+export APP_DATABASE_URL=postgres://momo_app:momo_app@localhost:55433/momo_keikaku
+
 pnpm demo
 ```
 
-That one command starts Postgres 18 in docker compose, applies the schema, seeds the
-demo project, replays the `fixture` Connector's six weekly Tracker Snapshots into the
-Actuals Ledger, and starts the web app.
+That one command starts Postgres 18 in docker compose, applies the schema, creates the
+`momo_migrator`, `momo_app` and `momo_maintenance` roles with the pg-boss schema, applies the
+row-level security, grants and append-only triggers generated from the table-class registry,
+seeds the demo project, replays the `fixture` Connector's six weekly Tracker Snapshots into
+the Actuals Ledger, and starts the web app.
+
+`pnpm demo` checks for both variables first and names whichever is missing, rather than
+failing three steps in with a connection error.
 
 | | |
 |---|---|
