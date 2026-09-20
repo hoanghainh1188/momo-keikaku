@@ -8,6 +8,7 @@ This addendum collects material that supports the PRD but belongs downstream: te
 - A multi-tenant data model: Tenant > Department > Program > Project > Work Package.
 - Resources have a home Department and work across Projects. Cost rolls up on both the Project axis and the Department axis.
 - The Baseline Ledger and the Actuals Ledger are separate stores. Both are append-only.
+- **Plan dates are derived from pinned scheduling inputs and are owned by the scheduler.** No other module writes a WP's start or finish — not the importer, not the re-importer, not a Disposition (PRD FR-6b, FR-9, FR-11, FR-29). A Baseline pins the inputs, the actual dates in force, the Holiday Calendar version and the Data Date, not only the dates it produced (PRD FR-15).
 
 ### A.2 Snapshot service
 - **Always-on polling.** The snapshot service must run continuously, because Backlog has no worklog API and only one `actualHours` value per issue. The Actuals Ledger therefore has to be built from time-series deltas (research R3).
@@ -37,6 +38,16 @@ This addendum collects material that supports the PRD but belongs downstream: te
 - Host in a Japan region, including backups.
 - Prepare a pre-filled Japanese security check sheet (セキュリティチェックシート) answer document before inviting the first client.
 
+### A.5 Scheduling engine
+
+- **One write path.** `domain/schedule.recalculate(project)` owns every write to a WP's start and finish, and a test greps for assignments outside it (sprint change proposal A-3).
+- **Progress awareness.** The forward pass reads each leaf WP's actual start and actual finish alongside its duration, plus the Project's Data Date, and schedules only remaining work (PRD FR-6b, FR-43). Remaining duration is *derived*, never stored, so it cannot drift from the actual dates it is computed from.
+- **Project-level inputs.** `project` gains a start, an optional finish and a data date (PRD FR-43). The backward pass's origin depends on whether the finish is set, so the origin used must be recorded with the result — Float means different things under the two.
+- **Pinning.** `baseline_wp` must store scheduling inputs and the actual dates in force, and the Baseline must reference the dependency-graph state and the Holiday Calendar version it was taken against (PRD FR-15). Storing outputs only is the doctrine breach this change exists to close. Published Snapshots pin the same set (PRD FR-35).
+- **Calendar versioning.** The Holiday Calendar gains a dated, append-only history like Rates (PRD FR-14), and every schedule is re-derived against the version pinned with it.
+- **Leaf-only graph.** Dependencies and constraints attach to leaf WPs only, and links between ancestors and descendants are rejected at entry — a check the cycle detector cannot cover, because it is a cycle only once roll-up edges are considered (PRD FR-6a).
+- **Recalculation is whole-Project and serialised per Project** (PRD FR-6b), inside NFR-P1's 300 ms p95 budget for 500 WPs. The write amplification of restamping up to 500 date rows per edit is an architecture concern to size, not a requirement to renegotiate.
+
 ## B. UX Notes (from brief Addendum E and research)
 
 - **Practice facts.**
@@ -50,10 +61,11 @@ This addendum collects material that supports the PRD but belongs downstream: te
   - The Client View shows effort (工数) only, never money. Its wording should read naturally to a Japanese client-side PM.
   - The client-facing Japanese wording for Unplanned Work needs care. The draft label is 計画外作業 ("unplanned work"). Validate it with a real client and avoid wording that sounds like blame.
 - **Template binding.** The xlsx template binding flow (PRD FR-38) needs its own UX design.
+- **The dependency-editing surface is the open design problem, and it is open on purpose.** `DESIGN.md` and `EXPERIENCE.md` mention dependencies nowhere, and the PRD declines to invent the design (PRD OQ-11). What it hands to `bmad-ux`: dependency and constraint editing on both the Gantt and the tree grid, rejection feedback that names the cycle or the ancestor/descendant pair, constraint-violation explanation for three constraint types including negative Float, and what the PM sees when one edit moves a hundred dates. The build-versus-buy question for the Gantt component rides along with it, because NFR-U1's keyboard-access bar is the part most off-the-shelf Gantt components fail.
 
 ## C. Next-Wave Design Detail (from brief Addendum D, not v1)
 
-- **Scheduling:** dependency-driven, effort-driven recalculation, with hard deadline constraints for fixed-date contracts.
+- **Scheduling — partly pulled into R0 on 2026-09-20.** Dependency-driven recalculation is now FR-6a and FR-6b in R0: finish-to-start links, forward and backward pass, Float (which may be negative), the minimum-Float critical path, and JP/VN working-day arithmetic. The same day's adversarial review added progress-aware scheduling with a Data Date (FR-43) and calendar versioning (FR-14), because every target project is mid-flight. What remains next-wave is **effort-driven** recalculation (duration derived from effort ÷ assignment), the SS/FF/SF link types with lead, cross-project scheduling, and constraint types beyond ASAP / must-start-on / must-finish-on. Hard deadline constraints for fixed-date contracts are served by must-finish-on in R0, which reports a violation and negative Float; **the recovery behaviour when one is violated — crash, fast-track, re-plan — is still next-wave** and belongs with the recovery options below.
 - **What-if sandbox:** changes only the current schedule and never the Baseline. Every reallocation is logged with a reason.
 - **Load statement:** a person × week heatmap of planned load against real load, including Unplanned Work (for example, "80% on plan, 130% real").
 - **Probabilistic forecast:** built from Baseline slip history, for example, "70% by 15/03". A drivers block shows the certain share, the top slipping items, and Unplanned Work by team. On fixed-date contracts, it also shows the probability of hitting the date.
