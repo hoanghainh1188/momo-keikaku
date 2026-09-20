@@ -1,4 +1,4 @@
-# Minimal CI: the two gates that can run green today.
+# Minimal CI: the gates that can run green today.
 #
 # THIS IS NOT THE FULL GATE SET. ARCHITECTURE-SPINE.md AD-19 requires CI to block
 # merge on: dependency-cruiser, the ESLint clock/env rules, the cross-tenant harness
@@ -7,20 +7,31 @@
 # test (AD-5), the ComputationInputs closure test (AD-10), the concurrency test (AD-20),
 # and the six scheduler gates (AD-26/27/28).
 #
-# Every one of those needs code that does not exist yet, and most need a Postgres
-# service. They belong to Epic 1 story 1.1 (the workspace, the import fences and the
-# gate list) and Epic 2 story 2.1 (the migration). Adding them here before their code
+# The ESLint clock/env rules are now here — story 1.1 slice B1 added them. Every other
+# entry still needs code that does not exist yet, and most need a Postgres service. They
+# belong to Epic 1 story 1.2 (the registry, RLS and the rewiring the dependency-cruiser
+# gate waits on) and Epic 2 story 2.1 (the migration). Adding them before their code
 # exists would make CI red on day one for a reason nobody could fix that day — which is
 # the failure epics.md warns about for the dependency-cruiser gate specifically.
 #
-# So this file gates on what is real: typecheck and the test suite. Measured on
-# 2026-09-20 — both typechecks exit 0, and `pnpm test` passes 46 tests across 3 files
-# with DATABASE_URL pointing at a dead port, so no database service is needed yet.
-# Add a `services: postgres` block when the first test needs one.
+# So this file gates on what is real: lint, all three typechecks and the test suite.
+# Measured on 2026-09-20 — `pnpm lint` exits 0, all three typechecks exit 0, and
+# `pnpm test` passes 53 tests across 4 files against the seeded Postgres service below.
 #
-# The typecheck gate was verified non-vacuous: injecting `const x: number = "str"` into
-# packages/domain/src/units.ts makes it fail with TS2322. A gate nobody has seen fail is
-# indistinguishable from a green light.
+# Every gate here has been watched to fail, because a gate nobody has seen fail is
+# indistinguishable from a green light:
+#   * typecheck — injecting `const x: number = "str"` into packages/domain/src/units.ts
+#     fails with TS2322 (verified in slice A).
+#   * lint — eleven injected violations each fail with the rule named, and each returns the
+#     gate to 0 when removed: `Date.now()`, `new Date()`, `Date()`, `process.env.FOO`,
+#     `const { env } = process` and `const p = process; p.env.FOO` in a source file; the
+#     first two forms inside each sanctioned home, which is exempt from one ban and not the
+#     other; `Date.now()` in a test file; a `.mjs` module under packages/; and a stale
+#     eslint-disable directive, which `--max-warnings 0` turns into a failure. The full
+#     table is in spec-1-1-workspace-skeleton.md.
+#   * typecheck (apps/worker) — `const __bad: number = 'nope'` in apps/worker/src/index.ts
+#     is caught by this step and by neither of the other two, because the root tsconfig
+#     excludes `apps`.
 
 name: CI
 
@@ -42,7 +53,7 @@ concurrency:
 
 jobs:
   verify:
-    name: typecheck + tests
+    name: lint + 3 typechecks + tests
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -100,16 +111,29 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
-      # Two typecheck steps, because the root tsconfig excludes `apps`. Without the
-      # second one a type error in apps/web would reach main unnoticed — Next.js only
-      # catches it at `next build`, which CI does not run. Both are plain `tsc --noEmit`,
-      # so neither emits into the source tree.
+      # Three typecheck steps, because the root tsconfig excludes `apps` — so each app
+      # needs its own or a type error there reaches main unnoticed. Next.js only catches
+      # apps/web's at `next build`, which CI does not run, and nothing at all would catch
+      # apps/worker's. All three are plain `tsc --noEmit`, so none emits into the source
+      # tree.
       - name: Typecheck (packages, scripts)
         run: pnpm typecheck
 
       - name: Typecheck (apps/web)
         if: always()
         run: pnpm --filter @momo/web typecheck
+
+      - name: Typecheck (apps/worker)
+        if: always()
+        run: pnpm --filter @momo/worker typecheck
+
+      # The clock and environment fence (see eslint.config.js). It is ESLint rather than
+      # dependency-cruiser because dependency-cruiser sees imports and this class of
+      # violation is a call, not an import. An ungated rule enforces nothing, which is
+      # why this step exists the same day the rules do.
+      - name: Lint (clock/env fence)
+        if: always()
+        run: pnpm lint
 
       # The round-trip test needs rows to read. `push` applies schema.ts through
       # drizzle-kit rather than a migration, which is correct while Epic 2's single

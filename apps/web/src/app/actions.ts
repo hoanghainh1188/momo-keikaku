@@ -83,6 +83,11 @@ async function recordDisposition(
 async function anchorOf(projectId: string): Promise<Date> {
   const db = getDb();
   const [p] = await db.select().from(s.project).where(eq(s.project.id, projectId));
+  // The demo spike's fallback when a project has no anchor row. The correct end state is
+  // a `Clock` injected at the composition root — but `apps/web` has no composition root
+  // yet, and this whole file is one of the eight that story 1.2 moves onto use cases. The
+  // disable is one line wide and says who removes it.
+  // eslint-disable-next-line no-restricted-syntax -- no Clock to inject until story 1.2
   return p ? p.demoAnchor : new Date();
 }
 

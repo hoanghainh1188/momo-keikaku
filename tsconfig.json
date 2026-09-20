@@ -1,37 +1,14 @@
+// The root typecheck target: `tsc --noEmit -p tsconfig.json`.
+//
+// This file used to duplicate tsconfig.base.json verbatim, which meant every compiler
+// option had to be edited in two places with nothing detecting drift (deleting the
+// deprecated `baseUrl` took three edits instead of one). It now extends the base and
+// carries only what is genuinely root-specific: which files to check.
+//
+// `exclude: ["apps"]` is why every new package under `packages/` is typechecked the day
+// it is created, and why `apps/web` needs its own `pnpm --filter @momo/web typecheck`.
 {
-  "compilerOptions": {
-    "target": "ES2022",
-    "lib": [
-      "ES2023",
-      "DOM",
-      "DOM.Iterable"
-    ],
-    "module": "ESNext",
-    "moduleResolution": "Bundler",
-    "strict": true,
-    "noUncheckedIndexedAccess": false,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "resolveJsonModule": true,
-    "forceConsistentCasingInFileNames": true,
-    "types": [
-      "node"
-    ],
-    "paths": {
-      "@momo/domain": [
-        "./packages/domain/src/index.ts"
-      ],
-      "@momo/domain/*": [
-        "./packages/domain/src/*"
-      ],
-      "@momo/db": [
-        "./packages/db/src/index.ts"
-      ],
-      "@momo/db/*": [
-        "./packages/db/src/*"
-      ]
-    }
-  },
+  "extends": "./tsconfig.base.json",
   "include": [
     "packages/**/*.ts",
     "scripts/**/*.ts",

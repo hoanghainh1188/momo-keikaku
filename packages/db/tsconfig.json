@@ -1,0 +1,12 @@
+// TypeScript 6 defaults `types` to none, so a package that touches Node globals must say
+// so. `packages/db` is covered by the root tsconfig's `include` for the repo typecheck;
+// this file exists so the declaration travels with the package rather than depending on
+// the root config's `types` staying as it is.
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "noEmit": true
+  },
+  "include": ["src/**/*.ts"]
+}

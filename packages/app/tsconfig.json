@@ -1,0 +1,11 @@
+// TypeScript 6 defaults `types` to none, and packages/app/src/config.ts reads the `process`
+// global, which makes this the package that most needs the declaration rather than the
+// least. Same shape as packages/db, packages/adapters and apps/worker.
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "noEmit": true
+  },
+  "include": ["src/**/*.ts"]
+}

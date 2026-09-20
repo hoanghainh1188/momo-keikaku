@@ -1,0 +1,12 @@
+// `apps/worker` needs its own config for a second reason beyond the `types` declaration:
+// the root tsconfig excludes `apps` entirely, so nothing else would ever see these files.
+// No gate runs this config yet (recorded in deferred-work.md) — `pnpm exec tsc --noEmit -p
+// apps/worker/tsconfig.json` runs it by hand until the worker has code worth gating.
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "noEmit": true
+  },
+  "include": ["src/**/*.ts"]
+}
