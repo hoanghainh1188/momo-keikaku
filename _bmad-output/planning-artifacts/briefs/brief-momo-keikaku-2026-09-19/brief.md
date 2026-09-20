@@ -75,6 +75,7 @@ Target: all three met in Q1 2027.
 - Resources belong to a department but work across projects.
 - Cost rolls up on both the project and department axes.
 - Baseline and actuals are separate ledgers.
+- **Plan dates are derived from pinned scheduling inputs and are owned by the scheduler.** No other module writes a work package's derived start or finish, and nothing derived from tracker evidence is ever a scheduling input. A baseline therefore pins the inputs a schedule came from, not only the dates it produced, so any past plan can be re-derived and explained (sprint change proposal 2026-09-20, A-6; PRD FR-6b, FR-15, NFR-C1).
 
 ## Business Model
 
