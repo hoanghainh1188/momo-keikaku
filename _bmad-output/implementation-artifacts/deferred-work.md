@@ -57,6 +57,7 @@ work started and was deliberately deferred, with the evidence for the split.
 - source_spec: none
   summary: Story 1.1 slice B2 — apps/worker and pg-boss on separated database roles: the migrator (owner) role installs and migrates pg-boss's schema during migrate, and the application role starts pg-boss with auto-migration disabled holding only DML grants on that schema.
   evidence: Split from slice B on 2026-09-20 at the Build multi-goal gate, after the founder chose to land the workspace skeleton (B1) first. Independently shippable once B1 exists, and substantial in its own right: pg-boss is not installed, and the migrator/application/maintenance role split does not exist in the database at all. It is database and ops work rather than application layering, so folding it into B1 would mix two debugging surfaces in one PR — the same reasoning that split slice A from slice B.
+  resolved: PARTIAL, 2026-09-20 in `spec-1-1-pgboss-roles.md`. pg-boss 12.33.2 is installed; `scripts/pgboss-migrate.ts` (`pnpm pgboss:migrate`) creates the `momo_migrator` (NOLOGIN owner) and `momo_app` (LOGIN, restricted) roles idempotently, installs/migrates the `pgboss` schema from pg-boss's own generated plan SQL as the owner, and grants the app role USAGE plus DML and nothing else; `apps/worker` constructs pg-boss with `migrate: false`/`createSchema: false` and is gated by `apps/worker/src/worker-round-trip.test.ts`. The `maintenance` role named in this entry's summary was NOT created — it belongs to the append-only exception path, which is story 1.2's (see the new entry below).
 
 - source_spec: none
   summary: Story 1.1 slice B3 — `pnpm dev` bringing Postgres, migrations, the RLS/grants/trigger SQL, the seed, web and worker up in one command.
@@ -82,6 +83,7 @@ work started and was deliberately deferred, with the evidence for the split.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-1-workspace-skeleton.md`
   summary: The config module's fail-boot behaviour is proven by a hand-run probe, not by a gate. Nothing imports `@momo/app`, so no automated run ever loads it.
   evidence: Verified three ways by hand (`DATABASE_URL` absent, empty, present) and recorded in the spec's Verification section, but `pnpm test` never imports the module and `pnpm lint`/`pnpm typecheck` do not execute it, so a future edit that breaks the parse or stops naming the key would ship green. A unit test over `parseConfig(env)` — which takes the environment as an argument precisely so it can be tested without touching the real process environment — would close this for a few lines. It was not added because this slice adds no tests and the 80% coverage floor is itself deferred (see the vitest coverage entry above); pair the two.
+  resolved: YES, 2026-09-20 in slice B2's review round 1. `packages/app/src/config.test.ts` gates `parseConfig` for both keys in both failure modes (absent and empty). Watched to fail: giving `APP_DATABASE_URL` a zod `.default(...)` keeps the inferred type `string` and passes `pnpm typecheck`, and the test catches it.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-1-workspace-skeleton.md`
   summary: packages/db/src/client.ts still falls back to a hardcoded 'postgres://momo:momo@localhost:55433/momo_keikaku' when DATABASE_URL is unset, so a missing key silently connects to a dev database instead of failing the way packages/app/src/config.ts promises.
@@ -98,6 +100,7 @@ work started and was deliberately deferred, with the evidence for the split.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-1-workspace-skeleton.md`
   summary: parseConfig has no unit test; the fail-boot acceptance criterion is proven only by a hand-run probe that no gate repeats.
   evidence: Confirmed. Nothing blocks adding one (AC 6 forbids changing existing test files, not adding new ones), but it is new work rather than a correction, and because of the eager-parse entry above the test file would itself need DATABASE_URL present to import the module. Worth doing together with the lazy-config change so the test does not inherit a database requirement it has no use for.
+  resolved: YES, 2026-09-20 in slice B2's review round 1, and the predicted cost was paid exactly as written: `packages/app/src/config.test.ts` sets both keys with `??=` and then `await import`s the module, purely to get past the eager parse for a function that takes its environment as an argument. The lazy-config entry above is still the real fix.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-1-workspace-skeleton.md`
   summary: The Clock port exposes now() and nowMs(), two methods that must agree with nothing making them agree, and now() returns a mutable Date.
@@ -110,3 +113,55 @@ work started and was deliberately deferred, with the evidence for the split.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-1-workspace-skeleton.md`
   summary: apps/web/next.config.ts sits inside the clock/env fence although the sibling tooling configs (scripts/, vitest.config.ts, drizzle.config.ts) are deliberately outside it.
   evidence: Confirmed: it appears in the lint file list and lints clean today. It becomes a problem at the first env-driven Next setting, which will need a disable for exactly the 'this is tooling, not application code' reason the other config files never needed one.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-1-pgboss-roles.md`
+  summary: The `maintenance` role is still absent. Slice B2 created only `momo_migrator` and `momo_app`; ARCHITECTURE-SPINE.md's append-only enforcement names a third role with an explicit maintenance flag as the only path allowed to UPDATE or DELETE an append-only table.
+  evidence: Confirmed by `pg_roles` after the migrator step — three roles exist (`momo`, `momo_migrator`, `momo_app`) and none is a maintenance role. Deliberately out of scope: the spec's Never excludes the table-class registry, `grants.sql` and the triggers, and the maintenance role has nothing to be an exception to until the append-only triggers exist. Natural home is story 1.2, beside the generated grant SQL.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-1-pgboss-roles.md`
+  summary: `pg-boss` is pinned exactly in two manifests (root `package.json` for the migrator script, `apps/worker/package.json` for the runner) with nothing enforcing lockstep, extending the same problem already recorded for `drizzle-orm`/`pg` across three.
+  evidence: Verified in both files. Both declarations are genuine — each package imports pg-boss directly — so removing one would be worse, not better. A partial bump installs two pg-boss instances and the lockfile records it happily; worse here than for drizzle, because the two instances would disagree about `pgboss.schema` and the worker would refuse to start against the version the migrator installed. Same fix as the existing entry: pnpm 12 `catalogs:`.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-1-pgboss-roles.md`
+  summary: `packages/app/src/config.ts` now has two required keys and still parses eagerly at module load, so the friction the earlier entry predicted has doubled: `pnpm pgboss:migrate` and the worker both need APP_DATABASE_URL *and* DATABASE_URL, while `pnpm seed`, `pnpm demo` and `drizzle-kit` still run off `packages/db/src/client.ts`'s hardcoded fallback.
+  evidence: Confirmed by probe — running either command with APP_DATABASE_URL unset throws naming the key (which is the intended fail-boot behaviour), but a developer who has never needed an environment variable for `pnpm seed` now needs two for the migrator. The local invocation is `DATABASE_URL=... APP_DATABASE_URL=... pnpm pgboss:migrate` and it is written down nowhere a developer would look — README-DEMO.md predates all of this. Pairs with the existing lazy-config entry and the `getDb(connectionString)` refactor; a `.env.example` plus a note in the README is the cheap half.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-1-pgboss-roles.md`
+  summary: The migrator step's migration path (as opposed to its install path) has never been executed. `getMigrationPlans` is only reached when the installed schema version is behind pg-boss's, which cannot happen until pg-boss is upgraded.
+  evidence: Verified by reading the script and by the three runs recorded in the spec: run 1 installed at version 42, runs 2 and 3 took the "already at version 42" branch. The migration branch — including the split at the plan's own `COMMIT;` that keeps inlined `CREATE INDEX CONCURRENTLY` statements out of an implicit transaction — is exercised by nothing. It was written from pg-boss's own note that `migrateCommands()` (unexported) is the programmatic path, and the concurrent tail is empty for every migration in 12.33.2 (checked for v40→42). The honest test needs an older pg-boss schema to migrate from, which means either a fixture dump or installing an older release in a test; both are new work.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-1-pgboss-roles.md`
+  summary: Re-running `pnpm pgboss:migrate` no longer rotates the app role's password, so a changed APP_DATABASE_URL and an existing role can drift apart silently.
+  evidence: Deliberate, and a trade rather than a gap. `ALTER ROLE ... PASSWORD` was removed from the existing-role path in review round 1 because re-issuing it put the credential into pg_stat_activity and into any `log_statement` capture on every run, against the security floor. The cost: the password is now written only by `CREATE ROLE`, so rotating APP_DATABASE_URL against an existing role changes nothing and the worker fails to authenticate with a message about the password, not about the drift. Role *attributes* are still re-asserted every run, so only the credential is affected. A `--rotate-password` flag, or an explicit comparison that fails naming the drift, would close it; both are new surface.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-1-pgboss-roles.md`
+  summary: The worker writes to `console` directly. There is no logger port, so a runner that is meant to be operated has no structured output, no levels and no redaction — and the security floor requires that no tracker credential reach logs.
+  evidence: Confirmed at `apps/worker/src/index.ts`, which uses `console.error`/`console.warn`/`console.log` for pg-boss's `error` and `warning` events and for its own lifecycle lines. Harmless today (the worker runs nothing and handles no credentials), and a logger port is a decision no story has taken yet. It stops being harmless in Epic 5, when the Connector's jobs carry tracker credentials into exactly those event payloads.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-1-pgboss-roles.md`
+  summary: `pnpm test` still silently skips the worker round trip when APP_DATABASE_URL is unset, which is every local run that has not exported it.
+  evidence: By design and consistent with `db-round-trip.test.ts`'s REQUIRE_DB contract — CI sets both and a missing key there is a failure, not a skip. Worth recording anyway: the repo now has two DB-backed test files with two different local preconditions (one falls back to a hardcoded URL, one does not), so "pnpm test is green locally" covers less than it appears to. Resolving the `client.ts` fallback entry would make the two consistent.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-1-pgboss-roles.md`
+  summary: The worker requires DATABASE_URL as well as APP_DATABASE_URL, because packages/app/src/config.ts parses the whole schema eagerly at module load.
+  evidence: Confirmed by running the worker: it fails naming both keys. The process whose entire purpose is to hold only the restricted credential cannot boot without the owner's connection string, which is a hole in the separation this slice establishes rather than mere friction. Not patched because the fix is a config-module design change — per-key laziness, a worker-specific schema, or parseConfig(env, { require: [...] }) — and it compounds the already-recorded eager-parse entry from slice B1. Do both together.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-1-pgboss-roles.md`
+  summary: The migrator assumes DATABASE_URL names a superuser and neither states nor checks it.
+  evidence: Confirmed by reading the script: it issues SET ROLE momo_migrator with nothing granting the connecting role membership, and runs the grants outside that SET ROLE window against a schema the migrator owns. Both work today only because momo is the superuser. A production deployment using a dedicated non-superuser migration role would get raw Postgres permission errors instead of a named precondition. The fix — GRANT the migrator role TO CURRENT_USER and move the grants inside the window — is small but changes the role model, so it belongs with story 1.2's grants work.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-1-pgboss-roles.md`
+  summary: Excluding TRUNCATE from the app role's grants removes part of pg-boss's public API without recording which part.
+  evidence: Confirmed in pg-boss's sources: deleteAllJobs() with no queue name issues TRUNCATE, and deleteAllJobs(name) on a partitioned queue truncates that partition. The new test passes only because its probe queue is unpartitioned. The exclusion is correct — TRUNCATE is not DML — but the consequence is undocumented and the worker meets it the first time it wants a partitioned queue.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-1-pgboss-roles.md`
+  summary: Two concurrent migrator runs race on CREATE ROLE.
+  evidence: Real but narrow: the step runs serially in CI and locally, so nothing triggers it today. A pg_advisory_lock around the whole step closes it. Recorded rather than patched because the failure mode is a duplicate_object error on a step that is safe to re-run.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-1-pgboss-roles.md`
+  summary: The migration branch's post-COMMIT statements have never executed, and a failure there leaves the schema version already stamped.
+  evidence: Confirmed by reading the script. The branch is only reachable on a future pg-boss upgrade, so it is untestable without a fixture dump of an older schema. The risk is specific: a failed CREATE INDEX CONCURRENTLY after the version row is written makes every later run short-circuit as 'nothing to migrate' while the index is missing. Worth a fixture-based test before the first real pg-boss upgrade, not before.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-1-pgboss-roles.md`
+  summary: PGBOSS_SCHEMA is declared twice, in apps/worker/src/boss.ts and scripts/pgboss-migrate.ts.
+  evidence: Confirmed, and it is the same duplication the slice's own 'one config key, not two' decision rejects for the role name and password. Layering forbids scripts/ importing from apps/, but a shared constant in a package both may import, or a config key, would not. Left because moving it now would touch the layering question story 1.2 settles.

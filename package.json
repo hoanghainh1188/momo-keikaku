@@ -7,6 +7,7 @@
     "db:up": "docker compose -f infra/docker-compose.yml up -d --wait",
     "db:reset": "tsx packages/db/src/reset.ts",
     "seed": "tsx packages/db/src/seed.ts",
+    "pgboss:migrate": "tsx scripts/pgboss-migrate.ts",
     "dev": "pnpm --filter @momo/web dev",
     "test": "vitest run",
     "lint": "eslint . --max-warnings 0",
@@ -26,6 +27,7 @@
     "@types/pg": "^8.23.1",
     "drizzle-orm": "0.45.2",
     "pg": "8.23.0",
+    "pg-boss": "12.33.2",
     "uuid": "^11.0.3",
     "zod": "4.6.5"
   },
