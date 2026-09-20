@@ -46,6 +46,30 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
+    # The image is pinned to the same tag infra/docker-compose.yml uses, so CI and a
+    # laptop exercise the same server. The round-trip test is the only gate covering
+    # the ORM, the driver and the server together; everything else here is static.
+    services:
+      postgres:
+        image: postgres:18.6-alpine
+        env:
+          POSTGRES_USER: momo
+          POSTGRES_PASSWORD: momo
+          POSTGRES_DB: momo_keikaku
+        ports:
+          - 55433:5432
+        options: >-
+          --health-cmd "pg_isready -U momo -d momo_keikaku"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+
+    env:
+      DATABASE_URL: postgres://momo:momo@localhost:55433/momo_keikaku
+      # Turns an unreachable database into a failure instead of a skip. Without it the
+      # round-trip test would pass by not running, which is the same as not having it.
+      REQUIRE_DB: '1'
+
     steps:
       - uses: actions/checkout@v4
 
@@ -87,8 +111,18 @@ jobs:
         if: always()
         run: pnpm --filter @momo/web typecheck
 
-      # `always()` throughout so one failure does not hide the others. All three signals
-      # land on the same run.
+      # The round-trip test needs rows to read. `push` applies schema.ts through
+      # drizzle-kit rather than a migration, which is correct while Epic 2's single
+      # pre-production migration does not exist yet; switch this to `drizzle-kit
+      # migrate` when it does.
+      - name: Prepare database (schema + seed)
+        if: always()
+        run: |
+          pnpm exec drizzle-kit push --force
+          pnpm seed
+
+      # `always()` throughout so one failure does not hide the others. Every signal
+      # lands on the same run.
       - name: Tests
         if: always()
         run: pnpm test
