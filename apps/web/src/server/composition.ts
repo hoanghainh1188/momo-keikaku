@@ -40,6 +40,8 @@ import { cache } from 'react';
 import { headers as nextHeaders } from 'next/headers';
 import { redirect } from 'next/navigation';
 import {
+  assignMemberProject as assignMemberProjectUseCase,
+  changeMemberRole as changeMemberRoleUseCase,
   config,
   createDepartment as createDepartmentUseCase,
   createProgram as createProgramUseCase,
@@ -59,6 +61,10 @@ import {
   renameProgram as renameProgramUseCase,
   renameProject as renameProjectUseCase,
   resolveRequestContext,
+  revokeMembership as revokeMembershipUseCase,
+  unassignMemberProject as unassignMemberProjectUseCase,
+  type AssignMemberProjectInput,
+  type ChangeMemberRoleInput,
   type ChangeRequestCandidatesInput,
   type CreateDepartmentInput,
   type CreateProgramInput,
@@ -79,6 +85,8 @@ import {
   type RequestContext,
   type RequestContextResolution,
   type ResolveRequestContextDeps,
+  type RevokeMembershipInput,
+  type UnassignMemberProjectInput,
   type WriteDeps,
 } from '@momo/app';
 import { systemClock, uuidV7IdsOn } from '@momo/adapters';
@@ -359,4 +367,33 @@ export async function reassignProjectProgram(input: ReassignProjectProgramInput,
 export async function reassignProjectDepartment(input: ReassignProjectDepartmentInput, ctx?: RequestContext) {
   const context = ctx ?? (await requestContext());
   return reassignProjectDepartmentUseCase(writeDeps(), context, input);
+}
+
+// --- Membership changes (story 1.4 slice 2). No page calls them yet — there is no Users screen in
+// this slice. Wired now so a future server action reaches them with the context it resolved once,
+// and so `tests/web-composition.test.ts` pins each binding to its own use case. Each requires
+// `tenant_admin` in the context and re-checks it against the bridge inside its transaction.
+
+/** FR-3: revokes a membership; the member's next request is signed out. See `revokeMembership`. */
+export async function revokeMembership(input: RevokeMembershipInput, ctx?: RequestContext) {
+  const context = ctx ?? (await requestContext());
+  return revokeMembershipUseCase(writeDeps(), context, input);
+}
+
+/** Changes a member's role (Tenant Admin or PM). See `packages/app`'s `changeMemberRole`. */
+export async function changeMemberRole(input: ChangeMemberRoleInput, ctx?: RequestContext) {
+  const context = ctx ?? (await requestContext());
+  return changeMemberRoleUseCase(writeDeps(), context, input);
+}
+
+/** FR-1 PM assignment: a Project added to a member's Projects. See `assignMemberProject`. */
+export async function assignMemberProject(input: AssignMemberProjectInput, ctx?: RequestContext) {
+  const context = ctx ?? (await requestContext());
+  return assignMemberProjectUseCase(writeDeps(), context, input);
+}
+
+/** FR-1 PM assignment: a Project removed from a member's Projects. See `unassignMemberProject`. */
+export async function unassignMemberProject(input: UnassignMemberProjectInput, ctx?: RequestContext) {
+  const context = ctx ?? (await requestContext());
+  return unassignMemberProjectUseCase(writeDeps(), context, input);
 }

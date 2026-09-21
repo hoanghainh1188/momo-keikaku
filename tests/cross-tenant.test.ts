@@ -621,7 +621,7 @@ describe.skipIf(!reachable)('the cross-tenant harness, driven against two probe 
     const failures: string[] = [];
     for (const probe of [PROBE_A, PROBE_B]) {
       try {
-        await removeProbeTenant(owner(), probe.tenantId);
+        await removeProbeTenant(owner(), probe);
       } catch (error) {
         failures.push(`removing ${probe.tenantId}: ${String(error)}`);
       }

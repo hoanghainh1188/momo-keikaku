@@ -10,7 +10,8 @@
 // run in; slice 2 generalises the write deps (`AuditedWriteDeps`, `WriteDeps`), adds the Clock and
 // id ports, and the eight organisation writes. Story 1.4 slice 1 adds the `RequestContext` and
 // its resolver (`./authz`), the identity and membership ports, and the auth configuration keys;
-// the role checks (1.5) attach here later.
+// slice 2 the four audited membership writes and the bridge's write port. The role checks (1.5)
+// attach here later.
 //
 // `./use-cases` does not import `./config`, so code that needs the use cases and not the
 // configuration can import `packages/app/src/use-cases` directly. `config` is lazy (a getter
@@ -49,6 +50,12 @@ export type {
   ProgramRow,
   ProjectPlacementRow,
 } from './ports/org-write';
+export type {
+  LockedMemberRow,
+  MembershipWriteDeps,
+  MembershipWriteRepository,
+  MembershipWriteScope,
+} from './ports/membership-write';
 export type { WriteDeps, WriteScope } from './ports/write-deps';
 export type { Created } from './use-cases/org-writes';
 export type { TenantTransaction } from './ports/tenant-transaction';
@@ -96,3 +103,9 @@ export type {
   RenameProgramInput,
   RenameProjectInput,
 } from './use-cases/org-input';
+export type {
+  AssignMemberProjectInput,
+  ChangeMemberRoleInput,
+  RevokeMembershipInput,
+  UnassignMemberProjectInput,
+} from './use-cases/membership-input';

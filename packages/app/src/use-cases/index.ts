@@ -29,3 +29,9 @@ export {
   renameProgram,
   renameProject,
 } from './org-writes';
+export {
+  assignMemberProject,
+  changeMemberRole,
+  revokeMembership,
+  unassignMemberProject,
+} from './membership-writes';

@@ -24,7 +24,8 @@ import { stringify } from '@momo/domain';
  *
  * The first six members are the strings `packages/db` wrote free-hand before slice 1 — FR-29's
  * four Dispositions and FR-21's manual Mapping — unchanged, so the rows stay byte for byte what
- * they were. Slice 2 appended the eight organisation changes.
+ * they were. Story 1.3 slice 2 appended the eight organisation changes; story 1.4 slice 2 appended
+ * the four membership changes.
  */
 export const AUDIT_ACTIONS = [
   'disposition.map',
@@ -34,7 +35,7 @@ export const AUDIT_ACTIONS = [
   'mapping.map',
   'mapping.unmap',
   // FR-1's organisation changes (story 1.3 slice 2), each recording the previous value where
-  // there is one. PM assignment joins with story 1.4/1.5.
+  // there is one. PM assignment joined with story 1.4 slice 2, below.
   'department.create',
   'department.rename',
   'program.create',
@@ -43,6 +44,13 @@ export const AUDIT_ACTIONS = [
   'project.rename',
   'project.reassign_program',
   'project.reassign_department',
+  // Membership changes (story 1.4 slice 2, NFR-A1's "role, membership and revocation changes"):
+  // each targets the member's user id and records the previous value. PM assignment is here —
+  // a Project added to or removed from a membership's `project_ids`.
+  'membership.revoke',
+  'membership.change_role',
+  'membership.assign_project',
+  'membership.unassign_project',
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];

@@ -6,7 +6,8 @@ import { asOfDate, buildDemoState, currentPeriod } from '../packages/db/src/fixt
 
 /**
  * The composition root's bindings — the five project writes, the eight organisation writes (story
- * 1.3 slice 2), then the four reads — wired to spies, no database.
+ * 1.3 slice 2), the four membership writes (story 1.4 slice 2), then the four reads — wired to
+ * spies, no database.
  *
  * The `satisfies` checks cannot see a binding pointed at the WRONG use case: `ExplainTicketsInput`
  * is assignable to `ChangeRequestCandidatesInput`, so `explainTickets` calling
@@ -62,6 +63,17 @@ const spies = vi.hoisted(() => {
     setProjectProgram: vi.fn(async () => {}),
     setProjectDepartment: vi.fn(async () => {}),
   };
+  /** The session's user (below) is a Tenant Admin here, so the membership writes get past the lock. */
+  const sessionUserId = '019b76da-a800-7000-8000-0c3333333333';
+  const membership = {
+    lockMembers: vi.fn(async (_ids: { callerId: string; targetId: string }) => [
+      { userId: sessionUserId, role: 'tenant_admin', projectIds: [] as string[] },
+      { userId: 'usr-member', role: 'pm', projectIds: ['prj-gone'] },
+    ]),
+    deleteMembership: vi.fn(async () => {}),
+    setRole: vi.fn(async () => {}),
+    setProjectIds: vi.fn(async () => {}),
+  };
   const append = vi.fn(async (_entry: unknown) => {});
   type AuthBuild = { readonly generateId: () => string } & Record<string, unknown>;
   const authInstance = { marker: 'auth-instance' };
@@ -69,7 +81,7 @@ const spies = vi.hoisted(() => {
   /** The session the fake identity adapter answers: a user and the Tenant it last acted in. */
   const session = {
     token: 'tok-session',
-    userId: '019b76da-a800-7000-8000-0c3333333333',
+    userId: sessionUserId,
     activeTenantId: 'ten-from-session' as string | null,
     locale: 'en',
   };
@@ -87,10 +99,11 @@ const spies = vi.hoisted(() => {
     getDb: vi.fn(),
     repository,
     org,
+    membership,
     append,
     inTenantTransaction: vi.fn(
       async (_handle: unknown, _tenantId: string, work: (scope: unknown) => Promise<unknown>) =>
-        work({ projectWrite: repository, org, audit: { append } }),
+        work({ projectWrite: repository, org, membership, audit: { append } }),
     ),
     loadProjectBundle: vi.fn(),
     loadReview: vi.fn(),
@@ -218,6 +231,7 @@ const CASES: readonly {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  spies.membershipsOf.mockResolvedValue([{ tenantId: SESSION_TENANT, role: 'pm', projectIds: ['prj-ec2'] }]);
   spies.getDb.mockReturnValue(spies.handle);
   spies.session.activeTenantId = SESSION_TENANT;
   spies.identity.sessionFrom.mockImplementation(async () => spies.session);
@@ -377,6 +391,90 @@ describe.each(ORG_CASES)('the $binding organisation binding', ({ call, writer, c
     expect(spies.append).toHaveBeenCalledWith(
       expect.objectContaining({ actor: SESSION_ACTOR, at: spies.now, action, target }),
     );
+  });
+});
+
+const MEMBERSHIP_WRITERS = ['deleteMembership', 'setRole', 'setProjectIds'] as const;
+
+type MembershipWriter = (typeof MEMBERSHIP_WRITERS)[number];
+
+/**
+ * The membership bindings (story 1.4 slice 2). `ChangeMemberRoleInput`, `AssignMemberProjectInput`
+ * and `UnassignMemberProjectInput` overlap enough that a binding pointed at the wrong use case could
+ * typecheck, so each is called once and must reach its own writer, record its own action on the
+ * member, and run as the session's Tenant Admin.
+ */
+const MEMBERSHIP_CASES: readonly {
+  readonly binding: string;
+  readonly call: () => Promise<unknown>;
+  readonly writer: MembershipWriter;
+  readonly change: unknown;
+  readonly action: string;
+}[] = [
+  {
+    binding: 'revokeMembership',
+    call: () => composition.revokeMembership({ userId: 'usr-member' }),
+    writer: 'deleteMembership',
+    change: 'usr-member',
+    action: 'membership.revoke',
+  },
+  {
+    binding: 'changeMemberRole',
+    call: () => composition.changeMemberRole({ userId: 'usr-member', role: 'tenant_admin' }),
+    writer: 'setRole',
+    change: { userId: 'usr-member', role: 'tenant_admin' },
+    action: 'membership.change_role',
+  },
+  {
+    binding: 'assignMemberProject',
+    call: () => composition.assignMemberProject({ userId: 'usr-member', projectId: 'prj-ec2' }),
+    writer: 'setProjectIds',
+    change: { userId: 'usr-member', projectIds: ['prj-gone', 'prj-ec2'] },
+    action: 'membership.assign_project',
+  },
+  {
+    binding: 'unassignMemberProject',
+    call: () => composition.unassignMemberProject({ userId: 'usr-member', projectId: 'prj-gone' }),
+    writer: 'setProjectIds',
+    change: { userId: 'usr-member', projectIds: [] },
+    action: 'membership.unassign_project',
+  },
+];
+
+describe.each(MEMBERSHIP_CASES)('the $binding membership binding', ({ call, writer, change, action }) => {
+  it(`reaches membership.${writer} once, for the session's Tenant as its admin user, stamped by the Clock, audited as ${action}`, async () => {
+    spies.membershipsOf.mockResolvedValue([{ tenantId: SESSION_TENANT, role: 'tenant_admin', projectIds: [] }]);
+    expect(await call()).toEqual({ ok: true, value: undefined });
+
+    expect(spies.getDb).toHaveBeenCalledWith(APP_URL);
+    expect(spies.inTenantTransaction).toHaveBeenCalledTimes(1);
+    expect(spies.inTenantTransaction).toHaveBeenCalledWith(spies.handle, SESSION_TENANT, expect.any(Function));
+    expect(spies.membership.lockMembers).toHaveBeenCalledTimes(1);
+    expect(spies.membership.lockMembers).toHaveBeenCalledWith({
+      callerId: spies.session.userId,
+      targetId: 'usr-member',
+    });
+    expect(spies.membership[writer]).toHaveBeenCalledTimes(1);
+    expect(spies.membership[writer]).toHaveBeenCalledWith(change);
+    for (const other of MEMBERSHIP_WRITERS.filter((name) => name !== writer)) {
+      expect(spies.membership[other], `membership.${other} must not be called`).not.toHaveBeenCalled();
+    }
+    for (const orgWriter of ORG_WRITERS) {
+      expect(spies.org[orgWriter], `a membership write must not reach org.${orgWriter}`).not.toHaveBeenCalled();
+    }
+    for (const recorder of RECORDERS) {
+      expect(spies.repository[recorder], `a membership write must not reach ${recorder}`).not.toHaveBeenCalled();
+    }
+    expect(spies.append).toHaveBeenCalledTimes(1);
+    expect(spies.append).toHaveBeenCalledWith(
+      expect.objectContaining({ actor: SESSION_ACTOR, at: spies.now, action, target: 'usr-member' }),
+    );
+  });
+
+  it('answers not_found to a session whose role is PM, opening no transaction', async () => {
+    // The default membership the fake reader answers is a PM's.
+    expect(await call()).toMatchObject({ ok: false, error: { code: 'not_found' } });
+    expect(spies.inTenantTransaction).not.toHaveBeenCalled();
   });
 });
 

@@ -42,7 +42,7 @@ import type { WriteDeps } from '../packages/app/src/ports/write-deps';
 import * as readSurface from '../packages/app/src/use-cases';
 import type { Db } from '../packages/db/src/client';
 import type { DemoState } from '../packages/db/src/fixtures';
-import { requestContextFor } from './request-context';
+import { adminContextFor, requestContextFor } from './request-context';
 
 /** Named in failure messages, so the reader is sent to the file rather than to a diff. */
 export const READ_SURFACE_MODULE = 'packages/app/src/use-cases/index.ts';
@@ -64,6 +64,17 @@ function contextOf(target: UseCaseTarget) {
 }
 
 /**
+ * The context the membership writes are called with (story 1.4 slice 2): a Tenant Admin, because
+ * they refuse anyone else with `not_found` before looking at anything — a PM context would make the
+ * foreign-Tenant assertion pass without ever reaching the target lookup. The caller must also hold
+ * a `tenant_admin` membership in the Tenant it acts in (the harnesses give it one), because the
+ * writes re-check that against the bridge inside their transaction.
+ */
+function adminContextOf(target: UseCaseTarget) {
+  return adminContextFor(target.tenantId, target.userId);
+}
+
+/**
  * What one write invocation is given: the Tenant it runs as, the Project it names, and ids to
  * put in the command. The ids come from the Project's OWN Tenant's fixture — for the
  * cross-Tenant probe too, which is the id-from-a-URL shape: a foreign Tenant replaying ids it
@@ -78,6 +89,21 @@ export interface WriteTarget extends UseCaseTarget {
   readonly departmentId: string;
   /** A Program of that Department — the one the Project sits in, in the fixture. */
   readonly programId: string;
+  /**
+   * A member of the Project's Tenant for the membership writes to change (story 1.4 slice 2): the
+   * probe's PM, a `pm` holding `staleProjectId` and not the Project — so promoting, assigning the
+   * Project and unassigning the stale id each change something from the starting state, and
+   * revoking comes last.
+   */
+  readonly memberUserId: string;
+  /** A Project id the member holds whose Project does not exist — what an unassign removes. */
+  readonly staleProjectId: string;
+  /**
+   * A Tenant Admin of the Project's Tenant other than the caller — what the audit gate's admin
+   * demotion and admin revocation (`moreWrites`) target. The caller stays an admin, so neither is
+   * ever the last admin.
+   */
+  readonly secondAdminUserId: string;
 }
 
 /** How a write is driven: the deps its caller chose, and the target's ids. */
@@ -515,6 +541,69 @@ export const READ_USE_CASES: readonly ReadUseCase[] = [
         contextOf(target),
         { projectId: target.projectId, departmentId: target.departmentId, programId: target.programId },
       ),
+  },
+  // --- Membership changes (story 1.4 slice 2) --------------------------------------------------
+  // In this order, on the one probe member: promote the PM, assign the Project, unassign the stale
+  // id, revoke last — the write harness drives own-Tenant writes in registry order, each one
+  // changing something from where the previous left the member. Called as a Tenant Admin.
+  {
+    name: 'changeMemberRole',
+    kind: 'write',
+    why:
+      'FR-3/NFR-A1: locks the Tenant\'s admin rows plus caller and target (one ordered statement), ' +
+      'sets tenant_membership.role (projectIds kept), audits { before, after }. The bridge has no ' +
+      'RLS, so every statement filters by tenant_id itself.',
+    invokeWrite: (deps, target) =>
+      readSurface.changeMemberRole(deps, adminContextOf(target), {
+        userId: target.memberUserId,
+        role: 'tenant_admin',
+      }),
+    moreWrites: [
+      // Demoting an admin while the caller remains one: the branch the last-admin rule guards.
+      (deps, target) =>
+        readSurface.changeMemberRole(deps, adminContextOf(target), {
+          userId: target.secondAdminUserId,
+          role: 'pm',
+        }),
+    ],
+  },
+  {
+    name: 'assignMemberProject',
+    kind: 'write',
+    why:
+      'FR-1 PM assignment: the same lock, then the Project (locked, must be this Tenant\'s), appends ' +
+      'it to project_ids, audits { before, after }.',
+    invokeWrite: (deps, target) =>
+      readSurface.assignMemberProject(deps, adminContextOf(target), {
+        userId: target.memberUserId,
+        projectId: target.projectId,
+      }),
+  },
+  {
+    name: 'unassignMemberProject',
+    kind: 'write',
+    why:
+      'FR-1 PM assignment: the same lock, removes a Project id from project_ids — a stale one here, ' +
+      'whose Project does not exist — audits { before, after }.',
+    invokeWrite: (deps, target) =>
+      readSurface.unassignMemberProject(deps, adminContextOf(target), {
+        userId: target.memberUserId,
+        projectId: target.staleProjectId,
+      }),
+  },
+  {
+    name: 'revokeMembership',
+    kind: 'write',
+    why:
+      'FR-3: the same lock, the last-admin rule, deletes the tenant_membership row, audits ' +
+      '{ before: { role, projectIds } }. The resolver ends the member\'s session on their next request.',
+    invokeWrite: (deps, target) =>
+      readSurface.revokeMembership(deps, adminContextOf(target), { userId: target.memberUserId }),
+    moreWrites: [
+      // Revoking an admin while the caller remains one: the branch the last-admin rule guards.
+      (deps, target) =>
+        readSurface.revokeMembership(deps, adminContextOf(target), { userId: target.secondAdminUserId }),
+    ],
   },
 ] as const;
 

@@ -124,7 +124,7 @@ describe.skipIf(!reachable)('the organisation rules, against a probe Tenant as t
   afterAll(async () => {
     const left: string[] = [];
     for (const probe of [PROBE_O, PROBE_F]) {
-      await removeProbeTenant(owner(), probe.tenantId);
+      await removeProbeTenant(owner(), probe);
       left.push(
         ...Object.entries(await rowCounts(probe.tenantId))
           .filter(([, n]) => n > 0)

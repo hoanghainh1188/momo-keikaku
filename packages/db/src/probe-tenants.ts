@@ -26,6 +26,7 @@ import { eq, inArray, sql } from 'drizzle-orm';
 import type { Db } from './client';
 import { account, authUser, session } from './schema';
 import { tenantMembership } from './schema-membership';
+import { DEMO_USERS } from './demo-identities';
 import { buildDemoState, type DemoState } from './fixtures';
 import { MAINTENANCE_SETTING, TABLE_REGISTRY } from './table-classes';
 import { writeTenantRows, type TenantRowWriteOptions } from './seed';
@@ -374,7 +375,7 @@ export function assertProbeTenantsDisjoint(probes: readonly ProbeTenant[]): void
  *   application role's reach for "the other Tenant cannot see them" to mean anything.
  */
 export async function createProbeTenant(owner: Db, probe: ProbeTenant): Promise<void> {
-  await removeProbeTenant(owner, probe.tenantId);
+  await removeProbeTenant(owner, probe);
   await withTenant(owner, probe.tenantId, (tx) =>
     writeTenantRows(tx, probe.state, probe.writeOptions),
   );
@@ -393,28 +394,47 @@ export async function createProbeTenant(owner: Db, probe: ProbeTenant): Promise<
  *
  * Idempotent, and safe to call for a Tenant that was never written.
  */
-export async function removeProbeTenant(owner: Db, tenantId: string): Promise<void> {
+export async function removeProbeTenant(owner: Db, probe: RemovableProbe): Promise<void> {
   await owner.transaction(async (tx) => {
     await tx.execute(sql`SELECT set_config(${MAINTENANCE_SETTING}, 'on', true)`);
-    await deleteTenantRows(tx, tenantId);
+    await deleteTenantMembers(tx, probe.tenantId, probeMemberIds(probe));
+    await deleteTenantRows(tx, probe.tenantId);
   });
+}
+
+/** What removal needs of a probe: its Tenant, and the id prefix its members were written with. */
+export type RemovableProbe = Pick<ProbeTenant, 'tenantId' | 'writeOptions'>;
+
+/**
+ * The user ids `writeTenantRows` gave a probe Tenant's members — one per `DEMO_USERS` entry,
+ * prefixed by the probe's `idPrefix`. Known without reading the bridge, which is the point: a
+ * member whose membership was REVOKED (story 1.4 slice 2) has no row left to be found by.
+ */
+export function probeMemberIds(probe: Pick<ProbeTenant, 'writeOptions'>): string[] {
+  return Object.values(DEMO_USERS).map((user) => `${probe.writeOptions.idPrefix}${user.id}`);
 }
 
 /**
  * Deletes the probe Tenant's PEOPLE (story 1.4 slice 1): its memberships by Tenant id, and the
- * users those memberships name — with their sessions and credential accounts — by user id.
+ * users those memberships name — with their sessions and credential accounts — by user id,
+ * together with the probe's KNOWN member ids (`probeMemberIds`), because a revoked member
+ * (slice 2) is named by no membership any more.
  *
  * The identity tables and the membership bridge are `global` (no tenant column), so the
  * registry walk below skips them by design; without this a probe's users would outlive it and
  * the next run would collide on their emails. Users are found through the Tenant's memberships
  * before those are deleted, in the same transaction, so a crash leaves both or neither.
  */
-async function deleteTenantMembers(tx: Tx, tenantId: string): Promise<void> {
+async function deleteTenantMembers(
+  tx: Tx,
+  tenantId: string,
+  knownUserIds: readonly string[],
+): Promise<void> {
   const members = await tx
     .select({ userId: tenantMembership.userId })
     .from(tenantMembership)
     .where(eq(tenantMembership.tenantId, tenantId));
-  const userIds = members.map((row) => row.userId);
+  const userIds = [...new Set([...knownUserIds, ...members.map((row) => row.userId)])];
   if (userIds.length > 0) {
     await tx.delete(session).where(inArray(session.userId, userIds));
     await tx.delete(account).where(inArray(account.userId, userIds));
@@ -424,7 +444,6 @@ async function deleteTenantMembers(tx: Tx, tenantId: string): Promise<void> {
 }
 
 async function deleteTenantRows(tx: Tx, tenantId: string): Promise<void> {
-  await deleteTenantMembers(tx, tenantId);
   // Reverse registry order. The registry documents itself as being in dependency order,
   // and reading it here is one list fewer than writing a second one — `seed.ts`'s
   // TRUNCATE_ORDER is already recorded in deferred-work as duplication worth removing.

@@ -124,26 +124,29 @@ describe('the table-class registry is the single source', () => {
     }
   });
 
-  it('gives the application role read-only access to the global class, except the Better Auth tables', () => {
+  it('gives the application role read-only access to the global class, except the Better Auth tables and the bridge', () => {
     // `tenant` has no isolation policy — it is what `tenant_id` points at — so the grant
     // is the only thing standing between the application role and writing another Tenant's
-    // row. It reads, and that is all. So does the membership bridge: a membership is written
-    // by an audited use case (slice 2), never by a request as a side effect.
+    // row. It reads, and that is all. The membership bridge has one reader for request
+    // resolution and one writer (story 1.4 slice 2's audited use cases, which filter by
+    // `tenant_id` themselves): SELECT, UPDATE and DELETE — never INSERT, because adding a user
+    // to a Tenant is invitation work, not a request's side effect.
     expect(APP_PRIVILEGES.global).toEqual(['SELECT']);
     const overridden = TABLE_REGISTRY.filter((e) => e.appPrivileges !== undefined);
     expect(overridden.map((e) => e.table).sort()).toEqual([
       'account',
       'auth_user',
       'session',
+      'tenant_membership',
       'verification',
     ]);
-    for (const entry of overridden) {
+    for (const entry of overridden.filter((e) => e.table !== 'tenant_membership')) {
       expect(appPrivilegesOf(entry), entry.table).toEqual(['SELECT', 'INSERT', 'UPDATE', 'DELETE']);
     }
     expect(appPrivilegesOf(TABLE_REGISTRY.find((e) => e.table === 'tenant')!)).toEqual(['SELECT']);
     expect(
       appPrivilegesOf(TABLE_REGISTRY.find((e) => e.table === 'tenant_membership')!),
-    ).toEqual(['SELECT']);
+    ).toEqual(['SELECT', 'UPDATE', 'DELETE']);
   });
 });
 

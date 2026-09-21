@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { isAuditAction, type AuditDeclaration, type AuditEntry } from '../packages/app/src/audit';
+import type { MembershipWriteRepository } from '../packages/app/src/ports/membership-write';
 import type { OrgRepository } from '../packages/app/src/ports/org-write';
 import type { ProjectWriteRepository } from '../packages/app/src/ports/project-write';
 import type { WriteDeps, WriteScope } from '../packages/app/src/ports/write-deps';
 import { USE_CASE_AUDIT } from '../packages/app/src/use-cases/audit-declarations';
+import { MEMBERSHIP_WRITE_AUDIT } from '../packages/app/src/use-cases/membership-writes';
 import { ORG_WRITE_AUDIT } from '../packages/app/src/use-cases/org-writes';
 import { PROJECT_WRITE_AUDIT } from '../packages/app/src/use-cases/project-writes';
 import {
@@ -70,6 +72,17 @@ const WORLD = {
   department: { id: 'dep-gate', name: 'Gate Department' },
   program: { id: 'prg-gate', departmentId: 'dep-gate', name: 'Gate Program' },
   project: { id: 'prj-gate', name: 'Gate Project', departmentId: 'dep-gate', programId: 'prg-gate' },
+  /**
+   * The Tenant's memberships (story 1.4 slice 2): the gate's own user and a second Tenant Admin —
+   * two, so no membership write the registry drives meets the last-admin rule — and the PM the
+   * writes change, holding a stale Project id (one whose Project does not exist) and not the
+   * Project, so every registered input changes something.
+   */
+  members: [
+    { userId: GATE_USER, role: 'tenant_admin', projectIds: [] },
+    { userId: 'usr-gate-admin-2', role: 'tenant_admin', projectIds: [] },
+    { userId: 'usr-gate-pm', role: 'pm', projectIds: ['prj-gate-gone'] },
+  ],
 } as const;
 
 const TARGET: WriteTarget = {
@@ -80,6 +93,9 @@ const TARGET: WriteTarget = {
   wpId: 'wp-gate',
   departmentId: WORLD.department.id,
   programId: WORLD.program.id,
+  memberUserId: 'usr-gate-pm',
+  staleProjectId: 'prj-gate-gone',
+  secondAdminUserId: 'usr-gate-admin-2',
 };
 
 interface Committed {
@@ -141,6 +157,18 @@ const FAKE_FAMILIES: {
     setProjectProgram: write('org.setProjectProgram', undefined),
     setProjectDepartment: write('org.setProjectDepartment', undefined),
   }),
+  // The bridge's writer: `lockMembers` answers what the real statement would — the admins plus the
+  // caller and the target, ordered by user id — and records nothing (a lock is not a change).
+  membership: (write): MembershipWriteRepository => ({
+    lockMembers: async ({ callerId, targetId }) =>
+      WORLD.members
+        .filter((row) => row.role === 'tenant_admin' || row.userId === callerId || row.userId === targetId)
+        .slice()
+        .sort((a, b) => (a.userId < b.userId ? -1 : a.userId > b.userId ? 1 : 0)),
+    deleteMembership: write('membership.deleteMembership', undefined),
+    setRole: write('membership.setRole', undefined),
+    setProjectIds: write('membership.setProjectIds', undefined),
+  }),
 };
 
 /** Drives one invocation against a fresh fake transaction. */
@@ -167,6 +195,7 @@ async function drive(invoke: InvokeWrite, sabotage: Sabotage = {}): Promise<Run>
       const scope: WriteScope = {
         projectWrite: FAKE_FAMILIES.projectWrite(write),
         org: FAKE_FAMILIES.org(write),
+        membership: FAKE_FAMILIES.membership(write),
         audit: {
           append: async (auditEntry) => {
             pendingRecords.push({ transaction: index, entry: auditEntry });
@@ -260,13 +289,14 @@ describe('every use case that changes anything is classified for audit', () => {
 
 /**
  * The stamp each write family must put on its record: the Project's anchor for the project writes
- * (their rows stay byte-identical), the Clock for the organisation writes. Per family, so a project
+ * (their rows stay byte-identical), the Clock for the organisation and membership writes. Per family, so a project
  * write stamped by the Clock — or an org write by an anchor — fails. A declared write in neither
  * family fails here too, until its family's stamp is stated.
  */
 function expectedStamp(name: string): Date | undefined {
   if (Object.hasOwn(PROJECT_WRITE_AUDIT, name)) return AT;
   if (Object.hasOwn(ORG_WRITE_AUDIT, name)) return NOW;
+  if (Object.hasOwn(MEMBERSHIP_WRITE_AUDIT, name)) return NOW;
   return undefined;
 }
 

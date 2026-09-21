@@ -14,15 +14,17 @@
  * them. (Vitest isolates test files, so each suite has its own copy of this module's state.)
  */
 import { isDeepStrictEqual } from 'node:util';
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { decode } from '@momo/domain';
 import { auditActorOf } from '../packages/app/src/authz/request-context';
 import type { WriteDeps } from '../packages/app/src/ports/write-deps';
 import type { AppError } from '../packages/app/src/result';
 import { getDb, getPool, schema, type Db } from '../packages/db/src/client';
+import { DEMO_USERS } from '../packages/db/src/demo-identities';
 import type { ProbeTenant } from '../packages/db/src/probe-tenants';
-import { TENANT_OWNED } from '../packages/db/src/table-classes';
+import { tenantMembership } from '../packages/db/src/schema-membership';
+import { TENANT_BRIDGES, TENANT_OWNED } from '../packages/db/src/table-classes';
 import { inTenantTransaction } from '../packages/db/src/tenant-transaction';
 import { withTenant } from '../packages/db/src/with-tenant';
 import type { InvokeWrite, WriteTarget } from './read-use-cases';
@@ -130,9 +132,10 @@ export function restrictedWriteDeps(ids: IdPort) {
 }
 
 /**
- * A probe Tenant's own ids: two Tickets it has Mapping history for, a leaf non-Catch-all WP, and
- * its Project's Department and Program — run as `tenantId`, which is the probe's own Tenant for an
- * own write and the OTHER probe's for the id-from-a-URL replay.
+ * A probe Tenant's own ids: two Tickets it has Mapping history for, a leaf non-Catch-all WP, its
+ * Project's Department and Program, and the member the membership writes change (its PM, staged by
+ * `stageProbeMembers`) — run as `tenantId`, which is the probe's own Tenant for an own write and the
+ * OTHER probe's for the id-from-a-URL replay.
  */
 export function targetOf(probe: ProbeTenant, tenantId: string): WriteTarget {
   const tickets = [...new Set(probe.state.mappingEvents.map((m) => m.ticketId))];
@@ -147,7 +150,48 @@ export function targetOf(probe: ProbeTenant, tenantId: string): WriteTarget {
     wpId: leaf.id,
     departmentId: probe.state.fixture.department.id,
     programId: probe.state.fixture.program.id,
+    memberUserId: probePmId(probe),
+    staleProjectId: staleProjectIdOf(probe),
+    // The probe's seeded Tenant Admin; the harness user (`stageProbeMembers`) is the other one.
+    secondAdminUserId: `${probe.writeOptions.idPrefix}${DEMO_USERS.hoang.id}`,
   };
+}
+
+/** The probe's PM — `writeTenantRows` writes `DEMO_USERS.linh` under the probe's id prefix. */
+export function probePmId(probe: ProbeTenant): string {
+  return `${probe.writeOptions.idPrefix}${DEMO_USERS.linh.id}`;
+}
+
+/** A Project id no Project carries, prefixed so it is the probe's own. */
+export function staleProjectIdOf(probe: ProbeTenant): string {
+  return `${probe.writeOptions.idPrefix}prj-gone`;
+}
+
+/**
+ * Stages a probe Tenant's memberships for the membership writes (story 1.4 slice 2), as the owner:
+ *
+ *   * the harness's own user (`HARNESS_USER_ID`, the user of every registry context) gets a
+ *     `tenant_admin` membership — the membership writes re-check the caller against the bridge
+ *     inside their transaction, so without one every write would answer `not_found` at the
+ *     caller check and the foreign-Tenant assertion would prove nothing;
+ *   * the probe's PM holds the stale Project id instead of the Project, so `targetOf`'s assign and
+ *     unassign each change something from this starting state.
+ */
+export async function stageProbeMembers(probe: ProbeTenant): Promise<void> {
+  await owner().transaction(async (tx) => {
+    await tx
+      .insert(tenantMembership)
+      .values({ userId: HARNESS_USER_ID, tenantId: probe.tenantId, role: 'tenant_admin', projectIds: [] })
+      .onConflictDoUpdate({
+        target: [tenantMembership.userId, tenantMembership.tenantId],
+        set: { role: 'tenant_admin', projectIds: [] },
+      });
+    const res = await tx
+      .update(tenantMembership)
+      .set({ projectIds: [staleProjectIdOf(probe)] })
+      .where(and(eq(tenantMembership.tenantId, probe.tenantId), eq(tenantMembership.userId, probePmId(probe))));
+    if (res.rowCount !== 1) throw new Error(`${probe.token} has no PM membership to stage`);
+  });
 }
 
 export interface Outcome {
@@ -173,36 +217,47 @@ export async function drive(
   }
 }
 
-/** Rows per tenant-owned table for one Tenant, counted inside its own tenant scope. */
+/**
+ * The tables a Tenant's rows are read from: every tenant-owned table by its tenant column — and the
+ * membership bridge (story 1.4 slice 2), which carries `tenant_id` with no row-level security, so
+ * the explicit filter below is the only thing that scopes it. Without it the membership writes'
+ * rows would be invisible to every "nothing else moved" assertion.
+ */
+const TENANT_TABLES: readonly { readonly table: string; readonly column: string }[] = [
+  ...TENANT_OWNED.map((owned) => ({ table: owned.table, column: owned.tenantColumn! })),
+  ...TENANT_BRIDGES.map((bridge) => ({ table: bridge.table, column: 'tenant_id' })),
+];
+
+/** Rows per tenant table for one Tenant, counted inside its own tenant scope. */
 export async function rowCounts(tenantId: string): Promise<Record<string, number>> {
   return withTenant(owner(), tenantId, async (tx) => {
     // Sequential: one transaction is one connection, and pg refuses overlapping queries on it.
     const entries: (readonly [string, number])[] = [];
-    for (const owned of TENANT_OWNED) {
+    for (const { table, column } of TENANT_TABLES) {
       const res = await tx.execute<{ n: number }>(
-        sql`SELECT count(*)::int AS n FROM ${sql.identifier(owned.table)}
-             WHERE ${sql.identifier(owned.tenantColumn!)} = ${tenantId}`,
+        sql`SELECT count(*)::int AS n FROM ${sql.identifier(table)}
+             WHERE ${sql.identifier(column)} = ${tenantId}`,
       );
-      entries.push([owned.table, Number(res.rows[0]?.n ?? 0)]);
+      entries.push([table, Number(res.rows[0]?.n ?? 0)]);
     }
     return Object.fromEntries(entries);
   });
 }
 
 /**
- * EVERY row of every tenant-owned table for one Tenant, each as Postgres's own text form of the
- * whole row (`t::text` — every column, no codec, no driver conversion), sorted so two reads
- * compare row for row. What "only `program_id` changed" is measured against.
+ * EVERY row of every tenant table (the bridge included) for one Tenant, each as Postgres's own
+ * text form of the whole row (`t::text` — every column, no codec, no driver conversion), sorted so
+ * two reads compare row for row. What "only `program_id` changed" is measured against.
  */
 export async function allRows(tenantId: string): Promise<Record<string, readonly string[]>> {
   return withTenant(owner(), tenantId, async (tx) => {
     const entries: (readonly [string, readonly string[]])[] = [];
-    for (const owned of TENANT_OWNED) {
+    for (const { table, column } of TENANT_TABLES) {
       const res = await tx.execute<{ row: string }>(
-        sql`SELECT t::text AS row FROM ${sql.identifier(owned.table)} AS t
-             WHERE ${sql.identifier(owned.tenantColumn!)} = ${tenantId} ORDER BY 1`,
+        sql`SELECT t::text AS row FROM ${sql.identifier(table)} AS t
+             WHERE ${sql.identifier(column)} = ${tenantId} ORDER BY 1`,
       );
-      entries.push([owned.table, res.rows.map((r) => r.row)]);
+      entries.push([table, res.rows.map((r) => r.row)]);
     }
     return Object.fromEntries(entries);
   });
@@ -247,6 +302,10 @@ const auditPayloadJson = z.union([
     .strict(),
   z.object({ before: z.string().nullable(), after: z.string().nullable() }).strict(),
   z.object({ before: placement, after: placement }).strict(),
+  // Membership writes (story 1.4 slice 2): a revocation keeps the role and Projects it removed; a
+  // role change is `{ before, after }` of strings (the shape above); a Project change is the list.
+  z.object({ before: z.object({ role: z.string(), projectIds: z.array(z.string()) }).strict() }).strict(),
+  z.object({ before: z.array(z.string()), after: z.array(z.string()) }).strict(),
 ]);
 
 /** The rows a write may land, for one Tenant, keyed so a later read can be diffed. */
@@ -273,6 +332,11 @@ export async function landedRows(tenantId: string) {
       .where(eq(schema.department.tenantId, tenantId)),
     programs: await tx.select().from(schema.program).where(eq(schema.program.tenantId, tenantId)),
     projects: await tx.select().from(schema.project).where(eq(schema.project.tenantId, tenantId)),
+    // The bridge has no RLS: `withTenant` scopes nothing here, the filter does.
+    memberships: await tx
+      .select()
+      .from(tenantMembership)
+      .where(eq(tenantMembership.tenantId, tenantId)),
   }));
 }
 
@@ -287,7 +351,11 @@ export const LANDED_TABLE: Readonly<Record<keyof Landed, string>> = {
   departments: 'department',
   programs: 'program',
   projects: 'project',
+  memberships: 'tenant_membership',
 };
+
+/** The table `newSince`'s removed memberships come from — the same as `memberships`'. */
+export const REMOVED_TABLE = { membershipsRemoved: 'tenant_membership' } as const;
 
 /**
  * The rows of a MUTABLE table that are new or different since `before` — by id, compared whole.
@@ -299,7 +367,25 @@ function changedSince<T extends { id: string }>(before: readonly T[], after: rea
   return after.filter((row) => !isDeepStrictEqual(was.get(row.id), row));
 }
 
-/** What appeared or changed between two reads, per table. */
+type MembershipRowOf = Landed['memberships'][number];
+
+/** A membership's key: the bridge's primary key, `(user_id, tenant_id)`. */
+const memberKey = (row: MembershipRowOf) => `${row.userId}\u0000${row.tenantId}`;
+
+/**
+ * The bridge's rows, diffed by `(user_id, tenant_id)` — new or changed ones, and REMOVED ones: a
+ * revocation deletes a row, which a "new or changed" diff alone would never report.
+ */
+function membershipsSince(before: readonly MembershipRowOf[], after: readonly MembershipRowOf[]) {
+  const was = new Map(before.map((row) => [memberKey(row), row]));
+  const now = new Set(after.map(memberKey));
+  return {
+    memberships: after.filter((row) => !isDeepStrictEqual(was.get(memberKey(row)), row)),
+    membershipsRemoved: before.filter((row) => !now.has(memberKey(row))),
+  };
+}
+
+/** What appeared, changed or (for the bridge) disappeared between two reads, per table. */
 export function newSince(before: Landed, after: Landed) {
   const seqs = (rows: readonly { seq: number }[]) => new Set(rows.map((row) => row.seq));
   const mapSeqs = seqs(before.mappingEvents);
@@ -316,6 +402,7 @@ export function newSince(before: Landed, after: Landed) {
     departments: changedSince(before.departments, after.departments),
     programs: changedSince(before.programs, after.programs),
     projects: changedSince(before.projects, after.projects),
+    ...membershipsSince(before.memberships, after.memberships),
   };
 }
 
