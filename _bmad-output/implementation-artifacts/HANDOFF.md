@@ -1,8 +1,16 @@
 # Handoff — 2026-09-21 (updated at the end of the 2026-09-21 session)
 
-State at `main` = the merge of PR #27 (story 1.4 slice 1), `1f4ae62`.
+State at `main` = the merge of PR #29 (story 1.4 slice 2), `e272600`.
 
-**Latest (2026-09-21, third session): story 1.4 slice 1 is merged.** People sign
+**Latest (2026-09-21, fourth session): story 1.4 slice 2 is merged.** A Tenant
+Admin can revoke a membership, change its role, and assign or unassign a PM's
+Projects — four audited use cases; a revoked user is signed out on their next
+request. The suite is **678 tests across 36 files**. Story 1.4 stays
+`in-progress` — slices 3 (Google) and 4 (password reset) remain. **The next
+session builds slice 4, or slice 3 once the founder decides on OAuth
+credentials** — see "Next, in order".
+
+**Earlier the same day (third session): story 1.4 slice 1 was merged.** People sign
 in with email + password; every request resolves a `RequestContext` from its
 session and the `tenant_membership` bridge, and the audit actor is the signed-in
 user. The suite is **570 tests across 34 files**. Story 1.4 is still
@@ -86,13 +94,15 @@ to their share. Track upgrade-style work separately from feature work.
 | #25 | Story 1.3 code review — nine fixes (monotonic UUIDv7, seed truncate gate, whole-Tenant write checks, full `project.create` audit, indexes); this handoff |
 | #26 | Story 1.4 slice 1 spec |
 | #27 | Story 1.4 slice 1 — Better Auth tables + `tenant_membership`, `@momo/db-auth`, `RequestContext`/`resolveRequestContext`, email + password sign-in, Node middleware; AD-1/AD-15 amended |
+| #28 | Handoff after story 1.4 slice 1 |
+| #29 | Story 1.4 slice 2 — revoke, change role, assign/unassign a PM's Project as audited use cases; one writer of `tenant_membership` with one ordered lock; the last Tenant Admin protected |
 
 **CI has ten steps**, all watched to fail before being trusted: lint (the
 clock/env fence, the tenant bans, and AD-4's arithmetic fences — rounding only
 in `domain/present`, `JSON.stringify` only in the codec), three typechecks,
 **dependency-cruiser** (no database), a Postgres 18.6-alpine service, a prepare
 step (schema → pgboss roles → RLS/grants/triggers → seed), and the suite.
-**570 tests across 34 files**, up from 46 across 3. The gates report and do not
+**678 tests across 36 files**, up from 46 across 3. The gates report and do not
 block (no branch protection on a private free-plan repo).
 
 **The import direction is gated.** `.dependency-cruiser.cjs` fails on: Drizzle
@@ -156,6 +166,25 @@ Demo users `linh` (PM) and `hoang` (Tenant Admin) are seeded with fixed UUIDv7
 ids and the password from `SEED_DEMO_PASSWORD`. Verified in a real browser
 against `next start`, including `next build`.
 
+**Access can be taken away (story 1.4 slice 2).** `revokeMembership`,
+`changeMemberRole`, `assignMemberProject` and `unassignMemberProject`
+(`packages/app/src/use-cases/membership-writes.ts`) each require `tenant_admin`
+in the context — checked before any parse, answering `not_found` — and run
+through `runAuditedWrite` with four new `AUDIT_ACTIONS` (`membership.*`,
+target = the member's user id, previous value recorded). The one writer,
+`packages/db/src/repo-membership-write.ts` (the `membership` family of the write
+scope), filters every statement by `tenant_id` itself (the bridge has no RLS)
+and takes **one ordered `FOR UPDATE` statement** — the Tenant's admin rows plus
+caller and target, by `user_id` — so concurrent writes queue instead of
+deadlocking. Inside it the caller must still be an admin (a context resolved
+once per action can be stale), the target must exist, and the last Tenant
+Admin can be neither revoked nor demoted (`last_tenant_admin`). Revocation
+deletes the row; the resolver then ends the session on the next request (a
+session with no active Tenant yet answers `no_access` instead). The app role
+holds SELECT, UPDATE, DELETE on the bridge — no INSERT: adding someone is
+invitation work. No screen yet; four bindings wait in the composition root.
+These are the **only** role checks in the codebase — story 1.5 replaces them.
+
 ---
 
 ## The pattern that mattered most, and should continue
@@ -169,6 +198,7 @@ the diff never found one of them. Deliberate sabotage found every one.**
 | B2 | Changing the worker to connect as the **superuser** passed typecheck and all 56 tests — the composition root was never executed |
 | 1.2 | Setting the ledger's policy to `USING (true)`, leaking every tenant's money, left **all 96 tests passing** |
 | 1.2 s2 | `USING (true)` on `baseline_wp` leaked every Tenant's rows into the process and **all twenty** harness assertions stayed green |
+| 1.4 s2 | The revoked-member cleanup could be deleted with every test green: `beforeEach` restored the memberships before cleanup ran; and a PM-context harness made the cross-tenant write check pass on the role refusal alone. Both found by review, not by sabotage of the code under test |
 | 1.4 s1 | depcruise's `exclude: dist` dropped every edge into `better-auth`'s `dist/`, so `better-auth-only-in-db-auth` could **never** fire; found by the adversarial review of the spine amendment, fixed by narrowing `exclude` to our own build output |
 
 **So: after adding any gate, break the thing it guards and watch it fail.** The
@@ -189,48 +219,43 @@ reading.
 
 ## Next, in order
 
-### 1. Story 1.4 slice 2 — revocation and membership changes (start here, in a new session)
+### 1. Story 1.4 slice 4 — password reset (unblocked), or slice 3 — Google
 
-Run:
+Slice 4 is unblocked:
 ```
-/bmad-build story 1.4 slice 2 — revocation and membership changes as audited use cases (deferred-work.md). Hãy chạy `git fetch` trước.
+/bmad-build story 1.4 slice 4 — password reset through MailerPort (deferred-work.md). Hãy chạy `git fetch` trước.
 ```
-Slice 1's spec (`spec-1-4-identity-and-request-context.md`, `done`) is the
-continuity context: its Code Map, Design Notes, Spec Change Log and Review
-Triage Log. The spine changed in PR #27 (AD-1, AD-15), so Build recompiles
-`epic-1-context.md`.
+Mail goes through a new `MailerPort`: `mailer-console` in development,
+`mailer-ses` as the production implementation (the AWS account, sender domain
+and SES access are Epic 8's). The route handler's allowlist
+(`packages/db/auth/src/bindings.ts`) must grow the reset endpoints on purpose —
+`/reset-password/*` is 404 today and a test pins that. Consider the deferred
+sign-in rate limit at the same time: reset is the second unauthenticated,
+enumerable endpoint.
 
-What slice 2 has to deliver: revocation and membership changes — including PM
-assignment into `tenant_membership.project_ids` (moved here from 1.3) — as
-audited `app` use cases through `runAuditedWrite`, never a write through the
-auth adapter; the revoked user is refused on their **next** request (the cookie
-cache is off and `resolveRequestContext` checks the bridge on every request, so
-deleting the membership or the sessions is enough). New audit actions go into
-`AUDIT_ACTIONS`.
+**Slice 3 (Google) needs a founder decision first:** OAuth credentials for
+local and CI — a test double, or real client ids?
 
-What slice 1 left for it:
-- The app role holds **SELECT only** on `tenant_membership`; membership writes
-  need a grant change (via the registry's `appPrivileges`) or a dedicated path —
-  decide it in the spec.
-- `membershipsOf` is the one reader and `source-discipline.test.ts` pins the
-  files that name `tenantMembership`/`membershipsOf`; a writer must be added to
-  those lists on purpose.
-- `inTenantTransaction` has no identity/membership scope family yet, and
-  `tenant_membership` is `global` (no `withTenant` policy), so the write's
-  Tenant check has to be explicit.
-- No role checks exist yet (story 1.5): decide what "only a Tenant Admin may
-  revoke" means before 1.5, or defer it with the other role checks.
+Continuity: slices 1 and 2's specs (`spec-1-4-identity-and-request-context.md`,
+`spec-1-4-revocation-and-membership.md`, both `done`). When all four slices are
+done, run `bmad-code-review` over the whole story, as for 1.3, then mark 1.4
+`done`.
 
-After slice 2: **slice 3** (Google sign-in) needs a founder decision on OAuth
-credentials for local and CI (a test double, or real client ids?); **slice 4**
-(password reset through `MailerPort`, console mailer locally, SES is Epic 8's)
-is unblocked. When all four are done, run `bmad-code-review` over the whole
-story, as for 1.3, then mark 1.4 `done`.
+What slice 2 left, in `deferred-work.md`:
+- **The spine (AD-21/AD-23) and `epic-1-context.md` still call the bridge
+  SELECT-only with a single reader.** Amending the spine needs an adversarial
+  review (budget two rounds); then regenerate the context.
+- Story 1.5 must not read a Tenant Admin's `projectIds` as a limit (kept on
+  promotion so a demotion restores them).
+- A user revoked from their only Tenant keeps their account and can sign in to
+  `no_access` — an account-lifecycle decision for the invitation work.
+- Revocation ends only the session that makes the next request; the user's
+  other sessions end on their own next requests.
 
-Deferred from slice 1 worth knowing (`deferred-work.md`): `/` still redirects
-everyone to `/p/prj-ec2/review`; the middleware may answer an expired
-session's server-action POST with a 307 (unverified); the sign-in action has no
-rate limit; the top bar shows the role, not the user's name (1.7).
+Deferred from slice 1 still open: `/` redirects everyone to
+`/p/prj-ec2/review`; the middleware may answer an expired session's
+server-action POST with a 307 (unverified); the sign-in action has no rate
+limit; the top bar shows the role, not the user's name (1.7).
 
 ### 2. Story 1.2's watermark slice — blocked
 
@@ -245,7 +270,7 @@ Advisory locks before `seq` allocation. Needs Epic 2 and Epic 5's writers.
 Stories 1.5 through 1.9. Epic 1 is 156 h and is the calibration point for the
 whole estimate — its closing is the first date-slip checkpoint (above).
 
-What story 1.3 left, in `deferred-work.md` (**141 entries** now): the
+What story 1.3 left, in `deferred-work.md` (**148 entries** now): the
 Program-within-Department rule is held by use cases and row locks, with no
 foreign key and no concurrency test; `audit_log.at` mixes fixture and wall time;
 the audited-use-case gate trusts declarations rather than NFR-A1's list;
@@ -308,6 +333,10 @@ clock); CI never runs `next build` (it passed locally for story 1.4 slice 1).
   preview until OQ-8); `@momo/db-auth` exports a factory and the composition
   root builds the one instance lazily; Better Auth's own `Date` is a named AD-15
   exception; the sign-in rate limit is deferred on purpose.
+- **Story 1.4 slice 2 decisions (founder, 2026-09-21)**: the membership use
+  cases require `tenant_admin` now (a local check ahead of 1.5, `not_found`
+  otherwise); the last Tenant Admin cannot be revoked or demoted; adding a user
+  to a Tenant is invitation work, so no INSERT grant; no Users screen yet.
 
 ---
 
@@ -336,7 +365,9 @@ clock); CI never runs `next build` (it passed locally for story 1.4 slice 1).
 - Since story 1.4 the seed also needs `SEED_DEMO_PASSWORD` (8+ characters), and
   the web process `BETTER_AUTH_SECRET` (32+) and `BETTER_AUTH_URL`
   (`http://localhost:3101`); `SESSION_IDLE_TIMEOUT_HOURS` is optional (default
-  8). The tests that build an auth instance take their own values. The local
+  8). A shell without `apps/web/.env.local` sourced runs the DB suites as
+  file-level failures, not skips, under `REQUIRE_DB=1` — `set -a; .
+  apps/web/.env.local; set +a` first. The tests that build an auth instance take their own values. The local
   seed password in use is `momo-demo-2026`; sign in as
   `linh@momo-digital.example` or `hoang@momo-digital.example`. Re-seeding
   truncates `session`, so everyone is signed out.
