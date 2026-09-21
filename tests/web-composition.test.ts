@@ -113,12 +113,23 @@ const spies = vi.hoisted(() => {
       { tenantId: 'ten-from-session', role: 'pm', projectIds: ['prj-ec2'] },
     ]),
     authInstance,
-    /** Every options object `createAuth` was built with — never cleared, the instance is per process. */
+    /** The middleware's instance: built WITHOUT Google (story 1.4 slice 3). */
+    sessionAuthInstance: { marker: 'session-auth-instance' },
+    /** Every options object `createAuth` was built with — never cleared, the instances are per process. */
     authBuilds,
     createAuth: vi.fn((options: AuthBuild) => {
       authBuilds.push(options);
-      return authInstance;
+      // The page instance is asked for Google; the middleware's is not (no `google` key at all).
+      return 'google' in options ? authInstance : { marker: 'session-auth-instance' };
     }),
+    googleRegistered: vi.fn(async (_auth: unknown) => true),
+    googleSignIn: vi.fn(
+      async (_auth: unknown, _headers: Headers): Promise<{ url: string; setCookies: string[] } | null> => ({
+        url: 'http://127.0.0.1:4455/authorize?state=s',
+        setCookies: ['momo.state=signed; Path=/'],
+      }),
+    ),
+    sessionForMiddleware: vi.fn(async (_auth: unknown, _headers: Headers) => ({ signedIn: true, setCookies: [] })),
     requestHeaders: new Headers({ cookie: 'momo.session_token=signed' }),
   };
 });
@@ -138,8 +149,10 @@ vi.mock('@momo/db-auth', () => ({
     expect(auth).toBe(spies.authInstance);
     return spies.identity;
   },
+  googleRegistered: spies.googleRegistered,
+  googleSignIn: spies.googleSignIn,
   serveAllowlisted: vi.fn(),
-  sessionForMiddleware: vi.fn(),
+  sessionForMiddleware: spies.sessionForMiddleware,
   signInWithPassword: vi.fn(),
   signOutOf: vi.fn(),
 }));
@@ -651,8 +664,41 @@ describe('the request context the bindings run with', () => {
       secret: 'web-composition-test-secret-0123456789',
       baseURL: 'http://localhost:3101',
       idleHours: 8,
+      // AUTH_GOOGLE is not set: Google is off, and the instance is told so.
+      google: null,
     });
     expect(spies.authBuilds[0]!.generateId()).toBe(spies.newId);
+  });
+
+  it('answers whether Google is offered from the page instance\'s registration (story 1.4 slice 3)', async () => {
+    spies.googleRegistered.mockResolvedValueOnce(false);
+    expect(await composition.googleEnabled()).toBe(false);
+    expect(await composition.googleEnabled()).toBe(true);
+    for (const [auth] of spies.googleRegistered.mock.calls) expect(auth).toBe(spies.authInstance);
+  });
+
+  it('starts a Google sign-in on the page instance with the request\'s headers, answering the URL only', async () => {
+    expect(await composition.googleSignIn()).toBe('http://127.0.0.1:4455/authorize?state=s');
+    expect(spies.googleSignIn).toHaveBeenCalledWith(spies.authInstance, expect.any(Headers));
+    expect(spies.googleSignIn.mock.calls[0]![1].get('cookie')).toBe('momo.session_token=signed');
+    spies.googleSignIn.mockResolvedValueOnce(null);
+    expect(await composition.googleSignIn()).toBeNull();
+  });
+
+  it('refreshes the middleware\'s session on an instance of its own, built without Google', async () => {
+    const buildsBefore = spies.authBuilds.length;
+    const headers = new Headers({ cookie: 'momo.session_token=signed' });
+    expect(await composition.refreshSession(headers)).toEqual({ signedIn: true, setCookies: [] });
+    await composition.refreshSession(headers);
+    const [auth, passed] = spies.sessionForMiddleware.mock.calls[0]!;
+    expect(auth).not.toBe(spies.authInstance);
+    expect(auth).toEqual({ marker: 'session-auth-instance' });
+    expect(passed).toBe(headers);
+    // Built once, lazily, from the same configuration — and with no `google` option at all.
+    expect(spies.authBuilds.length - buildsBefore).toBe(1);
+    const build = spies.authBuilds.at(-1)!;
+    expect(build).not.toHaveProperty('google');
+    expect(build).toMatchObject({ db: spies.handle, secret: 'web-composition-test-secret-0123456789', idleHours: 8 });
   });
 
   it('answers the non-redirecting sign-in state for the root layout and /no-access', async () => {

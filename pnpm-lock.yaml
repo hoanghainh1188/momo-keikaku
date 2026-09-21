@@ -197,6 +197,9 @@ importers:
       eslint:
         specifier: 10.11.0
         version: 10.11.0(supports-color@7.2.0)
+      jose:
+        specifier: 6.2.12
+        version: 6.2.12
       tsx:
         specifier: 4.23.13
         version: 4.23.13

@@ -17,7 +17,7 @@ import { describe, expect, it } from 'vitest';
 process.env.DATABASE_URL ??= 'postgres://owner:owner@localhost:55433/momo_keikaku';
 process.env.APP_DATABASE_URL ??= 'postgres://momo_app:momo_app@localhost:55433/momo_keikaku';
 
-const { parseConfig } = await import('./config');
+const { parseConfig, parseGoogleProvider } = await import('./config');
 
 const COMPLETE = {
   DATABASE_URL: 'postgres://momo:momo@localhost:55433/momo_keikaku',
@@ -29,7 +29,7 @@ const COMPLETE = {
 
 describe('parseConfig', () => {
   it('returns every key when all are present, with the idle timeout defaulted to 8 hours', () => {
-    expect(parseConfig({ ...COMPLETE })).toEqual({ ...COMPLETE, SESSION_IDLE_TIMEOUT_HOURS: 8 });
+    expect(parseConfig({ ...COMPLETE })).toEqual({ ...COMPLETE, SESSION_IDLE_TIMEOUT_HOURS: 8, AUTH_GOOGLE: 'off' });
   });
 
   it('reads SESSION_IDLE_TIMEOUT_HOURS as a whole number of hours', () => {
@@ -71,4 +71,64 @@ describe('parseConfig', () => {
       );
     });
   }
+});
+
+/**
+ * Google sign-in's keys (story 1.4 slice 3, AD-17): off unless configured; `on` requires all three
+ * and names every missing one; the issuer is `https:` unless its host is loopback.
+ */
+const GOOGLE = {
+  AUTH_GOOGLE: 'on',
+  GOOGLE_CLIENT_ID: 'momo-local-client',
+  GOOGLE_CLIENT_SECRET: 'momo-local-secret',
+  GOOGLE_ISSUER_URL: 'https://accounts.google.com',
+} as const;
+
+describe('googleProvider', () => {
+  it('is null when AUTH_GOOGLE is absent or off, whatever else is set', () => {
+    expect(parseGoogleProvider({})).toBeNull();
+    expect(parseGoogleProvider({ ...GOOGLE, AUTH_GOOGLE: 'off' })).toBeNull();
+    expect(parseConfig({ ...COMPLETE }).AUTH_GOOGLE).toBe('off');
+  });
+
+  it('answers the three keys when on', () => {
+    expect(parseGoogleProvider({ ...GOOGLE })).toEqual({
+      clientId: 'momo-local-client',
+      clientSecret: 'momo-local-secret',
+      issuer: 'https://accounts.google.com',
+    });
+  });
+
+  it('fails naming GOOGLE_CLIENT_SECRET when on without a client secret — and every other missing key', () => {
+    const { GOOGLE_CLIENT_SECRET: _secret, ...noSecret } = GOOGLE;
+    expect(() => parseGoogleProvider(noSecret)).toThrow(
+      /^Invalid configuration: GOOGLE_CLIENT_SECRET is required when AUTH_GOOGLE=on$/,
+    );
+    expect(() => parseGoogleProvider({ AUTH_GOOGLE: 'on' })).toThrow(
+      /GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_ISSUER_URL are required when AUTH_GOOGLE=on/,
+    );
+    expect(() => parseConfig({ ...COMPLETE, ...noSecret })).toThrow(
+      /Invalid configuration: GOOGLE_CLIENT_SECRET is required when AUTH_GOOGLE=on/,
+    );
+    expect(parseConfig({ ...COMPLETE, ...GOOGLE }).GOOGLE_CLIENT_SECRET).toBe('momo-local-secret');
+  });
+
+  it('refuses an AUTH_GOOGLE that is neither off nor on, and an empty key', () => {
+    expect(() => parseGoogleProvider({ ...GOOGLE, AUTH_GOOGLE: 'yes' })).toThrow(/AUTH_GOOGLE must be `off` or `on`/);
+    expect(() => parseGoogleProvider({ ...GOOGLE, GOOGLE_CLIENT_ID: '' })).toThrow(/GOOGLE_CLIENT_ID must not be empty/);
+  });
+
+  it('takes an https issuer anywhere, and an http one only on a loopback host', () => {
+    for (const issuer of ['http://localhost:4455', 'http://127.0.0.1:4455/', 'http://[::1]:4455']) {
+      expect(parseGoogleProvider({ ...GOOGLE, GOOGLE_ISSUER_URL: issuer })?.issuer, issuer).toBe(issuer);
+    }
+    for (const issuer of ['http://accounts.google.com', 'http://10.0.0.5:4455', 'accounts.google.com', 'ftp://localhost']) {
+      expect(() => parseGoogleProvider({ ...GOOGLE, GOOGLE_ISSUER_URL: issuer }), issuer).toThrow(
+        /GOOGLE_ISSUER_URL must be an absolute https: URL/,
+      );
+      expect(() => parseConfig({ ...COMPLETE, ...GOOGLE, GOOGLE_ISSUER_URL: issuer }), issuer).toThrow(
+        /GOOGLE_ISSUER_URL must be an absolute https: URL/,
+      );
+    }
+  });
 });

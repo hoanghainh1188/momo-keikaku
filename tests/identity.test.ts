@@ -31,6 +31,7 @@ import { membershipsOf } from '../packages/db/src/repo-membership';
 import { account, auditLog, authUser, session } from '../packages/db/src/schema';
 import { tenantMembership } from '../packages/db/src/schema-membership';
 import { withTenant } from '../packages/db/src/with-tenant';
+import { startFakeOidc } from './support/fake-oidc';
 import { connectWriteHarness, idPort, owner, restrictedWriteDeps } from './write-harness';
 
 /**
@@ -375,10 +376,41 @@ describe.skipIf(!reachable)('sign-in and the request context, against Postgres (
     expect(await status('POST', '/update-session')).toBe(404);
     expect(await status('POST', '/sign-up/email')).toBe(404);
     expect(await status('GET', '/callback/google')).toBe(404);
+    expect(await status('POST', '/sign-in/social')).toBe(404);
     expect(await status('POST', '/get-session')).toBe(404);
     expect(await status('GET', '/sign-in/email')).toBe(404);
     // …and the allowlist itself is served.
     expect(await status('GET', '/get-session')).toBe(200);
+  });
+
+  it('serves GET /callback/google only while Google is registered, and never /sign-in/social (slice 3)', async () => {
+    const fake = await startFakeOidc({
+      clock: systemClock,
+      clientId: 'identity-google-client',
+      clientSecret: 'identity-google-secret',
+      redirectUri: `${BASE_URL}/api/auth/callback/google`,
+    });
+    try {
+      const withGoogle = createAuth({
+        db: appDb(),
+        secret: 'identity-test-secret-0123456789abcdef',
+        baseURL: BASE_URL,
+        idleHours: IDLE_HOURS,
+        generateId: uuidV7IdsOn(systemClock).next,
+        google: { clientId: 'identity-google-client', clientSecret: 'identity-google-secret', issuer: fake.issuer },
+      });
+      const serve = serveAllowlisted(withGoogle);
+      const status = async (method: string, path: string) =>
+        (await serve(new Request(`${BASE_URL}/api/auth${path}`, { method, headers: { origin: BASE_URL } }))).status;
+      // Served: with no state it answers the refusal redirect, not 404.
+      expect(await status('GET', '/callback/google')).toBe(302);
+      expect(await status('POST', '/callback/google')).toBe(404);
+      expect(await status('GET', '/callback/github')).toBe(404);
+      expect(await status('POST', '/sign-in/social')).toBe(404);
+      expect(await status('POST', '/link-social')).toBe(404);
+    } finally {
+      await fake.close();
+    }
   });
 
   it('round-trips each of the four Better Auth tables through the adapter, with UUIDv7 ids', async () => {

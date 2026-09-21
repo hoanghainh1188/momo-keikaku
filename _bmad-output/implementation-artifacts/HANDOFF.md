@@ -1,8 +1,18 @@
 # Handoff — 2026-09-21 (updated at the end of the 2026-09-21 session)
 
-State at `main` = the merge of PR #29 (story 1.4 slice 2), `e272600`.
+State at `main` = the merge of PR #31 (AD-21/AD-23, the membership bridge's one writer), `980483e`.
+This session's slice 3 work is uncommitted on branch `story-1-4-google-sign-in`.
 
-**Latest (2026-09-21, fourth session): story 1.4 slice 2 is merged.** A Tenant
+**Latest (2026-09-22): story 1.4 slice 3 (Google sign-in) is implemented on branch
+`story-1-4-google-sign-in`, not yet reviewed or merged** (`spec-1-4-google-sign-in.md`).
+Google is one OIDC provider discovered from an issuer URL — a fake in-repo provider
+(`tests/support/fake-oidc.ts`, `pnpm fake-oidc`) locally and in CI — off unless
+`AUTH_GOOGLE=on`, linking by verified email to existing users only. The suite is
+**722 tests across 38 files** (678 across 36 before); the seven sabotages in the spec's acceptance criteria were
+each watched to fail. What remains for story 1.4 is slice 4 (password reset), then the
+whole-story code review.
+
+**Earlier (2026-09-21, fourth session): story 1.4 slice 2 is merged.** A Tenant
 Admin can revoke a membership, change its role, and assign or unassign a PM's
 Projects — four audited use cases; a revoked user is signed out on their next
 request. The suite is **678 tests across 36 files**. Story 1.4 stays
@@ -219,7 +229,14 @@ reading.
 
 ## Next, in order
 
-### 1. Story 1.4 slice 4 — password reset (unblocked), or slice 3 — Google
+### 1. Review and merge slice 3 (Google), then story 1.4 slice 4 — password reset
+
+Slice 3 is built (`spec-1-4-google-sign-in.md`): review it, merge it. It left, in
+`deferred-work.md`: the spine's AD-1 amendment (new `createAuth` argument, the Google
+bindings, the `verification` table's "why") with its own adversarial review; Epic 8's
+checks against real Google (issuer spelling, discovery retry, a discovery timeout);
+`verification` row growth with the sign-in rate limit; and a note that Better Auth
+reads a state's expiry from the row's value, not its column.
 
 Slice 4 is unblocked:
 ```
@@ -232,9 +249,6 @@ and SES access are Epic 8's). The route handler's allowlist
 `/reset-password/*` is 404 today and a test pins that. Consider the deferred
 sign-in rate limit at the same time: reset is the second unauthenticated,
 enumerable endpoint.
-
-**Slice 3 (Google) needs a founder decision first:** OAuth credentials for
-local and CI — a test double, or real client ids?
 
 Continuity: slices 1 and 2's specs (`spec-1-4-identity-and-request-context.md`,
 `spec-1-4-revocation-and-membership.md`, both `done`). When all four slices are

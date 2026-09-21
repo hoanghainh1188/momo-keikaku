@@ -6,16 +6,22 @@
 // It is the ONLY package that imports `better-auth`, and in `apps/web` only the composition root
 // imports it (`pnpm depcruise`, rules `better-auth-only-in-db-auth` and
 // `web-db-auth-only-from-composition-root`). Role, membership and revocation changes go through
-// app use cases, never through here (story 1.4 slices 2–4).
+// app use cases, never through here (story 1.4 slices 2–4). Google sign-in (slice 3) is one OIDC
+// provider registered from an issuer URL (`google.ts`), off unless the caller passes it.
 export { AUTH_BASE_PATH, SESSION_UPDATE_AGE_SECONDS, authOptions, createAuth } from './auth';
 export type { Auth, CreateAuthOptions } from './auth';
 export { identityOn, type BetterAuthIdentity, type SessionIdentity } from './identity';
 export {
   SERVED_AUTH_ENDPOINTS,
+  googleRegistered,
+  googleSignIn,
   serveAllowlisted,
   sessionForMiddleware,
   signInWithPassword,
   signOutOf,
+  type GoogleSignInStart,
   type MiddlewareSession,
+  type ServedEndpoint,
 } from './bindings';
+export type { GoogleProviderOptions } from './google';
 export { hashPassword } from './password';
