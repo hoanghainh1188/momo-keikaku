@@ -36,22 +36,40 @@ module.exports = {
       to: { couldNotResolve: true },
     },
     {
+      name: 'apps-not-to-drizzle',
+      severity: 'error',
+      comment:
+        'AD-1: no inbound adapter (apps/*) imports Drizzle — the composition root included: its ' +
+        'carve-out is for packages/db, and it wires, it never queries. Call a use case.',
+      from: { path: '^apps/' },
+      to: { path: '(^|/)drizzle-orm(/|$)' },
+    },
+    {
       name: 'apps-not-to-db',
       severity: 'error',
       comment:
-        'AD-1: an inbound adapter (apps/*) calls packages/app use cases, never a repository or ' +
-        'Drizzle. The one apps/web file allowed to import packages/db is its composition root, ' +
-        'apps/web/src/server/composition.ts, which wires and never queries; packages/db/auth ' +
-        'is the sanctioned Better Auth binding. Call the use case through the composition ' +
-        'root instead.',
+        'AD-1: apps/web calls packages/app use cases, never a repository. The one apps/web file ' +
+        'allowed to import packages/db is its composition root, apps/web/src/server/composition.ts; ' +
+        'packages/db/auth is the Better Auth binding exported to apps/web alone. Call the use ' +
+        'case through the composition root instead.',
       from: {
-        path: '^apps/',
+        path: '^apps/web/',
         pathNot: '^apps/web/src/server/composition[.]ts$',
       },
       to: {
-        path: ['^packages/db/', '(^|/)drizzle-orm(/|$)'],
+        path: '^packages/db/',
         pathNot: '^packages/db/auth/',
       },
+    },
+    {
+      name: 'other-apps-not-to-db',
+      severity: 'error',
+      comment:
+        'AD-1: an app other than apps/web has no composition root and no packages/db/auth ' +
+        'carve-out (the spine names one per app before it may have one), so it imports ' +
+        'nothing from packages/db at all.',
+      from: { path: '^apps/', pathNot: '^apps/web/' },
+      to: { path: '^packages/db/' },
     },
     {
       name: 'schedule-domain-not-to-attribution',
