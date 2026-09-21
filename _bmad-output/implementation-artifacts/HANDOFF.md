@@ -160,10 +160,11 @@ whole estimate.
 - **The hardcoded DSN fallback**: removed in story 1.2, as decided.
 - **Connector order after R0**: Jira first, Redmine after. Revisit 2027-01-01.
 - **A second AD-1 carve-out**, decided 2026-09-21 and written into
-  ARCHITECTURE-SPINE's AD-1 the same day: each app's composition root —
-  `apps/web/src/server/composition.ts` today — is the only file in that app
-  permitted to import `@momo/db`, and the dependency-cruiser rule names that
-  exact path so the exception is auditable rather than a hole. Amending the
+  ARCHITECTURE-SPINE's AD-1 the same day (after an adversarial review that
+  narrowed a first draft): `apps/web/src/server/composition.ts` is the only
+  file under `apps/web` permitted to import `packages/db`, it exports use-case
+  bindings only, `apps/worker` has no such file, and `tests/` sits outside the
+  AD-1 graph. The dependency-cruiser rule names that exact path. Amending the
   spine makes the cached `epic-1-context.md` stale, so the next `/bmad-build`
   recompiles it.
 - **The dependency-cruiser gate takes AC-6's wording, not full AD-1.** It bans
