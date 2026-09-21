@@ -1,14 +1,17 @@
-# Handoff — 2026-09-21 (updated after the 2026-09-21 session)
+# Handoff — 2026-09-21 (updated at the end of the 2026-09-21 session)
 
-State at `main` = `da58d79` (PR #16 merged), plus the docs PR for AC-2/AC-5 and the AD-1
-amendment described below.
+State at `main` = `97e9fe1` (PR #21 merged).
 
 Two sessions are covered. **2026-09-20** took the project from "planning
 finished, no CI, 46 tests" to "three build slices merged, six CI gates, 123
 tests, tenant isolation enforced in the database". **2026-09-21** added the
-cross-tenant harness — **NFR-S1 is discharged** — and then built story 1.2
-slice 3: the seven read call sites now reach their data through `packages/app`
-use cases (PR #16), taking the suite to **165 tests across 14 files**.
+cross-tenant harness — **NFR-S1 is discharged** — and then finished every
+unblocked slice of story 1.2: the reads (PR #16) and the writes (PR #18) moved
+onto `packages/app` use cases, **dependency-cruiser is on**, the arithmetic is
+exact (`bigint` milli-hours and yen, unreduced ratios, one codec — PR #20), and
+the open `apps/web → packages/domain` edge was decided and gated (PR #21). The
+suite is **338 tests across 24 files**. Only story 1.2's watermark slice is
+left, and it is blocked.
 
 ---
 
@@ -62,18 +65,42 @@ to their share. Track upgrade-style work separately from feature work.
 | #12 | Story 1.2 slice 1 — table-class registry, RLS, `withTenant` |
 | #13 | Handoff for the next session |
 | #14 | Story 1.2 slice 2 — the cross-tenant harness; **NFR-S1 discharged** |
+| #15 | Sprint-status correction and handoff |
+| #16 | Story 1.2 slice 3 — the seven read call sites onto `packages/app` use cases |
+| #17 | Slice 3's AC-2/AC-5 wording; AD-1's composition-root carve-out |
+| #18 | Story 1.2 slice 4 — the five writes onto use cases; **dependency-cruiser on** |
+| #19 | AD-1 states what the gate enforces and what it does not; rules narrowed to the carve-outs |
+| #20 | Story 1.2 slice 5 — exact arithmetic (`bigint`, `Ratio`, `compareRatio`) and the one jsonb codec |
+| #21 | `apps/web` imports `domain/present` only; Client View and Mapping reads; AD-1/AD-4/AD-12 amended |
 
-**CI has nine steps**, all watched to fail before being trusted: lint (the
-clock/env fence), three typechecks, a Postgres 18.6-alpine service, a prepare
+**CI has ten steps**, all watched to fail before being trusted: lint (the
+clock/env fence, the tenant bans, and AD-4's arithmetic fences — rounding only
+in `domain/present`, `JSON.stringify` only in the codec), three typechecks,
+**dependency-cruiser** (no database), a Postgres 18.6-alpine service, a prepare
 step (schema → pgboss roles → RLS/grants/triggers → seed), and the suite.
-**146 tests across 12 files**, up from 46 across 3.
+**338 tests across 24 files**, up from 46 across 3. The gates report and do not
+block (no branch protection on a private free-plan repo).
+
+**The import direction is gated.** `.dependency-cruiser.cjs` fails on: Drizzle
+in any `apps/*` file; `packages/db` from `apps/web` except the composition root
+(`apps/web/src/server/composition.ts`) and `packages/db/auth`; `packages/db`
+from any other app; `apps/web` importing any `packages/domain` module but
+`present/index.ts`; the AD-1 scheduling edges (forward-looking); and any import
+it cannot resolve. What it does not enforce yet is listed in AD-1 and tracked in
+`deferred-work.md` — the worker's `pg-boss`/`pg`, package-to-package
+directions, raw `pg` in `apps/web`, and pages' own `bigint` arithmetic.
+
+**Numbers are exact until presentation (AD-4).** `Mh`/`Jpy` are `bigint` from
+the row to `domain/present`; every ratio is an unreduced `Ratio`, compared to a
+threshold only through `compareRatio`; `domain/present/codec` is the one path
+for `jsonb`. `tests/lint-fences.test.ts` proves the lint fences still fire.
 
 **Tenant isolation is real**, verified directly in SQL: as the application role
 with no tenant set a read returns 0 rows, with the right tenant 1, with a wrong
 tenant 0. `FORCE ROW LEVEL SECURITY` is on for the 16 tenant-owned tables.
 
 **And it is now proved at the use-case level, not only the table level.**
-`packages/db/src/cross-tenant.test.ts` seeds two probe Tenants — each a
+`tests/cross-tenant.test.ts` seeds two probe Tenants — each a
 bijectively relabelled copy of the demo dataset — and
 drives every read use case against both as the restricted role. The covered set
 is read off the read surface's module namespace, so an exported read with no
@@ -114,38 +141,34 @@ reading.
 
 ## Next, in order
 
-### 1. Story 1.2's remaining slices — three
+### 1. Story 1.3 — the organisation, and the record of who changed it
 
-Slice 3 (the reads) merged on 2026-09-21 as PR #16. `deferred-work.md` now has
-**83 entries**. What slice 3 left for the next one, all recorded there:
-`actions.ts` still imports `@momo/db` and `drizzle-orm`; an invisible Project
-is recognised by `repo.ts`'s error MESSAGE; the coverage gate can be sidestepped
-by a use case exported from the `@momo/app` barrel directly, or by a registry
-entry whose `invoke` calls a different use case than it names; and nothing
-automated stops a page importing `@momo/db` again until the gate lands.
+Story 1.2 is done except for its watermark slice, which is **blocked** (it needs
+the `seq` allocation Epic 2 and Epic 5 write), so 1.2 stays `in-progress` in
+`sprint-status.yaml` until then. Story 1.3 is the next unblocked story: the
+Tenant › Department › Program › Project shape, and the audit mechanism that
+1.4, 1.5, 1.6 and 1.7 rely on. It will be the first story to write through an
+audit module rather than inserting `audit_log` rows directly, and the first
+whose use cases are neither project reads nor Dispositions.
 
-1. ~~The seven read call sites onto `packages/app` use cases.~~ **Done**,
-   `spec-1-2-web-read-use-cases.md`, `status: done`.
-2. **The five write actions, then `dependency-cruiser`** — in that order, never
-   before. `actions.ts` is the file that still imports Drizzle, which is why
-   the gate cannot go on until the writes move. Measured 2026-09-21: 12
-   violating imports across 11 files today. This is also what makes `apps/web`
-   testable: it still has **no automated test at all**.
-3. **Arithmetic and codec** — `bigint` milli-hours, integer JPY, unreduced
-   `{num, den}`, one `compareRatio` site, one jsonb codec. 13 domain modules,
-   20 `number` uses, 32 pinned assertions. Independent of tenancy; doing it
-   early means later stories are written against the right representation.
-4. **Watermark advisory locks** — needs `seq` allocation that Epic 2 and Epic 5
-   write. **Blocked**, and the only one of the four that is.
+What story 1.2 leaves for later, all in `deferred-work.md` (**109 entries**):
+the harness registry still carries read-era names; the Plan Work Package id
+`wp-new-<anchor>` is a global primary key (a second Plan collides); no
+dependency-cruiser rule has an automated test; pages still do some `bigint`
+arithmetic of their own; and CI never runs `next build`.
 
-### 2. Then story 1.1 slice B3
+### 2. Story 1.2's watermark slice — blocked
 
-`pnpm dev` in one command. Blocked on 1.2's RLS SQL (now exists) **and story
-2.1's migration** (does not). Sequence it after 1.2.
+Advisory locks before `seq` allocation. Needs Epic 2 and Epic 5's writers.
 
-### 3. Then the rest of Epic 1
+### 3. Story 1.1 slice B3
 
-Stories 1.3 through 1.9. Epic 1 is 156 h and is the calibration point for the
+`pnpm dev` in one command. Blocked on **story 2.1's migration**. Sequence it
+after 2.1.
+
+### 4. Then the rest of Epic 1
+
+Stories 1.4 through 1.9. Epic 1 is 156 h and is the calibration point for the
 whole estimate.
 
 ---
@@ -167,6 +190,11 @@ whole estimate.
   AD-1 graph. The dependency-cruiser rule names that exact path. Amending the
   spine makes the cached `epic-1-context.md` stale, so the next `/bmad-build`
   recompiles it.
+- **`apps/web → packages/domain` is allowed for `domain/present`'s entry
+  module only**, decided by the founder 2026-09-21 and recorded in AD-1: pages
+  import formatters and presentation types, never computation; figures needing
+  domain rules arrive from a use case. `present/index.ts`'s export list is
+  pinned by a test.
 - **The dependency-cruiser gate takes AC-6's wording, not full AD-1.** It bans
   `apps/*` importing a repository or Drizzle. Full AD-1 would also flag
   `apps/worker`'s `pg-boss` and `pg` and drag the queue-adapter move into
@@ -204,7 +232,11 @@ whole estimate.
   ```
   `REQUIRE_DB=1` additionally turns an unreachable database into a failure
   rather than a skip, which is what CI sets.
-- `.claude/launch.json` starts the web app on 3101 for the agent harness.
+- `.claude/launch.json` starts the web app on 3101 for the agent harness. It
+  reads `apps/web/.env.local` (gitignored) for `DATABASE_URL` and
+  `APP_DATABASE_URL`; create it with the two lines above if it is missing.
+- A shell without `pnpm` needs `corepack enable` once; `packageManager` pins
+  pnpm 12.4.2.
 - **The local clone goes stale**: work lands via PRs merged from other
   sessions. `git fetch` before measuring anything, or a stale ref reads exactly
   like a missing artifact.
