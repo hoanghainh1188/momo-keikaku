@@ -1,6 +1,6 @@
 import { getProjectReview } from '@/server/composition';
 import { valueOrNotFound } from '@/server/result';
-import { earnedProgress, hours, ZERO, type Mh } from '@momo/domain';
+import { earnedProgress, hours, type Mh } from '@momo/domain/present';
 import { Section } from '@/components/ui';
 import { GanttRow, ganttScale } from '@/components/gantt';
 
@@ -134,7 +134,7 @@ export default async function PlanPage({
                         scale={scale}
                         baseline={b ? { start: b.start, finish: b.finish } : null}
                         current={start && finish ? { start, finish } : null}
-                        earned={earnedProgress(ev?.pctComplete ?? ZERO)}
+                        earned={earnedProgress(ev?.pctComplete)}
                         isMilestone={w.isMilestone}
                         slipped={
                           w.isMilestone && b ? !w.milestoneDoneAt && bundle.input.asOf > b.finish : false

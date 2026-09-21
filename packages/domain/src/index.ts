@@ -8,5 +8,8 @@ export * from './evm';
 export * from './health';
 export * from './forecast';
 export * from './present';
+// Not re-exported by `./present`, so that `@momo/domain/present` — the one domain module a page
+// may import — does not carry it (see the header of present/index.ts).
+export * from './present/codec';
 export * from './review';
 export * from './client-view';

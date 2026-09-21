@@ -112,6 +112,12 @@ export interface ReadUseCase {
    */
   readonly mustSurface?: (state: DemoState) => string[];
   /**
+   * The floor under "the demo Tenant's result carries labelled data at all", when this read's
+   * result is legitimately smaller than the harness's default of 100 relabelled strings. State
+   * why beside it: a floor lowered to make a test pass is a gate removed.
+   */
+  readonly minimumLabels?: number;
+  /**
    * How the harness invokes a `write`. Required for one, forbidden otherwise.
    *
    * Given the port wired to the RESTRICTED role's handle and a test actor, for the same reason
@@ -124,8 +130,9 @@ export interface ReadUseCase {
 /**
  * Everything a Project bundle must carry, read out of the fixture.
  *
- * Both of today's use cases return the same bundle, so both declare this. A future read
- * that legitimately returns less declares its own — which is the point of putting it on
+ * The two bundle reads (`getProjectHeader`, `getProjectReview`) return the same bundle, so
+ * both declare this. A read that legitimately returns less declares its own, as the Client
+ * View and the Mapping surface do below — which is the point of putting it on
  * the entry rather than in the harness: "this use case returns less" becomes a statement
  * somebody writes down, not a gap nobody notices.
  *
@@ -176,6 +183,50 @@ export function projectBundleLabels(state: DemoState): string[] {
 }
 
 /**
+ * What the Client View must carry: the client's and the Project's names, the Milestones, and
+ * the Schedule to WBS level 2 — read out of the fixture as the projection selects them.
+ *
+ * Deliberately NOT `projectBundleLabels`: the projection is FR-34's client-safe type, with no
+ * Resource, Tracker Account, Ticket, Rule or Rate, so requiring those would be requiring a
+ * leak. The Milestone and Schedule rows come from the ACTIVE Baseline and the Current Plan's
+ * leaves, the same selection `computeReview` and `clientProjection` make.
+ */
+export function clientViewLabels(state: DemoState): string[] {
+  const baseline = state.baselineVersions.find((b) => b.seq === state.activeBaselineSeq);
+  const milestoneIds = new Set(baseline?.wps.filter((b) => b.isMilestone).map((b) => b.wpId));
+  return [
+    ...new Set([
+      state.fixture.project.name,
+      state.fixture.project.clientName,
+      ...state.wps.filter((w) => milestoneIds.has(w.id)).map((w) => w.name),
+      ...state.wps
+        .filter((w) => w.isLeaf && w.wbsCode.split('.').length <= 2)
+        .flatMap((w) => [w.wbsCode, w.name]),
+    ]),
+  ];
+}
+
+/**
+ * What the Mapping surface must carry: every leaf, non-milestone Work Package (the targets a
+ * Ticket can be mapped to) and every Mapping Rule.
+ *
+ * Its Tickets are NOT required one by one: the surface lists only the sixty carrying the most
+ * hours, and restating that selection here would be the use case again rather than a floor
+ * under it. They are still covered — the relative assertions compare them against the demo
+ * Tenant's own result, label for label.
+ */
+export function projectMappingLabels(state: DemoState): string[] {
+  return [
+    ...new Set([
+      ...state.wps
+        .filter((w) => w.isLeaf && !w.isMilestone)
+        .flatMap((w) => [w.id, w.wbsCode, w.name]),
+      ...state.fixture.mappingRules.flatMap((r) => [r.id, r.name]),
+    ]),
+  ];
+}
+
+/**
  * Every export of the use-case surface, reads and writes alike. (The name predates the writes;
  * `kind` is what tells them apart.)
  */
@@ -214,6 +265,42 @@ export const READ_USE_CASES: readonly ReadUseCase[] = [
         { projectId: target.projectId },
       ),
     mustSurface: projectBundleLabels,
+  },
+  {
+    name: 'getClientView',
+    kind: 'read',
+    why:
+      'The Client View preview (apps/web c/[projectId]): repo.ts loadReview, then the ' +
+      'client projection with the default visibility. Driven on its own because the ' +
+      'projection is what a client would see, so a foreign or demo string reaching it is the ' +
+      'leak that matters most, and because its not_found is what the page\'s 404 rests on.',
+    invoke: (deps, target) =>
+      readSurface.getClientView(
+        deps,
+        { tenantId: target.tenantId },
+        { projectId: target.projectId },
+      ),
+    mustSurface: clientViewLabels,
+    // The projection is FR-34's client-safe subset: names, Milestones and the WBS-level-2
+    // Schedule — no Resource, Ticket, Rule or Account. The demo result carries 84 labelled
+    // strings (measured 2026-09-21), against the 100 a bundle read clears many times over.
+    minimumLabels: 50,
+  },
+  {
+    name: 'getProjectMapping',
+    kind: 'read',
+    why:
+      'The Mapping surface (apps/web p/[projectId]/mapping): repo.ts loadReview, then the ' +
+      'current Mapping head joined to the pinned snapshot\'s Tickets, their hours and the ' +
+      'Work Package labels, top sixty by hours. The join runs over mapping_event and the ' +
+      'snapshot, so a foreign row surviving the load would surface here as a Ticket or a label.',
+    invoke: (deps, target) =>
+      readSurface.getProjectMapping(
+        deps,
+        { tenantId: target.tenantId },
+        { projectId: target.projectId },
+      ),
+    mustSurface: projectMappingLabels,
   },
   {
     name: 'mapTickets',

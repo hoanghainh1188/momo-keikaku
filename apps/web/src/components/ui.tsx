@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { present, type Metric } from '@momo/domain';
+import { present, type Metric } from '@momo/domain/present';
 
 export function Section({
   title,

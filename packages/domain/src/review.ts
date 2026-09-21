@@ -2,7 +2,7 @@ import { attribute, type AttributionResult, type Buckets } from './attribution';
 import type { HolidayCalendar, IsoDate, ReportingPeriod } from './calendar';
 import { computeEvm, type EvmResult, type WpMeasure } from './evm';
 import { computeForecast, type ForecastResult } from './forecast';
-import { computeHealth, type HealthColour, type HealthIndicator } from './health';
+import { computeHealth, isBehindPlan, type HealthColour, type HealthIndicator } from './health';
 import { mappingHead, type MappingHeadEntry } from './mapping';
 import type {
   BaselineVersion,
@@ -96,6 +96,13 @@ export interface ReviewResult {
   snapshot: { id: string; observedAt: string; ticketCount: number };
   measurementBasis: 'hours' | 'count';
   evm: EvmResult;
+  /**
+   * PV and EV in money, at the Project default Rate (`costOf`, half-even per figure). AC's money
+   * is `attribution.cumulative.totalJpy`, at the per-Resource Rate in force on each hour's date.
+   */
+  money: { pvJpy: Jpy; evJpy: Jpy };
+  /** SPI strictly below 1, compared exactly (`isBehindPlan`); false while SPI is unavailable. */
+  behindPlan: boolean;
   forecast: ForecastResult;
   health: { indicators: HealthIndicator[]; overall: HealthColour; overallNote: string | null };
   attribution: AttributionResult;
@@ -104,7 +111,8 @@ export interface ReviewResult {
     cumulative: Buckets;
     sharePeriod: Ratio | null;
     shareCumulative: Ratio | null;
-    components: { key: string; label: string; mh: Mh; jpy: Jpy }[];
+    /** `share` is the component's part of cumulative Unplanned Work; null while that is zero. */
+    components: { key: string; label: string; mh: Mh; jpy: Jpy; share: Ratio | null }[];
   };
   scopeLedger: { key: string; label: string; mh: Mh; share: Ratio }[];
   unmappedGroups: UnmappedGroup[];
@@ -319,6 +327,11 @@ export function computeReview(input: ReviewInput): ReviewResult {
     },
     measurementBasis,
     evm,
+    money: {
+      pvJpy: costOf(evm.pvMh, input.project.defaultRateYenPerHour),
+      evJpy: costOf(evm.evMh, input.project.defaultRateYenPerHour),
+    },
+    behindPlan: isBehindPlan(evm.spi),
     forecast,
     health,
     attribution,
@@ -341,7 +354,10 @@ export function computeReview(input: ReviewInput): ReviewResult {
           mh: c.catchAllOverflowMh,
           jpy: 0n,
         },
-      ],
+      ].map((component) => ({
+        ...component,
+        share: c.unplannedMh === 0n ? null : ratio(component.mh, c.unplannedMh),
+      })),
     },
     scopeLedger,
     unmappedGroups,

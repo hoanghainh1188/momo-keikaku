@@ -7,7 +7,7 @@ paradigm: 'modular monolith, hexagonal (ports & adapters) around a pure function
 scope: 'momo-keikaku v1: builds R0 and fixes the invariants that R1 and Post-Q1 must not break'
 status: final
 created: '2026-09-20'
-updated: '2026-09-21 (AD-1: composition-root carve-out; the dependency-cruiser gate on)'
+updated: '2026-09-21 (AD-1: composition-root carve-out; the dependency-cruiser gate on; web → domain/present)'
 binds: [FR-1, FR-2, FR-3, FR-4, FR-5, FR-6a, FR-6b, FR-7, FR-8, FR-9, FR-10, FR-11, FR-12, FR-13, FR-14, FR-15, FR-16, FR-17, FR-18, FR-19, FR-20, FR-21, FR-22, FR-23, FR-24, FR-25, FR-26, FR-27, FR-28, FR-29, FR-30, FR-31, FR-32, FR-33, FR-34, FR-35, FR-36, FR-37, FR-38, FR-39, FR-40, FR-41, FR-42, FR-43, NFR-S1, NFR-S2, NFR-S3, NFR-S4, NFR-S5, NFR-S6, NFR-S7, NFR-S8, NFR-D1, NFR-A1, NFR-C1, NFR-R1, NFR-R2, NFR-P1, NFR-I1, NFR-U1, NFR-O1]
 sources:
   - _bmad-output/planning-artifacts/sprint-change-proposal-2026-09-20.md (A-1 … A-6)
@@ -27,13 +27,14 @@ reviews_applied:
   - reviews/review-tech-currency-scheduling.md
   - reviews/review-adversarial-ad1-carve-out.md
   - reviews/review-adversarial-ad1-gate-on.md
+  - reviews/review-adversarial-ad1-web-present.md
 ---
 
 # Architecture Spine: momo-keikaku
 
 **Against PRD §7.3, this update sits in the left-hand column: it resolves OQ-13 and decomposes FR-6a, FR-6b and FR-43. It adds no FR, no NFR and no target beyond PRD §5.**
 
-This spine was produced headless, overnight, and then amended to apply the findings of four reviews (rubric, adversarial, reconcile-inputs, tech-currency); the resolution trail is in `reviews/resolution.md`. On 2026-09-20 it was updated with the founder present to carry the scheduler that `sprint-change-proposal-2026-09-20.md` restored to R0 — AD-25 through AD-30, with earlier decisions amended in place and their IDs unchanged. Every call tagged `[ASSUMPTION]` was made on the founder's behalf and is waiting for review. On 2026-09-21 AD-1 gained a second carve-out, `apps/web`'s composition root (story 1.2 slice 3), reviewed adversarially before it landed (`reviews/review-adversarial-ad1-carve-out.md`); the same day, once story 1.2 slice 4 had moved the writes, AD-1's temporary-violations bullet was replaced by what the `dependency-cruiser` gate actually enforces (`reviews/review-adversarial-ad1-gate-on.md`). Vocabulary follows PRD §3. Code names use the Glossary terms verbatim (for example `WorkPackage`, `TrackerSnapshot`, `ActualsLedgerEntry`, `PublishedSnapshot`).
+This spine was produced headless, overnight, and then amended to apply the findings of four reviews (rubric, adversarial, reconcile-inputs, tech-currency); the resolution trail is in `reviews/resolution.md`. On 2026-09-20 it was updated with the founder present to carry the scheduler that `sprint-change-proposal-2026-09-20.md` restored to R0 — AD-25 through AD-30, with earlier decisions amended in place and their IDs unchanged. Every call tagged `[ASSUMPTION]` was made on the founder's behalf and is waiting for review. On 2026-09-21 AD-1 gained a second carve-out, `apps/web`'s composition root (story 1.2 slice 3), reviewed adversarially before it landed (`reviews/review-adversarial-ad1-carve-out.md`); the same day, once story 1.2 slice 4 had moved the writes, AD-1's temporary-violations bullet was replaced by what the `dependency-cruiser` gate actually enforces (`reviews/review-adversarial-ad1-gate-on.md`); then the founder decided the open `apps/web → packages/domain` edge — allowed for `domain/present` only — and the gate gained its rule (`reviews/review-adversarial-ad1-web-present.md`). Vocabulary follows PRD §3. Code names use the Glossary terms verbatim (for example `WorkPackage`, `TrackerSnapshot`, `ActualsLedgerEntry`, `PublishedSnapshot`).
 
 ## Design Paradigm
 
@@ -61,6 +62,7 @@ flowchart LR
   WEB --> APP
   WRK --> APP
   WEB --> I18N
+  WEB -. presentation only .-> DOM
   WRK --> I18N
   APP --> DOM
   DB -. implements ports .-> APP
@@ -69,7 +71,7 @@ flowchart LR
   ADP --> DOM
 ```
 
-Arrows show allowed imports, plus AD-1's two carve-outs. Nothing imports `apps/*`. `domain` and `i18n` import nothing from the workspace.
+Arrows show allowed imports, plus AD-1's two carve-outs. The dotted `apps/web → packages/domain` arrow is presentation only: `domain/present`'s formatters and presentation types, nothing that computes (AD-1). Nothing imports `apps/*`. `domain` and `i18n` import nothing from the workspace.
 
 ## Invariants & Rules
 
@@ -78,17 +80,19 @@ Arrows show allowed imports, plus AD-1's two carve-outs. Nothing imports `apps/*
 - **Binds:** all
 - **Prevents:** metric code that quietly reads the DB or the clock, making Published Snapshots non-reproducible; UI code that bypasses authorisation by querying tables directly.
 - **Rule:**
-  - The import graph is exactly the one in the diagram above plus the two carve-outs below, and `dependency-cruiser` fails CI on any violation. `packages/domain` has no runtime dependencies except `zod`. `apps/web` and `apps/worker` call only `packages/app` use cases (and `packages/i18n` for text), never repositories or Drizzle directly, except through the carve-outs below.
+  - The import graph is exactly the one in the diagram above plus the two carve-outs below, and `dependency-cruiser` fails CI on any violation. `packages/domain` has no runtime dependencies except `zod`. `apps/web` and `apps/worker` call only `packages/app` use cases (and `packages/i18n` for text), never repositories or Drizzle directly, except through the carve-outs below. **One further edge, `apps/web` → `packages/domain/present`, and only its entry module** (`present/index.ts`): the display formatters (`hours`, `hoursSigned`, `share`, `yen`, `present`, …), the layout-geometry helpers (`earnedProgress`, `geometryFraction`, `cssPercent` — AD-4's layout-only float exception) and the presentation types it re-exports. A page imports nothing from the domain that computes: the figures that need domain rules arrive from a use case already computed — the Review's PV/EV money and Unplanned component shares, the SPI behind-plan flag, the Mapping rows, and the internal Client View preview (`/c/…` today renders `clientProjection` live through a use case; R1's Client View reads only the stored `outputs_client`, AD-12). `present/index.ts` never re-exports computation — a test pins its export list — and the codec in `present/codec.ts` is not a page's to call. Decided by the founder 2026-09-21. `apps/worker` has no such edge.
   - `Date.now()`, `new Date()` without arguments and `process.env` are forbidden outside `packages/adapters/clock` and `packages/app/config`. dependency-cruiser cannot see calls, so this is enforced by ESLint `no-restricted-syntax` (`NewExpression[callee.name='Date'][arguments.length=0]`, `CallExpression[callee.object.name='Date'][callee.property.name='now']`) and `no-restricted-properties` for `process.env`, with file-scoped overrides for the two allowed modules.
   - **Two carve-outs, each a named path rather than a pattern.** (1) `packages/db/auth` is the only sanctioned Better Auth ↔ Drizzle binding, exported to `apps/web` as an adapter that implements `IdentityPort` (AD-23). Role, membership and revocation changes never go through it; they go through `app` use cases so AD-14 still holds. (2) `apps/web/src/server/composition.ts`, `apps/web`'s **composition root**, is the one file in `apps/web` permitted to import `packages/db` (by any specifier). It builds the restricted-role handle, hands `packages/db`'s repository functions to the port(s) `packages/app` declares (a structural match TypeScript checks at that line) and constructs the use-case context. It wires; it never queries, and it exports use-case bindings only — never a `Db` handle, a repository function or a Drizzle schema to another file in the app. It never imports `db/repositories/schedule` or `db/repositories/plan-input` (AD-27). Any other app that needs a composition root names its file here first; `apps/worker` has none. Added 2026-09-21 by story 1.2 slice 3.
   - **What the `dependency-cruiser` gate enforces today** (`.dependency-cruiser.cjs`, `pnpm depcruise`; switched on by story 1.2 slice 4, after `actions.ts`'s writes moved onto use cases). It cruises `apps/` and `packages/` only, and it turns CI red but does not block a merge: branch protection is unavailable on the private free-plan repository, so every CI gate reports rather than blocks (decided 2026-09-20, recorded in the CI header). Within that scope it fails on:
     - any `apps/*` file importing Drizzle — the composition root included;
     - any `apps/web` file other than the composition root importing `packages/db`, except `packages/db/auth`; and any other app importing `packages/db` at all, `packages/db/auth` included;
+    - any `apps/web` file importing any `packages/domain` module other than `present/index.ts`, by any specifier — the barrel, another module or subpath, the codec;
     - the two scheduling edges below, and the composition root importing the schedule or plan-input repositories. These match no file yet (none of the three paths exists) and were proved live with temporary files; the two repositories may import each other;
     - an import it cannot resolve, so a broken resolver setup fails instead of letting an edge escape every rule.
   - **What it does not enforce yet**, so the first bullet's "fails CI on any violation" holds only for the edges above. Each is tracked in `deferred-work.md`:
-    - *Live violations, added to the gate when the code is gone:* `apps/worker` imports `pg-boss` and `pg` directly; and eight `apps/web` files import `packages/domain` directly — presentation helpers (`hours`, `hoursSigned`, `share`, `yen`, `present`, the `Metric` type) and domain logic (`clientProjection`, `DEFAULT_VISIBILITY`, `mappingHead`) — an edge the diagram does not draw — **whether to forbid it or add the arrow is an open decision**, and its rule lands with whichever fix is chosen.
-    - *Nothing to flag today, unenforced by scope choice, added with the next change to the config:* `apps/web` importing the raw `pg` driver; `packages/db` and `packages/app` importing each other; `packages/domain` importing anything but `zod`; every other edge of the diagram; and nothing outside `tests/` importing from it.
+    - *Live violations, added to the gate when the code is gone:* `apps/worker` imports `pg-boss` and `pg` directly.
+    - *Not an import rule, and tolerated for now:* pages still do plain `bigint` arithmetic and two date comparisons of their own without importing the domain (the Plan page's parent roll-up and its `slipped` and milestone-overdue flags, the Baselines page's per-version BAC, the Review page's planned-scope AC); nothing gates it.
+    - *Nothing to flag today, unenforced by scope choice, added with the next change to the config:* `apps/web` importing the raw `pg` driver; `apps/worker` importing `packages/domain` (the web-only rule does not reach it); `packages/db` and `packages/app` importing each other; `packages/domain` importing anything but `zod`; every other edge of the diagram; and nothing outside `tests/` importing from it.
     - *Not an import rule at all:* the composition root exporting use-case bindings only and never querying. A re-export from `packages/db` is an edge of `composition.ts` itself, so the gate cannot see it; `tests/web-composition.test.ts` pins its wiring, and review holds the rest.
     - `scripts/` (seed, policy generation, pg-boss migration) is operator tooling outside this graph, like `tests/`.
   - `tests/` sits outside this graph. The cross-tenant harness there wires `packages/app` to `packages/db` because it must drive both at once (AD-3); that is test-only wiring, not a carve-out. Nothing outside `tests/` imports from it.
@@ -123,7 +127,7 @@ Arrows show allowed imports, plus AD-1's two carve-outs. Nothing imports `apps/*
   - Effort is stored and summed as integer **milli-hours** (`bigint`; 1 h = 1000). Ticket counts are integers.
   - Money is integer **JPY**. The Tenant currency is fixed to JPY (FR-4).
   - Hours × Rate is computed as `round_half_even(milliHours × yenPerHour / 1000)` for each ledger entry, then summed.
-  - **Ratios are never floats.** CPI, SPI, TCPI and every share are `Ratio = { num: bigint, den: bigint }` inside `domain`, carried unreduced except by an explicit `reduce()`.
+  - **Ratios are never floats.** CPI, SPI, TCPI and every share are `Ratio = { num: bigint, den: bigint }` inside `domain`, carried unreduced except by an explicit `reduce()`. One exception, for layout only: `domain/present`'s geometry helpers (`geometryFraction` and the two built on it) turn a Ratio into a float for a bar's width or fill. That float is never compared, stored, summed or shown as a figure; the internal Client View preview currently carries one in its projection (tracked in `deferred-work.md`).
   - **Threshold comparisons use the exact value, never the rounded one**, by cross-multiplication: `spi ≥ 0.95` is `num × 100 ≥ den × 95`. A single `compareRatio(ratio, { num, den })` in `domain/health` is the only comparison site, so 0.9496 can never be green in one module and amber in another.
   - **Fractional spreads** (PV per working day across a WP's Baseline window, a BAC split across Resources) are allocated in integer milli-hours by **largest remainder**, with ties broken deterministically by (date ascending), then (resource id ascending). No module divides and rounds independently.
   - Rounding happens only in `packages/domain/present`: ratios to 2 decimals, hours to 1 decimal, yen to integer. That module is the only rounding site for both the UI and Published Snapshot outputs. [ASSUMPTION]
@@ -262,7 +266,7 @@ Arrows show allowed imports, plus AD-1's two carve-outs. Nothing imports `apps/*
   - `RequestContext { tenantId, userId, roles, projectIds, locale }` is resolved once per request from the session, through `resolveRequestContext` (AD-23). Every use case declares its allowed roles and checks project membership. The UI never authorises.
   - Client Viewer use cases (R1) live in `packages/app/client-view` and may read only `published_snapshot.outputs_client` for their invited Projects.
   - **Two client writes are explicitly allowed** and are the only ones: recording a Client View open (FR-36) and setting a notification opt-out. Both go through `client-view` use cases, are tenant-scoped, and write no other table.
-  - `outputs_client` is produced by `domain/present/clientProjection(outputsInternal, visibilityPolicy)`. It returns a separate TypeScript type that has no money, Rate, person, Tracker Account or Ticket-content fields, so the omission is checked at compile time. The Visibility Policy is event-sourced (`visibility_policy_event`) and its value is stored in `published_snapshot.inputs` (FR-35).
+  - `outputs_client` is produced by `domain/client-view`'s `clientProjection(outputsInternal, visibilityPolicy)` (a pure domain function, deliberately outside `domain/present`, whose entry module is the one `apps/web` may import — AD-1). It returns a separate TypeScript type that has no money, Rate, person, Tracker Account or Ticket-content fields, so the omission is checked at compile time. The Visibility Policy is event-sourced (`visibility_policy_event`) and its value is stored in `published_snapshot.inputs` (FR-35).
   - Anything outside the allowed set returns `not_found` (FR-2).
   - Client routes live under their own route group (`/c/...`) with their own layout.
 
@@ -756,7 +760,7 @@ flowchart TB
 | FR-28, FR-29 Reconciliation Review, Dispositions | `app/review`, `disposition_event`, the pinned `schedule_run` | AD-10, AD-22, AD-14, AD-26 |
 | FR-30–FR-32 EVM, Health, forecast | `domain/evm`, `domain/health`, `domain/forecast` | AD-4, AD-8, AD-10 |
 | FR-33 roll-ups (Post-Q1) | `app/rollup` over the same compute | AD-8, AD-9, AD-10 |
-| FR-34–FR-37 Visibility, Publish, Client View, Risks (R1) | `app/publish`, `app/client-view`, `domain/present` | AD-10, AD-12 |
+| FR-34–FR-37 Visibility, Publish, Client View, Risks (R1) | `app/publish`, `app/client-view`, `domain/client-view`, `domain/present` | AD-10, AD-12 |
 | FR-38, FR-39 exports | `app/export`, `adapters/excel` | AD-10, AD-16, AD-5 |
 | FR-40 seats (R1) | `app/tenant` | AD-3, AD-23 |
 | NFR-A1 audit | `app/audit`, `operator_audit` | AD-14, AD-19 |

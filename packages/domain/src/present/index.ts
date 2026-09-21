@@ -1,4 +1,17 @@
-import { divRoundHalfEven, reduce, type Jpy, type Metric, type Mh, type Ratio } from '../units';
+import { divRoundHalfEven, reduce, ZERO, type Jpy, type Metric, type Mh, type Ratio } from '../units';
+
+/**
+ * `@momo/domain/present` is the ONE domain module `apps/web` may import (AD-1, decided
+ * 2026-09-21; `.dependency-cruiser.cjs` rule `web-to-domain-present-only`). So it carries the
+ * presentation TYPES a page or component names, re-exported as types only — nothing that
+ * computes crosses with them. Everything a page used to compute from the domain comes from a
+ * use case or from the Review result instead.
+ *
+ * The codec (`./codec`) is deliberately NOT re-exported here: it is how stored values are
+ * written and read, which is not a page's to call. It reaches the rest of the codebase through
+ * the `@momo/domain` barrel, which a page may not import.
+ */
+export type { Jpy, Metric, Mh, Ratio } from '../units';
 
 /**
  * AD-4: the ONLY rounding site, for both the UI and published outputs.
@@ -68,11 +81,14 @@ export const geometryFraction = (r: Ratio): number => Number(r.num) / Number(r.d
 /** A ratio as a CSS percentage length, for layout geometry only (see `geometryFraction`). */
 export const cssPercent = (r: Ratio): string => `${geometryFraction(r) * 100}%`;
 
-/** Earned progress for a Gantt bar: its fill (geometry only) and its whole-percentage label. */
-export const earnedProgress = (r: Ratio): { fraction: number; label: string } => ({
-  fraction: geometryFraction(r),
-  label: wholePercent(r),
-});
+/**
+ * Earned progress for a Gantt bar: its fill (geometry only) and its whole-percentage label. A
+ * missing ratio (a Work Package with no measure — a parent, a milestone) presents as zero.
+ */
+export function earnedProgress(r: Ratio | undefined): { fraction: number; label: string } {
+  const exact = r ?? ZERO;
+  return { fraction: geometryFraction(exact), label: wholePercent(exact) };
+}
 
 export interface PresentedMetric {
   text: string;
@@ -105,4 +121,3 @@ export function present(m: Metric): PresentedMetric {
   }
 }
 
-export * from './codec';

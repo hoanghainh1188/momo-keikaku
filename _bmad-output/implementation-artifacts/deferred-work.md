@@ -407,6 +407,7 @@ work started and was deliberately deferred, with the evidence for the split.
 - source_spec: `_bmad-output/planning-artifacts/architecture/architecture-momo-keikaku-2026-09-20/ARCHITECTURE-SPINE.md`
   summary: Eight `apps/web` files import `packages/domain` directly (`hours`, `hoursSigned`, `share`, `yen`, `present`, `Metric`, `clientProjection`, `DEFAULT_VISIBILITY`, `mappingHead`), an edge AD-1's diagram does not draw, and the dependency-cruiser gate does not forbid it.
   evidence: Found by the adversarial review of the AD-1 gate-on amendment, 2026-09-21. AD-1 says apps call only `packages/app` use cases and `packages/i18n`. Most imports are presentation formatters; `clientProjection` and `mappingHead` are domain logic run in a page. Open decision for the founder: add a `web → domain` arrow scoped to presentation (and move the two functions behind use cases), or forbid the edge and move the formatters to `packages/app`/presentation. Whichever is chosen, the gate gains the matching rule when that fix lands — forbidding the edge first would be red on day one.
+  resolved: YES, 2026-09-21 in `spec-web-present-edge.md`. The founder allowed the edge for `domain/present` only. Every `apps/web` import of the domain is now `@momo/domain/present` (formatters plus the `Mh`/`Ratio`/`Metric`/`Jpy` types it re-exports); `clientProjection` + `DEFAULT_VISIBILITY` moved behind the `getClientView` use case and `mappingHead` + the Ticket sort behind `getProjectMapping`, both registered in the cross-tenant harness. `.dependency-cruiser.cjs` rule `web-to-domain-present-only` forbids `apps/web` → `packages/domain` except `packages/domain/src/present/index.ts` — the codec in `present/codec.ts` included, which `present/index.ts` no longer re-exports — watched to fail on the barrel, a `review` subpath, the codec subpath and a relative path. The ARCHITECTURE-SPINE AD-1 amendment follows separately.
 
 - source_spec: `_bmad-output/planning-artifacts/architecture/architecture-momo-keikaku-2026-09-20/ARCHITECTURE-SPINE.md`
   summary: "Nothing outside `tests/` imports from it" (AD-1) is unenforced: `pnpm depcruise` cruises `apps/` and `packages/` only.
@@ -419,6 +420,7 @@ work started and was deliberately deferred, with the evidence for the split.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-2-arithmetic-and-codec.md`
   summary: The Review page now calls non-presentation domain helpers (`costOf`, `ratio`, `isBehindPlan`, `compareBigint`, `sum`) where it used to do the same arithmetic inline, which widens what the open `apps/web → packages/domain` edge carries.
   evidence: Found while replacing the pages' inline rounding and comparisons (slice 5). No new importing file — the gantt component takes an already-presented `earned` prop instead — but PV/EV money on the Review (`yen(costOf(pvMh, defaultRate))`), a share of the Unplanned total, and the "behind plan" wording are still derived in a page. They belong in the Review's result (or a presentation layer) whichever way the web → domain decision goes; moving them is a new field on `ReviewResult`, which this slice's Never excluded.
+  resolved: YES, 2026-09-21 in `spec-web-present-edge.md`. `ReviewResult` gained `money: { pvJpy, evJpy }` (`costOf` at the Project default Rate), `behindPlan` (`isBehindPlan`) and each Unplanned component's `share` (null while cumulative Unplanned is zero); the Review page reads them and imports nothing that computes. `demo-golden.test.ts` pins all three at the baseline commit's rendered values.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-2-arithmetic-and-codec.md`
   summary: `audit_log.payload` is decoded through the codec only by the write harness; no product code reads it yet, so its decode schema lives in `tests/cross-tenant-writes.test.ts`.
@@ -435,3 +437,28 @@ work started and was deliberately deferred, with the evidence for the split.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-2-arithmetic-and-codec.md`
   summary: The Review page's own derivations — PV/EV yen, the Unplanned component share, % complete, Gantt progress — are covered only by the manual identical-HTML diff.
   evidence: Review round 1 (V3). `apps/web` has no render test; moving these into `ReviewResult` (already recorded) would put them under `demo-golden.test.ts`.
+  resolved: PARTIAL, 2026-09-21 in `spec-web-present-edge.md`. PV/EV yen and the component shares are now `ReviewResult` fields pinned by `demo-golden.test.ts`. % complete and Gantt progress are still presented in the page (`wholePercent`, `earnedProgress`) and covered by the identical-HTML diff only.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-web-present-edge.md`
+  summary: The ARCHITECTURE-SPINE's AD-1 (and epic-1-context.md's "open decision" paragraph) still describe the `apps/web → packages/domain` edge as undrawn and undecided, though the code, the rule and this log now say `domain/present` only.
+  evidence: The spec's Never list forbade the spine edit in this build ("the AD-1 amendment follows separately"). The amendment should draw the arrow to `domain/present` alone, name the codec as excluded, and add `web-to-domain-present-only` to "what the dependency-cruiser gate enforces now".
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-web-present-edge.md`
+  summary: The cross-tenant harness sanctions one float by KEY NAME: a non-integer number under any key called `fraction` is canonicalised as text instead of being refused by the codec.
+  evidence: Found when `getClientView` joined the harness: the client projection carries `earnedProgress`'s layout-geometry `fraction` (slice 5's one sanctioned float), and `canonicalise` serialises through the codec, which refuses floats. The exemption is keyed on the field name, so a float figure that happened to be named `fraction` would pass the harness's multiset comparison. Tightening needs the harness to know the path of the one geometry field, or the projection to carry geometry as an exact Ratio turned into a float only in the component — the latter changes a domain type this spec's Never list held still.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-web-present-edge.md`
+  summary: Pages still do plain `bigint` arithmetic of their own — the Plan page's parent roll-up (`rollUp`), the Review page's planned-scope AC (`mappedBaselinedMh + catchAllMh`), the Baselines page's per-version BAC (now a native `reduce`).
+  evidence: None of it imports the domain, so the new rule and the intent's "a page imports nothing that computes" both hold; but it is still arithmetic in an inbound adapter. The Baselines total was kept native, as the spec allowed. Moving the Plan roll-up and the planned-scope AC into a use case or `ReviewResult` would finish the job; nothing gates it today. UPDATE 2026-09-21 (AD-1 web → domain/present review): the Plan page also decides two Divergence-style flags itself — `slipped` (current finish after the Baseline's) and milestone overdue — which belong in a use-case result with the rest.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-web-present-edge.md`
+  summary: No dependency-cruiser rule has an automated test that it still fires; every rule (`apps-not-to-drizzle`, `apps-not-to-db`, `other-apps-not-to-db`, `web-to-domain-present-only`, the scheduling rules, `not-to-unresolvable`) was watched to fail by hand once.
+  evidence: Review round 1 (V2/B1). `pnpm depcruise` passing shows only that the code is clean today; a loosened `pathNot` or a typo in `to.path` leaves CI green. `tests/lint-fences.test.ts` is the pattern: run dependency-cruiser's API on planted in-memory or temp-dir imports and assert each rule's name appears. Do it for all rules at once.
+
+- source_spec: `_bmad-output/planning-artifacts/architecture/architecture-momo-keikaku-2026-09-20/ARCHITECTURE-SPINE.md`
+  summary: No rule stops `apps/worker` importing `packages/domain`; `web-to-domain-present-only` starts from `^apps/web/` only, and AD-1 says the worker has no such edge.
+  evidence: Found by the adversarial review of the AD-1 web → domain/present amendment, 2026-09-21. Nothing violates it today (the worker imports only `@momo/app` and `pg-boss`/`pg`). Green to add: `from ^apps/(?!web/)`, `to ^packages/domain/`, with the next change to `.dependency-cruiser.cjs`.
+
+- source_spec: `_bmad-output/planning-artifacts/architecture/architecture-momo-keikaku-2026-09-20/ARCHITECTURE-SPINE.md`
+  summary: The Review's SV note says "Ahead of plan" at SV = 0 while the SPI note, from `behindPlan`, says "on or ahead of plan".
+  evidence: Pre-existing wording (`svMh < 0n`, `review/page.tsx`), rejected at the slice 5 code review as pre-existing; recorded by the AD-1 web → domain/present review so it is tracked. Fix with the rest of the page's own decisions: an "On plan" case driven from the Review result.

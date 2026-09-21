@@ -4,6 +4,12 @@ import { fileURLToPath } from 'node:url';
 export default defineConfig({
   resolve: {
     alias: {
+      // Before the bare name: an alias matches its key as a PREFIX too, so without this entry
+      // `@momo/domain/present` would resolve to `.../src/index.ts/present`. It is the one
+      // domain subpath `apps/web` imports (`.dependency-cruiser.cjs`, web-to-domain-present-only).
+      '@momo/domain/present': fileURLToPath(
+        new URL('./packages/domain/src/present/index.ts', import.meta.url),
+      ),
       '@momo/domain': fileURLToPath(new URL('./packages/domain/src/index.ts', import.meta.url)),
       '@momo/db': fileURLToPath(new URL('./packages/db/src/index.ts', import.meta.url)),
       '@momo/app': fileURLToPath(new URL('./packages/app/src/index.ts', import.meta.url)),

@@ -62,6 +62,22 @@ module.exports = {
       },
     },
     {
+      name: 'web-to-domain-present-only',
+      severity: 'error',
+      comment:
+        'AD-1 (decided 2026-09-21): apps/web may import packages/domain for PRESENTATION only — ' +
+        '`@momo/domain/present`, the formatters and the presentation types it re-exports — and ' +
+        'nothing that computes. Not the `@momo/domain` barrel, not another module by subpath, ' +
+        'and not present/codec.ts, which present/index.ts deliberately does not re-export: ' +
+        'writing and reading stored values is not a page\'s to do. A figure a page needs comes ' +
+        'from a packages/app use case or the Review result.',
+      from: { path: '^apps/web/' },
+      to: {
+        path: '^packages/domain/',
+        pathNot: '^packages/domain/src/present/index[.]ts$',
+      },
+    },
+    {
       name: 'other-apps-not-to-db',
       severity: 'error',
       comment:

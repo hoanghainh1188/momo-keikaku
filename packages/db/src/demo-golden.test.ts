@@ -95,6 +95,22 @@ describe('demo dataset — golden EVM figures', () => {
     expect(hours(r.unplanned.cumulative.unplannedMh)).toBe('216.8');
   });
 
+  it('carries the figures the Review page used to compute itself, as it rendered them', () => {
+    // Moved off the page with the web → domain/present edge: each component's share of
+    // Unplanned Work, PV/EV money at the Project default Rate, and "behind plan". The texts
+    // are the baseline commit's rendered HTML.
+    const shares = Object.fromEntries(
+      r.unplanned.components.map((c) => [c.key, c.share === null ? null : share(c.share)]),
+    );
+    expect(shares).toEqual({
+      unmapped: '76.6%',
+      'non-baselined': '0.0%',
+      'catch-all-overflow': '23.4%',
+    });
+    expect(r.money).toEqual({ pvJpy: 5_839_220n, evJpy: 5_323_172n });
+    expect(r.behindPlan).toBe(true);
+  });
+
   it('shows Unplanned Work in the 10–20% amber band for the period', () => {
     expect(share(r.unplanned.sharePeriod!)).toBe('16.8%');
     expect(share(r.unplanned.shareCumulative!)).toBe('13.0%');
