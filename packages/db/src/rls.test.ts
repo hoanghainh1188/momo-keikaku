@@ -5,7 +5,7 @@ import { closeAllPools, getDb } from './client';
 import * as s from './schema';
 import {
   APPEND_ONLY,
-  APP_PRIVILEGES,
+  appPrivilegesOf,
   CANONICAL_MAINTENANCE_ROLE,
   REGISTERED_TABLES,
   TABLE_REGISTRY,
@@ -318,9 +318,20 @@ describe.skipIf(!reachable)('the registry is the database, and the database is t
       return rows.map((row) => row.table_name);
     });
 
+    // The one sanctioned exception is the tenant-membership bridge (`tenantBridge`), which
+    // carries `tenant_id` and is read before any Tenant is known. `registry.test.ts` pins that
+    // exactly one table carries the flag.
     const wronglyExempt = TABLE_REGISTRY.filter(
-      (entry) => entry.tenantColumn === null && columns.includes(entry.table),
+      (entry) =>
+        entry.tenantColumn === null && entry.tenantBridge !== true && columns.includes(entry.table),
     ).map((entry) => entry.table);
+    const bridgesWithoutColumn = TABLE_REGISTRY.filter(
+      (entry) => entry.tenantBridge === true && !columns.includes(entry.table),
+    ).map((entry) => entry.table);
+    expect(
+      bridgesWithoutColumn,
+      `the registry flags these tables as the tenant bridge and they carry no tenant_id: ${bridgesWithoutColumn.join(', ')}`,
+    ).toEqual([]);
     const wronglyOwned = TABLE_REGISTRY.filter(
       (entry) => entry.tenantColumn !== null && !columns.includes(entry.table),
     ).map((entry) => entry.table);
@@ -362,6 +373,22 @@ describe.skipIf(!reachable)('FORCE row-level security and the policy are on ever
       `these tenant-owned tables have no '${TENANT_POLICY}' policy: ${withoutPolicy.join(', ')}. ` +
         'RLS with no policy denies everything; RLS with a missing policy on one table leaks it.',
     ).toEqual([]);
+  });
+
+  it('leaves the identity tables and the membership bridge without row-level security (story 1.4)', async () => {
+    // They are read to resolve WHICH Tenant a request acts in, so a tenant policy on any of them
+    // would make every session invisible. They must exist, and carry no RLS and no policy.
+    const { flags, policies } = await readPolicyCatalog();
+    const identity = ['auth_user', 'session', 'account', 'verification', 'tenant_membership'];
+    for (const table of identity) {
+      const flag = flags.find((row) => row.relname === table);
+      expect(flag, `${table} does not exist — run drizzle-kit push`).toBeDefined();
+      expect(flag!.relrowsecurity, `${table} has row-level security switched on`).toBe(false);
+      expect(
+        policies.filter((row) => row.tablename === table).map((row) => row.policyname),
+        `${table} carries a policy`,
+      ).toEqual([]);
+    }
   });
 
   it('holds the generator\'s own predicate in every policy — not merely a policy by that name', async () => {
@@ -493,7 +520,7 @@ describe.skipIf(!reachable)('FORCE row-level security and the policy are on ever
 
     for (const entry of TABLE_REGISTRY) {
       const actual = [...(effective.get(entry.table) ?? [])].sort();
-      const expected = [...APP_PRIVILEGES[entry.class]].sort();
+      const expected = [...appPrivilegesOf(entry)].sort();
       expect(
         actual,
         `${entry.table} (${entry.class}): the application role can do something the registry ` +

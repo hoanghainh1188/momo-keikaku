@@ -17,6 +17,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { decode } from '@momo/domain';
+import { auditActorOf } from '../packages/app/src/authz/request-context';
 import type { WriteDeps } from '../packages/app/src/ports/write-deps';
 import type { AppError } from '../packages/app/src/result';
 import { getDb, getPool, schema, type Db } from '../packages/db/src/client';
@@ -25,6 +26,7 @@ import { TENANT_OWNED } from '../packages/db/src/table-classes';
 import { inTenantTransaction } from '../packages/db/src/tenant-transaction';
 import { withTenant } from '../packages/db/src/with-tenant';
 import type { InvokeWrite, WriteTarget } from './read-use-cases';
+import { HARNESS_USER_ID } from './request-context';
 
 export interface HarnessEnv {
   /** DATABASE_URL: the owning role. */
@@ -82,8 +84,11 @@ export function owner(): Db {
   return getDb(env().ownerUrl!);
 }
 
-/** Distinct from every fixture actor, so the rows a write lands can be told apart. */
-export const TEST_ACTOR = 'user:xtprobe-writer';
+/**
+ * Distinct from every fixture actor, so the rows a write lands can be told apart. Derived from the
+ * harness's RequestContext user (story 1.4: the actor is `user:<ctx.userId>`, never a deps value).
+ */
+export const TEST_ACTOR = auditActorOf({ userId: HARNESS_USER_ID });
 
 /**
  * The Clock the organisation writes are stamped with — fixed, and distinct from every Project
@@ -118,7 +123,6 @@ export type IdPort = ReturnType<typeof idPort>;
 export function restrictedWriteDeps(ids: IdPort) {
   return {
     handle: getDb(env().appUrl!),
-    actor: TEST_ACTOR,
     clock: { now: () => TEST_NOW },
     ids,
     transaction: inTenantTransaction,

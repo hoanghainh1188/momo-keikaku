@@ -1,7 +1,7 @@
 import { compareBigint, mappingHead, type MappingEvent, type Mh, type ReviewResult } from '@momo/domain';
 import type { Result } from '../result';
 import type { ProjectReadDeps, ProjectReview } from '../ports/project-read';
-import type { UseCaseContext } from './context';
+import type { RequestContext } from '../authz/request-context';
 import { runProjectRead, type ProjectInput } from './project-input';
 
 /** How many Tickets the Mapping surface lists: the ones carrying the most hours. */
@@ -116,7 +116,7 @@ export function toProjectMapping({ bundle, review }: ProjectReview): ProjectMapp
  */
 export async function getProjectMapping<Handle>(
   deps: ProjectReadDeps<Handle>,
-  ctx: UseCaseContext,
+  ctx: RequestContext,
   input: ProjectInput,
 ): Promise<Result<ProjectMapping>> {
   return runProjectRead(ctx, input, async (tenantId, projectId) =>

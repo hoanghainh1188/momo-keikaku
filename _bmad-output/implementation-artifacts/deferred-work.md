@@ -571,3 +571,33 @@ work started and was deliberately deferred, with the evidence for the split.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-4-identity-and-request-context.md`
   summary: The email + password sign-in server action has no rate limit; Better Auth's limiter runs only in its HTTP router, which the action bypasses.
   evidence: Spec review of story 1.4 slice 1 (finding 6); deferred on purpose by the founder 2026-09-21 because slice 1 runs locally only. Needs a per-email + per-IP throttle before any deployment (Epic 8) — or route sign-in through the HTTP endpoint.
+
+## Deferred from: implementation of spec-1-4-identity-and-request-context (2026-09-21)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-identity-and-request-context.md`
+  summary: The Node-runtime middleware, Better Auth and `pg` in the Next bundles are verified on `next dev` only; CI never runs `next build`.
+  evidence: Checked by hand on `next dev` (port 3101): the middleware compiled with `pg` (already in `serverExternalPackages`), redirected signed-out requests, slid a session and forwarded its `Set-Cookie`. Dropping `@momo/db-auth` from `transpilePackages` or a bundling regression stays green in every gate. Same fix as the other "CI never runs `next build`" entries.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-identity-and-request-context.md`
+  summary: The sign-in FORM (the `useActionState` client component and its generic error) is exercised by no automated test; the flow underneath is.
+  evidence: `tests/identity.test.ts` drives sign-in, refusal, sliding, idle expiry, tampering and sign-out through `auth.api` and the bindings; the manual check signed in through `/api/auth/sign-in/email` with curl and posted the mapping and sign-out forms without JavaScript. Typing a password into the browser form was not done by the implementing agent. A Playwright pass is the real fix (same entry as the web-layer coverage one above).
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-identity-and-request-context.md`
+  summary: The top bar shows only the signed-in user's role; `RequestContext` carries no name, and the `{ userId, email, locale }` identity lookup is deferred to story 1.7.
+  evidence: The hard-coded "Linh · PM" chip was replaced by the role from the context (it was wrong for `hoang`). Showing the name needs the IdentityPort lookup AD-23 now assigns to its first reader.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-identity-and-request-context.md`
+  summary: The idle timeout has up to five minutes of slack, and a fixture-mode Clock does not move it.
+  evidence: `updateAge` is 5 minutes, so the expiry is pushed forward at most every 5 minutes; a session is refused 8 h after its last refresh, which can be up to 5 minutes before its last request. Session times are Better Auth's own `Date` (the AD-15 exception), so story 1.8's fixture clock will not affect them.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-identity-and-request-context.md`
+  summary: A local database created before this story needs `DROP TABLE app_user` before `drizzle-kit push`, which otherwise stops on an interactive rename prompt.
+  evidence: Measured locally: push asks whether `auth_user` is `app_user` renamed and fails with no TTY. CI starts from an empty database and is unaffected. README-DEMO.md also still says "No authentication"; it predates this story and needs the sign-in steps (SEED_DEMO_PASSWORD, the four new env keys).
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-identity-and-request-context.md`
+  summary: `/` still redirects every signed-in user to the demo Project (`/p/prj-ec2/review`) instead of a Project from their membership.
+  evidence: `apps/web/src/app/page.tsx` predates sign-in; harmless while the demo Tenant is the only one, wrong as soon as a second Tenant or a PM of other Projects exists.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-identity-and-request-context.md`
+  summary: The middleware redirects an expired session's server-action POST with 307 (unverified, medium if real).
+  evidence: A 307 replays the POST against `/sign-in`; a 303 may be correct for non-GET. Settle it by posting a Mapping form in `next dev` with an expired session, with and without JS, and seeing where the browser lands.

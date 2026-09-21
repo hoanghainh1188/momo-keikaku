@@ -24,8 +24,24 @@ pnpm install
 export DATABASE_URL=postgres://momo:momo@localhost:55433/momo_keikaku
 export APP_DATABASE_URL=postgres://momo_app:momo_app@localhost:55433/momo_keikaku
 
+# Sign-in (story 1.4). SEED_DEMO_PASSWORD is required by `pnpm seed`: it becomes the password
+# of the two demo users. The web app needs the Better Auth pair (put them in
+# apps/web/.env.local too, since `next dev` reads that file). SESSION_IDLE_TIMEOUT_HOURS is
+# optional (whole hours, default 8).
+export SEED_DEMO_PASSWORD=choose-a-demo-password
+export BETTER_AUTH_SECRET=a-local-secret-of-at-least-32-characters
+export BETTER_AUTH_URL=http://localhost:3101
+# export SESSION_IDLE_TIMEOUT_HOURS=8
+
 pnpm demo
 ```
+
+Every page asks you to sign in first. Sign in as **`linh@momo-digital.example`** (the PM) or
+**`hoang@momo-digital.example`** (the Tenant Admin), with the `SEED_DEMO_PASSWORD` you set.
+
+> **An older local database** (created before story 1.4) still has the `app_user` table, and
+> `drizzle-kit push` stops on an interactive rename prompt for it. Drop it once, then push:
+> `docker exec momo-keikaku-postgres psql -U momo -d momo_keikaku -c 'DROP TABLE IF EXISTS app_user'`.
 
 That one command starts Postgres 18 in docker compose, applies the schema, creates the
 `momo_migrator`, `momo_app` and `momo_maintenance` roles with the pg-boss schema, applies the
@@ -168,7 +184,8 @@ Screenshots: `_bmad-output/demo-screenshots/`.
 
 Deliberately out of scope for this demo (from the build brief):
 
-- **No authentication.** A single seeded PM session; no sign-in, no roles enforced.
+- **Email + password sign-in only, and no roles enforced.** Two seeded users; no Google
+  sign-in, no password reset, no revocation yet, and role checks arrive with story 1.5.
 - **No multi-tenant isolation.** `tenant_id` is on every table, but Row Level Security,
   composite foreign keys and the non-owner application role are not set up (AD-3).
 - **No pg-boss worker.** Snapshots are replayed once at seed time, not on a schedule.

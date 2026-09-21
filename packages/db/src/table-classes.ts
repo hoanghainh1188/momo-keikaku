@@ -23,10 +23,20 @@
  *
  * `tenantColumn` is the second, independent axis. A table is *tenant-owned* when it
  * carries one, and a tenant-owned table gets ENABLE + FORCE row-level security and the
- * isolation policy. 17 of the 18 tables today carry `tenant_id`; `tenant` itself does not
- * — it is the table the column points at — so it is `global`, which is the class for rows
- * that exist before any tenant is resolved (the identity tables and the tenant-membership
- * bridge join it in story 1.4).
+ * isolation policy. 16 of the 22 tables today are tenant-owned. `tenant` itself is not — it is
+ * the table the column points at — so it is `global`, which is the class for rows that exist
+ * before any tenant is resolved. Story 1.4 slice 1 put the four Better Auth tables and the
+ * tenant-membership bridge in that class beside it.
+ *
+ * TWO PER-ENTRY EXCEPTIONS, each stated where it applies rather than by a new class:
+ *
+ *   * `appPrivileges` overrides the class's grant. The four Better Auth tables are `global`
+ *     (no tenant policy) but Better Auth writes them on the application role's connection, so
+ *     they need DML; `tenant` and `tenant_membership` keep the class's SELECT.
+ *   * `tenantBridge` marks the ONE table that carries `tenant_id` without row-level security:
+ *     `tenant_membership`, read to decide which Tenant a request acts in, and so read before any
+ *     Tenant is known. `rls.test.ts` otherwise fails a `tenant_id` column with a null
+ *     `tenantColumn`, and `registry.test.ts` fails the flag on any second table.
  */
 
 /** AD-21's five classes. A table has exactly one. */
@@ -67,11 +77,22 @@ export interface TableEntry {
    * allocation). This field is what keeps the collision from being a live bug until then.
    */
   readonly clientAllocatedSeq?: true;
+  /**
+   * The application role's privileges on this table when they differ from its class's
+   * (`APP_PRIVILEGES`). Read through `appPrivilegesOf`, never directly, so the generator and the
+   * catalog assertion cannot disagree about which one applies.
+   */
+  readonly appPrivileges?: readonly string[];
+  /**
+   * True for the tenant-membership bridge alone: a table that carries `tenant_id` and has NO
+   * tenant policy, because it is what the Tenant is resolved from. Exactly one table may carry it.
+   */
+  readonly tenantBridge?: true;
 }
 
 /**
- * The 18 tables of this release (story 1.3 slice 2 added `program`), in dependency order (the
- * order `seed.ts` writes them in reverse for its TRUNCATE).
+ * The 22 tables of this release (story 1.3 slice 2 added `program`; story 1.4 slice 1 removed
+ * `app_user` and added the four Better Auth tables and `tenant_membership`), in dependency order.
  *
  * Nine are insert-only today and are classed `append-only` accordingly:
  * baseline_version, baseline_wp, tracker_snapshot, ticket_observation,
@@ -85,6 +106,41 @@ export const TABLE_REGISTRY: readonly TableEntry[] = [
     why: 'The Tenant row itself. It is what `tenant_id` points at, so it cannot be discriminated by one.',
   },
   {
+    table: 'auth_user',
+    class: 'global',
+    tenantColumn: null,
+    why: 'A person (Better Auth\'s user model, story 1.4). One user may belong to several Tenants, so no Tenant owns the row.',
+    appPrivileges: ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+  },
+  {
+    table: 'session',
+    class: 'global',
+    tenantColumn: null,
+    why: 'A signed-in browser. Resolved before the Tenant is known; its active Tenant is validated against tenant_membership on every request.',
+    appPrivileges: ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+  },
+  {
+    table: 'account',
+    class: 'global',
+    tenantColumn: null,
+    why: 'A user\'s credential (the password hash; Google later). Belongs to the person, not to a Tenant.',
+    appPrivileges: ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+  },
+  {
+    table: 'verification',
+    class: 'global',
+    tenantColumn: null,
+    why: 'Better Auth\'s one-time tokens (password reset, story 1.4 slice 4). Issued before any Tenant is known.',
+    appPrivileges: ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+  },
+  {
+    table: 'tenant_membership',
+    class: 'global',
+    tenantColumn: null,
+    why: 'The bridge: which Tenants a user belongs to, as which role. Read to resolve the Tenant, so it cannot be filtered by one. Read by resolveRequestContext alone; written by audited use cases only (slice 2).',
+    tenantBridge: true,
+  },
+  {
     table: 'department',
     class: 'mutable-audited',
     tenantColumn: 'tenant_id',
@@ -95,12 +151,6 @@ export const TABLE_REGISTRY: readonly TableEntry[] = [
     class: 'mutable-audited',
     tenantColumn: 'tenant_id',
     why: 'Org shape between Department and Project (FR-1). Created and renamed by Tenant Admins; every change is audited (story 1.3 slice 2).',
-  },
-  {
-    table: 'app_user',
-    class: 'mutable-audited',
-    tenantColumn: 'tenant_id',
-    why: 'Names and roles change. Story 1.4 replaces this with the identity tables plus the membership bridge.',
   },
   {
     table: 'project',
@@ -198,7 +248,8 @@ export const APP_PRIVILEGES: Readonly<Record<TableClass, readonly string[]>> = {
   'mutable-audited': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
   'derived': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
   // Read-only for the application role: rows here are created by the owner (the seed
-  // today, the tenant-provisioning use case in story 1.3).
+  // today, the tenant-provisioning use case in story 1.3). The Better Auth tables are the
+  // stated exception, per entry (`appPrivileges`).
   'global': ['SELECT'],
   'operational': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
 } as const;
@@ -247,6 +298,16 @@ export const APPEND_ONLY: readonly TableEntry[] = TABLE_REGISTRY.filter(
  *  SECURITY DEFINER allocator: `MAX(seq)` under RLS is the caller's Tenant's maximum. */
 export const CLIENT_ALLOCATED_SEQ: readonly TableEntry[] = TABLE_REGISTRY.filter(
   (e) => e.clientAllocatedSeq === true,
+);
+
+/** What the application role holds on one table: its entry's override, or its class's grant. */
+export function appPrivilegesOf(entry: TableEntry): readonly string[] {
+  return entry.appPrivileges ?? APP_PRIVILEGES[entry.class];
+}
+
+/** The tables that carry `tenant_id` without row-level security. Exactly one: the bridge. */
+export const TENANT_BRIDGES: readonly TableEntry[] = TABLE_REGISTRY.filter(
+  (e) => e.tenantBridge === true,
 );
 
 /** Looks a table up, or `undefined` when it is not registered. */

@@ -32,20 +32,6 @@ CREATE POLICY "maintenance_bypass" ON public."program"
   USING (true)
   WITH CHECK (true);
 
--- app_user (mutable-audited): Names and roles change. Story 1.4 replaces this with the identity tables plus the membership bridge.
-ALTER TABLE public."app_user" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public."app_user" FORCE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "tenant_isolation" ON public."app_user";
-CREATE POLICY "tenant_isolation" ON public."app_user"
-  FOR ALL
-  USING ("tenant_id" = NULLIF(current_setting('app.tenant_id', true), ''))
-  WITH CHECK ("tenant_id" = NULLIF(current_setting('app.tenant_id', true), ''));
-DROP POLICY IF EXISTS "maintenance_bypass" ON public."app_user";
-CREATE POLICY "maintenance_bypass" ON public."app_user"
-  FOR ALL TO "momo_maintenance"
-  USING (true)
-  WITH CHECK (true);
-
 -- project (mutable-audited): Project configuration is edited in place; moving a Project between Programs changes roll-up only.
 ALTER TABLE public."project" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public."project" FORCE ROW LEVEL SECURITY;

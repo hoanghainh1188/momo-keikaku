@@ -1,7 +1,7 @@
 import { audit, type AuditDeclaration } from '../audit';
 import type { Result } from '../result';
 import type { ProjectWriteDeps } from '../ports/project-write';
-import type { UseCaseContext } from './context';
+import type { RequestContext } from '../authz/request-context';
 import {
   changeRequestCandidatesInputSchema,
   explainTicketsInputSchema,
@@ -45,7 +45,7 @@ import {
 /** FR-29 *Map*: the hours leave Unplanned Work immediately (FR-21 attribution). */
 export async function mapTickets<Handle>(
   deps: ProjectWriteDeps<Handle>,
-  ctx: UseCaseContext,
+  ctx: RequestContext,
   input: MapTicketsInput,
 ): Promise<Result<void>> {
   return runProjectWrite(mapTicketsInputSchema, deps, ctx, input, async (scope, stamp, command) => {
@@ -65,7 +65,7 @@ export async function mapTickets<Handle>(
  */
 export async function planTicketsAsWorkPackage<Handle>(
   deps: ProjectWriteDeps<Handle>,
-  ctx: UseCaseContext,
+  ctx: RequestContext,
   input: PlanTicketsInput,
 ): Promise<Result<void>> {
   return runProjectWrite(planTicketsInputSchema, deps, ctx, input, async (scope, stamp, command) => {
@@ -85,7 +85,7 @@ export async function planTicketsAsWorkPackage<Handle>(
 /** FR-29 *Explain*: attaches a note. Clients see it only if a snapshot is published. */
 export async function explainTickets<Handle>(
   deps: ProjectWriteDeps<Handle>,
-  ctx: UseCaseContext,
+  ctx: RequestContext,
   input: ExplainTicketsInput,
 ): Promise<Result<void>> {
   return runProjectWrite(explainTicketsInputSchema, deps, ctx, input, async (scope, stamp, command) => {
@@ -102,7 +102,7 @@ export async function explainTickets<Handle>(
 /** FR-29 *Change Request candidate*: collects the Tickets into the candidate list. */
 export async function markChangeRequestCandidates<Handle>(
   deps: ProjectWriteDeps<Handle>,
-  ctx: UseCaseContext,
+  ctx: RequestContext,
   input: ChangeRequestCandidatesInput,
 ): Promise<Result<void>> {
   return runProjectWrite(
@@ -128,7 +128,7 @@ export async function markChangeRequestCandidates<Handle>(
 /** FR-21 manual Mapping of one Ticket; an empty `wpId` unmaps it. */
 export async function mapTicket<Handle>(
   deps: ProjectWriteDeps<Handle>,
-  ctx: UseCaseContext,
+  ctx: RequestContext,
   input: MapTicketInput,
 ): Promise<Result<void>> {
   return runProjectWrite(mapTicketInputSchema, deps, ctx, input, async (scope, stamp, command) => {

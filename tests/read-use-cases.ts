@@ -42,6 +42,7 @@ import type { WriteDeps } from '../packages/app/src/ports/write-deps';
 import * as readSurface from '../packages/app/src/use-cases';
 import type { Db } from '../packages/db/src/client';
 import type { DemoState } from '../packages/db/src/fixtures';
+import { requestContextFor } from './request-context';
 
 /** Named in failure messages, so the reader is sent to the file rather than to a diff. */
 export const READ_SURFACE_MODULE = 'packages/app/src/use-cases/index.ts';
@@ -49,10 +50,17 @@ export const READ_SURFACE_MODULE = 'packages/app/src/use-cases/index.ts';
 /** This file, named in the same messages. */
 export const REGISTRY_MODULE = 'tests/read-use-cases.ts';
 
-/** What a use case is invoked against: one Tenant, one Project. */
+/** What a use case is invoked against: one Tenant, one Project — as one user. */
 export interface UseCaseTarget {
   readonly tenantId: string;
   readonly projectId: string;
+  /** The signed-in user the context names (story 1.4); the harness's own when absent. */
+  readonly userId?: string;
+}
+
+/** The RequestContext a registry entry calls its use case with. */
+function contextOf(target: UseCaseTarget) {
+  return requestContextFor(target.tenantId, target.userId);
 }
 
 /**
@@ -267,7 +275,7 @@ export const READ_USE_CASES: readonly ReadUseCase[] = [
     invoke: (deps, target) =>
       readSurface.getProjectHeader(
         deps,
-        { tenantId: target.tenantId },
+        contextOf(target),
         { projectId: target.projectId },
       ),
     mustSurface: projectBundleLabels,
@@ -284,7 +292,7 @@ export const READ_USE_CASES: readonly ReadUseCase[] = [
     invoke: (deps, target) =>
       readSurface.getProjectReview(
         deps,
-        { tenantId: target.tenantId },
+        contextOf(target),
         { projectId: target.projectId },
       ),
     mustSurface: projectBundleLabels,
@@ -300,7 +308,7 @@ export const READ_USE_CASES: readonly ReadUseCase[] = [
     invoke: (deps, target) =>
       readSurface.getClientView(
         deps,
-        { tenantId: target.tenantId },
+        contextOf(target),
         { projectId: target.projectId },
       ),
     mustSurface: clientViewLabels,
@@ -320,7 +328,7 @@ export const READ_USE_CASES: readonly ReadUseCase[] = [
     invoke: (deps, target) =>
       readSurface.getProjectMapping(
         deps,
-        { tenantId: target.tenantId },
+        contextOf(target),
         { projectId: target.projectId },
       ),
     mustSurface: projectMappingLabels,
@@ -334,7 +342,7 @@ export const READ_USE_CASES: readonly ReadUseCase[] = [
     invokeWrite: (deps, target) =>
       readSurface.mapTickets(
         deps,
-        { tenantId: target.tenantId },
+        contextOf(target),
         { projectId: target.projectId, wpId: target.wpId, ticketIds: target.ticketIds },
       ),
   },
@@ -347,7 +355,7 @@ export const READ_USE_CASES: readonly ReadUseCase[] = [
     invokeWrite: (deps, target) =>
       readSurface.planTicketsAsWorkPackage(
         deps,
-        { tenantId: target.tenantId },
+        contextOf(target),
         { projectId: target.projectId, name: 'Harness Plan', ticketIds: target.ticketIds },
       ),
   },
@@ -360,7 +368,7 @@ export const READ_USE_CASES: readonly ReadUseCase[] = [
     invokeWrite: (deps, target) =>
       readSurface.explainTickets(
         deps,
-        { tenantId: target.tenantId },
+        contextOf(target),
         { projectId: target.projectId, note: 'Harness note.', ticketIds: target.ticketIds },
       ),
   },
@@ -373,7 +381,7 @@ export const READ_USE_CASES: readonly ReadUseCase[] = [
     invokeWrite: (deps, target) =>
       readSurface.markChangeRequestCandidates(
         deps,
-        { tenantId: target.tenantId },
+        contextOf(target),
         { projectId: target.projectId, ticketIds: target.ticketIds },
       ),
   },
@@ -386,7 +394,7 @@ export const READ_USE_CASES: readonly ReadUseCase[] = [
     invokeWrite: (deps, target) =>
       readSurface.mapTicket(
         deps,
-        { tenantId: target.tenantId },
+        contextOf(target),
         { projectId: target.projectId, ticketId: target.ticketIds[0], wpId: target.wpId },
       ),
     moreWrites: [
@@ -394,7 +402,7 @@ export const READ_USE_CASES: readonly ReadUseCase[] = [
       (deps, target) =>
         readSurface.mapTicket(
           deps,
-          { tenantId: target.tenantId },
+          contextOf(target),
           { projectId: target.projectId, ticketId: target.ticketIds[0], wpId: '' },
         ),
     ],
@@ -405,7 +413,7 @@ export const READ_USE_CASES: readonly ReadUseCase[] = [
     kind: 'write',
     why: 'FR-1: inserts a department (id from the id port) and an audit_log row, Clock-stamped.',
     invokeWrite: (deps, target) =>
-      readSurface.createDepartment(deps, { tenantId: target.tenantId }, { name: 'Harness Department' }),
+      readSurface.createDepartment(deps, contextOf(target), { name: 'Harness Department' }),
     namesNoExistingRow:
       'It takes a name and nothing else, and creates in ctx.tenantId: there is no id a foreign ' +
       'Tenant could replay, so the probe asserts the row lands for the caller and nothing for the other.',
@@ -417,7 +425,7 @@ export const READ_USE_CASES: readonly ReadUseCase[] = [
     invokeWrite: (deps, target) =>
       readSurface.renameDepartment(
         deps,
-        { tenantId: target.tenantId },
+        contextOf(target),
         { departmentId: target.departmentId, name: 'Harness Department renamed' },
       ),
   },
@@ -428,7 +436,7 @@ export const READ_USE_CASES: readonly ReadUseCase[] = [
     invokeWrite: (deps, target) =>
       readSurface.createProgram(
         deps,
-        { tenantId: target.tenantId },
+        contextOf(target),
         { departmentId: target.departmentId, name: 'Harness Program' },
       ),
   },
@@ -439,7 +447,7 @@ export const READ_USE_CASES: readonly ReadUseCase[] = [
     invokeWrite: (deps, target) =>
       readSurface.renameProgram(
         deps,
-        { tenantId: target.tenantId },
+        contextOf(target),
         { programId: target.programId, name: 'Harness Program renamed' },
       ),
   },
@@ -452,7 +460,7 @@ export const READ_USE_CASES: readonly ReadUseCase[] = [
     invokeWrite: (deps, target) =>
       readSurface.createProject(
         deps,
-        { tenantId: target.tenantId },
+        contextOf(target),
         {
           name: 'Harness Project',
           departmentId: target.departmentId,
@@ -469,7 +477,7 @@ export const READ_USE_CASES: readonly ReadUseCase[] = [
     invokeWrite: (deps, target) =>
       readSurface.renameProject(
         deps,
-        { tenantId: target.tenantId },
+        contextOf(target),
         { projectId: target.projectId, name: 'Harness Project renamed' },
       ),
   },
@@ -482,7 +490,7 @@ export const READ_USE_CASES: readonly ReadUseCase[] = [
     invokeWrite: (deps, target) =>
       readSurface.reassignProjectProgram(
         deps,
-        { tenantId: target.tenantId },
+        contextOf(target),
         { projectId: target.projectId, programId: null },
       ),
     moreWrites: [
@@ -490,7 +498,7 @@ export const READ_USE_CASES: readonly ReadUseCase[] = [
       (deps, target) =>
         readSurface.reassignProjectProgram(
           deps,
-          { tenantId: target.tenantId },
+          contextOf(target),
           { projectId: target.projectId, programId: target.programId },
         ),
     ],
@@ -504,7 +512,7 @@ export const READ_USE_CASES: readonly ReadUseCase[] = [
     invokeWrite: (deps, target) =>
       readSurface.reassignProjectDepartment(
         deps,
-        { tenantId: target.tenantId },
+        contextOf(target),
         { projectId: target.projectId, departmentId: target.departmentId, programId: target.programId },
       ),
   },
@@ -552,17 +560,6 @@ export interface UnreachedTable {
  * reading. Either way the change becomes a decision somebody makes on purpose.
  */
 export const UNREACHED_TENANT_OWNED_TABLES: readonly UnreachedTable[] = [
-  {
-    table: 'app_user',
-    why:
-      'No read use case reads it. There is no auth yet; story 1.4 replaces this table with ' +
-      'the identity tables plus the membership bridge, and `resolveRequestContext` becomes ' +
-      'the one reader. Until then nothing renders a user, so nothing selects one. NOTE for ' +
-      'whoever removes this entry: a probe Tenant\'s `app_user` rows are the only place the ' +
-      'row writer prefixes a HUMAN NAME rather than an id, so they literally contain the ' +
-      'demo Tenant\'s resource names and the demo-marker scan would report a leak that is ' +
-      'not one. Give those two rows opaque names in the same change.',
-  },
   {
     table: 'program',
     why:

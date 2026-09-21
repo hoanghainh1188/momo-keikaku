@@ -113,3 +113,78 @@ describe('the bare db handle never issues a query', () => {
     ).toEqual([]);
   });
 });
+
+describe('the tenant-membership bridge has one reader (story 1.4 slice 1)', () => {
+  /**
+   * `resolveRequestContext` is the one place a membership is read, and it reads through
+   * `membershipsOf` (`repo-membership.ts`). So among the modules that SHIP — every tracked
+   * TypeScript/JavaScript file outside the tests — only that reader, the seed (which writes the
+   * demo members) and the probe Tenants (which write and remove theirs) may import the Drizzle
+   * symbol, and no other one may name the table in a query. Tests are outside the rule: a test has
+   * to be able to seed a membership and look one up.
+   *
+   * The `@momo/db` barrel does not export the symbol either, so an application cannot reach it by
+   * the package name.
+   */
+  const ALLOWED_IMPORTERS = new Set([
+    'packages/db/src/repo-membership.ts',
+    'packages/db/src/seed.ts',
+    'packages/db/src/probe-tenants.ts',
+  ]);
+  const DEFINITION = 'packages/db/src/schema-membership.ts';
+
+  /** Code only: a comment that NAMES the table or the symbol (this rule's own prose) is not a use. */
+  const code = (path: string) =>
+    readFileSync(`${ROOT}${path}`, 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/(^|[^:'"`])\/\/.*$/gm, '$1');
+
+  const isTest = (path: string) => /\.test\.[cm]?[jt]sx?$/.test(path) || path.startsWith('tests/');
+  const applicationSources = () =>
+    textFiles().filter(
+      (path) => /\.(ts|tsx|js|jsx|mjs|cjs|mts|cts)$/.test(path) && !isTest(path),
+    );
+
+  it('imports `tenantMembership` only in its reader, the seed and the probe Tenants', () => {
+    const importers = applicationSources().filter((path) => {
+      if (path === DEFINITION) return false;
+      const contents = code(path);
+      return (
+        /\btenantMembership\b/.test(contents) ||
+        /(from\s+|import\s*\(\s*)['"][^'"]*schema-membership(\.[jt]s)?['"]/.test(contents)
+      );
+    });
+    expect(importers.sort()).toEqual([...ALLOWED_IMPORTERS].sort());
+  });
+
+  it('is named in a FROM or JOIN by no other application source', () => {
+    const offenders = applicationSources().filter((path) => {
+      if (ALLOWED_IMPORTERS.has(path) || path === DEFINITION) return false;
+      return /\b(FROM|JOIN)\s+"?tenant_membership\b/i.test(code(path));
+    });
+    expect(offenders, `tenant_membership is queried outside its reader in: ${offenders.join(', ')}`).toEqual([]);
+  });
+
+  it('has its reader, `membershipsOf`, named only where it is defined, exported and wired', () => {
+    // The spec: the reader is called only by `resolveRequestContext`, which the composition root
+    // hands it to. Among shipping sources the identifier appears in exactly these files: the reader,
+    // the barrel, the composition root that wires it — and, under the same name, the `packages/app`
+    // port member it satisfies and the resolver, its one caller.
+    const namers = applicationSources().filter((path) => /\bmembershipsOf\b/.test(code(path)));
+    expect(namers.sort()).toEqual(
+      [
+        'apps/web/src/server/composition.ts',
+        'packages/app/src/authz/resolve-request-context.ts',
+        'packages/app/src/ports/membership.ts',
+        'packages/db/src/index.ts',
+        'packages/db/src/repo-membership.ts',
+      ].sort(),
+    );
+  });
+
+  it('is not exported by the @momo/db barrel', () => {
+    const barrel = code('packages/db/src/index.ts');
+    expect(barrel).not.toMatch(/schema-membership/);
+    expect(barrel).not.toMatch(/\btenantMembership\b/);
+  });
+});

@@ -8,8 +8,9 @@
 // computes from the domain.
 // Story 1.3 slice 1 adds the audit mechanism (`./audit`) and the tenant transaction the writes
 // run in; slice 2 generalises the write deps (`AuditedWriteDeps`, `WriteDeps`), adds the Clock and
-// id ports, and the eight organisation writes. Authorisation (1.5) and the RequestContext (1.4)
-// attach to this layer later.
+// id ports, and the eight organisation writes. Story 1.4 slice 1 adds the `RequestContext` and
+// its resolver (`./authz`), the identity and membership ports, and the auth configuration keys;
+// the role checks (1.5) attach here later.
 //
 // `./use-cases` does not import `./config`, so code that needs the use cases and not the
 // configuration can import `packages/app/src/use-cases` directly. `config` is lazy (a getter
@@ -55,7 +56,18 @@ export type { TenantTransaction } from './ports/tenant-transaction';
 // call inside its own transaction, never an inbound adapter's.
 export type { AuditAction, AuditEntry, AuditSink } from './audit';
 export * from './use-cases';
-export type { UseCaseContext } from './use-cases/context';
+export type { Locale, RequestContext, Role } from './authz/request-context';
+// The resolver is a runtime value, like the use cases: the composition root calls it once per
+// request. It is not on the use-case surface (`./use-cases`), which the harness enumerates.
+export {
+  resolveRequestContext,
+  type NoAccessEvent,
+  type NoAccessReason,
+  type RequestContextResolution,
+  type ResolveRequestContextDeps,
+} from './authz/resolve-request-context';
+export type { IdentityPort, SessionIdentity } from './ports/identity';
+export type { MembershipReader, MembershipRecord } from './ports/membership';
 export type { ClientView } from './use-cases/get-client-view';
 export type {
   MappingRuleRow,

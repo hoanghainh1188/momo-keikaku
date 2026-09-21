@@ -54,7 +54,9 @@ import {
 const USE_CASE_AUDIT_MODULE = 'packages/app/src/use-cases/audit-declarations.ts';
 
 const HANDLE = { marker: 'fake-handle' };
-const ACTOR = 'user:audit-gate';
+/** The gate's signed-in user; every record's actor must be derived from it (story 1.4). */
+const GATE_USER = 'audit-gate';
+const ACTOR = `user:${GATE_USER}`;
 /** The Project anchor the project writes stamp with. */
 const AT = new Date('2026-09-01T00:00:00Z');
 /** The Clock the organisation writes stamp with — distinct, so a mix-up shows. */
@@ -72,6 +74,7 @@ const WORLD = {
 
 const TARGET: WriteTarget = {
   tenantId: 'ten-gate',
+  userId: GATE_USER,
   projectId: WORLD.project.id,
   ticketIds: ['tkt-gate-1', 'tkt-gate-2'],
   wpId: 'wp-gate',
@@ -149,7 +152,6 @@ async function drive(invoke: InvokeWrite, sabotage: Sabotage = {}): Promise<Run>
 
   const deps: WriteDeps<typeof HANDLE> = {
     handle: HANDLE,
-    actor: ACTOR,
     clock: { now: () => NOW },
     ids: { next: () => `id-gate-${(issued += 1)}` },
     transaction: async (_handle, _tenantId, work) => {

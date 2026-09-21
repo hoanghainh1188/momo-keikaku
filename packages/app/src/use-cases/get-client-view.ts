@@ -1,7 +1,7 @@
 import { clientProjection, DEFAULT_VISIBILITY, type ClientOutputs } from '@momo/domain';
 import type { Result } from '../result';
 import type { ProjectReadDeps } from '../ports/project-read';
-import type { UseCaseContext } from './context';
+import type { RequestContext } from '../authz/request-context';
 import { runProjectRead, type ProjectInput } from './project-input';
 
 /**
@@ -26,7 +26,7 @@ export interface ClientView {
  */
 export async function getClientView<Handle>(
   deps: ProjectReadDeps<Handle>,
-  ctx: UseCaseContext,
+  ctx: RequestContext,
   input: ProjectInput,
 ): Promise<Result<ClientView>> {
   return runProjectRead(ctx, input, async (tenantId, projectId) => {

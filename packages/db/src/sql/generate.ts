@@ -18,7 +18,7 @@
  */
 import {
   APPEND_ONLY,
-  APP_PRIVILEGES,
+  appPrivilegesOf,
   CLIENT_ALLOCATED_SEQ,
   MAINTENANCE_PRIVILEGES,
   MAINTENANCE_SETTING,
@@ -168,7 +168,7 @@ export function generateGrantsSql(appRole: string, maintenanceRole: string): str
 
   for (const entry of TABLE_REGISTRY) {
     const table = `public.${ident(entry.table)}`;
-    const appPrivileges = APP_PRIVILEGES[entry.class];
+    const appPrivileges = appPrivilegesOf(entry);
     const maintenancePrivileges = MAINTENANCE_PRIVILEGES[entry.class];
     lines.push(`-- ${entry.table} (${entry.class})`);
     if (appPrivileges.length > 0) {

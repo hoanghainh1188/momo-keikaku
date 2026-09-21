@@ -3,6 +3,12 @@ import { ratio } from '@momo/domain';
 import type { ProjectReadDeps, ProjectReview } from '../ports/project-read';
 import { getClientView, getProjectMapping } from '.';
 import { MAPPING_TICKET_LIMIT } from './get-project-mapping';
+import type { RequestContext } from '../authz/request-context';
+
+/** A signed-in caller in `tenantId` (story 1.4 slice 1: the context is the whole RequestContext). */
+function ctxOf(tenantId: string): RequestContext {
+  return { tenantId, userId: 'test-reader', roles: ['pm'], projectIds: [], locale: 'en' };
+}
 
 /**
  * The two reads that PROJECT the Review for one page — the Client View and the Mapping surface
@@ -137,7 +143,7 @@ function fakeDeps(behave: (projectId: string) => ProjectReview | Error) {
 describe('getClientView', () => {
   it('projects the Review with the default visibility, for the context\'s Tenant', async () => {
     const { deps, calls } = fakeDeps(() => REVIEW);
-    const result = await getClientView(deps, { tenantId: 'ten-a' }, { projectId: 'prj-1' });
+    const result = await getClientView(deps, ctxOf('ten-a'), { projectId: 'prj-1' });
 
     expect(calls).toEqual([{ handle: HANDLE, tenantId: 'ten-a', projectId: 'prj-1' }]);
     if (!result.ok) throw new Error(`answered ${result.error.code}`);
@@ -163,7 +169,7 @@ describe('getClientView', () => {
 describe('getProjectMapping', () => {
   it('joins and orders the Mapping surface\'s rows, for the context\'s Tenant', async () => {
     const { deps, calls } = fakeDeps(() => REVIEW);
-    const result = await getProjectMapping(deps, { tenantId: 'ten-a' }, { projectId: 'prj-1' });
+    const result = await getProjectMapping(deps, ctxOf('ten-a'), { projectId: 'prj-1' });
 
     expect(calls).toEqual([{ handle: HANDLE, tenantId: 'ten-a', projectId: 'prj-1' }]);
     if (!result.ok) throw new Error(`answered ${result.error.code}`);
@@ -204,7 +210,7 @@ describe('getProjectMapping', () => {
       review: { ...REVIEW.review, attribution: { ...REVIEW.review.attribution, hoursByTicket } },
     } as unknown as ProjectReview;
     const { deps } = fakeDeps(() => review);
-    const result = await getProjectMapping(deps, { tenantId: 'ten-a' }, { projectId: 'prj-1' });
+    const result = await getProjectMapping(deps, ctxOf('ten-a'), { projectId: 'prj-1' });
 
     if (!result.ok) throw new Error(`answered ${result.error.code}`);
     expect(result.value.tickets).toHaveLength(MAPPING_TICKET_LIMIT);
@@ -223,7 +229,7 @@ describe.each([
 ] as const)('$name, the shared read contract', ({ run }) => {
   it('answers not_found — never a throw — for a Project the Tenant cannot see', async () => {
     const { deps } = fakeDeps((projectId) => notFoundError(projectId));
-    expect(await run(deps, { tenantId: 'ten-b' }, { projectId: 'prj-of-a' })).toEqual({
+    expect(await run(deps, ctxOf('ten-b'), { projectId: 'prj-of-a' })).toEqual({
       ok: false,
       error: { code: 'not_found', messageKey: 'errors.not_found' },
     });
@@ -232,7 +238,7 @@ describe.each([
   it('rethrows any other failure rather than answering not_found for it', async () => {
     const outage = new Error('connect ECONNREFUSED 127.0.0.1:55433');
     const { deps } = fakeDeps(() => outage);
-    await expect(run(deps, { tenantId: 'ten-a' }, { projectId: 'prj-1' })).rejects.toBe(outage);
+    await expect(run(deps, ctxOf('ten-a'), { projectId: 'prj-1' })).rejects.toBe(outage);
   });
 
   it.each([
@@ -240,7 +246,7 @@ describe.each([
     ['absent', {}],
   ])('answers invalid_input for an %s projectId, without calling the port', async (_label, input) => {
     const { deps, calls } = fakeDeps(() => REVIEW);
-    const result = await run(deps, { tenantId: 'ten-a' }, input as { projectId: string });
+    const result = await run(deps, ctxOf('ten-a'), input as { projectId: string });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.code).toBe('invalid_input');
     expect(calls).toEqual([]);

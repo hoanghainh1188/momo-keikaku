@@ -7,7 +7,7 @@
  *
  * TWO HALVES, AND THE SPLIT IS LOAD-BEARING. `seedInTenant` below is the demo seed: it
  * refuses a second Tenant, opens the maintenance hatch and TRUNCATEs. `writeTenantRows`
- * is the *row writer* — the 17 inserts and nothing else — and it is shared with
+ * is the *row writer* — the inserts and nothing else — and it is shared with
  * `probe-tenants.ts`, which builds the cross-tenant harness's two probe Tenants. One
  * definition, because two would drift and the harness would then be proving isolation
  * over a dataset that is not the one the application actually stores.
@@ -36,8 +36,10 @@
 import { encode } from '@momo/domain';
 import { sql } from 'drizzle-orm';
 import type { Db } from './client';
+import { actorOf, DEMO_USERS } from './demo-identities';
 import { buildDemoState, mhFromJson, type DemoState } from './fixtures';
 import * as s from './schema';
+import { tenantMembership } from './schema-membership';
 import { MAINTENANCE_SETTING } from './table-classes';
 import { withTenant, type Tx } from './with-tenant';
 
@@ -61,11 +63,22 @@ export const TRUNCATE_ORDER: readonly string[] = [
   'rate_entry',
   'resource',
   'project',
-  'app_user',
   'program',
   'department',
+  // Story 1.4 slice 1: the identity tables and the membership bridge. `global`, so TRUNCATE
+  // empties them for every Tenant — which the single-Tenant guard below already requires.
+  'tenant_membership',
+  'session',
+  'account',
+  'verification',
+  'auth_user',
   'tenant',
 ];
+
+/** A Postgres identifier, quoted — `session`, `account` and `auth_user` are not safe bare. */
+function quoteIdent(name: string): string {
+  return `"${name.replace(/"/g, '""')}"`;
+}
 
 async function chunked<T>(rows: T[], size: number, fn: (batch: T[]) => Promise<unknown>) {
   for (let i = 0; i < rows.length; i += size) await fn(rows.slice(i, i + size));
@@ -96,6 +109,13 @@ export interface TenantRowWriteOptions {
    * start at 1 and collide. The demo seed passes `0`.
    */
   readonly seqOffset: number;
+  /**
+   * The scrypt hash every seeded member's credential account carries (story 1.4 slice 1), or
+   * absent to write the members WITHOUT credential accounts — the probe Tenants, which nobody
+   * signs in to. The demo seed passes the hash of `SEED_DEMO_PASSWORD`, which
+   * `scripts/seed.ts` computes through `@momo/db-auth`: `packages/db` never sees the password.
+   */
+  readonly passwordHash?: string;
 }
 
 /** The demo seed's own options: no prefix, no offset — byte-for-byte what it wrote before. */
@@ -118,7 +138,7 @@ export interface TenantRowWriteResult {
 }
 
 /**
- * Writes one Tenant's complete dataset — all 17 inserts — and nothing else.
+ * Writes one Tenant's complete dataset — its rows, its members — and nothing else.
  *
  * No TRUNCATE, no guard, no maintenance hatch: those belong to the demo seed, which is the
  * only caller that owns the whole database. This function assumes `tx` is already inside
@@ -157,24 +177,10 @@ export async function writeTenantRows(
     name: f.program.name,
   });
 
-  // No auth in the demo: a single seeded PM session (build brief non-goal). Story 1.4
-  // replaces this table with the identity tables plus the membership bridge.
-  await tx.insert(s.appUser).values([
-    {
-      id: own('user-linh'),
-      tenantId,
-      email: own('linh@momo-digital.example'),
-      name: own('Nguyen Thi Linh'),
-      role: 'pm',
-    },
-    {
-      id: own('user-hoang'),
-      tenantId,
-      email: own('hoang@momo-digital.example'),
-      name: own('Hoang Hai'),
-      role: 'tenant_admin',
-    },
-  ]);
+  // The Tenant's people (story 1.4 slice 1): users, their memberships and — for the demo seed
+  // only — credential accounts. Names are opaque for a probe Tenant: the demo PM's name is also a
+  // Resource name, and the harness scans probe results for the demo Tenant's strings.
+  await writeMembers(tx, tenantId, f.project.id, own, options.passwordHash, state.anchor);
 
   await tx.insert(s.project).values({
     id: f.project.id,
@@ -241,7 +247,7 @@ export async function writeTenantRows(
       projectId: f.project.id,
       reason: f.baseline.reason,
       recordedAt: new Date(f.baseline.recordedAt),
-      actor: own('user:linh'),
+      actor: own(actorOf(DEMO_USERS.linh.id)),
     })
     .returning({ seq: s.baselineVersion.seq });
   // Trap 1. This is the allocated value, not the fixture's — read back rather than assumed.
@@ -421,18 +427,83 @@ export async function writeTenantRows(
 }
 
 /**
+ * The demo Tenant's members, or a probe Tenant's: one user per `DEMO_USERS` entry, its
+ * membership in `tenantId`, and — when a hash is given — its credential account (Better Auth's
+ * `credential` provider, `account_id` = the user id, which is what `signInEmail` looks up).
+ *
+ * `own` prefixes every invented value, so two Tenants written from the same fixture never share
+ * a user id or an email. Timestamps are the demo anchor: `packages/db` reads no wall clock.
+ */
+async function writeMembers(
+  tx: Tx,
+  tenantId: string,
+  projectId: string,
+  own: (value: string) => string,
+  passwordHash: string | undefined,
+  anchor: string,
+): Promise<void> {
+  const at = new Date(anchor);
+  const probe = own('') !== '';
+  const members = Object.entries(DEMO_USERS).map(([handle, user]) => ({
+    handle,
+    user,
+    id: own(user.id),
+  }));
+  await tx.insert(s.authUser).values(
+    members.map(({ handle, user, id }) => ({
+      id,
+      name: probe ? own(`member-${handle}`) : user.name,
+      email: own(user.email),
+      emailVerified: true,
+      createdAt: at,
+      updatedAt: at,
+    })),
+  );
+  if (passwordHash !== undefined) {
+    await tx.insert(s.account).values(
+      members.map(({ id }) => ({
+        id: own(`acct-${id}`),
+        accountId: id,
+        providerId: 'credential',
+        userId: id,
+        password: passwordHash,
+        createdAt: at,
+        updatedAt: at,
+      })),
+    );
+  }
+  await tx.insert(tenantMembership).values(
+    members.map(({ user, id }) => ({
+      userId: id,
+      tenantId,
+      role: user.role,
+      projectIds: user.onDemoProject ? [projectId] : [],
+    })),
+  );
+}
+
+/** What the demo seed needs from its composition root. */
+export interface SeedOptions {
+  /** The scrypt hash of `SEED_DEMO_PASSWORD`, computed by `scripts/seed.ts` via `@momo/db-auth`. */
+  readonly demoPasswordHash: string;
+}
+
+/**
  * @param db the OWNING role's handle — see the module note. `scripts/seed.ts` builds it
  *   from `config.DATABASE_URL`.
  */
-export async function seed(db: Db): Promise<void> {
+export async function seed(db: Db, options: SeedOptions): Promise<void> {
+  if (options.demoPasswordHash.trim() === '') {
+    throw new Error('seed was given an empty demo password hash; hash SEED_DEMO_PASSWORD first.');
+  }
   const state = buildDemoState();
   const tenantId = state.fixture.tenant.id;
-  // One transaction, one tenant: the truncate and all 17 inserts either land together or
+  // One transaction, one tenant: the truncate and every insert either land together or
   // not at all, and every one of them is issued with `app.tenant_id` bound.
-  await withTenant(db, tenantId, (tx) => seedInTenant(tx, state));
+  await withTenant(db, tenantId, (tx) => seedInTenant(tx, state, options.demoPasswordHash));
 }
 
-async function seedInTenant(tx: Tx, state: DemoState): Promise<void> {
+async function seedInTenant(tx: Tx, state: DemoState, passwordHash: string): Promise<void> {
   const tenantId = state.fixture.tenant.id;
 
   // TRUNCATE is exempt from row-level security by design — it is a table-level operation, so
@@ -464,9 +535,11 @@ async function seedInTenant(tx: Tx, state: DemoState): Promise<void> {
   // and saying so in one transaction-scoped setting is better than a table that any statement
   // can empty. The setting is reset at COMMIT, like the tenant.
   await tx.execute(sql`SELECT set_config(${MAINTENANCE_SETTING}, 'on', true)`);
-  await tx.execute(sql.raw(`TRUNCATE ${TRUNCATE_ORDER.join(', ')} RESTART IDENTITY CASCADE`));
+  await tx.execute(
+    sql.raw(`TRUNCATE ${TRUNCATE_ORDER.map(quoteIdent).join(', ')} RESTART IDENTITY CASCADE`),
+  );
 
-  const written = await writeTenantRows(tx, state, DEMO_ROW_WRITE_OPTIONS);
+  const written = await writeTenantRows(tx, state, { ...DEMO_ROW_WRITE_OPTIONS, passwordHash });
 
   console.log(
     `seeded: ${written.counts.wps} WPs, ${written.counts.baselineWps} baseline WPs, ` +

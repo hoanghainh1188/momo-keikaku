@@ -55,6 +55,7 @@
   --sidebar-w: 216px;
   --sidebar-w-collapsed: 56px;
   --rail-w: 360px;
+  --signout-gutter: 104px;
 
   --font-sans: 'IBM Plex Sans JP', 'IBM Plex Sans', -apple-system, BlinkMacSystemFont,
     'Hiragino Sans', 'Noto Sans JP', 'Segoe UI', sans-serif;
@@ -99,7 +100,8 @@ a {
   display: flex;
   align-items: center;
   gap: 16px;
-  padding: 0 16px;
+  /* the right gutter leaves room for the root layout's sign-out control (.signout) */
+  padding: 0 var(--signout-gutter) 0 16px;
   background: var(--sheet);
   border-bottom: 1px solid var(--rule);
   position: sticky;
@@ -646,4 +648,94 @@ textarea {
 }
 details > summary {
   cursor: pointer;
+}
+
+/* ---------------------------------------------------------------- sign-in (story 1.4) */
+.signout {
+  position: fixed;
+  top: 10px;
+  right: 16px;
+  z-index: 30;
+  margin: 0;
+}
+
+.auth-page {
+  min-height: 100vh;
+  display: grid;
+  align-content: start;
+  justify-items: center;
+  padding: 18vh 16px 48px;
+}
+
+.auth-sheet {
+  width: 100%;
+  max-width: 360px;
+  background: var(--sheet);
+  border-top: 2px solid var(--ink);
+  border-bottom: 1px solid var(--rule);
+  padding: 20px 24px 24px;
+}
+
+.auth-sheet h1 {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 4px 0 16px;
+}
+
+.auth-brand {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--ink-muted);
+}
+.auth-brand span {
+  color: var(--ink-faint);
+  font-weight: 400;
+}
+
+.auth-form {
+  display: grid;
+  gap: 14px;
+}
+
+.auth-field {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+.auth-field input {
+  font-family: inherit;
+  font-size: 14px;
+  height: 34px;
+  border: 1px solid var(--rule-strong);
+  border-radius: 2px;
+  padding: 0 8px;
+  background: var(--sheet);
+  color: var(--ink);
+}
+.auth-field input:focus-visible {
+  border-color: var(--focus-ring);
+}
+
+.auth-error {
+  margin: 0;
+  padding: 8px 10px;
+  font-size: 13px;
+  color: var(--health-red);
+  background: var(--health-red-soft);
+  border-left: 2px solid var(--health-red);
+}
+
+.auth-submit {
+  height: 34px;
+  font-size: 13px;
+  justify-self: start;
+  padding: 0 16px;
+}
+
+.auth-note {
+  margin: 0;
+  color: var(--ink-muted);
 }

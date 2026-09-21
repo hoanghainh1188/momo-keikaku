@@ -12,12 +12,12 @@ import type { TenantTransaction } from './tenant-transaction';
  * wider scope satisfies a port that asks for a narrower one, so each use case still declares only
  * what it touches.
  *
- * `actor` is audit data, stated once by the composition root beside the Tenant, until story 1.4's
- * RequestContext replaces both.
+ * There is no actor here (story 1.4 slice 1): the actor is `user:<ctx.userId>`, derived from the
+ * `RequestContext` the write is called with (`auditActorOf`), so a composition root states
+ * neither the Tenant nor who acted — it only resolves them.
  */
 export interface AuditedWriteDeps<Handle, Scope extends AuditScope> {
   readonly handle: Handle;
-  readonly actor: string;
   readonly transaction: TenantTransaction<Handle, Scope>;
 }
 

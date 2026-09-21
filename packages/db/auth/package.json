@@ -1,1 +1,2 @@
-{ "name": "@momo/db-auth", "version": "0.0.0", "private": true, "type": "module", "main": "src/index.ts" }
+{ "name": "@momo/db-auth", "version": "0.0.0", "private": true, "type": "module", "main": "src/index.ts",
+  "dependencies": { "better-auth": "1.7.5", "drizzle-orm": "0.45.2", "@momo/db": "workspace:*" } }

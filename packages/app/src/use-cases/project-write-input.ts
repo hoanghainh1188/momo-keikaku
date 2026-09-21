@@ -10,7 +10,7 @@ import type { Result } from '../result';
 import { isProjectNotFound } from '../ports/project-read';
 import type { ProjectWriteDeps, ProjectWriteScope, WriteStamp } from '../ports/project-write';
 import { runAuditedWrite } from './audited-write';
-import type { UseCaseContext } from './context';
+import type { RequestContext } from '../authz/request-context';
 
 /**
  * A non-empty string Postgres will accept as a text parameter. NUL is refused for the reason
@@ -88,7 +88,7 @@ export type MapTicketInput = Readonly<z.infer<typeof mapTicketInputSchema>>;
 export async function runProjectWrite<Handle, Command extends { readonly projectId: string }>(
   schema: z.ZodType<Command>,
   deps: ProjectWriteDeps<Handle>,
-  ctx: UseCaseContext,
+  ctx: RequestContext,
   input: unknown,
   work: (scope: ProjectWriteScope, stamp: WriteStamp, command: Command) => Promise<void>,
 ): Promise<Result<void>> {

@@ -13,7 +13,10 @@
 // THE CARVE-OUTS ARE NAMED PATHS, NOT PATTERNS (AD-1): `apps/web/src/server/composition.ts`,
 // `apps/web`'s composition root, and `packages/db/auth`, the Better Auth binding. A third needs
 // the spine amended first. The composition root is also the one `apps/*` file that may import
-// `packages/adapters` (story 1.3 slice 2, `apps-adapters-only-from-composition-root`).
+// `packages/adapters` (story 1.3 slice 2, `apps-adapters-only-from-composition-root`) and, since
+// story 1.4 slice 1, the one `apps/web` file that may import `packages/db/auth`
+// (`web-db-auth-only-from-composition-root`); `packages/db/auth` is the one unit that may import
+// `better-auth` (`better-auth-only-in-db-auth`).
 //
 // Every rule here has been watched to fail (see the CI header in .github/workflows/ci.yml and
 // spec-1-2-web-write-use-cases.md) — including the three forward-looking scheduling rules,
@@ -61,6 +64,30 @@ module.exports = {
         path: '^packages/db/',
         pathNot: '^packages/db/auth/',
       },
+    },
+    {
+      name: 'better-auth-only-in-db-auth',
+      severity: 'error',
+      comment:
+        'AD-1 carve-out 1 (story 1.4 slice 1): packages/db/auth is the single Better Auth <-> ' +
+        'Drizzle binding, and the only unit under apps/ or packages/ that imports better-auth (or ' +
+        'any @better-auth/* package). Everything else reaches identity through the IdentityPort ' +
+        'packages/app declares, or through the composition root\'s auth bindings.',
+      from: { path: '^(apps|packages)/', pathNot: '^packages/db/auth/' },
+      to: { path: '(^|/)@?better-auth(/|$)' },
+    },
+    {
+      name: 'web-db-auth-only-from-composition-root',
+      severity: 'error',
+      comment:
+        'AD-1 (story 1.4 slice 1): in apps/web only the composition root imports packages/db/auth. ' +
+        'The route handler, the middleware and the sign-in and sign-out actions use the ' +
+        'composition root\'s auth bindings, so the one auth instance is built in one place.',
+      from: {
+        path: '^apps/web/',
+        pathNot: '^apps/web/src/server/composition[.]ts$',
+      },
+      to: { path: '^packages/db/auth/' },
     },
     {
       name: 'apps-adapters-only-from-composition-root',
@@ -154,7 +181,12 @@ module.exports = {
     // Build output is not the application's import graph. `node_modules` is NOT excluded, only
     // not followed: excluding it would drop the edge to `drizzle-orm` along with it, and
     // `apps-not-to-db` would then have nothing to match.
-    exclude: { path: '(^|/)([.]next|dist)/' },
+    //
+    // `dist` is excluded only UNDER apps/ and packages/ (our own build output), never under
+    // node_modules: better-auth ships its code in `dist/`, and a bare `dist` exclusion dropped every
+    // edge into it — so `better-auth-only-in-db-auth` could never fire (found by the adversarial
+    // review of the story 1.4 spine amendment, 2026-09-21).
+    exclude: { path: '(^|/)[.]next/|^(apps|packages)/[^/]+/dist/|^packages/db/auth/dist/' },
     doNotFollow: { path: '(^|/)node_modules/' },
     // Type-only imports count: `import type { Db } from '@momo/db'` in a page is the same
     // coupling as a value import, and it is erased before any bundler could object.

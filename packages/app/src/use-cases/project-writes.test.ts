@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { AuditEntry } from '../audit';
 import type { ProjectWriteDeps, ProjectWriteRepository, WriteStamp } from '../ports/project-write';
 import type { Result } from '../result';
-import type { UseCaseContext } from './context';
+import type { RequestContext } from '../authz/request-context';
 import {
   explainTickets,
   mapTicket,
@@ -27,8 +27,9 @@ import { mapTicketInputSchema, runProjectWrite } from './project-write-input';
  */
 
 const HANDLE = { marker: 'handle' };
+/** The signed-in caller; the audit actor is derived from its user id (story 1.4 slice 1). */
+const CTX: RequestContext = { tenantId: 'ten-a', userId: 'test-actor', roles: ['pm'], projectIds: [], locale: 'en' };
 const ACTOR = 'user:test-actor';
-const CTX: UseCaseContext = { tenantId: 'ten-a' };
 /** The Project's anchor the fake answers: the event time every row and record carries. */
 const AT = new Date('2026-09-01T00:00:00Z');
 const PLANNED_WP = 'wp-new-fake';
@@ -61,7 +62,6 @@ function fakeDeps(behave: Behaviour = {}) {
 
   const deps: ProjectWriteDeps<typeof HANDLE> = {
     handle: HANDLE,
-    actor: ACTOR,
     transaction: async (handle, tenantId, work) => {
       transactions.push({ handle, tenantId });
       const pendingCalls: Call[] = [];
@@ -110,7 +110,7 @@ const notFoundError = (projectId: string) =>
 
 type Run = (
   deps: ProjectWriteDeps<typeof HANDLE>,
-  ctx: UseCaseContext,
+  ctx: RequestContext,
   input: never,
 ) => Promise<Result<void>>;
 
@@ -247,7 +247,7 @@ describe.each(CASES)('$name', ({ run, member, valid, kind, invalid, record }) =>
   });
 
   it('ignores a tenantId or actor smuggled into the input', async () => {
-    // The Tenant comes from ctx and the actor from deps, never from what the caller posted:
+    // The Tenant and the actor both come from ctx (story 1.4), never from what the caller posted:
     // zod strips the unknown keys, so the command carries neither.
     const { deps, transactions, calls, audits } = fakeDeps();
     const result = await run(
@@ -273,7 +273,7 @@ describe.each(CASES)('$name', ({ run, member, valid, kind, invalid, record }) =>
 
   it('answers not_found — never a throw, never ok — for a Project the Tenant cannot see, and records nothing', async () => {
     const { deps, calls, audits } = fakeDeps({ anchor: (projectId) => notFoundError(projectId) });
-    const result = await run(deps, { tenantId: 'ten-b' }, valid as never);
+    const result = await run(deps, { ...CTX, tenantId: 'ten-b' }, valid as never);
 
     // No `details`: the refusal must carry nothing, so it cannot disclose anything.
     expect(result).toEqual({ ok: false, error: { code: 'not_found', messageKey: 'errors.not_found' } });

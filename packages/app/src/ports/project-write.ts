@@ -29,9 +29,7 @@ export type { WriteStamp } from './audited-write';
  * the Explain slot — measured in story 1.2 slice 4 — and every Explain would land as a candidate.
  * The literal makes each slot accept its own function only.
  *
- * `actor` is audit data, passed beside the Tenant. It is not a `UseCaseContext` field: adding
- * one there is story 1.4's decision. The composition root states it once, next to the Tenant,
- * and 1.4 replaces both lines together.
+ * The actor on every row is `user:<ctx.userId>`, from the `RequestContext` (story 1.4 slice 1).
  */
 
 /** FR-29 *Map*: the Tickets are mapped to an existing Work Package. */
@@ -79,7 +77,7 @@ export interface ManualMappingCommand {
 
 /**
  * One repository write, stamped with who and when (`WriteStamp`, `./audited-write`): the actor
- * from the deps, and the event time — the Project's `demoAnchor`, read inside the transaction by
+ * from the RequestContext, and the event time — the Project's `demoAnchor`, read inside the transaction by
  * `projectAnchor` (the project writes keep the anchor, so their rows stay byte-identical; the
  * organisation writes take a Clock). The Tenant is not in the stamp: the repository is bound to
  * its transaction's Tenant.
@@ -108,8 +106,7 @@ export interface ProjectWriteScope {
 }
 
 /**
- * What a project write use case is given: the transaction to open, the handle it is opened on,
- * and the actor the rows name — slice 2's generic `AuditedWriteDeps` over this scope. All three
- * are chosen by the composition root.
+ * What a project write use case is given: the transaction to open and the handle it is opened on
+ * — slice 2's generic `AuditedWriteDeps` over this scope. Both are chosen by the composition root.
  */
 export type ProjectWriteDeps<Handle> = AuditedWriteDeps<Handle, ProjectWriteScope>;
