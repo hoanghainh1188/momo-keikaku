@@ -1,10 +1,12 @@
-# Handoff — 2026-09-21
+# Handoff — 2026-09-21 (updated after the 2026-09-21 session)
 
-State at `main` = `9d43f19`, working tree clean, no open PRs.
+State at `main` = `007f6cb`, working tree clean, no open PRs.
 
-This covers the session of 2026-09-20, which took the project from "planning
+Two sessions are covered. **2026-09-20** took the project from "planning
 finished, no CI, 46 tests" to "three build slices merged, six CI gates, 123
-tests, tenant isolation enforced in the database".
+tests, tenant isolation enforced in the database". **2026-09-21** added the
+cross-tenant harness — **NFR-S1 is discharged** — taking the suite to 146 tests
+across 12 files, and planned the slice after it.
 
 ---
 
@@ -56,54 +58,82 @@ to their share. Track upgrade-style work separately from feature work.
 | #10 | Story 1.1 slice B2 — pg-boss on separated database roles |
 | #11 | `.nvmrc`, plus two decisions recorded where they bind |
 | #12 | Story 1.2 slice 1 — table-class registry, RLS, `withTenant` |
+| #13 | Handoff for the next session |
+| #14 | Story 1.2 slice 2 — the cross-tenant harness; **NFR-S1 discharged** |
 
 **CI has nine steps**, all watched to fail before being trusted: lint (the
 clock/env fence), three typechecks, a Postgres 18.6-alpine service, a prepare
 step (schema → pgboss roles → RLS/grants/triggers → seed), and the suite.
-**123 tests across 11 files**, up from 46 across 3.
+**146 tests across 12 files**, up from 46 across 3.
 
 **Tenant isolation is real**, verified directly in SQL: as the application role
 with no tenant set a read returns 0 rows, with the right tenant 1, with a wrong
 tenant 0. `FORCE ROW LEVEL SECURITY` is on for the 16 tenant-owned tables.
 
+**And it is now proved at the use-case level, not only the table level.**
+`packages/db/src/cross-tenant.test.ts` seeds two probe Tenants — each a
+bijectively relabelled copy of the demo dataset — and
+drives every read use case against both as the restricted role. The covered set
+is read off the read surface's module namespace, so an exported read with no
+registry entry fails **with no database at all**, naming it. Reach is measured
+with a query logger: 14 of the 16 tenant-owned tables; `app_user` and
+`audit_log` are declared unreached with reasons, and either direction of change
+fails the build.
+
 ---
 
 ## The pattern that mattered most, and should continue
 
-Three times in one session a gate looked green and proved nothing. **Reading
-the diff never found it. Deliberate sabotage always did.**
+Four times across two sessions a gate looked green and proved nothing. **Reading
+the diff never found one of them. Deliberate sabotage found every one.**
 
 | Slice | What passed that should not have |
 |---|---|
 | B1 | The ESLint fence had four holes: `Date()` without `new`, `process` aliasing, `.js`/`.mjs` files entirely, and warnings that could never fail CI |
 | B2 | Changing the worker to connect as the **superuser** passed typecheck and all 56 tests — the composition root was never executed |
 | 1.2 | Setting the ledger's policy to `USING (true)`, leaking every tenant's money, left **all 96 tests passing** |
+| 1.2 s2 | `USING (true)` on `baseline_wp` leaked every Tenant's rows into the process and **all twenty** harness assertions stayed green |
 
 **So: after adding any gate, break the thing it guards and watch it fail.** The
 CI header and each spec's Verification section record the probes that have been
 run; keep adding to them rather than trusting a green check.
 
+**And one sharper rule, learned on 2026-09-21 at the cost of a real finding:
+when a gate covers a CLASS of things, sabotage every member, not a
+representative.** Four reads in `repo.ts` carry no `WHERE` at all. Sabotaging
+one of them (`actuals_ledger_entry`) failed six assertions and looked like
+proof for all four. It was not: `baseline_wp` and `rate_entry` are re-filtered
+in memory by a key that differs per Tenant, so a wide-open policy on either
+left every assertion green. That is why the harness now also asserts isolation
+at the table level, over the set the query logger **measures** the use cases
+reading.
+
 ---
 
 ## Next, in order
 
-### 1. Story 1.2's remaining slices
+### 1. Story 1.2's remaining slices — four, not one
 
-`deferred-work.md` has **60 entries**. These four are the story:
+The harness landed on 2026-09-21. `deferred-work.md` now has **73 entries**.
+These four remain:
 
-1. **The cross-tenant harness** that enumerates every read use case.
-   **NFR-S1 is not discharged until this lands** — AC-5 says that harness *is*
-   the automated test NFR-S1 demands. What shipped is a targeted sabotage set.
-2. **Rewire the eight `apps/web` files** onto `packages/app` use cases, then
-   switch `dependency-cruiser` on — in that order, never before. This is also
-   what makes `apps/web` testable: it currently has **no automated test at
-   all**, and `vitest.config.ts` collects nothing under it.
+1. **The seven read call sites onto `packages/app` use cases.**
+   **Spec is written and approved**, `status: ready-for-dev`, on `main`:
+   `spec-1-2-web-read-use-cases.md`. Point `/bmad-build` at it and it goes
+   straight to implementation. Four decisions are frozen in it — reads only;
+   the gate scoped to AC-6's wording; the composition root as a named second
+   carve-out in `apps/web`; the harness moving to a root `tests/` directory.
+2. **The five write actions, then `dependency-cruiser`** — in that order, never
+   before. `actions.ts` is the file that still imports Drizzle, which is why
+   the gate cannot go on until the writes move. Measured 2026-09-21: 12
+   violating imports across 11 files today. This is also what makes `apps/web`
+   testable: it still has **no automated test at all**.
 3. **Arithmetic and codec** — `bigint` milli-hours, integer JPY, unreduced
    `{num, den}`, one `compareRatio` site, one jsonb codec. 13 domain modules,
    20 `number` uses, 32 pinned assertions. Independent of tenancy; doing it
    early means later stories are written against the right representation.
 4. **Watermark advisory locks** — needs `seq` allocation that Epic 2 and Epic 5
-   write.
+   write. **Blocked**, and the only one of the four that is.
 
 ### 2. Then story 1.1 slice B3
 
@@ -126,6 +156,21 @@ whole estimate.
   person can merge. Recorded in the CI header.
 - **The hardcoded DSN fallback**: removed in story 1.2, as decided.
 - **Connector order after R0**: Jira first, Redmine after. Revisit 2027-01-01.
+- **A second AD-1 carve-out**, decided 2026-09-21. ARCHITECTURE-SPINE calls
+  `packages/db/auth` "one carve-out"; there are now two. The composition root
+  `apps/web/src/server/composition.ts` will be the only file under `apps/web`
+  permitted to import `@momo/db`, and the dependency-cruiser rule names that
+  exact path so the exception is auditable rather than a hole.
+- **The dependency-cruiser gate takes AC-6's wording, not full AD-1.** It bans
+  `apps/*` importing a repository or Drizzle. Full AD-1 would also flag
+  `apps/worker`'s `pg-boss` and `pg` and drag the queue-adapter move into
+  `packages/adapters` with it — the day-one-red the epic warns about. The
+  uncovered half is recorded in `deferred-work.md`.
+- **`sprint-status.yaml` records a story `in-progress` until every slice of it
+  is done**, corrected 2026-09-21. Build's own step-05 marks a story `review`
+  when a slice finishes, which for a multi-slice story is wrong and made the
+  status view recommend a code review of unfinished work. Stories 1.1 and 1.2
+  were both showing `review` with slices outstanding.
 - **All three constraint types stay in R0**; the critical path is the
   minimum-Float chain.
 
