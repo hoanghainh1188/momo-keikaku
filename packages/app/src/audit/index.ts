@@ -22,9 +22,9 @@ import { stringify } from '@momo/domain';
  * `audit_log.action` has no database constraint (a deliberate choice — the schema, grants and
  * triggers are not this slice's), so this check is the only one.
  *
- * The first six members are the strings `packages/db` wrote free-hand before this slice —
- * FR-29's four Dispositions and FR-21's manual Mapping — unchanged, so the rows stay byte for
- * byte what they were.
+ * The first six members are the strings `packages/db` wrote free-hand before slice 1 — FR-29's
+ * four Dispositions and FR-21's manual Mapping — unchanged, so the rows stay byte for byte what
+ * they were. Slice 2 appended the eight organisation changes.
  */
 export const AUDIT_ACTIONS = [
   'disposition.map',
@@ -33,6 +33,16 @@ export const AUDIT_ACTIONS = [
   'disposition.cr_candidate',
   'mapping.map',
   'mapping.unmap',
+  // FR-1's organisation changes (story 1.3 slice 2), each recording the previous value where
+  // there is one. PM assignment joins with story 1.4/1.5.
+  'department.create',
+  'department.rename',
+  'program.create',
+  'program.rename',
+  'project.create',
+  'project.rename',
+  'project.reassign_program',
+  'project.reassign_department',
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
@@ -46,7 +56,8 @@ export function isAuditAction(value: unknown): value is AuditAction {
 
 /**
  * Who and when, stamped on the record. `at` is the event time the use case stamps on the change
- * itself (today the Project's `demoAnchor`; a `Clock` later), so the two cannot disagree.
+ * itself (the Project's `demoAnchor` for the project writes, the `Clock` for the organisation
+ * writes), so the two cannot disagree.
  */
 export interface AuditStamp {
   readonly actor: string;

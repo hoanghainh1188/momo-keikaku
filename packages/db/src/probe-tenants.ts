@@ -257,6 +257,8 @@ export function demoMarkers(demo: DemoState = buildDemoState()): string[] {
     f.tenant.name,
     f.department.id,
     f.department.name,
+    f.program.id,
+    f.program.name,
     f.project.id,
     f.project.name,
     f.project.clientName,

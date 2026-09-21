@@ -5,8 +5,8 @@ import { MAPPING_TICKET_LIMIT } from '../packages/app/src/use-cases/get-project-
 import { asOfDate, buildDemoState, currentPeriod } from '../packages/db/src/fixtures';
 
 /**
- * The composition root's bindings — the five writes, then the four reads — wired to spies, no
- * database.
+ * The composition root's bindings — the five project writes, the eight organisation writes (story
+ * 1.3 slice 2), then the four reads — wired to spies, no database.
  *
  * The `satisfies` checks cannot see a binding pointed at the WRONG use case: `ExplainTicketsInput`
  * is assignable to `ChangeRequestCandidatesInput`, so `explainTickets` calling
@@ -16,6 +16,11 @@ import { asOfDate, buildDemoState, currentPeriod } from '../packages/db/src/fixt
  * for `DEMO_TENANT_ID`; inside it exactly the matching repository member must receive
  * `({ actor: 'user:linh', at: anchor }, { ...input, kind })`, and the audit sink exactly one
  * record of the matching action.
+ *
+ * The organisation bindings the same way, plus the two outbound adapters the composition root
+ * wires for them: `@momo/adapters` is mocked, so the test sees that the audit `at` is the Clock's
+ * (`systemClock`) and a created row's id is the id port's (`uuidV7IdsOn`) — not a value the use case
+ * or the binding made up.
  *
  * In `tests/`, not beside the file: it has to import and mock `@momo/db`, and AD-1 lets exactly
  * one `apps/web` file do that (`pnpm depcruise`, rule `apps-not-to-db`). `tests/` sits outside
@@ -32,16 +37,38 @@ const spies = vi.hoisted(() => {
     recordChangeRequestCandidates: vi.fn(async () => {}),
     recordManualMapping: vi.fn(async () => {}),
   };
+  const org = {
+    findDepartment: vi.fn(async (id: string) => ({ id, name: 'Delivery' })),
+    findProgram: vi.fn(async (id: string) => ({ id, departmentId: 'dep-delivery', name: 'EC platform' })),
+    findProject: vi.fn(async (id: string) => ({
+      id,
+      name: 'EC phase 2',
+      departmentId: 'dep-delivery',
+      programId: 'prg-ec-platform',
+    })),
+    insertDepartment: vi.fn(async () => {}),
+    renameDepartment: vi.fn(async () => {}),
+    insertProgram: vi.fn(async () => {}),
+    renameProgram: vi.fn(async () => {}),
+    insertProject: vi.fn(async () => {}),
+    renameProject: vi.fn(async () => {}),
+    setProjectProgram: vi.fn(async () => {}),
+    setProjectDepartment: vi.fn(async () => {}),
+  };
   const append = vi.fn(async (_entry: unknown) => {});
   return {
     anchor,
+    /** What the mocked `systemClock` answers — distinct from the anchor. */
+    now: new Date('2026-09-21T08:00:00Z'),
+    newId: '01890a5d-ac96-774b-bcce-b302099a8057',
     handle: { marker: 'restricted-handle' },
     getDb: vi.fn(),
     repository,
+    org,
     append,
     inTenantTransaction: vi.fn(
       async (_handle: unknown, _tenantId: string, work: (scope: unknown) => Promise<unknown>) =>
-        work({ projectWrite: repository, audit: { append } }),
+        work({ projectWrite: repository, org, audit: { append } }),
     ),
     loadProjectBundle: vi.fn(),
     loadReview: vi.fn(),
@@ -55,6 +82,11 @@ vi.mock('@momo/db', async (importOriginal) => ({
   inTenantTransaction: spies.inTenantTransaction,
   loadProjectBundle: spies.loadProjectBundle,
   loadReview: spies.loadReview,
+}));
+
+vi.mock('@momo/adapters', () => ({
+  systemClock: { now: () => spies.now, nowMs: () => spies.now.getTime() },
+  uuidV7IdsOn: () => ({ next: () => spies.newId }),
 }));
 
 const APP_URL = 'postgres://momo_app:momo_app@localhost:55433/momo_keikaku';
@@ -142,8 +174,142 @@ describe.each(CASES)('the $binding binding', ({ call, recorder, command, action 
     for (const other of RECORDERS.filter((name) => name !== recorder)) {
       expect(spies.repository[other], `${other} must not be called`).not.toHaveBeenCalled();
     }
+    for (const writer of ORG_WRITERS) {
+      expect(spies.org[writer], `a project write must not reach org.${writer}`).not.toHaveBeenCalled();
+    }
     expect(spies.append).toHaveBeenCalledTimes(1);
     expect(spies.append).toHaveBeenCalledWith(expect.objectContaining({ ...stamp, action }));
+  });
+});
+
+const ORG_WRITERS = [
+  'insertDepartment',
+  'renameDepartment',
+  'insertProgram',
+  'renameProgram',
+  'insertProject',
+  'renameProject',
+  'setProjectProgram',
+  'setProjectDepartment',
+] as const;
+
+type OrgWriter = (typeof ORG_WRITERS)[number];
+
+const ORG_CASES: readonly {
+  readonly binding: string;
+  readonly call: () => Promise<unknown>;
+  readonly writer: OrgWriter;
+  readonly change: Record<string, unknown>;
+  readonly action: string;
+  readonly target: string;
+}[] = [
+  {
+    binding: 'createDepartment',
+    call: () => composition.createDepartment({ name: 'Design' }),
+    writer: 'insertDepartment',
+    change: { id: spies.newId, name: 'Design' },
+    action: 'department.create',
+    target: spies.newId,
+  },
+  {
+    binding: 'renameDepartment',
+    call: () => composition.renameDepartment({ departmentId: 'dep-delivery', name: 'Delivery JP' }),
+    writer: 'renameDepartment',
+    change: { id: 'dep-delivery', name: 'Delivery JP' },
+    action: 'department.rename',
+    target: 'dep-delivery',
+  },
+  {
+    binding: 'createProgram',
+    call: () => composition.createProgram({ departmentId: 'dep-delivery', name: 'Retail' }),
+    writer: 'insertProgram',
+    change: { id: spies.newId, departmentId: 'dep-delivery', name: 'Retail' },
+    action: 'program.create',
+    target: spies.newId,
+  },
+  {
+    binding: 'renameProgram',
+    call: () => composition.renameProgram({ programId: 'prg-ec-platform', name: 'EC' }),
+    writer: 'renameProgram',
+    change: { id: 'prg-ec-platform', name: 'EC' },
+    action: 'program.rename',
+    target: 'prg-ec-platform',
+  },
+  {
+    binding: 'createProject',
+    call: () =>
+      composition.createProject({
+        name: 'EC phase 3',
+        departmentId: 'dep-delivery',
+        programId: 'prg-ec-platform',
+        clientName: 'Osaka Retail',
+        contractType: '請負',
+      }),
+    writer: 'insertProject',
+    change: {
+      id: spies.newId,
+      name: 'EC phase 3',
+      departmentId: 'dep-delivery',
+      programId: 'prg-ec-platform',
+      clientName: 'Osaka Retail',
+      contractType: '請負',
+      demoAnchor: spies.now,
+    },
+    action: 'project.create',
+    target: spies.newId,
+  },
+  {
+    binding: 'renameProject',
+    call: () => composition.renameProject({ projectId: 'prj-ec2', name: 'EC phase 2b' }),
+    writer: 'renameProject',
+    change: { id: 'prj-ec2', name: 'EC phase 2b' },
+    action: 'project.rename',
+    target: 'prj-ec2',
+  },
+  {
+    binding: 'reassignProjectProgram',
+    call: () => composition.reassignProjectProgram({ projectId: 'prj-ec2', programId: null }),
+    writer: 'setProjectProgram',
+    change: { id: 'prj-ec2', programId: null },
+    action: 'project.reassign_program',
+    target: 'prj-ec2',
+  },
+  {
+    binding: 'reassignProjectDepartment',
+    call: () =>
+      composition.reassignProjectDepartment({
+        projectId: 'prj-ec2',
+        departmentId: 'dep-delivery',
+        programId: 'prg-ec-platform',
+      }),
+    writer: 'setProjectDepartment',
+    change: { id: 'prj-ec2', departmentId: 'dep-delivery', programId: 'prg-ec-platform' },
+    action: 'project.reassign_department',
+    target: 'prj-ec2',
+  },
+];
+
+describe.each(ORG_CASES)('the $binding organisation binding', ({ call, writer, change, action, target }) => {
+  it(`reaches org.${writer} and nothing else, for the demo Tenant as user:linh, stamped by the Clock, audited as ${action}`, async () => {
+    // A create answers the id the id port minted — the one its record names; the rest nothing.
+    const created = writer.startsWith('insert');
+    expect(await call()).toEqual({ ok: true, value: created ? { id: spies.newId } : undefined });
+
+    expect(spies.getDb).toHaveBeenCalledWith(APP_URL);
+    expect(spies.inTenantTransaction).toHaveBeenCalledTimes(1);
+    expect(spies.inTenantTransaction).toHaveBeenCalledWith(spies.handle, DEMO_TENANT_ID, expect.any(Function));
+    expect(spies.org[writer]).toHaveBeenCalledTimes(1);
+    expect(spies.org[writer]).toHaveBeenCalledWith(expect.objectContaining(change));
+    for (const other of ORG_WRITERS.filter((name) => name !== writer)) {
+      expect(spies.org[other], `org.${other} must not be called`).not.toHaveBeenCalled();
+    }
+    for (const recorder of RECORDERS) {
+      expect(spies.repository[recorder], `an org write must not reach ${recorder}`).not.toHaveBeenCalled();
+    }
+    expect(spies.append).toHaveBeenCalledTimes(1);
+    expect(spies.append).toHaveBeenCalledWith(
+      expect.objectContaining({ actor: 'user:linh', at: spies.now, action, target }),
+    );
   });
 });
 
@@ -241,6 +407,9 @@ describe.each(READ_CASES)('the $binding read binding', ({ call, port, check }) =
     expect(spies.inTenantTransaction, 'a read must not open a write transaction').not.toHaveBeenCalled();
     for (const recorder of RECORDERS) {
       expect(spies.repository[recorder], `a read must not reach ${recorder}`).not.toHaveBeenCalled();
+    }
+    for (const writer of ORG_WRITERS) {
+      expect(spies.org[writer], `a read must not reach org.${writer}`).not.toHaveBeenCalled();
     }
   });
 });

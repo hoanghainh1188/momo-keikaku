@@ -12,7 +12,8 @@
 //
 // THE CARVE-OUTS ARE NAMED PATHS, NOT PATTERNS (AD-1): `apps/web/src/server/composition.ts`,
 // `apps/web`'s composition root, and `packages/db/auth`, the Better Auth binding. A third needs
-// the spine amended first.
+// the spine amended first. The composition root is also the one `apps/*` file that may import
+// `packages/adapters` (story 1.3 slice 2, `apps-adapters-only-from-composition-root`).
 //
 // Every rule here has been watched to fail (see the CI header in .github/workflows/ci.yml and
 // spec-1-2-web-write-use-cases.md) — including the three forward-looking scheduling rules,
@@ -60,6 +61,33 @@ module.exports = {
         path: '^packages/db/',
         pathNot: '^packages/db/auth/',
       },
+    },
+    {
+      name: 'apps-adapters-only-from-composition-root',
+      severity: 'error',
+      comment:
+        'AD-1 (amended for story 1.3 slice 2): packages/adapters implements the outbound ports ' +
+        'packages/app declares (the Clock, the id generator), and the one apps/* file allowed to ' +
+        'import it is apps/web/src/server/composition.ts, which wires them into the use cases. A ' +
+        'page reading the clock or minting ids itself is a use case\'s decision taken in an ' +
+        'inbound adapter; apps/worker has no composition root, so it imports none of it either.',
+      from: {
+        path: '^apps/',
+        pathNot: '^apps/web/src/server/composition[.]ts$',
+      },
+      to: { path: '^packages/adapters/' },
+    },
+    {
+      name: 'inner-packages-not-to-adapters',
+      severity: 'error',
+      comment:
+        'AD-1: packages/adapters IMPLEMENTS the ports packages/app declares (the Clock, the id ' +
+        'generator); the dependency points inward only. packages/app, packages/domain and ' +
+        'packages/db never import it — a use case that imported systemClock would read the wall ' +
+        'clock no test could fix. Declare a port in packages/app and let a composition root wire ' +
+        'the adapter in.',
+      from: { path: '^packages/(app|domain|db)/' },
+      to: { path: '^packages/adapters/' },
     },
     {
       name: 'web-to-domain-present-only',

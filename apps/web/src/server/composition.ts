@@ -1,7 +1,8 @@
 /**
  * `apps/web`'s COMPOSITION ROOT — and the only file under `apps/web` permitted to import
- * `@momo/db`. `.dependency-cruiser.cjs` (rule `apps-not-to-db`) names this exact path, and
- * `pnpm depcruise` fails CI on any other `apps/*` file importing `packages/db` or Drizzle.
+ * `@momo/db` or `@momo/adapters`. `.dependency-cruiser.cjs` (rules `apps-not-to-db` and
+ * `apps-adapters-only-from-composition-root`) names this exact path, and `pnpm depcruise` fails CI
+ * on any other `apps/*` file importing `packages/db`, `packages/adapters` or Drizzle.
  *
  * AD-1 says an inbound adapter may call use cases and nothing else. Something still has to
  * build the database handle, pick the role, and hand `packages/db`'s repository to
@@ -18,10 +19,13 @@
  *     the connection string is read here and passed in.
  *   * The ports. `packages/db`'s functions are handed over as they are: `packages/app`
  *     declares `ProjectReadPort` and the write deps' `TenantTransaction` (whose scope carries
- *     the project write repository and the audit sink, both bound to one transaction), and
+ *     every write repository family and the audit sink, all bound to one transaction), and
  *     these functions satisfy them STRUCTURALLY. The two `satisfies` below are where
  *     TypeScript checks that match — change a signature on either side and the typecheck names
  *     the line.
+ *   * The outbound adapters (story 1.3 slice 2): the `Clock` the organisation writes stamp their
+ *     audit `at` with (`systemClock`) and the UUIDv7 id port new rows take their ids from, both
+ *     from `packages/adapters` (AD-1, amended for this edge: the composition root alone).
  *   * The context: `{ tenantId }`, story 1.4's shape with one field, and — beside it — the
  *     audit ACTOR the writes stamp. There is no auth yet, so the single seeded Tenant and the
  *     single demo user are stated here, once each. `resolveRequestContext` replaces both
@@ -32,6 +36,9 @@
  */
 import {
   config,
+  createDepartment as createDepartmentUseCase,
+  createProgram as createProgramUseCase,
+  createProject as createProjectUseCase,
   explainTickets as explainTicketsUseCase,
   getClientView as getClientViewUseCase,
   getProjectHeader as getProjectHeaderUseCase,
@@ -41,16 +48,30 @@ import {
   mapTickets as mapTicketsUseCase,
   markChangeRequestCandidates as markChangeRequestCandidatesUseCase,
   planTicketsAsWorkPackage as planTicketsAsWorkPackageUseCase,
+  reassignProjectDepartment as reassignProjectDepartmentUseCase,
+  reassignProjectProgram as reassignProjectProgramUseCase,
+  renameDepartment as renameDepartmentUseCase,
+  renameProgram as renameProgramUseCase,
+  renameProject as renameProjectUseCase,
   type ChangeRequestCandidatesInput,
+  type CreateDepartmentInput,
+  type CreateProgramInput,
+  type CreateProjectInput,
   type ExplainTicketsInput,
   type MapTicketInput,
   type MapTicketsInput,
   type PlanTicketsInput,
   type ProjectInput,
   type ProjectReadDeps,
-  type ProjectWriteDeps,
+  type ReassignProjectDepartmentInput,
+  type ReassignProjectProgramInput,
+  type RenameDepartmentInput,
+  type RenameProgramInput,
+  type RenameProjectInput,
   type UseCaseContext,
+  type WriteDeps,
 } from '@momo/app';
+import { systemClock, uuidV7IdsOn } from '@momo/adapters';
 import {
   DEMO_TENANT_ID,
   getDb,
@@ -112,38 +133,86 @@ export function getClientView(input: ProjectInput) {
 }
 
 /**
- * The project write deps, wired: the one tenant transaction every write use case runs its change
- * and its audit record in (AD-14). Built per call, for the same reason as the read port.
+ * The write deps, wired: the one tenant transaction every write use case runs its change and its
+ * audit record in (AD-14), the Clock and the id port. One value for every write — it satisfies
+ * the project writes' deps and the organisation writes' alike. Built per call, for the same
+ * reason as the read port.
  */
-function projectWriteDeps() {
+function writeDeps() {
   return {
     handle: webDb(),
     actor: WEB_ACTOR,
+    clock: systemClock,
+    ids: uuidV7IdsOn(systemClock),
     transaction: inTenantTransaction,
-  } satisfies ProjectWriteDeps<Db>;
+  } satisfies WriteDeps<Db>;
 }
 
 /** FR-29 *Map*. See `packages/app`'s `mapTickets`. */
 export function mapTickets(input: MapTicketsInput) {
-  return mapTicketsUseCase(projectWriteDeps(), webContext(), input);
+  return mapTicketsUseCase(writeDeps(), webContext(), input);
 }
 
 /** FR-29 *Plan*. See `packages/app`'s `planTicketsAsWorkPackage`. */
 export function planTicketsAsWorkPackage(input: PlanTicketsInput) {
-  return planTicketsAsWorkPackageUseCase(projectWriteDeps(), webContext(), input);
+  return planTicketsAsWorkPackageUseCase(writeDeps(), webContext(), input);
 }
 
 /** FR-29 *Explain*. See `packages/app`'s `explainTickets`. */
 export function explainTickets(input: ExplainTicketsInput) {
-  return explainTicketsUseCase(projectWriteDeps(), webContext(), input);
+  return explainTicketsUseCase(writeDeps(), webContext(), input);
 }
 
 /** FR-29 *Change Request candidate*. See `packages/app`'s `markChangeRequestCandidates`. */
 export function markChangeRequestCandidates(input: ChangeRequestCandidatesInput) {
-  return markChangeRequestCandidatesUseCase(projectWriteDeps(), webContext(), input);
+  return markChangeRequestCandidatesUseCase(writeDeps(), webContext(), input);
 }
 
 /** FR-21 manual Mapping of one Ticket. See `packages/app`'s `mapTicket`. */
 export function mapTicket(input: MapTicketInput) {
-  return mapTicketUseCase(projectWriteDeps(), webContext(), input);
+  return mapTicketUseCase(writeDeps(), webContext(), input);
+}
+
+// --- FR-1's organisation writes (story 1.3 slice 2). No page calls them yet: the Organisation
+// admin surface waits for sign-in and roles (1.4/1.5). Wired now so the bindings, the Clock and the
+// id port are pinned by `tests/web-composition.test.ts` before a page can reach them.
+
+/** FR-1: a new Department. See `packages/app`'s `createDepartment`. */
+export function createDepartment(input: CreateDepartmentInput) {
+  return createDepartmentUseCase(writeDeps(), webContext(), input);
+}
+
+/** FR-1: renames a Department. See `packages/app`'s `renameDepartment`. */
+export function renameDepartment(input: RenameDepartmentInput) {
+  return renameDepartmentUseCase(writeDeps(), webContext(), input);
+}
+
+/** FR-1: a new Program in a Department. See `packages/app`'s `createProgram`. */
+export function createProgram(input: CreateProgramInput) {
+  return createProgramUseCase(writeDeps(), webContext(), input);
+}
+
+/** FR-1: renames a Program. See `packages/app`'s `renameProgram`. */
+export function renameProgram(input: RenameProgramInput) {
+  return renameProgramUseCase(writeDeps(), webContext(), input);
+}
+
+/** FR-1: a new Project. See `packages/app`'s `createProject`. */
+export function createProject(input: CreateProjectInput) {
+  return createProjectUseCase(writeDeps(), webContext(), input);
+}
+
+/** FR-1: renames a Project. See `packages/app`'s `renameProject`. */
+export function renameProject(input: RenameProjectInput) {
+  return renameProjectUseCase(writeDeps(), webContext(), input);
+}
+
+/** FR-1: moves a Project between its Department's Programs. See `reassignProjectProgram`. */
+export function reassignProjectProgram(input: ReassignProjectProgramInput) {
+  return reassignProjectProgramUseCase(writeDeps(), webContext(), input);
+}
+
+/** FR-1: moves a Project to another Department. See `reassignProjectDepartment`. */
+export function reassignProjectDepartment(input: ReassignProjectDepartmentInput) {
+  return reassignProjectDepartmentUseCase(writeDeps(), webContext(), input);
 }

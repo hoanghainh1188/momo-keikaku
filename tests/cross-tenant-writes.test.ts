@@ -1,22 +1,34 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { eq, sql } from 'drizzle-orm';
-import { z } from 'zod';
-import { decode } from '@momo/domain';
-import type { ProjectWriteDeps } from '../packages/app/src/ports/project-write';
-import type { AppError } from '../packages/app/src/result';
+import { eq } from 'drizzle-orm';
+import type { WriteDeps } from '../packages/app/src/ports/write-deps';
 import { mapTicket } from '../packages/app/src/use-cases';
-import { closeAllPools, getDb, getPool, schema, type Db } from '../packages/db/src/client';
+import { closeAllPools, schema, type Db } from '../packages/db/src/client';
 import {
   assertProbeTenantsDisjoint,
   buildProbeTenant,
   createProbeTenant,
   removeProbeTenant,
-  type ProbeTenant,
 } from '../packages/db/src/probe-tenants';
-import { inTenantTransaction } from '../packages/db/src/repo-writes';
-import { TENANT_OWNED } from '../packages/db/src/table-classes';
+import { inTenantTransaction } from '../packages/db/src/tenant-transaction';
 import { withTenant } from '../packages/db/src/with-tenant';
 import { READ_USE_CASES, REGISTRY_MODULE, type ReadUseCase, type WriteTarget } from './read-use-cases';
+import { EXPECTED, manualMapping } from './write-expectations';
+import {
+  TEST_ACTOR,
+  TEST_NOW,
+  drive as driveWith,
+  idPort,
+  landedRows,
+  newSince,
+  owner,
+  connectWriteHarness,
+  restrictedWriteDeps as restrictedWriteDepsWith,
+  allRows,
+  rowCounts,
+  targetOf,
+  withoutSeq,
+  type Outcome,
+} from './write-harness';
 
 /**
  * THE WRITE HALF OF THE CROSS-TENANT HARNESS (story 1.2 slice 4).
@@ -33,9 +45,15 @@ import { READ_USE_CASES, REGISTRY_MODULE, type ReadUseCase, type WriteTarget } f
  *      unchanged for BOTH Tenants. Counting every table rather than the four a write touches
  *      is what catches a write that landed somewhere nobody expected.
  *   2. AN OWN-TENANT WRITE LANDS EXACTLY THE ROWS THE ACTION ALWAYS WROTE — ids, `at` (the
- *      Project's anchor), actor, audit action and payload, and the new Work Package for a
- *      Plan — on a dedicated probe Tenant, removed afterwards. Every write entry must have an
- *      expectation below, and that is asserted with no database too.
+ *      Project's anchor for a project write, the Clock for an organisation write), actor, audit
+ *      action and payload, the new Work Package for a Plan, the org row after a create, rename
+ *      or reassignment — on a dedicated probe Tenant, removed afterwards. Every write entry must
+ *      have an expectation (`tests/write-expectations.ts`), asserted with no database too.
+ *
+ * Story 1.3 slice 2 put the organisation writes on the same surface, so they are driven here like
+ * every other write: a foreign Department, Program or Project id answers `not_found` and lands
+ * nothing for either Tenant. The one write that names no existing row (`createDepartment`, marked
+ * `namesNoExistingRow` in the registry) is asserted to land in the caller's Tenant only.
  *
  * Its own probe Tenants, not `cross-tenant.test.ts`'s: vitest runs the two files in parallel,
  * and the reads there compare two probes' results for symmetry — a write landing on one of
@@ -43,9 +61,11 @@ import { READ_USE_CASES, REGISTRY_MODULE, type ReadUseCase, type WriteTarget } f
  * (700M, 710M), the demo seed's and `rls.test.ts`'s.
  */
 
-const REQUIRE_DB = process.env.REQUIRE_DB === '1';
-const OWNER_DATABASE_URL = process.env.DATABASE_URL;
-const APP_DATABASE_URL = process.env.APP_DATABASE_URL;
+const reachable = await connectWriteHarness({
+  ownerUrl: process.env.DATABASE_URL,
+  appUrl: process.env.APP_DATABASE_URL,
+  requireDb: process.env.REQUIRE_DB === '1',
+});
 
 /** The Tenant whose Project is written to. */
 const PROBE_W = buildProbeTenant('xtprobe-wa', 720_000_000);
@@ -53,250 +73,20 @@ const PROBE_W = buildProbeTenant('xtprobe-wa', 720_000_000);
 const PROBE_V = buildProbeTenant('xtprobe-wb', 730_000_000);
 assertProbeTenantsDisjoint([PROBE_W, PROBE_V]);
 
-/** Distinct from every fixture actor, so the rows a write lands can be told apart. */
-const TEST_ACTOR = 'user:xtprobe-writer';
-
 const WRITES: readonly ReadUseCase[] = READ_USE_CASES.filter((entry) => entry.kind === 'write');
 
-if (REQUIRE_DB && !(OWNER_DATABASE_URL && APP_DATABASE_URL)) {
-  throw new Error(
-    'REQUIRE_DB=1 but DATABASE_URL and APP_DATABASE_URL are not both set. The write half of ' +
-      'the cross-tenant harness needs the owner to write the probe Tenants and the application ' +
-      'role to drive the writes; it must not be skipped here.',
-  );
-}
+/** The id port for every write this file drives — one sequence for the run, never reused. */
+const IDS = idPort('xtwa-id');
 
-async function reachableAs(connectionString: string | undefined): Promise<boolean> {
-  if (!connectionString) return false;
-  try {
-    const client = await getPool(connectionString).connect();
-    client.release();
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-const reachable =
-  (await reachableAs(OWNER_DATABASE_URL)) && (await reachableAs(APP_DATABASE_URL));
-
-if (REQUIRE_DB && !reachable) {
-  throw new Error(
-    'REQUIRE_DB=1 but the database is not reachable as both roles. Run `pnpm pgboss:migrate` ' +
-      'and `pnpm db:policies` first.',
-  );
-}
-
-function owner(): Db {
-  return getDb(OWNER_DATABASE_URL!);
-}
-
-/**
- * The write deps, wired: `packages/db`'s tenant transaction as `packages/app` declares it, on the
- * RESTRICTED role's handle. The same structural check the web app's composition root makes —
- * this file is a composition root too.
- */
 function restrictedWriteDeps() {
-  return {
-    handle: getDb(APP_DATABASE_URL!),
-    actor: TEST_ACTOR,
-    transaction: inTenantTransaction,
-  } satisfies ProjectWriteDeps<Db>;
+  return restrictedWriteDepsWith(IDS);
 }
 
-/** W's own ids: two Tickets it has Mapping history for, and a leaf, non-Catch-all WP. */
-function targetOf(probe: ProbeTenant, tenantId: string): WriteTarget {
-  const tickets = [...new Set(probe.state.mappingEvents.map((m) => m.ticketId))];
-  const leaf = probe.state.wps.find((w) => w.isLeaf && !w.isCatchAll);
-  if (tickets.length < 2 || !leaf) {
-    throw new Error(`${probe.token}'s fixture has too few Tickets or no leaf Work Package`);
-  }
-  return { tenantId, projectId: probe.projectId, ticketIds: [tickets[0]!, tickets[1]!], wpId: leaf.id };
-}
-
-interface Outcome {
-  readonly ok?: true;
-  readonly refused?: AppError;
-  readonly error?: unknown;
-}
-
-async function drive(
-  entry: ReadUseCase,
-  target: WriteTarget,
-  deps: ProjectWriteDeps<Db> = restrictedWriteDeps(),
-): Promise<Outcome> {
-  try {
-    const returned = (await entry.invokeWrite!(deps, target)) as {
-      ok?: boolean;
-      error?: AppError;
-    } | null;
-    if (returned?.ok === true) return { ok: true };
-    if (returned?.ok === false && returned.error) return { refused: returned.error };
-    return { error: new Error(`${entry.name} did not return a Result`) };
-  } catch (error) {
-    return { error };
-  }
-}
-
-/** Rows per tenant-owned table for one Tenant, counted inside its own tenant scope. */
-async function rowCounts(tenantId: string): Promise<Record<string, number>> {
-  return withTenant(owner(), tenantId, async (tx) => {
-    // Sequential: one transaction is one connection, and pg refuses overlapping queries on it.
-    const entries: (readonly [string, number])[] = [];
-    for (const owned of TENANT_OWNED) {
-      const res = await tx.execute<{ n: number }>(
-        sql`SELECT count(*)::int AS n FROM ${sql.identifier(owned.table)}
-             WHERE ${sql.identifier(owned.tenantColumn!)} = ${tenantId}`,
-      );
-      entries.push([owned.table, Number(res.rows[0]?.n ?? 0)]);
-    }
-    return Object.fromEntries(entries);
-  });
+function drive(entry: ReadUseCase, target: WriteTarget, deps: WriteDeps<Db> = restrictedWriteDeps()): Promise<Outcome> {
+  return driveWith(entry.name, entry.invokeWrite!, target, deps);
 }
 
 // --- the pure gate ---------------------------------------------------------------------------
-
-/** What an own-Tenant write must land, per write entry — keyed by the registry's name. */
-type Expect = (ctx: ExpectContext) => ExpectedRows;
-
-interface ExpectContext {
-  readonly target: WriteTarget;
-  readonly at: Date;
-  /** The `9.` Work Packages the Project had before the write. */
-  readonly ninesBefore: number;
-}
-
-interface ExpectedRows {
-  readonly mappingEvents: readonly Record<string, unknown>[];
-  readonly dispositions: readonly Record<string, unknown>[];
-  readonly audits: readonly Record<string, unknown>[];
-  readonly workPackages: readonly Record<string, unknown>[];
-}
-
-const NO_ROWS: ExpectedRows = { mappingEvents: [], dispositions: [], audits: [], workPackages: [] };
-
-function dispositionMappings(target: WriteTarget, at: Date, wpId: string) {
-  return target.ticketIds.map((ticketId) => ({
-    id: `map-${ticketId}-${at.getTime()}`,
-    tenantId: target.tenantId,
-    projectId: target.projectId,
-    ticketId,
-    wpId,
-    source: 'disposition',
-    ruleId: null,
-    at,
-    actor: TEST_ACTOR,
-  }));
-}
-
-function disposition(
-  target: WriteTarget,
-  at: Date,
-  kind: string,
-  wpId: string | null,
-  note: string | null,
-) {
-  return {
-    dispositions: [
-      {
-        id: `disp-${kind}-${at.getTime()}`,
-        tenantId: target.tenantId,
-        projectId: target.projectId,
-        kind,
-        ticketIds: [...target.ticketIds],
-        wpId,
-        note,
-        at,
-        actor: TEST_ACTOR,
-      },
-    ],
-    audits: [
-      {
-        tenantId: target.tenantId,
-        actor: TEST_ACTOR,
-        action: `disposition.${kind}`,
-        target: target.projectId,
-        payload: { ticketIds: [...target.ticketIds], wpId, note },
-        at,
-      },
-    ],
-  };
-}
-
-const EXPECTED: Readonly<Record<string, Expect>> = {
-  mapTickets: ({ target, at }) => ({
-    ...NO_ROWS,
-    mappingEvents: dispositionMappings(target, at, target.wpId),
-    ...disposition(target, at, 'map', target.wpId, null),
-  }),
-  planTicketsAsWorkPackage: ({ target, at, ninesBefore }) => {
-    const wpId = `wp-new-${at.getTime()}`;
-    return {
-      mappingEvents: dispositionMappings(target, at, wpId),
-      ...disposition(target, at, 'plan', wpId, null),
-      workPackages: [
-        {
-          id: wpId,
-          tenantId: target.tenantId,
-          projectId: target.projectId,
-          wbsCode: `9.${ninesBefore + 1}`,
-          name: 'Harness Plan',
-          parentId: null,
-          isLeaf: true,
-          isMilestone: false,
-          isCatchAll: false,
-          start: null,
-          finish: null,
-          plannedMh: 0n,
-          completedAt: null,
-          milestoneDoneAt: null,
-          assignedResourceIds: [],
-          deletedAt: null,
-        },
-      ],
-    };
-  },
-  explainTickets: ({ target, at }) => ({
-    ...NO_ROWS,
-    ...disposition(target, at, 'explain', null, 'Harness note.'),
-  }),
-  markChangeRequestCandidates: ({ target, at }) => ({
-    ...NO_ROWS,
-    ...disposition(target, at, 'cr_candidate', null, null),
-  }),
-  mapTicket: ({ target, at }) => manualMapping(target, at, target.wpId),
-};
-
-/** FR-21's manual Mapping rows. `wpId` is the raw command value: `''` is the unmap. */
-function manualMapping(target: WriteTarget, at: Date, wpId: string): ExpectedRows {
-  const ticketId = target.ticketIds[0];
-  return {
-    ...NO_ROWS,
-    mappingEvents: [
-      {
-        id: `map-${ticketId}-${at.getTime()}`,
-        tenantId: target.tenantId,
-        projectId: target.projectId,
-        ticketId,
-        wpId: wpId === '' ? null : wpId,
-        source: 'manual',
-        ruleId: null,
-        at,
-        actor: TEST_ACTOR,
-      },
-    ],
-    audits: [
-      {
-        tenantId: target.tenantId,
-        actor: TEST_ACTOR,
-        action: wpId === '' ? 'mapping.unmap' : 'mapping.map',
-        target: ticketId,
-        payload: { wpId },
-        at,
-      },
-    ],
-  };
-}
 
 describe('every write use case is accounted for', () => {
   it('has an own-Tenant row expectation for every write entry, and none for anything else', () => {
@@ -318,73 +108,10 @@ describe('every write use case is accounted for', () => {
 
 // --- against the database --------------------------------------------------------------------
 
-/**
- * The audit payload shapes a probe Tenant carries: the seed's, and the two the writes record.
- * `audit_log.payload` is written through the domain's codec (AD-4), so it is read back through
- * it too, in the shape the reader states — never compared as raw `jsonb` column text, which reorders keys.
- */
-const auditPayloadJson = z.union([
-  z.object({ ticketIds: z.array(z.string()), wpId: z.string().nullable(), note: z.string().nullable() }).strict(),
-  z.object({ wpId: z.string() }).strict(),
-  z
-    .object({
-      snapshots: z.number().int(),
-      ledgerEntries: z.number().int(),
-      mappingEvents: z.number().int(),
-      anchor: z.string(),
-    })
-    .strict(),
-]);
-
-/** The rows a write may land, for one Tenant, keyed so a later read can be diffed. */
-async function landedRows(tenantId: string) {
-  return withTenant(owner(), tenantId, async (tx) => ({
-    mappingEvents: await tx
-      .select()
-      .from(schema.mappingEvent)
-      .where(eq(schema.mappingEvent.tenantId, tenantId)),
-    dispositions: await tx
-      .select()
-      .from(schema.dispositionEvent)
-      .where(eq(schema.dispositionEvent.tenantId, tenantId)),
-    audits: (
-      await tx.select().from(schema.auditLog).where(eq(schema.auditLog.tenantId, tenantId))
-    ).map((row) => ({ ...row, payload: decode(row.payload, auditPayloadJson) })),
-    workPackages: await tx
-      .select()
-      .from(schema.workPackage)
-      .where(eq(schema.workPackage.tenantId, tenantId)),
-  }));
-}
-
-type Landed = Awaited<ReturnType<typeof landedRows>>;
-
-/** What appeared between two reads — rows are append-only here, so "new" is by key. */
-function newSince(before: Landed, after: Landed) {
-  const seqs = (rows: readonly { seq: number }[]) => new Set(rows.map((row) => row.seq));
-  const mapSeqs = seqs(before.mappingEvents);
-  const dispSeqs = seqs(before.dispositions);
-  const auditSeqs = seqs(before.audits);
-  const wpIds = new Set(before.workPackages.map((row) => row.id));
-  return {
-    mappingEvents: after.mappingEvents
-      .filter((row) => !mapSeqs.has(row.seq))
-      .sort((a, b) => a.seq - b.seq),
-    dispositions: after.dispositions.filter((row) => !dispSeqs.has(row.seq)),
-    audits: after.audits.filter((row) => !auditSeqs.has(row.seq)),
-    workPackages: after.workPackages.filter((row) => !wpIds.has(row.id)),
-  };
-}
-
-/** Drops the database-allocated `seq`, which the expectations cannot know. */
-function withoutSeq<T extends { seq: number }>(rows: readonly T[]): Omit<T, 'seq'>[] {
-  return rows.map(({ seq: _seq, ...rest }) => rest);
-}
-
 describe.skipIf(!reachable)('the write use cases, against two probe Tenants as the restricted role', () => {
   let anchor: Date;
   const ownTarget = () => targetOf(PROBE_W, PROBE_W.tenantId);
-  type ProjectWriteScopeOf = Parameters<Parameters<typeof inTenantTransaction>[2]>[0];
+  type WriteScopeOf = Parameters<Parameters<typeof inTenantTransaction>[2]>[0];
 
   beforeAll(async () => {
     await createProbeTenant(owner(), PROBE_W);
@@ -415,7 +142,10 @@ describe.skipIf(!reachable)('the write use cases, against two probe Tenants as t
     }
   }, 120_000);
 
-  describe.each(WRITES.map((entry) => [entry.name, entry] as const))(
+  const FOREIGN = WRITES.filter((entry) => entry.namesNoExistingRow === undefined);
+  const NO_FOREIGN_ID = WRITES.filter((entry) => entry.namesNoExistingRow !== undefined);
+
+  describe.each(FOREIGN.map((entry) => [entry.name, entry] as const))(
     'write use case %s',
     (_name, entry) => {
       it('answers not_found and lands nothing, for either Tenant, when WB replays WA\'s ids', async () => {
@@ -425,12 +155,12 @@ describe.skipIf(!reachable)('the write use cases, against two probe Tenants as t
 
         expect(
           outcome.error,
-          `${entry.name} THREW when probe Tenant WB wrote to WA's Project, instead of answering ` +
+          `${entry.name} THREW when probe Tenant WB wrote to WA's rows, instead of answering ` +
             `not_found: ${String((outcome.error as Error | undefined)?.message ?? outcome.error)}`,
         ).toBeUndefined();
         expect(
           outcome.refused?.code,
-          `${entry.name} did not answer not_found when probe Tenant WB wrote to WA's Project` +
+          `${entry.name} did not answer not_found when probe Tenant WB wrote to WA's rows` +
             (outcome.refused ? ` — it answered ${outcome.refused.code}` : ' — it answered ok'),
         ).toBe('not_found');
         expect(
@@ -439,9 +169,31 @@ describe.skipIf(!reachable)('the write use cases, against two probe Tenants as t
         ).toBe(false);
         expect(
           after,
-          `${entry.name} changed row counts when probe Tenant WB wrote to WA's Project — a ` +
+          `${entry.name} changed row counts when probe Tenant WB wrote to WA's rows — a ` +
             'foreign write must land nothing in any tenant-owned table, for either Tenant',
         ).toEqual(before);
+      });
+    },
+  );
+
+  describe.skipIf(NO_FOREIGN_ID.length === 0).each(NO_FOREIGN_ID.map((entry) => [entry.name, entry] as const))(
+    'write use case %s (names no existing row)',
+    (_name, entry) => {
+      it('lands in the calling Tenant only — nothing for the other', async () => {
+        const before = { w: await rowCounts(PROBE_W.tenantId), v: await rowCounts(PROBE_V.tenantId) };
+        const outcome = await drive(entry, targetOf(PROBE_W, PROBE_V.tenantId));
+        const after = { w: await rowCounts(PROBE_W.tenantId), v: await rowCounts(PROBE_V.tenantId) };
+
+        expect(outcome, `${entry.name} did not answer ok for probe Tenant WB`).toEqual({ ok: true });
+        expect(after.w, `${entry.name}, run as WB, changed probe Tenant WA's rows`).toEqual(before.w);
+        const grew = Object.entries(after.v)
+          .map(([table, n]) => [table, n - before.v[table]!] as const)
+          .filter(([, delta]) => delta !== 0);
+        expect(grew.length, `${entry.name} landed nothing for the Tenant that called it`).toBeGreaterThan(0);
+        expect(
+          grew.filter(([, delta]) => delta !== 1),
+          `${entry.name} must land exactly one row per table it touches for WB`,
+        ).toEqual([]);
       });
     },
   );
@@ -464,12 +216,12 @@ describe.skipIf(!reachable)('the write use cases, against two probe Tenants as t
 
     /** The real transaction, with `wrap` applied to the scope it hands the use case. */
     function wrappedDeps(
-      wrap: (scope: ProjectWriteScopeOf) => ProjectWriteScopeOf,
+      wrap: (scope: WriteScopeOf) => WriteScopeOf,
       afterWork?: () => never,
-    ): ProjectWriteDeps<Db> {
+    ): WriteDeps<Db> {
       return {
         ...restrictedWriteDeps(),
-        transaction: <T>(handle: Db, tenantId: string, work: (scope: ProjectWriteScopeOf) => Promise<T>) =>
+        transaction: <T>(handle: Db, tenantId: string, work: (scope: WriteScopeOf) => Promise<T>) =>
           inTenantTransaction(handle, tenantId, async (scope) => {
             const result = await work(wrap(scope));
             if (afterWork) afterWork();
@@ -496,13 +248,14 @@ describe.skipIf(!reachable)('the write use cases, against two probe Tenants as t
             throw new Error(AFTER_AUDIT);
           },
         );
-        const before = await rowCounts(PROBE_W.tenantId);
+        // Every row, not counts: a count cannot see an UPDATE (a rename) that committed.
+        const before = await allRows(PROBE_W.tenantId);
         const outcome = await drive(entry, ownTarget(), deps);
 
         expect(appended, `${entry.name} did not reach audit.record before the failure`).toBe(1);
         expect((outcome.error as Error | undefined)?.message).toBe(AFTER_AUDIT);
         expect(
-          await rowCounts(PROBE_W.tenantId),
+          await allRows(PROBE_W.tenantId),
           `${entry.name}: rows survived a transaction that failed after its audit record`,
         ).toEqual(before);
       },
@@ -521,7 +274,7 @@ describe.skipIf(!reachable)('the write use cases, against two probe Tenants as t
             },
           },
         }));
-        const before = await rowCounts(PROBE_W.tenantId);
+        const before = await allRows(PROBE_W.tenantId);
         const outcome = await drive(entry, ownTarget(), deps);
 
         expect(attempted, `${entry.name} never tried to write its audit record`).toBe(1);
@@ -533,7 +286,7 @@ describe.skipIf(!reachable)('the write use cases, against two probe Tenants as t
           `${entry.name} failed, but not with Postgres refusing the audit insert: ${String(outcome.error)}`,
         ).toBe('22021');
         expect(
-          await rowCounts(PROBE_W.tenantId),
+          await allRows(PROBE_W.tenantId),
           `${entry.name}: the change committed although its audit record was refused`,
         ).toEqual(before);
       },
@@ -554,21 +307,30 @@ describe.skipIf(!reachable)('the write use cases, against two probe Tenants as t
         (w) => w.projectId === target.projectId && w.wbsCode.startsWith('9.'),
       ).length;
 
+      const issuedBefore = IDS.issued.length;
       const outcome = await drive(entry, target);
-      expect(outcome, `${entry.name} did not answer ok for its own Tenant's Project`).toEqual({
+      expect(outcome, `${entry.name} did not answer ok for its own Tenant's rows`).toEqual({
         ok: true,
       });
 
       const landed = newSince(before, await landedRows(PROBE_W.tenantId));
-      const expected = EXPECTED[entry.name]!({ target, at: anchor, ninesBefore });
+      const expected = EXPECTED[entry.name]!({
+        target,
+        at: anchor,
+        now: TEST_NOW,
+        actor: TEST_ACTOR,
+        ninesBefore,
+        newIds: IDS.issued.slice(issuedBefore),
+        before,
+      });
       expect(
         {
+          ...landed,
           mappingEvents: withoutSeq(landed.mappingEvents),
           dispositions: withoutSeq(landed.dispositions),
           audits: withoutSeq(landed.audits),
-          workPackages: landed.workPackages,
         },
-        `${entry.name} did not land the rows the action always wrote`,
+        `${entry.name} did not land the rows it must`,
       ).toEqual(expected);
       // Mapping seqs are allocated as one consecutive run, in Ticket order.
       const seqs = landed.mappingEvents.map((row) => row.seq);
@@ -587,11 +349,11 @@ describe.skipIf(!reachable)('the write use cases, against two probe Tenants as t
 
       const landed = newSince(before, await landedRows(PROBE_W.tenantId));
       expect({
+        ...landed,
         mappingEvents: withoutSeq(landed.mappingEvents),
         dispositions: withoutSeq(landed.dispositions),
         audits: withoutSeq(landed.audits),
-        workPackages: landed.workPackages,
-      }).toEqual(manualMapping(target, anchor, ''));
+      }).toEqual(manualMapping(target, anchor, TEST_ACTOR, ''));
     });
 
     it('landed nothing for the other probe Tenant', async () => {

@@ -1,20 +1,19 @@
 import { eq, sql } from 'drizzle-orm';
-import { auditSinkOn } from './audit-sink';
-import type { Db } from './client';
+import type { Bound } from './bound';
 import { projectNotFound } from './project-not-found';
 import * as s from './schema';
-import { withTenant, type Tx } from './with-tenant';
+import type { Tx } from './with-tenant';
 
 /**
- * The five project writes — FR-29's four Dispositions and FR-21's manual Mapping — and the tenant
- * transaction they run in.
+ * The five project writes — FR-29's four Dispositions and FR-21's manual Mapping.
  *
  * Moved here from `apps/web/src/app/actions.ts` by story 1.2 slice 4; reshaped by story 1.3
- * slice 1 onto `packages/app`'s tenant-transaction port. `inTenantTransaction` opens ONE
- * `withTenant` transaction and hands the use case a scope whose every member is bound to it: the
- * project write repository below and the audit sink (`audit-sink.ts`). The use case makes its
- * change through the one and records it through the other, so both commit together or not at
- * all (AD-14). The repository no longer writes `audit_log` — the sink is its one writer, and
+ * slice 1 onto `packages/app`'s tenant-transaction port. `inTenantTransaction`
+ * (`tenant-transaction.ts` since slice 2, which generalised it) opens ONE `withTenant` transaction
+ * and hands the use case a scope whose every member is bound to it: the project write repository
+ * below, the organisation repository (`repo-org.ts`) and the audit sink (`audit-sink.ts`). The
+ * use case makes its change through a repository and records it through the sink, so both commit
+ * together or not at all (AD-14). The repository no longer writes `audit_log` — the sink is its one writer, and
  * `packages/app`'s `audit.record` the one caller — and the event inserts stay here.
  *
  * They satisfy `packages/app`'s `ProjectWriteDeps` STRUCTURALLY: this package may not import
@@ -81,12 +80,6 @@ type DispositionKind = 'map' | 'plan' | 'cr_candidate' | 'explain';
 export interface WriteStamp {
   readonly actor: string;
   readonly at: Date;
-}
-
-/** The transaction and the Tenant a repository is bound to. */
-interface Bound {
-  readonly tx: Tx;
-  readonly tenantId: string;
 }
 
 /**
@@ -267,7 +260,7 @@ function recordManualMapping({ tx, tenantId }: Bound) {
 }
 
 /** The project write repository, bound to one transaction and its Tenant. */
-function projectWriteRepositoryOn(bound: Bound) {
+export function projectWriteRepositoryOn(bound: Bound) {
   return {
     projectAnchor: (projectId: string) => anchorOf(bound.tx, projectId),
     recordMapDisposition: recordMapDisposition(bound),
@@ -276,26 +269,4 @@ function projectWriteRepositoryOn(bound: Bound) {
     recordChangeRequestCandidates: recordChangeRequestCandidates(bound),
     recordManualMapping: recordManualMapping(bound),
   };
-}
-
-/** What `inTenantTransaction` hands the use case: `packages/app`'s `ProjectWriteScope`. */
-export type ProjectWriteScope = {
-  readonly projectWrite: ReturnType<typeof projectWriteRepositoryOn>;
-  readonly audit: ReturnType<typeof auditSinkOn>;
-};
-
-/**
- * `packages/app`'s `TenantTransaction`: ONE `withTenant` transaction for `tenantId`, and a scope
- * whose repository and audit sink are both bound to it. Whatever `work` does commits together
- * when it resolves, and rolls back together when it throws.
- */
-export function inTenantTransaction<T>(
-  db: Db,
-  tenantId: string,
-  work: (scope: ProjectWriteScope) => Promise<T>,
-): Promise<T> {
-  return withTenant(db, tenantId, (tx) => {
-    const bound: Bound = { tx, tenantId };
-    return work({ projectWrite: projectWriteRepositoryOn(bound), audit: auditSinkOn(tx, tenantId) });
-  });
 }

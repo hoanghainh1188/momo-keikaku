@@ -215,6 +215,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@momo/adapters':
+        specifier: workspace:*
+        version: link:../../packages/adapters
       '@momo/app':
         specifier: workspace:*
         version: link:../../packages/app
@@ -250,7 +253,11 @@ importers:
         specifier: 12.33.2
         version: 12.33.2
 
-  packages/adapters: {}
+  packages/adapters:
+    dependencies:
+      uuid:
+        specifier: 11.1.1
+        version: 11.1.1
 
   packages/app:
     dependencies:

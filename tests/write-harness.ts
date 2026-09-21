@@ -1,0 +1,303 @@
+/**
+ * What the two database write suites share — `tests/cross-tenant-writes.test.ts` (every write on
+ * the surface, foreign and own-Tenant) and `tests/org-writes.test.ts` (the organisation rules
+ * against real rows). Split out by story 1.3 slice 2, when the organisation writes would have
+ * taken the first file past the size the repository's rules allow.
+ *
+ * A composition root, like the files that import it: it wires `packages/app`'s write use cases to
+ * `packages/db`'s tenant transaction on the RESTRICTED role's handle, with a fixed Clock and a
+ * predictable id port, under the same `satisfies WriteDeps<Db>` the web app's composition root
+ * makes. Test-only wiring, outside the import graph (`tests/` is not cruised).
+ *
+ * It reads no environment itself — the env fence covers this non-test module — so each suite
+ * hands its connection strings to `connectWriteHarness` once, at load, and everything below uses
+ * them. (Vitest isolates test files, so each suite has its own copy of this module's state.)
+ */
+import { isDeepStrictEqual } from 'node:util';
+import { eq, sql } from 'drizzle-orm';
+import { z } from 'zod';
+import { decode } from '@momo/domain';
+import type { WriteDeps } from '../packages/app/src/ports/write-deps';
+import type { AppError } from '../packages/app/src/result';
+import { getDb, getPool, schema, type Db } from '../packages/db/src/client';
+import type { ProbeTenant } from '../packages/db/src/probe-tenants';
+import { TENANT_OWNED } from '../packages/db/src/table-classes';
+import { inTenantTransaction } from '../packages/db/src/tenant-transaction';
+import { withTenant } from '../packages/db/src/with-tenant';
+import type { InvokeWrite, WriteTarget } from './read-use-cases';
+
+export interface HarnessEnv {
+  /** DATABASE_URL: the owning role. */
+  readonly ownerUrl: string | undefined;
+  /** APP_DATABASE_URL: the restricted application role. */
+  readonly appUrl: string | undefined;
+  /** REQUIRE_DB=1: an unreachable database fails the suite instead of skipping it. */
+  readonly requireDb: boolean;
+}
+
+let connected: HarnessEnv | undefined;
+
+function env(): HarnessEnv {
+  if (!connected) throw new Error('call connectWriteHarness(...) before using the write harness');
+  return connected;
+}
+
+async function reachableAs(connectionString: string | undefined): Promise<boolean> {
+  if (!connectionString) return false;
+  try {
+    const client = await getPool(connectionString).connect();
+    client.release();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Points the harness at the suite's database and answers whether both roles are reachable — the
+ * DB suites skip without them, or fail under REQUIRE_DB=1.
+ */
+export async function connectWriteHarness(harnessEnv: HarnessEnv): Promise<boolean> {
+  connected = harnessEnv;
+  if (harnessEnv.requireDb && !(harnessEnv.ownerUrl && harnessEnv.appUrl)) {
+    throw new Error(
+      'REQUIRE_DB=1 but DATABASE_URL and APP_DATABASE_URL are not both set. The write half of ' +
+        'the cross-tenant harness needs the owner to write the probe Tenants and the application ' +
+        'role to drive the writes; it must not be skipped here.',
+    );
+  }
+  const reachable =
+    (await reachableAs(harnessEnv.ownerUrl)) && (await reachableAs(harnessEnv.appUrl));
+  if (harnessEnv.requireDb && !reachable) {
+    throw new Error(
+      'REQUIRE_DB=1 but the database is not reachable as both roles. Run `pnpm pgboss:migrate` ' +
+        'and `pnpm db:policies` first.',
+    );
+  }
+  return reachable;
+}
+
+/** The OWNING role's handle: writes and removes the probe Tenants, and reads what landed. */
+export function owner(): Db {
+  return getDb(env().ownerUrl!);
+}
+
+/** Distinct from every fixture actor, so the rows a write lands can be told apart. */
+export const TEST_ACTOR = 'user:xtprobe-writer';
+
+/**
+ * The Clock the organisation writes are stamped with — fixed, and distinct from every Project
+ * anchor, so an org write stamped with an anchor (or the other way round) fails the row match.
+ */
+export const TEST_NOW = new Date('2026-09-20T01:02:03.456Z');
+
+/**
+ * Ids handed out by the harness's id port, in order, for the whole run. Predictable, so the rows a
+ * create lands can be expected exactly; prefixed per file, so two files running in parallel
+ * never hand out the same id; never reused, so a rolled-back create cannot collide with a later one.
+ */
+export function idPort(prefix: string) {
+  const issued: string[] = [];
+  return {
+    issued: issued as readonly string[],
+    next: (): string => {
+      const id = `${prefix}-${String(issued.length + 1).padStart(4, '0')}`;
+      issued.push(id);
+      return id;
+    },
+  };
+}
+
+export type IdPort = ReturnType<typeof idPort>;
+
+/**
+ * The write deps, wired: `packages/db`'s tenant transaction as `packages/app` declares it, on the
+ * RESTRICTED role's handle, with the fixed Clock and the given id port. The same structural check
+ * the web app's composition root makes.
+ */
+export function restrictedWriteDeps(ids: IdPort) {
+  return {
+    handle: getDb(env().appUrl!),
+    actor: TEST_ACTOR,
+    clock: { now: () => TEST_NOW },
+    ids,
+    transaction: inTenantTransaction,
+  } satisfies WriteDeps<Db>;
+}
+
+/**
+ * A probe Tenant's own ids: two Tickets it has Mapping history for, a leaf non-Catch-all WP, and
+ * its Project's Department and Program — run as `tenantId`, which is the probe's own Tenant for an
+ * own write and the OTHER probe's for the id-from-a-URL replay.
+ */
+export function targetOf(probe: ProbeTenant, tenantId: string): WriteTarget {
+  const tickets = [...new Set(probe.state.mappingEvents.map((m) => m.ticketId))];
+  const leaf = probe.state.wps.find((w) => w.isLeaf && !w.isCatchAll);
+  if (tickets.length < 2 || !leaf) {
+    throw new Error(`${probe.token}'s fixture has too few Tickets or no leaf Work Package`);
+  }
+  return {
+    tenantId,
+    projectId: probe.projectId,
+    ticketIds: [tickets[0]!, tickets[1]!],
+    wpId: leaf.id,
+    departmentId: probe.state.fixture.department.id,
+    programId: probe.state.fixture.program.id,
+  };
+}
+
+export interface Outcome {
+  readonly ok?: true;
+  readonly refused?: AppError;
+  readonly error?: unknown;
+}
+
+/** Runs one write and sorts its answer into ok / refused / threw, without unwrapping for it. */
+export async function drive(
+  name: string,
+  invoke: InvokeWrite,
+  target: WriteTarget,
+  deps: WriteDeps<Db>,
+): Promise<Outcome> {
+  try {
+    const returned = (await invoke(deps, target)) as { ok?: boolean; error?: AppError } | null;
+    if (returned?.ok === true) return { ok: true };
+    if (returned?.ok === false && returned.error) return { refused: returned.error };
+    return { error: new Error(`${name} did not return a Result`) };
+  } catch (error) {
+    return { error };
+  }
+}
+
+/** Rows per tenant-owned table for one Tenant, counted inside its own tenant scope. */
+export async function rowCounts(tenantId: string): Promise<Record<string, number>> {
+  return withTenant(owner(), tenantId, async (tx) => {
+    // Sequential: one transaction is one connection, and pg refuses overlapping queries on it.
+    const entries: (readonly [string, number])[] = [];
+    for (const owned of TENANT_OWNED) {
+      const res = await tx.execute<{ n: number }>(
+        sql`SELECT count(*)::int AS n FROM ${sql.identifier(owned.table)}
+             WHERE ${sql.identifier(owned.tenantColumn!)} = ${tenantId}`,
+      );
+      entries.push([owned.table, Number(res.rows[0]?.n ?? 0)]);
+    }
+    return Object.fromEntries(entries);
+  });
+}
+
+/**
+ * EVERY row of every tenant-owned table for one Tenant, each as Postgres's own text form of the
+ * whole row (`t::text` — every column, no codec, no driver conversion), sorted so two reads
+ * compare row for row. What "only `program_id` changed" is measured against.
+ */
+export async function allRows(tenantId: string): Promise<Record<string, readonly string[]>> {
+  return withTenant(owner(), tenantId, async (tx) => {
+    const entries: (readonly [string, readonly string[]])[] = [];
+    for (const owned of TENANT_OWNED) {
+      const res = await tx.execute<{ row: string }>(
+        sql`SELECT t::text AS row FROM ${sql.identifier(owned.table)} AS t
+             WHERE ${sql.identifier(owned.tenantColumn!)} = ${tenantId} ORDER BY 1`,
+      );
+      entries.push([owned.table, res.rows.map((r) => r.row)]);
+    }
+    return Object.fromEntries(entries);
+  });
+}
+
+/**
+ * The audit payload shapes a probe Tenant carries: the seed's, the project writes' and the
+ * organisation writes'. `audit_log.payload` is written through the domain's codec (AD-4), so it is
+ * read back through it too, in the shape the reader states — never compared as raw `jsonb` column
+ * text, which reorders keys.
+ */
+const placement = z.object({ departmentId: z.string(), programId: z.string().nullable() }).strict();
+const auditPayloadJson = z.union([
+  z.object({ ticketIds: z.array(z.string()), wpId: z.string().nullable(), note: z.string().nullable() }).strict(),
+  z.object({ wpId: z.string() }).strict(),
+  z
+    .object({
+      snapshots: z.number().int(),
+      ledgerEntries: z.number().int(),
+      mappingEvents: z.number().int(),
+      anchor: z.string(),
+    })
+    .strict(),
+  // Organisation writes (story 1.3 slice 2).
+  z.object({ name: z.string() }).strict(),
+  z.object({ departmentId: z.string(), name: z.string() }).strict(),
+  z
+    .object({
+      name: z.string(),
+      departmentId: z.string(),
+      programId: z.string().nullable(),
+      clientName: z.string(),
+      contractType: z.string(),
+    })
+    .strict(),
+  z.object({ before: z.string().nullable(), after: z.string().nullable() }).strict(),
+  z.object({ before: placement, after: placement }).strict(),
+]);
+
+/** The rows a write may land, for one Tenant, keyed so a later read can be diffed. */
+export async function landedRows(tenantId: string) {
+  return withTenant(owner(), tenantId, async (tx) => ({
+    mappingEvents: await tx
+      .select()
+      .from(schema.mappingEvent)
+      .where(eq(schema.mappingEvent.tenantId, tenantId)),
+    dispositions: await tx
+      .select()
+      .from(schema.dispositionEvent)
+      .where(eq(schema.dispositionEvent.tenantId, tenantId)),
+    audits: (
+      await tx.select().from(schema.auditLog).where(eq(schema.auditLog.tenantId, tenantId))
+    ).map((row) => ({ ...row, payload: decode(row.payload, auditPayloadJson) })),
+    workPackages: await tx
+      .select()
+      .from(schema.workPackage)
+      .where(eq(schema.workPackage.tenantId, tenantId)),
+    departments: await tx
+      .select()
+      .from(schema.department)
+      .where(eq(schema.department.tenantId, tenantId)),
+    programs: await tx.select().from(schema.program).where(eq(schema.program.tenantId, tenantId)),
+    projects: await tx.select().from(schema.project).where(eq(schema.project.tenantId, tenantId)),
+  }));
+}
+
+export type Landed = Awaited<ReturnType<typeof landedRows>>;
+
+/**
+ * The rows of a MUTABLE table that are new or different since `before` — by id, compared whole.
+ * The org tables are `mutable-audited`: a rename changes a row in place, so "new by key" (enough
+ * for the append-only tables) would miss it.
+ */
+function changedSince<T extends { id: string }>(before: readonly T[], after: readonly T[]): T[] {
+  const was = new Map(before.map((row) => [row.id, row]));
+  return after.filter((row) => !isDeepStrictEqual(was.get(row.id), row));
+}
+
+/** What appeared or changed between two reads, per table. */
+export function newSince(before: Landed, after: Landed) {
+  const seqs = (rows: readonly { seq: number }[]) => new Set(rows.map((row) => row.seq));
+  const mapSeqs = seqs(before.mappingEvents);
+  const dispSeqs = seqs(before.dispositions);
+  const auditSeqs = seqs(before.audits);
+  const wpIds = new Set(before.workPackages.map((row) => row.id));
+  return {
+    mappingEvents: after.mappingEvents
+      .filter((row) => !mapSeqs.has(row.seq))
+      .sort((a, b) => a.seq - b.seq),
+    dispositions: after.dispositions.filter((row) => !dispSeqs.has(row.seq)),
+    audits: after.audits.filter((row) => !auditSeqs.has(row.seq)),
+    workPackages: after.workPackages.filter((row) => !wpIds.has(row.id)),
+    departments: changedSince(before.departments, after.departments),
+    programs: changedSince(before.programs, after.programs),
+    projects: changedSince(before.projects, after.projects),
+  };
+}
+
+/** Drops the database-allocated `seq`, which the expectations cannot know. */
+export function withoutSeq<T extends { seq: number }>(rows: readonly T[]): Omit<T, 'seq'>[] {
+  return rows.map(({ seq: _seq, ...rest }) => rest);
+}

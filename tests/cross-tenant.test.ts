@@ -991,7 +991,7 @@ describe.skipIf(!reachable)('the cross-tenant harness, driven against two probe 
       const covered = TENANT_OWNED.map((owned) => owned.table).filter((table) =>
         reached.has(table),
       );
-      // 16 tenant-owned tables, two declared unreached. A number here, so "the harness covers
+      // 17 tenant-owned tables, three declared unreached. A number here, so "the harness covers
       // every read use case" is a measurement rather than a claim.
       expect(covered.length).toBe(TENANT_OWNED.length - UNREACHED_TENANT_OWNED_TABLES.length);
     });

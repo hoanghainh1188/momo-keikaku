@@ -8,6 +8,10 @@
   "id": "dep-delivery",
   "name": "Delivery"
  },
+ "program": {
+  "id": "prg-ec-platform",
+  "name": "EC platform"
+ },
  "project": {
   "id": "prj-ec2",
   "name": "EC phase 2",

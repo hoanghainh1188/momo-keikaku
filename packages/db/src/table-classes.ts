@@ -23,7 +23,7 @@
  *
  * `tenantColumn` is the second, independent axis. A table is *tenant-owned* when it
  * carries one, and a tenant-owned table gets ENABLE + FORCE row-level security and the
- * isolation policy. 16 of the 17 tables today carry `tenant_id`; `tenant` itself does not
+ * isolation policy. 17 of the 18 tables today carry `tenant_id`; `tenant` itself does not
  * — it is the table the column points at — so it is `global`, which is the class for rows
  * that exist before any tenant is resolved (the identity tables and the tenant-membership
  * bridge join it in story 1.4).
@@ -70,8 +70,8 @@ export interface TableEntry {
 }
 
 /**
- * The 17 tables of this release, in dependency order (the order `seed.ts` writes them in
- * reverse for its TRUNCATE).
+ * The 18 tables of this release (story 1.3 slice 2 added `program`), in dependency order (the
+ * order `seed.ts` writes them in reverse for its TRUNCATE).
  *
  * Nine are insert-only today and are classed `append-only` accordingly:
  * baseline_version, baseline_wp, tracker_snapshot, ticket_observation,
@@ -89,6 +89,12 @@ export const TABLE_REGISTRY: readonly TableEntry[] = [
     class: 'mutable-audited',
     tenantColumn: 'tenant_id',
     why: 'Org shape. Renamed and re-parented by Tenant Admins; every change is audited (story 1.3).',
+  },
+  {
+    table: 'program',
+    class: 'mutable-audited',
+    tenantColumn: 'tenant_id',
+    why: 'Org shape between Department and Project (FR-1). Created and renamed by Tenant Admins; every change is audited (story 1.3 slice 2).',
   },
   {
     table: 'app_user',

@@ -35,6 +35,19 @@ export const department = pgTable('department', {
   name: text('name').notNull(),
 });
 
+/**
+ * FR-1's middle tier: Tenant › Department › Program › Project (story 1.3 slice 2). A Program
+ * belongs to exactly one Department for life — there is no use case that moves it — and a Project
+ * may sit in one of its owning Department's Programs, or in none. `mutable-audited`: renamed in
+ * place, every change audited by the use case that makes it.
+ */
+export const program = pgTable('program', {
+  id: text('id').primaryKey(),
+  tenantId: text('tenant_id').notNull(),
+  departmentId: text('department_id').notNull(),
+  name: text('name').notNull(),
+});
+
 export const appUser = pgTable('app_user', {
   id: text('id').primaryKey(),
   tenantId: text('tenant_id').notNull(),
@@ -47,6 +60,13 @@ export const project = pgTable('project', {
   id: text('id').primaryKey(),
   tenantId: text('tenant_id').notNull(),
   departmentId: text('department_id').notNull(),
+  /**
+   * Optional (story 1.3 slice 2): a Program of THIS Project's owning Department, or none. The
+   * rule is the use cases' (`packages/app`'s org writes check it inside the transaction); there is
+   * no foreign key, per the demo deviation above. Moving a Project between Programs changes this
+   * column and nothing else.
+   */
+  programId: text('program_id'),
   name: text('name').notNull(),
   clientName: text('client_name').notNull(),
   contractType: text('contract_type').notNull(),
@@ -239,6 +259,7 @@ export const auditLog = pgTable('audit_log', {
 export const schemaTables = {
   tenant,
   department,
+  program,
   appUser,
   project,
   resource,

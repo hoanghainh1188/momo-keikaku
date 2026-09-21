@@ -7,7 +7,7 @@ paradigm: 'modular monolith, hexagonal (ports & adapters) around a pure function
 scope: 'momo-keikaku v1: builds R0 and fixes the invariants that R1 and Post-Q1 must not break'
 status: final
 created: '2026-09-20'
-updated: '2026-09-21 (AD-1: composition-root carve-out; the dependency-cruiser gate on; web → domain/present)'
+updated: '2026-09-21 (AD-1: composition-root carve-out; the dependency-cruiser gate on; web → domain/present; composition root → adapters)'
 binds: [FR-1, FR-2, FR-3, FR-4, FR-5, FR-6a, FR-6b, FR-7, FR-8, FR-9, FR-10, FR-11, FR-12, FR-13, FR-14, FR-15, FR-16, FR-17, FR-18, FR-19, FR-20, FR-21, FR-22, FR-23, FR-24, FR-25, FR-26, FR-27, FR-28, FR-29, FR-30, FR-31, FR-32, FR-33, FR-34, FR-35, FR-36, FR-37, FR-38, FR-39, FR-40, FR-41, FR-42, FR-43, NFR-S1, NFR-S2, NFR-S3, NFR-S4, NFR-S5, NFR-S6, NFR-S7, NFR-S8, NFR-D1, NFR-A1, NFR-C1, NFR-R1, NFR-R2, NFR-P1, NFR-I1, NFR-U1, NFR-O1]
 sources:
   - _bmad-output/planning-artifacts/sprint-change-proposal-2026-09-20.md (A-1 … A-6)
@@ -28,13 +28,14 @@ reviews_applied:
   - reviews/review-adversarial-ad1-carve-out.md
   - reviews/review-adversarial-ad1-gate-on.md
   - reviews/review-adversarial-ad1-web-present.md
+  - reviews/review-adversarial-ad1-adapters.md
 ---
 
 # Architecture Spine: momo-keikaku
 
 **Against PRD §7.3, this update sits in the left-hand column: it resolves OQ-13 and decomposes FR-6a, FR-6b and FR-43. It adds no FR, no NFR and no target beyond PRD §5.**
 
-This spine was produced headless, overnight, and then amended to apply the findings of four reviews (rubric, adversarial, reconcile-inputs, tech-currency); the resolution trail is in `reviews/resolution.md`. On 2026-09-20 it was updated with the founder present to carry the scheduler that `sprint-change-proposal-2026-09-20.md` restored to R0 — AD-25 through AD-30, with earlier decisions amended in place and their IDs unchanged. Every call tagged `[ASSUMPTION]` was made on the founder's behalf and is waiting for review. On 2026-09-21 AD-1 gained a second carve-out, `apps/web`'s composition root (story 1.2 slice 3), reviewed adversarially before it landed (`reviews/review-adversarial-ad1-carve-out.md`); the same day, once story 1.2 slice 4 had moved the writes, AD-1's temporary-violations bullet was replaced by what the `dependency-cruiser` gate actually enforces (`reviews/review-adversarial-ad1-gate-on.md`); then the founder decided the open `apps/web → packages/domain` edge — allowed for `domain/present` only — and the gate gained its rule (`reviews/review-adversarial-ad1-web-present.md`). Vocabulary follows PRD §3. Code names use the Glossary terms verbatim (for example `WorkPackage`, `TrackerSnapshot`, `ActualsLedgerEntry`, `PublishedSnapshot`).
+This spine was produced headless, overnight, and then amended to apply the findings of four reviews (rubric, adversarial, reconcile-inputs, tech-currency); the resolution trail is in `reviews/resolution.md`. On 2026-09-20 it was updated with the founder present to carry the scheduler that `sprint-change-proposal-2026-09-20.md` restored to R0 — AD-25 through AD-30, with earlier decisions amended in place and their IDs unchanged. Every call tagged `[ASSUMPTION]` was made on the founder's behalf and is waiting for review. On 2026-09-21 AD-1 gained a second carve-out, `apps/web`'s composition root (story 1.2 slice 3), reviewed adversarially before it landed (`reviews/review-adversarial-ad1-carve-out.md`); the same day, once story 1.2 slice 4 had moved the writes, AD-1's temporary-violations bullet was replaced by what the `dependency-cruiser` gate actually enforces (`reviews/review-adversarial-ad1-gate-on.md`); then the founder decided the open `apps/web → packages/domain` edge — allowed for `domain/present` only — and the gate gained its rule (`reviews/review-adversarial-ad1-web-present.md`); and the founder decided (story 1.3 slice 2) that the composition root may import `packages/adapters` to wire the `Clock` and id ports (`reviews/review-adversarial-ad1-adapters.md`). Vocabulary follows PRD §3. Code names use the Glossary terms verbatim (for example `WorkPackage`, `TrackerSnapshot`, `ActualsLedgerEntry`, `PublishedSnapshot`).
 
 ## Design Paradigm
 
@@ -43,7 +44,7 @@ This spine was produced headless, overnight, and then amended to apply the findi
 - **One TypeScript codebase and one PostgreSQL database.** The codebase runs as two roles: `web` (Next.js) and `worker` (the always-on snapshot scheduler and job runner).
 - **Functional core** (`packages/domain`): ledger derivation, attribution, Reporting Periods, calendars, **schedule recalculation**, EVM, Health, forecast and import interpretation. Every function is pure (inputs → outputs), does no I/O and never reads the clock.
 - **Application layer** (`packages/app`): use cases, the port interfaces, `RequestContext`, authorisation and audit. It orchestrates each call: load inputs through ports, call the core, persist through ports.
-- **Adapters** (`packages/db`, `packages/adapters`, `apps/web`, `apps/worker`): Postgres/Drizzle, the Backlog HTTP client, fixture replay, Excel, blob storage, mail, the clock, and the inbound HTTP/UI and job entry points.
+- **Adapters** (`packages/db`, `packages/adapters`, `apps/web`, `apps/worker`): Postgres/Drizzle, the Backlog HTTP client, fixture replay, Excel, blob storage, mail, the clock, the id generator, and the inbound HTTP/UI and job entry points.
 - **Shared leaves** (`packages/i18n`): message catalogs, imported by both roles. It depends on nothing.
 
 ```mermaid
@@ -57,11 +58,13 @@ flowchart LR
   I18N[packages/i18n<br/>en/ja catalogs]
   subgraph outbound[Outbound adapters]
     DB[packages/db<br/>Drizzle schema, migrations, RLS, withTenant, repositories, db/auth]
-    ADP[packages/adapters<br/>backlog-http, fixture-replay, excel, blob, mailer, clock]
+    ADP[packages/adapters<br/>backlog-http, fixture-replay, excel, blob, mailer, clock, ids]
   end
   WEB --> APP
   WRK --> APP
   WEB --> I18N
+  WEB -. composition root only .-> ADP
+  WEB -. composition root only .-> DB
   WEB -. presentation only .-> DOM
   WRK --> I18N
   APP --> DOM
@@ -71,7 +74,7 @@ flowchart LR
   ADP --> DOM
 ```
 
-Arrows show allowed imports, plus AD-1's two carve-outs. The dotted `apps/web → packages/domain` arrow is presentation only: `domain/present`'s formatters and presentation types, nothing that computes (AD-1). Nothing imports `apps/*`. `domain` and `i18n` import nothing from the workspace.
+Arrows show allowed imports, plus AD-1's two carve-outs. The two dotted arrows from `apps/web` to `packages/db` and `packages/adapters` are the composition root's carve-out (AD-1) — plus, for `packages/db`, carve-out 1: `packages/db/auth`, open to any `apps/web` file. The dotted `apps/web → packages/domain` arrow is presentation only: `domain/present`'s formatters and presentation types, nothing that computes (AD-1). Nothing imports `apps/*`. `domain` and `i18n` import nothing from the workspace.
 
 ## Invariants & Rules
 
@@ -82,18 +85,19 @@ Arrows show allowed imports, plus AD-1's two carve-outs. The dotted `apps/web �
 - **Rule:**
   - The import graph is exactly the one in the diagram above plus the two carve-outs below, and `dependency-cruiser` fails CI on any violation. `packages/domain` has no runtime dependencies except `zod`. `apps/web` and `apps/worker` call only `packages/app` use cases (and `packages/i18n` for text), never repositories or Drizzle directly, except through the carve-outs below. **One further edge, `apps/web` → `packages/domain/present`, and only its entry module** (`present/index.ts`): the display formatters (`hours`, `hoursSigned`, `share`, `yen`, `present`, …), the layout-geometry helpers (`earnedProgress`, `geometryFraction`, `cssPercent` — AD-4's layout-only float exception) and the presentation types it re-exports. A page imports nothing from the domain that computes: the figures that need domain rules arrive from a use case already computed — the Review's PV/EV money and Unplanned component shares, the SPI behind-plan flag, the Mapping rows, and the internal Client View preview (`/c/…` today renders `clientProjection` live through a use case; R1's Client View reads only the stored `outputs_client`, AD-12). `present/index.ts` never re-exports computation — a test pins its export list — and the codec in `present/codec.ts` is not a page's to call. Decided by the founder 2026-09-21. `apps/worker` has no such edge.
   - `Date.now()`, `new Date()` without arguments and `process.env` are forbidden outside `packages/adapters/clock` and `packages/app/config`. dependency-cruiser cannot see calls, so this is enforced by ESLint `no-restricted-syntax` (`NewExpression[callee.name='Date'][arguments.length=0]`, `CallExpression[callee.object.name='Date'][callee.property.name='now']`) and `no-restricted-properties` for `process.env`, with file-scoped overrides for the two allowed modules.
-  - **Two carve-outs, each a named path rather than a pattern.** (1) `packages/db/auth` is the only sanctioned Better Auth ↔ Drizzle binding, exported to `apps/web` as an adapter that implements `IdentityPort` (AD-23). Role, membership and revocation changes never go through it; they go through `app` use cases so AD-14 still holds. (2) `apps/web/src/server/composition.ts`, `apps/web`'s **composition root**, is the one file in `apps/web` permitted to import `packages/db` (by any specifier). It builds the restricted-role handle, hands `packages/db`'s repository functions to the port(s) `packages/app` declares (a structural match TypeScript checks at that line) and constructs the use-case context. It wires; it never queries, and it exports use-case bindings only — never a `Db` handle, a repository function or a Drizzle schema to another file in the app. It never imports `db/repositories/schedule` or `db/repositories/plan-input` (AD-27). Any other app that needs a composition root names its file here first; `apps/worker` has none. Added 2026-09-21 by story 1.2 slice 3.
+  - **Two carve-outs, each a named path rather than a pattern.** (1) `packages/db/auth` is the only sanctioned Better Auth ↔ Drizzle binding, exported to `apps/web` as an adapter that implements `IdentityPort` (AD-23). Role, membership and revocation changes never go through it; they go through `app` use cases so AD-14 still holds. (2) `apps/web/src/server/composition.ts`, `apps/web`'s **composition root**, is the one file in `apps/web` permitted to import `packages/db` (by any specifier), and the one file in any app permitted to import `packages/adapters` — to wire the outbound adapters that implement `packages/app`'s ports (the `Clock`, AD-15; the id generator, UUIDv7) into the use cases. It builds the restricted-role handle, hands `packages/db`'s repository functions to the port(s) `packages/app` declares (a structural match TypeScript checks at that line) and constructs the use-case context. It wires; it never queries or reads the clock itself, and it exports use-case bindings only — never a `Db` handle, a repository function, a Drizzle schema, a clock or an id generator to another file in the app. It never imports `db/repositories/schedule` or `db/repositories/plan-input` (AD-27). Any other app that needs a composition root names its file here first; `apps/worker` has none yet, and gets one — named here, reviewed — the day it first needs an adapter (the fixture-mode `Clock` AD-15 requires in both roles, or the pg-boss queue adapter). Added 2026-09-21 by story 1.2 slice 3; widened to `packages/adapters` the same day by story 1.3 slice 2, decided by the founder.
   - **What the `dependency-cruiser` gate enforces today** (`.dependency-cruiser.cjs`, `pnpm depcruise`; switched on by story 1.2 slice 4, after `actions.ts`'s writes moved onto use cases). It cruises `apps/` and `packages/` only, and it turns CI red but does not block a merge: branch protection is unavailable on the private free-plan repository, so every CI gate reports rather than blocks (decided 2026-09-20, recorded in the CI header). Within that scope it fails on:
     - any `apps/*` file importing Drizzle — the composition root included;
     - any `apps/web` file other than the composition root importing `packages/db`, except `packages/db/auth`; and any other app importing `packages/db` at all, `packages/db/auth` included;
+    - any `apps/*` file other than the composition root importing `packages/adapters`; and `packages/app`, `packages/domain` or `packages/db` importing `packages/adapters` at all (a use case reaches the clock and ids only through ports);
     - any `apps/web` file importing any `packages/domain` module other than `present/index.ts`, by any specifier — the barrel, another module or subpath, the codec;
     - the two scheduling edges below, and the composition root importing the schedule or plan-input repositories. These match no file yet (none of the three paths exists) and were proved live with temporary files; the two repositories may import each other;
     - an import it cannot resolve, so a broken resolver setup fails instead of letting an edge escape every rule.
   - **What it does not enforce yet**, so the first bullet's "fails CI on any violation" holds only for the edges above. Each is tracked in `deferred-work.md`:
     - *Live violations, added to the gate when the code is gone:* `apps/worker` imports `pg-boss` and `pg` directly.
     - *Not an import rule, and tolerated for now:* pages still do plain `bigint` arithmetic and two date comparisons of their own without importing the domain (the Plan page's parent roll-up and its `slipped` and milestone-overdue flags, the Baselines page's per-version BAC, the Review page's planned-scope AC); nothing gates it.
-    - *Nothing to flag today, unenforced by scope choice, added with the next change to the config:* `apps/web` importing the raw `pg` driver; `apps/worker` importing `packages/domain` (the web-only rule does not reach it); `packages/db` and `packages/app` importing each other; `packages/domain` importing anything but `zod`; every other edge of the diagram; and nothing outside `tests/` importing from it.
-    - *Not an import rule at all:* the composition root exporting use-case bindings only and never querying. A re-export from `packages/db` is an edge of `composition.ts` itself, so the gate cannot see it; `tests/web-composition.test.ts` pins its wiring, and review holds the rest.
+    - *Nothing to flag today, unenforced by scope choice, added with the next change to the config:* `apps/web` importing the raw `pg` driver; `apps/worker` importing `packages/domain` (the web-only rule does not reach it); `packages/db` and `packages/app` importing each other; `packages/domain` importing anything but `zod` (its edge to `packages/adapters` is gated); every other edge of the diagram; and nothing outside `tests/` importing from it.
+    - *Not an import rule at all:* the composition root exporting use-case bindings only and never querying. A re-export from `packages/db` is an edge of `composition.ts` itself, so the gate cannot see it; `tests/web-composition.test.ts` pins its wiring, and review holds the rest. The same holds for the composition root's `packages/adapters` promises — it never reads the clock itself, and never re-exports a clock or an id generator: an edge from `composition.ts` is allowed, so a re-export is invisible to the gate; review holds it.
     - `scripts/` (seed, policy generation, pg-boss migration) is operator tooling outside this graph, like `tests/`.
   - `tests/` sits outside this graph. The cross-tenant harness there wires `packages/app` to `packages/db` because it must drive both at once (AD-3); that is test-only wiring, not a carve-out. Nothing outside `tests/` imports from it.
   - Message catalogs live in `packages/i18n/{en,ja}.json`, not under `apps/web`, so the worker can render mail (FR-17, FR-36) without importing an app.
@@ -576,7 +580,7 @@ flowchart TB
 | Domain naming | Types and modules use the PRD §3 Glossary terms verbatim, in PascalCase (`WorkPackage`, `TrackerSnapshot`, `ActualsLedgerEntry`, `MappingRule`, `Disposition`, `PublishedSnapshot`, `ReportingPeriod`). No synonyms such as "task", "issue" or "sync" in code. |
 | DB naming | `snake_case`, singular table names; `*_id` foreign keys; `seq` for append order; `*_event` for append-only history; `*_mh` for milli-hours; `*_jpy` for yen; `observed_at`, `recorded_at` and `created_at` are `timestamptz`. |
 | Table classes | Every table is registered in `packages/db/table-classes.ts` with exactly one class (AD-21). RLS, grants and triggers are generated from it. |
-| IDs | UUIDv7, generated in the app (deliberately, not Postgres 18's native `uuidv7()`, because ingest needs ids before insert to stay idempotent). Tracker ids are stored as text (`tracker_issue_id`) and never used as primary keys. |
+| IDs | UUIDv7, generated in the app — by `packages/adapters/ids`, injected through `packages/app`'s `IdGenerator` port, its millisecond taken from the `Clock` (AD-15) — (deliberately, not Postgres 18's native `uuidv7()`, because ingest needs ids before insert to stay idempotent). Tracker ids are stored as text (`tracker_issue_id`) and never used as primary keys. |
 | Dates and time | Instants are `timestamptz` in UTC. Every plan date — derived, actual, constraint, and the three Project settings — is `date` with no time zone, because a plan date is a working day and not a moment. Reporting Periods are resolved in `project.tz` (default `Asia/Tokyo`). Rate effective dates are `localDate(window_end, project.tz)`. The wire format is ISO 8601. |
 | Units in APIs and types | Effort is `mh: bigint` (milli-hours) in domain and DB and a `number` of hours only after `present`. Money is `jpy: bigint`. Ratios are `{ num: bigint, den: bigint }`. Every metric carries a `unit`. |
 | JSON of domain values | `jsonb` reads and writes of `inputs`/`outputs` go through the single codec in `domain/present/codec`: `bigint` → decimal string, `Ratio` → `{num, den}` strings. `JSON.stringify` on a `bigint` is a lint error. |
@@ -625,14 +629,14 @@ All versions were verified against the live registries on 2026-09-20 (see `revie
 momo-keikaku/
   apps/
     web/                 # Next.js: (pm) and (admin) route groups; /c (client, R1); proxy.ts; server actions
-      src/server/composition.ts  # the composition root: the one apps/web file that imports packages/db (AD-1)
+      src/server/composition.ts  # the composition root: the one apps/web file that imports packages/db, and the one apps file that imports packages/adapters (AD-1)
     worker/              # pg-boss boot, schedules, job handlers → app use cases
   packages/
     domain/              # pure: attribution, ledger derivation, schedule (passes, validate, order), evm, health, forecast, calendar, import, present (+codec), text
     app/                 # use cases, ports, RequestContext, authz, audit, config
     db/                  # drizzle schema, migrations, table-classes.ts, rls.sql, grants.sql, triggers.sql, withTenant, repositories (repositories/schedule is app/schedule's alone), seed
     db/auth/             # the single sanctioned Better Auth ↔ Drizzle binding (IdentityPort)
-    adapters/            # backlog-http, fixture-replay, excel, blob-fs, blob-s3, mailer-console, mailer-ses, clock
+    adapters/            # backlog-http, fixture-replay, excel, blob-fs, blob-s3, mailer-console, mailer-ses, clock, ids
     i18n/                # en.json, ja.json — imported by web and worker
   tests/                 # cross-layer suites (the cross-tenant harness, AD-3) — outside the AD-1 graph
   fixtures/backlog/      # <scenario>/NNNN.json — synthetic or anonymised (hours, no-hours, page-shift, leave-and-return, scope-change)
