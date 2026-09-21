@@ -5,9 +5,16 @@
  *
  * Idempotent: it truncates the demo tables first.
  *
- * WHICH ROLE THIS RUNS AS — decided in this story, recorded here because the answer is not
- * obvious. It keeps the OWNING role (DATABASE_URL), for two reasons that the restricted
- * application role cannot satisfy:
+ * TWO HALVES, AND THE SPLIT IS LOAD-BEARING. `seedInTenant` below is the demo seed: it
+ * refuses a second Tenant, opens the maintenance hatch and TRUNCATEs. `writeTenantRows`
+ * is the *row writer* — the 16 inserts and nothing else — and it is shared with
+ * `probe-tenants.ts`, which builds the cross-tenant harness's two probe Tenants. One
+ * definition, because two would drift and the harness would then be proving isolation
+ * over a dataset that is not the one the application actually stores.
+ *
+ * WHICH ROLE THIS RUNS AS — decided in story 1.2 slice 1, recorded here because the answer
+ * is not obvious. It keeps the OWNING role (DATABASE_URL), for two reasons that the
+ * restricted application role cannot satisfy:
  *
  *   1. It TRUNCATEs. TRUNCATE is not in any class's grant in `table-classes.ts` and must
  *      not be: an application role that can empty `audit_log` makes the append-only
@@ -28,7 +35,7 @@
  */
 import { sql } from 'drizzle-orm';
 import type { Db } from './client';
-import { buildDemoState } from './fixtures';
+import { buildDemoState, type DemoState } from './fixtures';
 import * as s from './schema';
 import { MAINTENANCE_SETTING } from './table-classes';
 import { withTenant, type Tx } from './with-tenant';
@@ -58,61 +65,101 @@ async function chunked<T>(rows: T[], size: number, fn: (batch: T[]) => Promise<u
 }
 
 /**
- * @param db the OWNING role's handle — see the module note. `scripts/seed.ts` builds it
- *   from `config.DATABASE_URL`.
+ * What a caller must decide before the row writer can write a *second* Tenant safely.
+ *
+ * Both fields exist because of traps that are invisible until a second Tenant appears,
+ * and both are deliberately the WRITER's responsibility rather than the caller's — see
+ * `writeTenantRows` for what each one closes.
  */
-export async function seed(db: Db): Promise<void> {
-  const state = buildDemoState();
-  const tenantId = state.fixture.tenant.id;
-  // One transaction, one tenant: the truncate and all 16 inserts either land together or
-  // not at all, and every one of them is issued with `app.tenant_id` bound.
-  await withTenant(db, tenantId, (tx) => seedInTenant(tx, state));
+export interface TenantRowWriteOptions {
+  /**
+   * Prefixed onto every identifier and literal the writer invents rather than reads out
+   * of the `DemoState` it is given.
+   *
+   * `blwp-${i}`, `led-${seq}`, `map-${seq}`, the Connector id and the two seeded users are
+   * built INSIDE this function out of values a relabelled fixture never sees, so without a
+   * prefix a second Tenant collides with the first on globally unique primary keys. The
+   * demo seed passes `''`, which leaves every id exactly as it was.
+   */
+  readonly idPrefix: string;
+  /**
+   * Added to every `seq` the CALLER allocates — `actuals_ledger_entry` and `mapping_event`,
+   * the two tables `table-classes.ts` marks `clientAllocatedSeq`. Their `seq` is a global
+   * primary key with no identity default, so two Tenants seeded from the same fixture both
+   * start at 1 and collide. The demo seed passes `0`.
+   */
+  readonly seqOffset: number;
 }
 
-async function seedInTenant(tx: Tx, state: ReturnType<typeof buildDemoState>): Promise<void> {
+/** The demo seed's own options: no prefix, no offset — byte-for-byte what it wrote before. */
+export const DEMO_ROW_WRITE_OPTIONS: TenantRowWriteOptions = { idPrefix: '', seqOffset: 0 };
+
+export interface TenantRowWriteResult {
+  readonly tenantId: string;
+  /**
+   * The `baseline_version.seq` Postgres actually allocated, which is what every ledger row
+   * was written against. Not the fixture's `1`: see `writeTenantRows`.
+   */
+  readonly activeBaselineSeq: number;
+  readonly counts: {
+    readonly wps: number;
+    readonly baselineWps: number;
+    readonly snapshots: number;
+    readonly ledgerEntries: number;
+    readonly mappingEvents: number;
+  };
+}
+
+/**
+ * Writes one Tenant's complete dataset — all 16 inserts — and nothing else.
+ *
+ * No TRUNCATE, no guard, no maintenance hatch: those belong to the demo seed, which is the
+ * only caller that owns the whole database. This function assumes `tx` is already inside
+ * `withTenant(state.fixture.tenant.id)`.
+ *
+ * TWO TRAPS IT CLOSES, both of which are silent rather than loud:
+ *
+ *   1. `baseline_version.seq` is `generatedAlwaysAsIdentity`. A second Tenant's Baseline is
+ *      therefore `seq = 2`, while the fixture's ledger rows carry the literal `1` they were
+ *      built with. Left alone, every mapped hour in that Tenant would be attributed against
+ *      a Baseline version it cannot find — `attribution.ts` looks the version up by seq —
+ *      and would be silently reclassified as Unplanned Work. Every figure moves and nothing
+ *      complains. So the writer reads the allocated `seq` back out of the INSERT and
+ *      rewrites each ledger row's `active_baseline_version_seq` to it.
+ *   2. The generated ids above. See `TenantRowWriteOptions.idPrefix`.
+ */
+export async function writeTenantRows(
+  tx: Tx,
+  state: DemoState,
+  options: TenantRowWriteOptions,
+): Promise<TenantRowWriteResult> {
   const f = state.fixture;
   const tenantId = f.tenant.id;
-
-  // TRUNCATE is exempt from row-level security by design — it is a table-level operation, so
-  // no policy filters it — which means the truncate below would destroy EVERY Tenant's rows,
-  // not just this one's. Re-seeding one Tenant must never be able to empty another's ledger.
-  //
-  // Refusing is the guard rather than a tenant-scoped DELETE, on purpose: the truncate carries
-  // `RESTART IDENTITY`, and the identity counters are what make a re-seed reproduce the same
-  // `baseline_version.seq` the fixture's ledger entries were recorded against. A DELETE would
-  // leave those counters where they were, so the second seed would stamp a different active
-  // Baseline sequence and silently reclassify the Actuals — exactly the kind of wrong figure
-  // this story is upstream of. So: assert this is a single-Tenant database, and say whose
-  // rows are in the way when it is not.
-  const others = await tx.execute<{ id: string }>(
-    sql`SELECT id FROM tenant WHERE id <> ${tenantId} ORDER BY id`,
-  );
-  if (others.rows.length > 0) {
-    throw new Error(
-      `Refusing to seed: this database also holds ${others.rows.length} other Tenant(s) — ` +
-        `${others.rows.map((row) => row.id).join(', ')}. The seed TRUNCATEs, and TRUNCATE is ` +
-        'exempt from row-level security, so it would destroy their rows too. Drop the database, ' +
-        'or delete those Tenants deliberately, then seed again.',
-    );
-  }
-
-  // The append-only tables now carry a BEFORE TRUNCATE trigger as well as a BEFORE
-  // UPDATE OR DELETE one, and a trigger is a property of the table, so it refuses the owner
-  // too. Opening the maintenance hatch is the honest way through: re-seeding IS maintenance,
-  // and saying so in one transaction-scoped setting is better than a table that any statement
-  // can empty. The setting is reset at COMMIT, like the tenant.
-  await tx.execute(sql`SELECT set_config(${MAINTENANCE_SETTING}, 'on', true)`);
-  await tx.execute(sql.raw(`TRUNCATE ${TRUNCATE_ORDER.join(', ')} RESTART IDENTITY CASCADE`));
+  /** Every id and literal this function invents, rather than reads out of `state`. */
+  const own = (value: string) => `${options.idPrefix}${value}`;
 
   await tx.insert(s.tenant).values({ id: tenantId, name: f.tenant.name });
   await tx
     .insert(s.department)
     .values({ id: f.department.id, tenantId, name: f.department.name });
 
-  // No auth in the demo: a single seeded PM session (build brief non-goal).
+  // No auth in the demo: a single seeded PM session (build brief non-goal). Story 1.4
+  // replaces this table with the identity tables plus the membership bridge.
   await tx.insert(s.appUser).values([
-    { id: 'user-linh', tenantId, email: 'linh@momo-digital.example', name: 'Nguyen Thi Linh', role: 'pm' },
-    { id: 'user-hoang', tenantId, email: 'hoang@momo-digital.example', name: 'Hoang Hai', role: 'tenant_admin' },
+    {
+      id: own('user-linh'),
+      tenantId,
+      email: own('linh@momo-digital.example'),
+      name: own('Nguyen Thi Linh'),
+      role: 'pm',
+    },
+    {
+      id: own('user-hoang'),
+      tenantId,
+      email: own('hoang@momo-digital.example'),
+      name: own('Hoang Hai'),
+      role: 'tenant_admin',
+    },
   ]);
 
   await tx.insert(s.project).values({
@@ -179,15 +226,41 @@ async function seedInTenant(tx: Tx, state: ReturnType<typeof buildDemoState>): P
       projectId: f.project.id,
       reason: f.baseline.reason,
       recordedAt: new Date(f.baseline.recordedAt),
-      actor: 'user:linh',
+      actor: own('user:linh'),
     })
     .returning({ seq: s.baselineVersion.seq });
+  // Trap 1. This is the allocated value, not the fixture's — read back rather than assumed.
+  const activeBaselineSeq = Number(bv!.seq);
+
+  // The rewrite below maps EVERY non-null `activeBaselineVersionSeq` onto that one value,
+  // which is correct exactly while the state carries one Baseline version — true of the
+  // fixture today, and the reason the rewrite is a one-liner rather than a translation
+  // table. The day a fixture carries a re-baseline, the quiet outcome would be every older
+  // ledger row re-pointed at the ACTIVE Baseline, which reclassifies historical hours and
+  // moves published figures with nothing complaining. So the assumption is asserted, on
+  // the demo path as well as the probe one.
+  const referenced = [
+    ...new Set(
+      state.ledger
+        .map((e) => e.activeBaselineVersionSeq)
+        .filter((seq): seq is number => seq !== null),
+    ),
+  ].sort((a, b) => a - b);
+  if (referenced.length > 1) {
+    throw new Error(
+      `this state's ledger references ${referenced.length} distinct Baseline versions ` +
+        `(seq ${referenced.join(', ')}), and the writer only knows how to re-point rows at ` +
+        'the one Baseline it just inserted. Writing it anyway would silently re-attribute ' +
+        'every historical hour to the active Baseline. Write the versions in order and ' +
+        'translate each fixture seq to the seq Postgres allocated for it.',
+    );
+  }
 
   await tx.insert(s.baselineWp).values(
     f.baseline.wps.map((b, i) => ({
-      id: `blwp-${i}`,
+      id: own(`blwp-${i}`),
       tenantId,
-      baselineVersionSeq: bv!.seq,
+      baselineVersionSeq: activeBaselineSeq,
       wpId: b.wpId,
       start: b.start,
       finish: b.finish,
@@ -196,14 +269,18 @@ async function seedInTenant(tx: Tx, state: ReturnType<typeof buildDemoState>): P
     })),
   );
 
-  const connectorId = 'con-fixture-ec2';
+  const connectorId = own('con-fixture-ec2');
   await tx.insert(s.connector).values({
     id: connectorId,
     tenantId,
     projectId: f.project.id,
+    // `adapter` is vocabulary (backlog | fixture | jira), so it is NOT prefixed: prefixing
+    // it would write a value no adapter registry could resolve. `scope` and `spaceLabel`
+    // are free text describing this Tenant's own tracker space, so they are — which is
+    // what lets the harness's token scan see them at all.
     adapter: 'fixture',
-    scope: 'project key EC2 (all issue types)',
-    spaceLabel: 'osaka-retail.backlog.jp (fixture replay)',
+    scope: own('project key EC2 (all issue types)'),
+    spaceLabel: own('osaka-retail.backlog.jp (fixture replay)'),
   });
 
   await tx.insert(s.mappingRule).values(
@@ -264,8 +341,8 @@ async function seedInTenant(tx: Tx, state: ReturnType<typeof buildDemoState>): P
   await chunked(state.ledger, 500, (batch) =>
     tx.insert(s.actualsLedgerEntry).values(
       batch.map((e) => ({
-        seq: e.seq,
-        id: `led-${e.seq}`,
+        seq: e.seq + options.seqOffset,
+        id: own(`led-${e.seq}`),
         tenantId,
         connectorId,
         ticketId: e.ticketId,
@@ -274,7 +351,10 @@ async function seedInTenant(tx: Tx, state: ReturnType<typeof buildDemoState>): P
         windowStart: e.windowStart ? new Date(e.windowStart) : null,
         windowEnd: new Date(e.windowEnd),
         assigneeAccountId: e.assigneeAccountId,
-        activeBaselineVersionSeq: e.activeBaselineVersionSeq,
+        // Trap 1 again, on the other side of the join: the fixture's literal seq is
+        // replaced by the one this Tenant's Baseline actually got.
+        activeBaselineVersionSeq:
+          e.activeBaselineVersionSeq === null ? null : activeBaselineSeq,
         snapshotId: snapshotOfEntry(e.windowEnd),
       })),
     ),
@@ -283,8 +363,8 @@ async function seedInTenant(tx: Tx, state: ReturnType<typeof buildDemoState>): P
   await chunked(state.mappingEvents, 500, (batch) =>
     tx.insert(s.mappingEvent).values(
       batch.map((m) => ({
-        seq: m.seq,
-        id: `map-${m.seq}`,
+        seq: m.seq + options.seqOffset,
+        id: own(`map-${m.seq}`),
         tenantId,
         projectId: f.project.id,
         ticketId: m.ticketId,
@@ -299,7 +379,7 @@ async function seedInTenant(tx: Tx, state: ReturnType<typeof buildDemoState>): P
 
   await tx.insert(s.auditLog).values({
     tenantId,
-    actor: 'system:seed',
+    actor: own('system:seed'),
     action: 'demo.seed',
     target: f.project.id,
     payload: {
@@ -311,10 +391,70 @@ async function seedInTenant(tx: Tx, state: ReturnType<typeof buildDemoState>): P
     at: new Date(state.anchor),
   });
 
-  console.log(
-    `seeded: ${state.wps.length} WPs, ${f.baseline.wps.length} baseline WPs, ` +
-      `${state.snapshots.length} snapshots, ${state.ledger.length} ledger entries, ` +
-      `${state.mappingEvents.length} mapping events`,
-  );
+  return {
+    tenantId,
+    activeBaselineSeq,
+    counts: {
+      wps: state.wps.length,
+      baselineWps: f.baseline.wps.length,
+      snapshots: state.snapshots.length,
+      ledgerEntries: state.ledger.length,
+      mappingEvents: state.mappingEvents.length,
+    },
+  };
 }
 
+/**
+ * @param db the OWNING role's handle — see the module note. `scripts/seed.ts` builds it
+ *   from `config.DATABASE_URL`.
+ */
+export async function seed(db: Db): Promise<void> {
+  const state = buildDemoState();
+  const tenantId = state.fixture.tenant.id;
+  // One transaction, one tenant: the truncate and all 16 inserts either land together or
+  // not at all, and every one of them is issued with `app.tenant_id` bound.
+  await withTenant(db, tenantId, (tx) => seedInTenant(tx, state));
+}
+
+async function seedInTenant(tx: Tx, state: DemoState): Promise<void> {
+  const tenantId = state.fixture.tenant.id;
+
+  // TRUNCATE is exempt from row-level security by design — it is a table-level operation, so
+  // no policy filters it — which means the truncate below would destroy EVERY Tenant's rows,
+  // not just this one's. Re-seeding one Tenant must never be able to empty another's ledger.
+  //
+  // Refusing is the guard rather than a tenant-scoped DELETE, on purpose: the truncate carries
+  // `RESTART IDENTITY`, and the identity counters are what make a re-seed reproduce the same
+  // `baseline_version.seq` the fixture's ledger entries were recorded against. A DELETE would
+  // leave those counters where they were, so the second seed would stamp a different active
+  // Baseline sequence and silently reclassify the Actuals — exactly the kind of wrong figure
+  // this story is upstream of. So: assert this is a single-Tenant database, and say whose
+  // rows are in the way when it is not.
+  const others = await tx.execute<{ id: string }>(
+    sql`SELECT id FROM tenant WHERE id <> ${tenantId} ORDER BY id`,
+  );
+  if (others.rows.length > 0) {
+    throw new Error(
+      `Refusing to seed: this database also holds ${others.rows.length} other Tenant(s) — ` +
+        `${others.rows.map((row) => row.id).join(', ')}. The seed TRUNCATEs, and TRUNCATE is ` +
+        'exempt from row-level security, so it would destroy their rows too. Drop the database, ' +
+        'or delete those Tenants deliberately, then seed again.',
+    );
+  }
+
+  // The append-only tables now carry a BEFORE TRUNCATE trigger as well as a BEFORE
+  // UPDATE OR DELETE one, and a trigger is a property of the table, so it refuses the owner
+  // too. Opening the maintenance hatch is the honest way through: re-seeding IS maintenance,
+  // and saying so in one transaction-scoped setting is better than a table that any statement
+  // can empty. The setting is reset at COMMIT, like the tenant.
+  await tx.execute(sql`SELECT set_config(${MAINTENANCE_SETTING}, 'on', true)`);
+  await tx.execute(sql.raw(`TRUNCATE ${TRUNCATE_ORDER.join(', ')} RESTART IDENTITY CASCADE`));
+
+  const written = await writeTenantRows(tx, state, DEMO_ROW_WRITE_OPTIONS);
+
+  console.log(
+    `seeded: ${written.counts.wps} WPs, ${written.counts.baselineWps} baseline WPs, ` +
+      `${written.counts.snapshots} snapshots, ${written.counts.ledgerEntries} ledger entries, ` +
+      `${written.counts.mappingEvents} mapping events`,
+  );
+}
