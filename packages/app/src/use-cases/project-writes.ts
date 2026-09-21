@@ -1,3 +1,4 @@
+import { audit, type AuditDeclaration } from '../audit';
 import type { Result } from '../result';
 import type { ProjectWriteDeps } from '../ports/project-write';
 import type { UseCaseContext } from './context';
@@ -16,23 +17,29 @@ import {
 } from './project-write-input';
 
 /**
- * The five project writes: FR-29's four Dispositions and FR-21's manual Mapping.
+ * The five project writes: FR-29's four Dispositions and FR-21's manual Mapping. All five are on
+ * NFR-A1's list, so all five are AUDITED (AD-14): each makes its change and calls `audit.record`
+ * inside the one tenant transaction `runProjectWrite` opens, on the scope it hands them.
  *
  * Every one has the same contract, which `runProjectWrite` holds in one place:
  *
  *   * `invalid_input` for a malformed command (no Tickets, a blank name or note, an empty id,
- *     a NUL) — and the port is never called, so nothing is written;
+ *     a NUL) — and no transaction is opened, so nothing is written;
  *   * `not_found` when the Project does not exist OR belongs to another Tenant — one event
- *     under row-level security — and the adapter's transaction has rolled back, so nothing is
- *     written for either Tenant;
- *   * `ok` once the event rows and their audit row have committed together (AD-14);
- *   * anything else propagates.
+ *     under row-level security — and the transaction has rolled back, so nothing is written for
+ *     either Tenant;
+ *   * `ok` once the change and its audit record have committed together;
+ *   * anything else propagates, the transaction rolled back.
  *
  * The Tenant comes from `ctx` and nowhere else; the actor from `deps`, where the composition
  * root put it beside the Tenant.
  *
  * Not checked here, as it never was: that the Tickets or the Work Package belong to the
  * Project. That is a later story's rule, not a rewiring's.
+ *
+ * THE AUDIT PAYLOADS are exactly what `packages/db` recorded before this slice moved the insert
+ * here: `{ ticketIds, wpId, note }` against the Project for a Disposition, `{ wpId }` against the
+ * Ticket for a manual Mapping — the raw `wpId`, so an unmap records the empty string.
  */
 
 /** FR-29 *Map*: the hours leave Unplanned Work immediately (FR-21 attribution). */
@@ -41,12 +48,15 @@ export async function mapTickets<Handle>(
   ctx: UseCaseContext,
   input: MapTicketsInput,
 ): Promise<Result<void>> {
-  return runProjectWrite(mapTicketsInputSchema, ctx, input, (tenantId, command) =>
-    deps.projectWrite.recordMapDisposition(deps.handle, tenantId, deps.actor, {
-      ...command,
-      kind: 'map',
-    }),
-  );
+  return runProjectWrite(mapTicketsInputSchema, deps, ctx, input, async (scope, stamp, command) => {
+    const { projectId, wpId, ticketIds } = command;
+    await scope.projectWrite.recordMapDisposition(stamp, { ...command, kind: 'map' });
+    await audit.record(scope, stamp, 'disposition.map', projectId, {
+      ticketIds: [...ticketIds],
+      wpId,
+      note: null,
+    });
+  });
 }
 
 /**
@@ -58,12 +68,18 @@ export async function planTicketsAsWorkPackage<Handle>(
   ctx: UseCaseContext,
   input: PlanTicketsInput,
 ): Promise<Result<void>> {
-  return runProjectWrite(planTicketsInputSchema, ctx, input, (tenantId, command) =>
-    deps.projectWrite.recordPlanDisposition(deps.handle, tenantId, deps.actor, {
+  return runProjectWrite(planTicketsInputSchema, deps, ctx, input, async (scope, stamp, command) => {
+    const { projectId, ticketIds } = command;
+    const { wpId } = await scope.projectWrite.recordPlanDisposition(stamp, {
       ...command,
       kind: 'plan',
-    }),
-  );
+    });
+    await audit.record(scope, stamp, 'disposition.plan', projectId, {
+      ticketIds: [...ticketIds],
+      wpId,
+      note: null,
+    });
+  });
 }
 
 /** FR-29 *Explain*: attaches a note. Clients see it only if a snapshot is published. */
@@ -72,12 +88,15 @@ export async function explainTickets<Handle>(
   ctx: UseCaseContext,
   input: ExplainTicketsInput,
 ): Promise<Result<void>> {
-  return runProjectWrite(explainTicketsInputSchema, ctx, input, (tenantId, command) =>
-    deps.projectWrite.recordExplainDisposition(deps.handle, tenantId, deps.actor, {
-      ...command,
-      kind: 'explain',
-    }),
-  );
+  return runProjectWrite(explainTicketsInputSchema, deps, ctx, input, async (scope, stamp, command) => {
+    const { projectId, note, ticketIds } = command;
+    await scope.projectWrite.recordExplainDisposition(stamp, { ...command, kind: 'explain' });
+    await audit.record(scope, stamp, 'disposition.explain', projectId, {
+      ticketIds: [...ticketIds],
+      wpId: null,
+      note,
+    });
+  });
 }
 
 /** FR-29 *Change Request candidate*: collects the Tickets into the candidate list. */
@@ -86,11 +105,23 @@ export async function markChangeRequestCandidates<Handle>(
   ctx: UseCaseContext,
   input: ChangeRequestCandidatesInput,
 ): Promise<Result<void>> {
-  return runProjectWrite(changeRequestCandidatesInputSchema, ctx, input, (tenantId, command) =>
-    deps.projectWrite.recordChangeRequestCandidates(deps.handle, tenantId, deps.actor, {
-      ...command,
-      kind: 'cr_candidate',
-    }),
+  return runProjectWrite(
+    changeRequestCandidatesInputSchema,
+    deps,
+    ctx,
+    input,
+    async (scope, stamp, command) => {
+      const { projectId, ticketIds } = command;
+      await scope.projectWrite.recordChangeRequestCandidates(stamp, {
+        ...command,
+        kind: 'cr_candidate',
+      });
+      await audit.record(scope, stamp, 'disposition.cr_candidate', projectId, {
+        ticketIds: [...ticketIds],
+        wpId: null,
+        note: null,
+      });
+    },
   );
 }
 
@@ -100,7 +131,24 @@ export async function mapTicket<Handle>(
   ctx: UseCaseContext,
   input: MapTicketInput,
 ): Promise<Result<void>> {
-  return runProjectWrite(mapTicketInputSchema, ctx, input, (tenantId, command) =>
-    deps.projectWrite.recordManualMapping(deps.handle, tenantId, deps.actor, command),
-  );
+  return runProjectWrite(mapTicketInputSchema, deps, ctx, input, async (scope, stamp, command) => {
+    const { ticketId, wpId } = command;
+    await scope.projectWrite.recordManualMapping(stamp, command);
+    await audit.record(scope, stamp, wpId === '' ? 'mapping.unmap' : 'mapping.map', ticketId, {
+      wpId,
+    });
+  });
 }
+
+/**
+ * What each write above records, declared for the audit gate (`tests/audited-use-cases.test.ts`).
+ * Keyed by the use case's exported name; the gate asserts the keys against the use-case surface
+ * both ways, so a renamed or added write cannot fall out of it.
+ */
+export const PROJECT_WRITE_AUDIT = {
+  mapTickets: { audited: ['disposition.map'] },
+  planTicketsAsWorkPackage: { audited: ['disposition.plan'] },
+  explainTickets: { audited: ['disposition.explain'] },
+  markChangeRequestCandidates: { audited: ['disposition.cr_candidate'] },
+  mapTicket: { audited: ['mapping.map', 'mapping.unmap'] },
+} as const satisfies Readonly<Record<string, AuditDeclaration>>;

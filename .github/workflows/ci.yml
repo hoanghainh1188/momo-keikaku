@@ -134,6 +134,16 @@
 #     (caught with NO database), a write ignoring the context's Tenant, the not_found mapping
 #     removed from the write path, and the write port miswired or drifted at the composition
 #     root (TS2322). The full table is in spec-1-2-web-write-use-cases.md.
+#   * tests (the audit mechanism, story 1.3 slice 1) — `tests/audited-use-cases.test.ts` runs in
+#     this suite with NO database: it enumerates the use-case surface and drives every audited
+#     write against a fake tenant transaction; the write harness proves the rollback against
+#     Postgres. Watched to fail — by the no-database gate: a write skipping `audit.record`,
+#     `audit.record` on a second transaction opened by the use case, the change swallowed after
+#     the audit call, and a new write exported unclassified; by the typecheck (TS2345) and the
+#     unit tests: an action outside the enum, refused at run time when forced; ONLY by the
+#     Postgres rollback tests in tests/cross-tenant-writes.test.ts: the db sink appending on its
+#     own `withTenant` (the no-database gate passes it). The full table is in
+#     spec-1-3-audit-mechanism.md.
 
 # THESE GATES REPORT; THEY DO NOT BLOCK. The repository is private on a free plan, so
 # GitHub refuses branch protection ("Upgrade to GitHub Pro or make this repository

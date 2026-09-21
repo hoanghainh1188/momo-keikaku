@@ -13,13 +13,7 @@ import {
   removeProbeTenant,
   type ProbeTenant,
 } from '../packages/db/src/probe-tenants';
-import {
-  recordChangeRequestCandidates,
-  recordExplainDisposition,
-  recordManualMapping,
-  recordMapDisposition,
-  recordPlanDisposition,
-} from '../packages/db/src/repo-writes';
+import { inTenantTransaction } from '../packages/db/src/repo-writes';
 import { TENANT_OWNED } from '../packages/db/src/table-classes';
 import { withTenant } from '../packages/db/src/with-tenant';
 import { READ_USE_CASES, REGISTRY_MODULE, type ReadUseCase, type WriteTarget } from './read-use-cases';
@@ -98,21 +92,15 @@ function owner(): Db {
 }
 
 /**
- * The write port, wired: `packages/db`'s write functions as `packages/app` declares them, on
- * the RESTRICTED role's handle. The same structural check the web app's composition root
- * makes — this file is a composition root too.
+ * The write deps, wired: `packages/db`'s tenant transaction as `packages/app` declares it, on the
+ * RESTRICTED role's handle. The same structural check the web app's composition root makes —
+ * this file is a composition root too.
  */
 function restrictedWriteDeps() {
   return {
     handle: getDb(APP_DATABASE_URL!),
     actor: TEST_ACTOR,
-    projectWrite: {
-      recordMapDisposition,
-      recordPlanDisposition,
-      recordExplainDisposition,
-      recordChangeRequestCandidates,
-      recordManualMapping,
-    },
+    transaction: inTenantTransaction,
   } satisfies ProjectWriteDeps<Db>;
 }
 
@@ -132,9 +120,13 @@ interface Outcome {
   readonly error?: unknown;
 }
 
-async function drive(entry: ReadUseCase, target: WriteTarget): Promise<Outcome> {
+async function drive(
+  entry: ReadUseCase,
+  target: WriteTarget,
+  deps: ProjectWriteDeps<Db> = restrictedWriteDeps(),
+): Promise<Outcome> {
   try {
-    const returned = (await entry.invokeWrite!(restrictedWriteDeps(), target)) as {
+    const returned = (await entry.invokeWrite!(deps, target)) as {
       ok?: boolean;
       error?: AppError;
     } | null;
@@ -392,6 +384,7 @@ function withoutSeq<T extends { seq: number }>(rows: readonly T[]): Omit<T, 'seq
 describe.skipIf(!reachable)('the write use cases, against two probe Tenants as the restricted role', () => {
   let anchor: Date;
   const ownTarget = () => targetOf(PROBE_W, PROBE_W.tenantId);
+  type ProjectWriteScopeOf = Parameters<Parameters<typeof inTenantTransaction>[2]>[0];
 
   beforeAll(async () => {
     await createProbeTenant(owner(), PROBE_W);
@@ -452,6 +445,100 @@ describe.skipIf(!reachable)('the write use cases, against two probe Tenants as t
       });
     },
   );
+
+  /**
+   * AD-14 against Postgres: the change and its audit record are ONE transaction. Each write is
+   * driven on its own Tenant's Project through `packages/db`'s real tenant transaction, with one
+   * thing wrapped — and nothing may land in any tenant-owned table either way.
+   *
+   *   * THE WORK FAILS AFTER THE AUDIT CALL: the use case's work resolves (the change made, the
+   *     record appended — counted), then the transaction's callback throws before COMMIT.
+   *   * THE AUDIT INSERT IS REFUSED: the sink's insert is handed a target Postgres rejects (a NUL
+   *     in a text column — a real refusal by the database, not a thrown stub), after the change.
+   *
+   * Run before the own-Tenant writes below, so a leak here would also surface there as a
+   * duplicate key rather than pass unnoticed.
+   */
+  describe('the change and its audit record commit together or not at all', () => {
+    const AFTER_AUDIT = 'the work failed after audit.record';
+
+    /** The real transaction, with `wrap` applied to the scope it hands the use case. */
+    function wrappedDeps(
+      wrap: (scope: ProjectWriteScopeOf) => ProjectWriteScopeOf,
+      afterWork?: () => never,
+    ): ProjectWriteDeps<Db> {
+      return {
+        ...restrictedWriteDeps(),
+        transaction: <T>(handle: Db, tenantId: string, work: (scope: ProjectWriteScopeOf) => Promise<T>) =>
+          inTenantTransaction(handle, tenantId, async (scope) => {
+            const result = await work(wrap(scope));
+            if (afterWork) afterWork();
+            return result;
+          }),
+      };
+    }
+
+    it.each(WRITES.map((entry) => [entry.name, entry] as const))(
+      '%s: the work failing after audit.record lands neither the change nor the record',
+      async (_name, entry) => {
+        let appended = 0;
+        const deps = wrappedDeps(
+          (scope) => ({
+            ...scope,
+            audit: {
+              append: async (record) => {
+                await scope.audit.append(record);
+                appended += 1;
+              },
+            },
+          }),
+          () => {
+            throw new Error(AFTER_AUDIT);
+          },
+        );
+        const before = await rowCounts(PROBE_W.tenantId);
+        const outcome = await drive(entry, ownTarget(), deps);
+
+        expect(appended, `${entry.name} did not reach audit.record before the failure`).toBe(1);
+        expect((outcome.error as Error | undefined)?.message).toBe(AFTER_AUDIT);
+        expect(
+          await rowCounts(PROBE_W.tenantId),
+          `${entry.name}: rows survived a transaction that failed after its audit record`,
+        ).toEqual(before);
+      },
+    );
+
+    it.each(WRITES.map((entry) => [entry.name, entry] as const))(
+      '%s: an audit_log insert refused by Postgres rolls the change back',
+      async (_name, entry) => {
+        let attempted = 0;
+        const deps = wrappedDeps((scope) => ({
+          ...scope,
+          audit: {
+            append: (record) => {
+              attempted += 1;
+              return scope.audit.append({ ...record, target: `${record.target}\0` });
+            },
+          },
+        }));
+        const before = await rowCounts(PROBE_W.tenantId);
+        const outcome = await drive(entry, ownTarget(), deps);
+
+        expect(attempted, `${entry.name} never tried to write its audit record`).toBe(1);
+        expect(outcome.error, `${entry.name} reported a refused audit insert as a result`).toBeDefined();
+        // Postgres's own refusal of the NUL (SQLSTATE 22021), not a client-side or wrapper throw.
+        const refusal = outcome.error as { code?: string; cause?: { code?: string } };
+        expect(
+          refusal.code ?? refusal.cause?.code,
+          `${entry.name} failed, but not with Postgres refusing the audit insert: ${String(outcome.error)}`,
+        ).toBe('22021');
+        expect(
+          await rowCounts(PROBE_W.tenantId),
+          `${entry.name}: the change committed although its audit record was refused`,
+        ).toEqual(before);
+      },
+    );
+  });
 
   describe('own-Tenant writes land exactly the rows the action always wrote', () => {
     let foreignBefore: Record<string, number>;

@@ -197,6 +197,7 @@ work started and was deliberately deferred, with the evidence for the split.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-2-rls-and-withtenant.md`
   summary: `withTenant` is not re-entrant and nothing detects a nested call, which would take a second pooled connection with no tenant set on it.
   evidence: Read from the implementation. `withTenant(db, …)` calls `db.transaction(…)`, which acquires a connection from the pool; a `withTenant(db, …)` called from *inside* another one's callback acquires a DIFFERENT connection, opens an independent transaction on it, and sets the tenant there — so the two are not one unit of work, an error in the inner one does not roll back the outer, and under a small pool they can deadlock waiting on each other. No code does this today (every caller wraps once, at the top), which is why it is recorded rather than patched. The cheap guard is an AsyncLocalStorage depth check that throws naming the outer call, or accepting a `Tx` as well as a `Db` so a nested call joins the transaction it is already in via a savepoint. Do it before the app layer starts composing use cases out of other use cases, which is story 1.3's shape.
+  resolved: PARTIAL, 2026-09-21 in `spec-1-3-audit-mechanism.md`. Every write use case now opens exactly ONE transaction through `packages/app`'s `TenantTransaction` port (`packages/db`'s `inTenantTransaction`, one `withTenant`), and the scope it hands the use case — the project write repository and the audit sink — is bound to that `tx`; no member opens its own. The audit gate asserts one transaction per audited use case against a fake, and the write harness proves the audit row rolls back with the change against Postgres. Still open: nothing DETECTS a nested `withTenant` in code (the AsyncLocalStorage guard or `Tx`-accepting overload), which matters when a use case first composes another.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-2-rls-and-withtenant.md`
   summary: The bare-handle ban is a naming convention — it flags queries on a variable literally called `db`, so the same query on a handle called anything else walks past both the lint rule and the test.
@@ -222,6 +223,7 @@ work started and was deliberately deferred, with the evidence for the split.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-2-rls-and-withtenant.md`
   summary: withTenant is not re-entrant and nothing detects a nested call.
   evidence: No caller nests today, so it is unreachable. It stops being unreachable in story 1.3, which composes use cases — a use case calling another that opens its own withTenant would either nest transactions or silently reuse the outer tenant. Cheap to guard when there is a second caller to guard against.
+  resolved: PARTIAL, 2026-09-21 — the same resolution as the entry above: story 1.3 slice 1 does not compose use cases; it gives them one transaction boundary through the port. The guard is still owed before the first composed use case.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-2-rls-and-withtenant.md`
   summary: loadProjectBundle now holds one transaction open across 15 round trips.
@@ -425,6 +427,7 @@ work started and was deliberately deferred, with the evidence for the split.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-2-arithmetic-and-codec.md`
   summary: `audit_log.payload` is decoded through the codec only by the write harness; no product code reads it yet, so its decode schema lives in `tests/cross-tenant-writes.test.ts`.
   evidence: Slice 5. The payload shapes (the two write payloads and the seed's) are restated there as zod schemas; story 1.7's audit-log reader should own them, next to the audited-action enum, and the harness should import them from there.
+  note: 2026-09-21 — the audited-action enum now exists (`packages/app/src/audit/index.ts`, `AUDIT_ACTIONS`), and the payloads are built by the use cases (`project-writes.ts`), so that module is where 1.7 should put the decode schemas. Still restated in the harness.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-2-arithmetic-and-codec.md`
   summary: AD-4's rounding fence covers `packages/domain` only; `Math.round`/`.toFixed` can come back into `apps/web` pages.
@@ -462,3 +465,31 @@ work started and was deliberately deferred, with the evidence for the split.
 - source_spec: `_bmad-output/planning-artifacts/architecture/architecture-momo-keikaku-2026-09-20/ARCHITECTURE-SPINE.md`
   summary: The Review's SV note says "Ahead of plan" at SV = 0 while the SPI note, from `behindPlan`, says "on or ahead of plan".
   evidence: Pre-existing wording (`svMh < 0n`, `review/page.tsx`), rejected at the slice 5 code review as pre-existing; recorded by the AD-1 web → domain/present review so it is tracked. Fix with the rest of the page's own decisions: an "On plan" case driven from the Review result.
+
+- source_spec: none
+  summary: Story 1.3 slice 2 — the organisation hierarchy: the `program` table (`mutable_audited`), and use cases to create, rename and reassign Departments, Programs and Projects (Program only within the Project's owning Department; moving a Project between Programs changes only roll-up), each audited with the previous value through slice 1's mechanism.
+  evidence: Split from story 1.3 at the Build multi-goal gate on 2026-09-21, the founder choosing the audit mechanism first so the hierarchy is written on it rather than beside it. No Organisation UI in 1.3 either (decided the same day): the admin surface waits for sign-in and roles (1.4/1.5).
+
+- source_spec: none
+  summary: FR-1's "assign PMs to Projects" is not done in story 1.3; it belongs with `tenant_membership` (story 1.4's table, `project_ids`) and role reach (1.5).
+  evidence: Decided by the founder on 2026-09-21: identity and membership do not exist before 1.4, and an interim `project_pm` table on the legacy `app_user` would be rewritten when 1.4 replaces it. The assignment is audited (NFR-A1 "role changes") when it lands.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-3-audit-mechanism.md`
+  summary: The audit gate drives each audited use case with ONE input (its registry entry's `invokeWrite`), so an action chosen on a branch is covered by the gate only on that branch — `mapTicket`'s unmap (`mapping.unmap`) is proved by the unit test and the write harness's unmap case, not by the gate.
+  evidence: Found building the gate. The gate asserts "exactly one record, of a declared action" per invocation, which a branch that skips `audit.record` would pass unless the gate drives that branch. Fix when a second branching write lands: let a registry entry carry several write inputs and drive each, requiring every declared action to be seen at least once.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-3-audit-mechanism.md`
+  summary: The gate proves the audit contract against a FAKE transaction; only the five writes' DB-level rollback tests (`tests/cross-tenant-writes.test.ts`) prove Postgres really rolls the record back — and those loop over the registry's writes, so a new write gets them automatically only if it is driven through the same `inTenantTransaction`.
+  evidence: Watched: moving the db audit sink onto its own `withTenant` passed the pure gate and the own-Tenant row tests and was caught only by the DB rollback tests. A write whose `packages/db` side ever returns a scope not built by `inTenantTransaction` would need the same wrapping; the harness's `wrappedDeps` is the place.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-3-audit-mechanism.md`
+  summary: `audit.record`'s payload is `unknown`: nothing ties an action to its payload shape.
+  evidence: Review round 1 (B2). A `mapping.map` record could carry a Disposition payload and typecheck. A type map from `AuditAction` to its payload schema, used by `record` and by story 1.7's reader, would give both one source of truth; the schemas live only in `tests/cross-tenant-writes.test.ts` today.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-3-audit-mechanism.md`
+  summary: The transaction port and the audited-use-case gate are built around the project write scope; story 1.3 slice 2's organisation writes need a different scope and a matching fake.
+  evidence: Review round 1 (B5). `inTenantTransaction` builds only a `ProjectWriteScope`, and the gate's `drive()` fakes only that. Generalise both when slice 2 adds its first write: a scope per repository family, composed, and a registry entry that supplies its own fake.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-3-audit-mechanism.md`
+  summary: The audited-use-case gate drives each use case with one input, so `mapTicket`'s unmap branch (`mapping.unmap`) is not driven by the gate.
+  evidence: Review round 1 (E2), and recorded by the implementation. Covered by the unit test and the harness's unmap test. Fix: a registry entry may supply several inputs, and the gate requires every declared action to be seen at least once.
