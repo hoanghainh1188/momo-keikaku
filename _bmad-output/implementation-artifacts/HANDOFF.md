@@ -1,8 +1,15 @@
 # Handoff — 2026-09-21 (updated at the end of the 2026-09-21 session)
 
-State at `main` = the merge of PR #25 (story 1.3's code-review fixes), on top of `625d2c5`.
+State at `main` = the merge of PR #27 (story 1.4 slice 1), `1f4ae62`.
 
-Two sessions are covered. **2026-09-20** took the project from "planning
+**Latest (2026-09-21, third session): story 1.4 slice 1 is merged.** People sign
+in with email + password; every request resolves a `RequestContext` from its
+session and the `tenant_membership` bridge, and the audit actor is the signed-in
+user. The suite is **570 tests across 34 files**. Story 1.4 is still
+`in-progress` — slices 2–4 remain. **The next session builds story 1.4 slice 2**
+— see "Next, in order".
+
+Two earlier sessions are covered below. **2026-09-20** took the project from "planning
 finished, no CI, 46 tests" to "three build slices merged, six CI gates, 123
 tests, tenant isolation enforced in the database". **2026-09-21** added the
 cross-tenant harness — **NFR-S1 is discharged** — finished every unblocked
@@ -77,20 +84,24 @@ to their share. Track upgrade-style work separately from feature work.
 | #23 | Story 1.3 slice 1 — the audit mechanism: one tenant transaction per write, `audit.record`, closed `AUDIT_ACTIONS`, the audited-use-case gate |
 | #24 | Story 1.3 slice 2 — `program`, eight audited org writes (`before`/`after`), `Clock` and UUIDv7 id ports; AD-1: the composition root may import `packages/adapters` |
 | #25 | Story 1.3 code review — nine fixes (monotonic UUIDv7, seed truncate gate, whole-Tenant write checks, full `project.create` audit, indexes); this handoff |
+| #26 | Story 1.4 slice 1 spec |
+| #27 | Story 1.4 slice 1 — Better Auth tables + `tenant_membership`, `@momo/db-auth`, `RequestContext`/`resolveRequestContext`, email + password sign-in, Node middleware; AD-1/AD-15 amended |
 
 **CI has ten steps**, all watched to fail before being trusted: lint (the
 clock/env fence, the tenant bans, and AD-4's arithmetic fences — rounding only
 in `domain/present`, `JSON.stringify` only in the codec), three typechecks,
 **dependency-cruiser** (no database), a Postgres 18.6-alpine service, a prepare
 step (schema → pgboss roles → RLS/grants/triggers → seed), and the suite.
-**510 tests across 29 files**, up from 46 across 3. The gates report and do not
+**570 tests across 34 files**, up from 46 across 3. The gates report and do not
 block (no branch protection on a private free-plan repo).
 
 **The import direction is gated.** `.dependency-cruiser.cjs` fails on: Drizzle
 in any `apps/*` file; `packages/db` from `apps/web` except the composition root
 (`apps/web/src/server/composition.ts`) and `packages/db/auth`; `packages/db`
 from any other app; `packages/adapters` from any `apps/*` file but the composition
-root, and from `packages/app|domain|db` at all; `apps/web` importing any `packages/domain` module but
+root, and from `packages/app|domain|db` at all; `better-auth` anywhere but
+`packages/db/auth`, and `packages/db/auth` from any `apps/web` file but the
+composition root; `apps/web` importing any `packages/domain` module but
 `present/index.ts`; the AD-1 scheduling edges (forward-looking); and any import
 it cannot resolve. What it does not enforce yet is listed in AD-1 and tracked in
 `deferred-work.md` — the worker's `pg-boss`/`pg`, package-to-package
@@ -123,9 +134,27 @@ bijectively relabelled copy of the demo dataset — and
 drives every read use case against both as the restricted role. The covered set
 is read off the read surface's module namespace, so an exported read with no
 registry entry fails **with no database at all**, naming it. Reach is measured
-with a query logger: 14 of the 16 tenant-owned tables; `app_user` and
+with a query logger: 14 of the 16 tenant-owned tables; `program` and
 `audit_log` are declared unreached with reasons, and either direction of change
 fails the build.
+
+**Every request is signed in (story 1.4 slice 1).** The four Better Auth tables
+(`auth_user`, `session`, `account`, `verification`) and `tenant_membership` are
+`global`, with no RLS; the registry flags `tenant_membership` as the one table
+carrying `tenant_id` without a policy, and gives the app role DML on the four
+Better Auth tables only. `resolveRequestContext` (`packages/app/src/authz`)
+reads the session through `IdentityPort` and the bridge through its one reader
+(`membershipsOf`, pinned by `source-discipline.test.ts`), deletes a session
+whose active Tenant has no membership, picks and persists a single membership,
+and answers `no_access` for zero or several. The composition root resolves it
+once per render (React `cache()`); a server action resolves once and passes it
+down; there is no constant Tenant or actor left in `apps/web` (a text-scan test
+pins that). A Node-runtime `middleware.ts` slides the session (8 h idle,
+`updateAge` 5 min, cookie cache off) and redirects to `/sign-in`. The route
+handler serves `/get-session`, `/sign-out`, `/sign-in/email` and 404s the rest.
+Demo users `linh` (PM) and `hoang` (Tenant Admin) are seeded with fixed UUIDv7
+ids and the password from `SEED_DEMO_PASSWORD`. Verified in a real browser
+against `next start`, including `next build`.
 
 ---
 
@@ -140,6 +169,7 @@ the diff never found one of them. Deliberate sabotage found every one.**
 | B2 | Changing the worker to connect as the **superuser** passed typecheck and all 56 tests — the composition root was never executed |
 | 1.2 | Setting the ledger's policy to `USING (true)`, leaking every tenant's money, left **all 96 tests passing** |
 | 1.2 s2 | `USING (true)` on `baseline_wp` leaked every Tenant's rows into the process and **all twenty** harness assertions stayed green |
+| 1.4 s1 | depcruise's `exclude: dist` dropped every edge into `better-auth`'s `dist/`, so `better-auth-only-in-db-auth` could **never** fire; found by the adversarial review of the spine amendment, fixed by narrowing `exclude` to our own build output |
 
 **So: after adding any gate, break the thing it guards and watch it fail.** The
 CI header and each spec's Verification section record the probes that have been
@@ -159,48 +189,48 @@ reading.
 
 ## Next, in order
 
-### 1. Story 1.4 — sign in, and be revoked (start here, in a new session)
+### 1. Story 1.4 slice 2 — revocation and membership changes (start here, in a new session)
 
-Run `/bmad-build story 1.4 — Sign in, and be revoked`. The story is at
-`epics.md:575`; its estimate and dependencies are in
-`oq12-sprint-planning-2026-09-20.md`. `epic-1-context.md` is current as of
-PR #24 (the spine has not changed since), so Build should load it rather than
-recompile — check the freshness rule anyway.
+Run:
+```
+/bmad-build story 1.4 slice 2 — revocation and membership changes as audited use cases (deferred-work.md). Hãy chạy `git fetch` trước.
+```
+Slice 1's spec (`spec-1-4-identity-and-request-context.md`, `done`) is the
+continuity context: its Code Map, Design Notes, Spec Change Log and Review
+Triage Log. The spine changed in PR #27 (AD-1, AD-15), so Build recompiles
+`epic-1-context.md`.
 
-What it has to deliver (AC summary): Better Auth's `user`, `session`,
-`account`, `verification` tables as class `global` (exempt from FORCE-RLS),
-reached only through `IdentityPort` implemented by `packages/db/auth` (AD-1
-carve-out 1, today an empty skeleton `@momo/db-auth`); `tenant_membership` as
-the one non-RLS bridge, read only by `resolveRequestContext`, which validates
-the session's explicit `activeTenantId` **on every request**; idle timeout
-(default 8 h) with the Better Auth cookie cache **disabled**, so revocation and
-expiry bite on the very next request; revocation as an audited `app` use case,
-never a write through the auth adapter; email + password and Google only;
-password reset through a mail port (console mailer locally).
+What slice 2 has to deliver: revocation and membership changes — including PM
+assignment into `tenant_membership.project_ids` (moved here from 1.3) — as
+audited `app` use cases through `runAuditedWrite`, never a write through the
+auth adapter; the revoked user is refused on their **next** request (the cookie
+cache is off and `resolveRequestContext` checks the bridge on every request, so
+deleting the membership or the sessions is enough). New audit actions go into
+`AUDIT_ACTIONS`.
 
-What exists that it builds on, and what it replaces:
-- **`UseCaseContext` is `{ tenantId }`** (`packages/app/src/use-cases/context.ts`),
-  built once in `composition.ts` from `DEMO_TENANT_ID`; the audit actor is
-  `WEB_ACTOR = 'user:linh'` beside it. `RequestContext { tenantId, userId, roles,
-  projectIds, locale }` (spine AD-12) replaces both — every use case and both
-  harnesses construct a context today, so budget for that ripple.
-- **The legacy `app_user` table** (seeded `user-linh` pm, `user-hoang`
-  tenant_admin) is declared unreached in the harness; 1.4 replaces it with the
-  identity tables plus `tenant_membership`, and the reach entry must come out.
-- **PM assignment moved here from 1.3** (founder decision 2026-09-21):
-  `tenant_membership.project_ids` is its home; role reach itself is 1.5's. It
-  is audited ("role changes" on NFR-A1) — add its action to `AUDIT_ACTIONS`.
-- **The audit mechanism, `Clock` and id ports are ready**: new audited writes
-  (revocation, membership changes) go through `runAuditedWrite`; add a scope
-  family to `inTenantTransaction` for identity/membership repositories.
-- **Local-run traps already decided** (epic context): configure Better Auth's
-  Next cookies plugin or session cookies are silently never set; export
-  next-intl middleware from `proxy.ts`.
+What slice 1 left for it:
+- The app role holds **SELECT only** on `tenant_membership`; membership writes
+  need a grant change (via the registry's `appPrivileges`) or a dedicated path —
+  decide it in the spec.
+- `membershipsOf` is the one reader and `source-discipline.test.ts` pins the
+  files that name `tenantMembership`/`membershipsOf`; a writer must be added to
+  those lists on purpose.
+- `inTenantTransaction` has no identity/membership scope family yet, and
+  `tenant_membership` is `global` (no `withTenant` policy), so the write's
+  Tenant check has to be explicit.
+- No role checks exist yet (story 1.5): decide what "only a Tenant Admin may
+  revoke" means before 1.5, or defer it with the other role checks.
 
-Expect Build's gates to ask the founder: how to slice it (identity tables +
-`resolveRequestContext` first, then sign-in methods, then revocation/reset is a
-natural split); Google OAuth credentials for local and CI (a test double, or
-real client ids?); and whether the mail port lands here or with Epic 8's SES.
+After slice 2: **slice 3** (Google sign-in) needs a founder decision on OAuth
+credentials for local and CI (a test double, or real client ids?); **slice 4**
+(password reset through `MailerPort`, console mailer locally, SES is Epic 8's)
+is unblocked. When all four are done, run `bmad-code-review` over the whole
+story, as for 1.3, then mark 1.4 `done`.
+
+Deferred from slice 1 worth knowing (`deferred-work.md`): `/` still redirects
+everyone to `/p/prj-ec2/review`; the middleware may answer an expired
+session's server-action POST with a 307 (unverified); the sign-in action has no
+rate limit; the top bar shows the role, not the user's name (1.7).
 
 ### 2. Story 1.2's watermark slice — blocked
 
@@ -215,12 +245,12 @@ Advisory locks before `seq` allocation. Needs Epic 2 and Epic 5's writers.
 Stories 1.5 through 1.9. Epic 1 is 156 h and is the calibration point for the
 whole estimate — its closing is the first date-slip checkpoint (above).
 
-What story 1.3 left, in `deferred-work.md` (**130 entries**): the
+What story 1.3 left, in `deferred-work.md` (**141 entries** now): the
 Program-within-Department rule is held by use cases and row locks, with no
 foreign key and no concurrency test; `audit_log.at` mixes fixture and wall time;
 the audited-use-case gate trusts declarations rather than NFR-A1's list;
 `apps/worker` has no composition root yet (it needs one for story 1.8's fixture
-clock); CI never runs `next build`.
+clock); CI never runs `next build` (it passed locally for story 1.4 slice 1).
 
 ---
 
@@ -268,6 +298,16 @@ clock); CI never runs `next build`.
   archiving org units, no name-uniqueness rule; new Projects take documented
   defaults (`NEW_PROJECT_DEFAULTS`) for columns later stories own, including a
   default Rate of 0 until story 1.6.
+- **Story 1.4 decisions (founder, 2026-09-21)**: split into four slices (1
+  identity + context + email/password, 2 revocation and membership writes, 3
+  Google, 4 password reset); the seed creates `linh` (PM) and `hoang` (Tenant
+  Admin) with the password from a required `SEED_DEMO_PASSWORD`, and there is no
+  provisioning script yet; a user with zero or several memberships signs in but
+  sees "no access" until a tenant switcher exists; every route but `/sign-in`,
+  `/no-access` and `/api/auth/*` requires sign-in, `/c/` included (a PM/Admin
+  preview until OQ-8); `@momo/db-auth` exports a factory and the composition
+  root builds the one instance lazily; Better Auth's own `Date` is a named AD-15
+  exception; the sign-in rate limit is deferred on purpose.
 
 ---
 
@@ -293,9 +333,21 @@ clock); CI never runs `next build`.
   ```
   `REQUIRE_DB=1` additionally turns an unreachable database into a failure
   rather than a skip, which is what CI sets.
+- Since story 1.4 the seed also needs `SEED_DEMO_PASSWORD` (8+ characters), and
+  the web process `BETTER_AUTH_SECRET` (32+) and `BETTER_AUTH_URL`
+  (`http://localhost:3101`); `SESSION_IDLE_TIMEOUT_HOURS` is optional (default
+  8). The tests that build an auth instance take their own values. The local
+  seed password in use is `momo-demo-2026`; sign in as
+  `linh@momo-digital.example` or `hoang@momo-digital.example`. Re-seeding
+  truncates `session`, so everyone is signed out.
+- A database created before story 1.4 needs `DROP TABLE IF EXISTS app_user`
+  before `drizzle-kit push`, which otherwise stops on an interactive rename
+  prompt. README-DEMO.md has the full steps.
 - `.claude/launch.json` starts the web app on 3101 for the agent harness. It
-  reads `apps/web/.env.local` (gitignored) for `DATABASE_URL` and
-  `APP_DATABASE_URL`; create it with the two lines above if it is missing.
+  reads `apps/web/.env.local` (gitignored) for the database URLs and the Better
+  Auth pair; create it if it is missing.
+- The agent does not type passwords into a browser: a real-browser sign-in
+  check needs the founder at the keyboard for that one step.
 - A shell without `pnpm` needs `corepack enable` once; `packageManager` pins
   pnpm 12.4.2.
 - If Postgres is not answering on 55433, Docker Desktop may be stopped: start it,
