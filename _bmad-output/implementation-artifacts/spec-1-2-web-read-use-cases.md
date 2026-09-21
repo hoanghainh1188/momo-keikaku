@@ -159,15 +159,17 @@ the same change, so isolation cover follows the code instead of lagging it.
 **Acceptance Criteria:**
 - Given a read call site, when it renders, then it reaches its data through a `packages/app` use
   case and imports neither `@momo/db` nor `drizzle-orm`.
-- Given `apps/web`, when its imports are listed, then exactly one file imports `@momo/db` and it is
-  the named composition root.
+- Given `apps/web`, when its imports are listed, then no read call site imports `@momo/db`, and the
+  only files that do are the named composition root and `app/actions.ts` — the latter until the
+  writes slice moves its five actions, after which the composition root is the only one.
 - Given a use case asked for a Project another Tenant owns, when it runs, then it returns
   `not_found` rather than throwing or disclosing existence.
 - Given a read use case added to `packages/app` with no harness registry entry, when the suite
   runs **without a database**, then it fails naming it.
 - Given a use case that swallows the repository's error and returns a default, when the harness
-  runs, then a completeness assertion fails — the thing the repository-level enumeration could
-  not see.
+  runs, then it fails — the cross-Tenant probe, because a foreign Project id then answers `ok`
+  rather than `not_found`; and a completeness assertion as well when the swallowed failure hits
+  the caller's own Tenant. The repository-level enumeration could see neither.
 - Given the whole suite, when lint, the three typechecks and the tests run, then all pass, the
   harness still discharges NFR-S1, and the six routes still render the pinned golden figures.
 
@@ -243,6 +245,14 @@ Next's 404 (`/p/nope/review`, `/c/nope` → 404) where it used to throw into a 5
   without mutation; `fail` lost its unused type parameter; the barrel exports the result and port
   modules as types only, keeping `ok`/`fail`/`isProjectNotFound` package-internal; the two
   composition roots dropped the return annotation so the `satisfies` is what checks.
+
+- 2026-09-21 (after merge, PR #16) — AC-2 and AC-5 reworded to what the approved intent allows
+  and the harness actually does, as decided by the human at walkthrough. AC-2: the frozen intent
+  keeps the writes, and so `actions.ts`, out of this slice, so "exactly one file" could never
+  hold; it now names `actions.ts` as the one remaining importer until the writes slice. AC-5: a
+  pure swallow is caught by the cross-Tenant `not_found` probe (sabotage #3), completeness only
+  when the own-Tenant read also fails (#4); the criterion now says so. ARCHITECTURE-SPINE.md AD-1
+  amended in the same change to record the composition-root carve-out.
 
 ## Review Triage Log
 

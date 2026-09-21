@@ -1,12 +1,14 @@
 # Handoff — 2026-09-21 (updated after the 2026-09-21 session)
 
-State at `main` = `007f6cb`, working tree clean, no open PRs.
+State at `main` = `da58d79` (PR #16 merged), plus the docs PR for AC-2/AC-5 and the AD-1
+amendment described below.
 
 Two sessions are covered. **2026-09-20** took the project from "planning
 finished, no CI, 46 tests" to "three build slices merged, six CI gates, 123
 tests, tenant isolation enforced in the database". **2026-09-21** added the
-cross-tenant harness — **NFR-S1 is discharged** — taking the suite to 146 tests
-across 12 files, and planned the slice after it.
+cross-tenant harness — **NFR-S1 is discharged** — and then built story 1.2
+slice 3: the seven read call sites now reach their data through `packages/app`
+use cases (PR #16), taking the suite to **165 tests across 14 files**.
 
 ---
 
@@ -112,17 +114,18 @@ reading.
 
 ## Next, in order
 
-### 1. Story 1.2's remaining slices — four, not one
+### 1. Story 1.2's remaining slices — three
 
-The harness landed on 2026-09-21. `deferred-work.md` now has **73 entries**.
-These four remain:
+Slice 3 (the reads) merged on 2026-09-21 as PR #16. `deferred-work.md` now has
+**83 entries**. What slice 3 left for the next one, all recorded there:
+`actions.ts` still imports `@momo/db` and `drizzle-orm`; an invisible Project
+is recognised by `repo.ts`'s error MESSAGE; the coverage gate can be sidestepped
+by a use case exported from the `@momo/app` barrel directly, or by a registry
+entry whose `invoke` calls a different use case than it names; and nothing
+automated stops a page importing `@momo/db` again until the gate lands.
 
-1. **The seven read call sites onto `packages/app` use cases.**
-   **Spec is written and approved**, `status: ready-for-dev`, on `main`:
-   `spec-1-2-web-read-use-cases.md`. Point `/bmad-build` at it and it goes
-   straight to implementation. Four decisions are frozen in it — reads only;
-   the gate scoped to AC-6's wording; the composition root as a named second
-   carve-out in `apps/web`; the harness moving to a root `tests/` directory.
+1. ~~The seven read call sites onto `packages/app` use cases.~~ **Done**,
+   `spec-1-2-web-read-use-cases.md`, `status: done`.
 2. **The five write actions, then `dependency-cruiser`** — in that order, never
    before. `actions.ts` is the file that still imports Drizzle, which is why
    the gate cannot go on until the writes move. Measured 2026-09-21: 12
@@ -156,11 +159,14 @@ whole estimate.
   person can merge. Recorded in the CI header.
 - **The hardcoded DSN fallback**: removed in story 1.2, as decided.
 - **Connector order after R0**: Jira first, Redmine after. Revisit 2027-01-01.
-- **A second AD-1 carve-out**, decided 2026-09-21. ARCHITECTURE-SPINE calls
-  `packages/db/auth` "one carve-out"; there are now two. The composition root
-  `apps/web/src/server/composition.ts` will be the only file under `apps/web`
-  permitted to import `@momo/db`, and the dependency-cruiser rule names that
-  exact path so the exception is auditable rather than a hole.
+- **A second AD-1 carve-out**, decided 2026-09-21 and written into
+  ARCHITECTURE-SPINE's AD-1 the same day (after an adversarial review that
+  narrowed a first draft): `apps/web/src/server/composition.ts` is the only
+  file under `apps/web` permitted to import `packages/db`, it exports use-case
+  bindings only, `apps/worker` has no such file, and `tests/` sits outside the
+  AD-1 graph. The dependency-cruiser rule names that exact path. Amending the
+  spine makes the cached `epic-1-context.md` stale, so the next `/bmad-build`
+  recompiles it.
 - **The dependency-cruiser gate takes AC-6's wording, not full AD-1.** It bans
   `apps/*` importing a repository or Drizzle. Full AD-1 would also flag
   `apps/worker`'s `pg-boss` and `pg` and drag the queue-adapter move into
