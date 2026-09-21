@@ -21,8 +21,9 @@
 //     bans and nothing else. The parser is configured only so the source can be read.
 //   * No type-aware linting, so no `projectService`/`project` — nothing here needs types,
 //     and turning it on would put the typecheck's cost inside the lint gate.
-//   * No import-direction rules (AD-1). Those need dependency-cruiser and must wait until
-//     story 1.2 has rewired the eight `apps/web` files that reach `@momo/db` directly.
+//   * No import-direction rules (AD-1). Those are dependency-cruiser's
+//     (`.dependency-cruiser.cjs`, `pnpm depcruise`), switched on by story 1.2 slice 4 once the
+//     `apps/web` files that reached `@momo/db` directly had moved onto use cases.
 //
 // Pins: `typescript-eslint` 8.70.0 comes from the decided stack. ESLint itself is not in
 // the Stack table, so it is pinned exactly at 10.11.0 — the newest release inside

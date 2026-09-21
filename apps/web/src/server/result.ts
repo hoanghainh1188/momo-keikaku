@@ -23,3 +23,27 @@ export function valueOrNotFound<T>(result: Result<T>): T {
     }
   }
 }
+
+/**
+ * Whether a write use case's change landed — the one question a server action asks before it
+ * revalidates.
+ *
+ * Both codes a write can return mean "nothing was written", and the action treats them as it
+ * always treated a form it could not use: an early return, no revalidation, no error page.
+ * `not_found` is a Project that does not exist or is another Tenant's; `invalid_input` a form
+ * with no Tickets, a blank name or note, or an empty id. Exhaustive for the same reason as
+ * `valueOrNotFound`: a new code is a compile error here until somebody decides what it means.
+ */
+export function writeLanded(result: Result<void>): boolean {
+  if (result.ok) return true;
+  const code = result.error.code;
+  switch (code) {
+    case 'not_found':
+    case 'invalid_input':
+      return false;
+    default: {
+      const unhandled: never = code;
+      throw new Error(`unhandled use-case error code: ${String(unhandled)}`);
+    }
+  }
+}

@@ -18,6 +18,7 @@ import {
   type WorkPackage,
 } from '@momo/domain';
 import type { Db } from './client';
+import { projectNotFound } from './project-not-found';
 import * as s from './schema';
 import { withTenant, type Tx } from './with-tenant';
 
@@ -74,7 +75,7 @@ export async function loadProjectBundle(
 
 async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBundle> {
   const [p] = await tx.select().from(s.project).where(eq(s.project.id, projectId));
-  if (!p) throw new Error(`project ${projectId} not found — run \`pnpm demo\` to seed`);
+  if (!p) throw projectNotFound(projectId);
   const [ten] = await tx.select().from(s.tenant).where(eq(s.tenant.id, p.tenantId));
   const [dep] = await tx.select().from(s.department).where(eq(s.department.id, p.departmentId));
   const [con] = await tx.select().from(s.connector).where(eq(s.connector.projectId, projectId));

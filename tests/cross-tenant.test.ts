@@ -79,6 +79,12 @@ import { withTenant } from '../packages/db/src/with-tenant';
  *      that makes the acceptance criterion's "any tenant-owned table" true rather than
  *      true of five of them.
  *
+ * THE WRITES live in `tests/cross-tenant-writes.test.ts` (story 1.2 slice 4). They are on the
+ * same enumerated surface, so claim 1's gate below names an unregistered write exactly as it
+ * names an unregistered read; that file drives every entry of `kind: 'write'` — a
+ * foreign-Tenant write must answer `not_found` and land nothing in any tenant-owned table, an
+ * own-Tenant write must land exactly the rows the action always wrote.
+ *
  * And it says what it does not reach: `read-use-cases.ts` declares the tenant-owned tables
  * no use case touches, and the declaration is compared against what a Drizzle query logger
  * MEASURES rather than against what anybody believes.
@@ -163,8 +169,9 @@ describe('the read surface is enumerated mechanically, not listed by hand', () =
       uncovered,
       `these functions are exported from ${READ_SURFACE_MODULE} and have no entry in ` +
         `${REGISTRY_MODULE}: ${uncovered.join(', ')}. Every read is driven ` +
-        'against two probe Tenants by tests/cross-tenant.test.ts; an export with ' +
-        'no entry is a read with no isolation cover.',
+        'against two probe Tenants by tests/cross-tenant.test.ts, and every write by ' +
+        'tests/cross-tenant-writes.test.ts; an export with no entry is a use case with no ' +
+        'isolation cover.',
     ).toEqual([]);
   });
 
@@ -191,6 +198,21 @@ describe('the read surface is enumerated mechanically, not listed by hand', () =
         broken.push(
           `${entry.name}: kind 'read' with no mustSurface — nothing would then fail if the ` +
             'use case returned the same empty result for every Tenant',
+        );
+      }
+      if (entry.kind === 'write' && typeof entry.invokeWrite !== 'function') {
+        broken.push(`${entry.name}: kind 'write' with no invokeWrite — it would never be driven`);
+      }
+      if (entry.kind !== 'write' && entry.invokeWrite !== undefined) {
+        broken.push(
+          `${entry.name}: kind '${entry.kind}' with an invokeWrite — the write suite drives ` +
+            'only entries of kind \'write\', so this invoker would never run',
+        );
+      }
+      if (entry.kind === 'write' && (entry.invoke !== undefined || entry.mustSurface !== undefined)) {
+        broken.push(
+          `${entry.name}: kind 'write' with a read's invoke/mustSurface — a write is not ` +
+            'driven through the read matrix, so these would be dead',
         );
       }
       if (entry.kind === 'not-a-read' && !entry.reason) {

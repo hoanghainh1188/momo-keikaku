@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Result } from '@momo/app';
-import { valueOrNotFound } from './result';
+import { valueOrNotFound, writeLanded } from './result';
 
 /**
  * The seven project pages' error arm. Without this, `valueOrNotFound` regressing from Next's
@@ -39,5 +39,26 @@ describe('valueOrNotFound', () => {
   ] as const)('throws Next\'s not-found error for %s', (_code, error) => {
     const result: Result<never> = { ok: false, error };
     expect(digestOf(() => valueOrNotFound(result))).toBe(NOT_FOUND_DIGEST);
+  });
+});
+
+describe('writeLanded', () => {
+  // The five write actions revalidate on `true` only. `false` for both codes is what keeps a
+  // refused write from revalidating — and a throw here instead would turn an unusable form into
+  // an error page, which it never was.
+  it('is true for ok', () => {
+    const result: Result<void> = { ok: true, value: undefined };
+    expect(writeLanded(result)).toBe(true);
+  });
+
+  it.each([
+    ['not_found', { code: 'not_found', messageKey: 'errors.not_found' }],
+    [
+      'invalid_input',
+      { code: 'invalid_input', messageKey: 'errors.invalid_input', details: { ticketIds: ['too_small'] } },
+    ],
+  ] as const)('is false, without throwing, for %s', (_code, error) => {
+    const result: Result<void> = { ok: false, error };
+    expect(writeLanded(result)).toBe(false);
   });
 });

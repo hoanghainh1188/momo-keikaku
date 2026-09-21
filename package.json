@@ -11,11 +11,13 @@
     "test": "vitest run",
     "lint": "eslint . --max-warnings 0",
     "typecheck": "tsc --noEmit -p tsconfig.json --pretty false",
+    "depcruise": "depcruise apps packages --config .dependency-cruiser.cjs",
     "db:policies": "tsx scripts/db-policies.ts",
     "db:sql": "tsx scripts/db-policies.ts --write"
   },
   "devDependencies": {
     "@types/node": "^24.13.6",
+    "dependency-cruiser": "18.3.1",
     "drizzle-kit": "0.31.10",
     "eslint": "10.11.0",
     "tsx": "4.23.13",

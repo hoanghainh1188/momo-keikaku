@@ -13,5 +13,6 @@
 export * from './client';
 export * from './schema';
 export * from './repo';
+export * from './repo-writes';
 export * from './table-classes';
 export * from './with-tenant';
