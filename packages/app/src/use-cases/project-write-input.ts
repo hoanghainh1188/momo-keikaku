@@ -6,8 +6,10 @@
  * schema or helper exported there would be reported as a use case with no registry entry.
  */
 import { z } from 'zod';
+import { refusingNonMembers } from '../audit';
 import { fail, ok, type AppError, type Result } from '../result';
 import { isProjectNotFound } from '../ports/project-read';
+import type { ProjectWriteDeps, ProjectWriteScope, WriteStamp } from '../ports/project-write';
 import type { UseCaseContext } from './context';
 
 /**
@@ -80,25 +82,37 @@ function invalidInputDetails(error: z.ZodError): NonNullable<AppError['details']
 }
 
 /**
- * Validates the input, runs `write` for the caller's Tenant, and maps an invisible Project to
- * `not_found`.
+ * Validates the input, opens ONE tenant transaction for the caller's Tenant, reads the Project's
+ * anchor inside it, and runs `work` on that transaction's scope with the stamp — then maps an
+ * invisible Project to `not_found`.
+ *
+ * `work` makes the change through `scope.projectWrite` and records it through
+ * `audit.record(scope, stamp, …)`, both on the one transaction opened here (AD-14). Nothing
+ * in it may open another: this is the only transaction boundary a write use case has.
  *
  * NOTHING ELSE IS CAUGHT, for the reason the read path gives: a write that failed for any other
- * reason — an outage, a constraint — must not be reported as "this Project does not exist", and
- * must never be reported as success.
+ * reason — an outage, a constraint, a refused audit insert — must not be reported as "this
+ * Project does not exist", and must never be reported as success. The transaction has rolled
+ * back by the time it propagates, so nothing landed.
  */
-export async function runProjectWrite<Command extends { readonly projectId: string }>(
+export async function runProjectWrite<Handle, Command extends { readonly projectId: string }>(
   schema: z.ZodType<Command>,
+  deps: ProjectWriteDeps<Handle>,
   ctx: UseCaseContext,
   input: unknown,
-  write: (tenantId: string, command: Command) => Promise<void>,
+  work: (scope: ProjectWriteScope, stamp: WriteStamp, command: Command) => Promise<void>,
 ): Promise<Result<void>> {
   const parsed = schema.safeParse(input);
   if (!parsed.success) return fail('invalid_input', invalidInputDetails(parsed.error));
 
   const command = parsed.data;
   try {
-    await write(ctx.tenantId, command);
+    await deps.transaction(deps.handle, ctx.tenantId, async (scope) => {
+      const at = await scope.projectWrite.projectAnchor(command.projectId);
+      // The work sees only a guarded sink: a direct `append` with a non-enum action is refused.
+      const guarded = { ...scope, audit: refusingNonMembers(scope.audit) };
+      await work(guarded, { actor: deps.actor, at }, command);
+    });
     return ok(undefined);
   } catch (error) {
     if (isProjectNotFound(error, command.projectId)) return fail('not_found');

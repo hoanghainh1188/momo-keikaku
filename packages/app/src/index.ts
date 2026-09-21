@@ -6,8 +6,8 @@
 // on, and the `Result` they return. Slice 4 adds the five project writes and their port. The
 // web → domain/present edge (2026-09-21) adds the Client View and Mapping reads, so no page
 // computes from the domain.
-// Authorisation (1.5), audit (1.3) and the RequestContext (1.4) attach to this layer later;
-// none of them exists yet.
+// Story 1.3 slice 1 adds the audit mechanism (`./audit`) and the tenant transaction the writes
+// run in. Authorisation (1.5) and the RequestContext (1.4) attach to this layer later.
 //
 // `./use-cases` does not import `./config`, so code that needs the use cases and not the
 // configuration can import `packages/app/src/use-cases` directly. `config` is lazy (a getter
@@ -31,8 +31,14 @@ export type {
   MapDispositionCommand,
   PlanDispositionCommand,
   ProjectWriteDeps,
-  ProjectWritePort,
+  ProjectWriteRepository,
+  ProjectWriteScope,
+  WriteStamp,
 } from './ports/project-write';
+export type { TenantTransaction } from './ports/tenant-transaction';
+// Audit crosses as TYPES only, like the result and the ports: `audit.record` is a use case's to
+// call inside its own transaction, never an inbound adapter's.
+export type { AuditAction, AuditEntry, AuditSink } from './audit';
 export * from './use-cases';
 export type { UseCaseContext } from './use-cases/context';
 export type { ClientView } from './use-cases/get-client-view';

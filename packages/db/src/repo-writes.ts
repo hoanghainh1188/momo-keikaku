@@ -1,35 +1,37 @@
-import { encode } from '@momo/domain';
 import { eq, sql } from 'drizzle-orm';
+import { auditSinkOn } from './audit-sink';
 import type { Db } from './client';
 import { projectNotFound } from './project-not-found';
 import * as s from './schema';
 import { withTenant, type Tx } from './with-tenant';
 
 /**
- * The five project writes — FR-29's four Dispositions and FR-21's manual Mapping — moved here
- * from `apps/web/src/app/actions.ts` by story 1.2 slice 4, bodies unchanged apart from taking
- * the Tenant and the actor as arguments.
+ * The five project writes — FR-29's four Dispositions and FR-21's manual Mapping — and the tenant
+ * transaction they run in.
  *
- * They satisfy `packages/app`'s `ProjectWritePort` STRUCTURALLY: this package may not import
- * `@momo/app` (the import direction), so the command types below restate the port's, and the
+ * Moved here from `apps/web/src/app/actions.ts` by story 1.2 slice 4; reshaped by story 1.3
+ * slice 1 onto `packages/app`'s tenant-transaction port. `inTenantTransaction` opens ONE
+ * `withTenant` transaction and hands the use case a scope whose every member is bound to it: the
+ * project write repository below and the audit sink (`audit-sink.ts`). The use case makes its
+ * change through the one and records it through the other, so both commit together or not at
+ * all (AD-14). The repository no longer writes `audit_log` — the sink is its one writer, and
+ * `packages/app`'s `audit.record` the one caller — and the event inserts stay here.
+ *
+ * They satisfy `packages/app`'s `ProjectWriteDeps` STRUCTURALLY: this package may not import
+ * `@momo/app` (the import direction), so the command types below restate the port's, and each
  * composition root's `satisfies ProjectWriteDeps<Db>` is where TypeScript checks the match. The
  * four Disposition commands carry their `kind` as a literal so that check can tell them apart
  * (see the port's header).
  *
- * AUDIT PAYLOADS GO THROUGH THE CODEC (AD-4): every `audit_log.payload` is written as
- * `encode(...)`, so a `bigint` in a later payload is stored as its decimal string instead of
- * throwing inside the driver, and a float is refused naming its path rather than stored lossily.
+ * NO MEMBER OPENS A TRANSACTION. Every statement is issued on the scope's `tx`; a member calling
+ * `withTenant` itself would open a second, independent transaction on another pooled connection
+ * (deferred-work: `withTenant` is not re-entrant), whose rows would survive this one's rollback.
  *
- * EACH FUNCTION IS ONE `withTenant` TRANSACTION (AD-14): the event rows and the `audit_log` row
- * commit together or not at all. Every table touched carries FORCE row-level security, so the
- * inserts are only accepted inside `withTenant`, for the Tenant it set.
- *
- * AN INVISIBLE PROJECT REJECTS. Each write first reads its Project — the event time is the
+ * AN INVISIBLE PROJECT REJECTS. The use case first asks `projectAnchor` — the event time is the
  * Project's `demoAnchor` — and a Project the Tenant cannot see (it does not exist, or another
- * Tenant owns it) rejects through `projectNotFound`, the one helper `repo.ts` uses too,
- * which is what `packages/app`'s `isProjectNotFound` recognises. The rejection is inside the
- * transaction, so nothing is written. The demo spike's `new Date()` fallback is gone with it:
- * writing a Disposition against a Project that is not there was never a thing to do quietly.
+ * Tenant owns it) rejects through `projectNotFound`, the one helper `repo.ts` uses too, which is
+ * what `packages/app`'s `isProjectNotFound` recognises. The rejection is inside the transaction,
+ * so nothing is written.
  *
  * TODO(review-adversarial H1/H4): in production these appends must take the per-Project
  * advisory lock before allocating `seq`, and rule evaluation must re-read the Ticket's head
@@ -72,11 +74,19 @@ export interface ManualMappingCommand {
 
 type DispositionKind = 'map' | 'plan' | 'cr_candidate' | 'explain';
 
-/** Who and when, fixed once per transaction and stamped on every row it writes. */
-interface Stamp {
-  readonly tenantId: string;
+/**
+ * Who and when, stamped on every row one write lands — `packages/app`'s `WriteStamp`, restated.
+ * The Tenant is not in it: the repository is bound to its transaction's Tenant.
+ */
+export interface WriteStamp {
   readonly actor: string;
   readonly at: Date;
+}
+
+/** The transaction and the Tenant a repository is bound to. */
+interface Bound {
+  readonly tx: Tx;
+  readonly tenantId: string;
 }
 
 /**
@@ -110,8 +120,8 @@ async function nextSeq(tx: Tx, table: 'mapping_event'): Promise<number> {
 }
 
 async function appendMappings(
-  tx: Tx,
-  stamp: Stamp,
+  { tx, tenantId }: Bound,
+  stamp: WriteStamp,
   projectId: string,
   ticketIds: readonly string[],
   wpId: string | null,
@@ -121,7 +131,7 @@ async function appendMappings(
     ticketIds.map((ticketId, index) => ({
       seq: first + index,
       id: `map-${ticketId}-${stamp.at.getTime()}`,
-      tenantId: stamp.tenantId,
+      tenantId,
       projectId,
       ticketId,
       wpId,
@@ -134,9 +144,10 @@ async function appendMappings(
   );
 }
 
+/** The Disposition event. Its audit record is the use case's, through the audit sink. */
 async function recordDisposition(
-  tx: Tx,
-  stamp: Stamp,
+  { tx, tenantId }: Bound,
+  stamp: WriteStamp,
   projectId: string,
   kind: DispositionKind,
   ticketIds: readonly string[],
@@ -145,7 +156,7 @@ async function recordDisposition(
 ): Promise<void> {
   await tx.insert(s.dispositionEvent).values({
     id: `disp-${kind}-${stamp.at.getTime()}`,
-    tenantId: stamp.tenantId,
+    tenantId,
     projectId,
     kind,
     ticketIds: [...ticketIds],
@@ -154,60 +165,33 @@ async function recordDisposition(
     at: stamp.at,
     actor: stamp.actor,
   });
-  await tx.insert(s.auditLog).values({
-    tenantId: stamp.tenantId,
-    actor: stamp.actor,
-    action: `disposition.${kind}`,
-    target: projectId,
-    payload: encode({ ticketIds: [...ticketIds], wpId, note }),
-    at: stamp.at,
-  });
-}
-
-/** Opens the Tenant's transaction, reads the Project's anchor, and hands `work` the stamp. */
-function inProject(
-  db: Db,
-  tenantId: string,
-  actor: string,
-  projectId: string,
-  work: (tx: Tx, stamp: Stamp) => Promise<void>,
-): Promise<void> {
-  return withTenant(db, tenantId, async (tx) => {
-    const at = await anchorOf(tx, projectId);
-    await work(tx, { tenantId, actor, at });
-  });
 }
 
 /** FR-29 *Map*. */
-export function recordMapDisposition(
-  db: Db,
-  tenantId: string,
-  actor: string,
-  command: MapDispositionCommand,
-): Promise<void> {
-  const { kind, projectId, wpId, ticketIds } = command;
-  return inProject(db, tenantId, actor, projectId, async (tx, stamp) => {
-    await appendMappings(tx, stamp, projectId, ticketIds, wpId);
-    await recordDisposition(tx, stamp, projectId, kind, ticketIds, wpId, null);
-  });
+function recordMapDisposition(bound: Bound) {
+  return async (stamp: WriteStamp, command: MapDispositionCommand): Promise<void> => {
+    const { kind, projectId, wpId, ticketIds } = command;
+    await appendMappings(bound, stamp, projectId, ticketIds, wpId);
+    await recordDisposition(bound, stamp, projectId, kind, ticketIds, wpId, null);
+  };
 }
 
 /**
  * FR-29 *Plan*: a new leaf Work Package, `9.<n>` in the WBS where `n` counts the Project's
- * existing `9.` Work Packages, then the Mappings and the Disposition.
+ * existing `9.` Work Packages, then the Mappings and the Disposition. Returns the new Work
+ * Package's id, which the use case's audit payload records.
  *
  * The Work Package id is `wp-new-<anchor ms>`, as it always was — so a second Plan on the same
  * Project collides on `work_package`'s primary key while the demo clock is fixed. Recorded in
  * deferred-work; changing the id is not a rewiring.
  */
-export function recordPlanDisposition(
-  db: Db,
-  tenantId: string,
-  actor: string,
-  command: PlanDispositionCommand,
-): Promise<void> {
-  const { kind, projectId, name, ticketIds } = command;
-  return inProject(db, tenantId, actor, projectId, async (tx, stamp) => {
+function recordPlanDisposition(bound: Bound) {
+  return async (
+    stamp: WriteStamp,
+    command: PlanDispositionCommand,
+  ): Promise<{ readonly wpId: string }> => {
+    const { tx, tenantId } = bound;
+    const { kind, projectId, name, ticketIds } = command;
     const wpId = `wp-new-${stamp.at.getTime()}`;
     const existing = await tx
       .select()
@@ -233,53 +217,39 @@ export function recordPlanDisposition(
       assignedResourceIds: [],
       deletedAt: null,
     });
-    await appendMappings(tx, stamp, projectId, ticketIds, wpId);
-    await recordDisposition(tx, stamp, projectId, kind, ticketIds, wpId, null);
-  });
+    await appendMappings(bound, stamp, projectId, ticketIds, wpId);
+    await recordDisposition(bound, stamp, projectId, kind, ticketIds, wpId, null);
+    return { wpId };
+  };
 }
 
 /**
  * FR-29 *Explain*. The note is stored as given: `packages/app`'s `explainTickets` has already
  * refused one longer than `EXPLAIN_NOTE_MAX` (the web form parser cuts to that bound first).
  */
-export function recordExplainDisposition(
-  db: Db,
-  tenantId: string,
-  actor: string,
-  command: ExplainDispositionCommand,
-): Promise<void> {
-  const { kind, projectId, note, ticketIds } = command;
-  return inProject(db, tenantId, actor, projectId, (tx, stamp) =>
-    recordDisposition(tx, stamp, projectId, kind, ticketIds, null, note),
-  );
+function recordExplainDisposition(bound: Bound) {
+  return (stamp: WriteStamp, command: ExplainDispositionCommand): Promise<void> => {
+    const { kind, projectId, note, ticketIds } = command;
+    return recordDisposition(bound, stamp, projectId, kind, ticketIds, null, note);
+  };
 }
 
 /** FR-29 *Change Request candidate*. */
-export function recordChangeRequestCandidates(
-  db: Db,
-  tenantId: string,
-  actor: string,
-  command: ChangeRequestCandidateCommand,
-): Promise<void> {
-  const { kind, projectId, ticketIds } = command;
-  return inProject(db, tenantId, actor, projectId, (tx, stamp) =>
-    recordDisposition(tx, stamp, projectId, kind, ticketIds, null, null),
-  );
+function recordChangeRequestCandidates(bound: Bound) {
+  return (stamp: WriteStamp, command: ChangeRequestCandidateCommand): Promise<void> => {
+    const { kind, projectId, ticketIds } = command;
+    return recordDisposition(bound, stamp, projectId, kind, ticketIds, null, null);
+  };
 }
 
 /**
  * FR-21 manual Mapping of one Ticket. An empty `wpId` is an unmap: the event carries a null
- * Work Package and the audit action is `mapping.unmap` — while the audit payload keeps the
- * empty string it has always recorded.
+ * Work Package (the use case records it as `mapping.unmap`, keeping the empty string in the
+ * payload as it always has).
  */
-export function recordManualMapping(
-  db: Db,
-  tenantId: string,
-  actor: string,
-  command: ManualMappingCommand,
-): Promise<void> {
-  const { projectId, ticketId, wpId } = command;
-  return inProject(db, tenantId, actor, projectId, async (tx, stamp) => {
+function recordManualMapping({ tx, tenantId }: Bound) {
+  return async (stamp: WriteStamp, command: ManualMappingCommand): Promise<void> => {
+    const { projectId, ticketId, wpId } = command;
     const seq = await nextSeq(tx, 'mapping_event');
     await tx.insert(s.mappingEvent).values({
       seq,
@@ -291,15 +261,41 @@ export function recordManualMapping(
       source: 'manual',
       ruleId: null,
       at: stamp.at,
-      actor,
+      actor: stamp.actor,
     });
-    await tx.insert(s.auditLog).values({
-      tenantId,
-      actor,
-      action: wpId === '' ? 'mapping.unmap' : 'mapping.map',
-      target: ticketId,
-      payload: encode({ wpId }),
-      at: stamp.at,
-    });
+  };
+}
+
+/** The project write repository, bound to one transaction and its Tenant. */
+function projectWriteRepositoryOn(bound: Bound) {
+  return {
+    projectAnchor: (projectId: string) => anchorOf(bound.tx, projectId),
+    recordMapDisposition: recordMapDisposition(bound),
+    recordPlanDisposition: recordPlanDisposition(bound),
+    recordExplainDisposition: recordExplainDisposition(bound),
+    recordChangeRequestCandidates: recordChangeRequestCandidates(bound),
+    recordManualMapping: recordManualMapping(bound),
+  };
+}
+
+/** What `inTenantTransaction` hands the use case: `packages/app`'s `ProjectWriteScope`. */
+export type ProjectWriteScope = {
+  readonly projectWrite: ReturnType<typeof projectWriteRepositoryOn>;
+  readonly audit: ReturnType<typeof auditSinkOn>;
+};
+
+/**
+ * `packages/app`'s `TenantTransaction`: ONE `withTenant` transaction for `tenantId`, and a scope
+ * whose repository and audit sink are both bound to it. Whatever `work` does commits together
+ * when it resolves, and rolls back together when it throws.
+ */
+export function inTenantTransaction<T>(
+  db: Db,
+  tenantId: string,
+  work: (scope: ProjectWriteScope) => Promise<T>,
+): Promise<T> {
+  return withTenant(db, tenantId, (tx) => {
+    const bound: Bound = { tx, tenantId };
+    return work({ projectWrite: projectWriteRepositoryOn(bound), audit: auditSinkOn(tx, tenantId) });
   });
 }

@@ -16,10 +16,12 @@
  *     owner's credential would make every policy inert. `@momo/db` cannot read the
  *     configuration itself (the environment fence, and it may not import `@momo/app`), so
  *     the connection string is read here and passed in.
- *   * The ports. `packages/db`'s repository functions are handed over as they are:
- *     `packages/app` declares `ProjectReadPort` and `ProjectWritePort`, and these functions
- *     satisfy them STRUCTURALLY. The two `satisfies` below are where TypeScript checks that
- *     match — change a signature on either side and the typecheck names the line.
+ *   * The ports. `packages/db`'s functions are handed over as they are: `packages/app`
+ *     declares `ProjectReadPort` and the write deps' `TenantTransaction` (whose scope carries
+ *     the project write repository and the audit sink, both bound to one transaction), and
+ *     these functions satisfy them STRUCTURALLY. The two `satisfies` below are where
+ *     TypeScript checks that match — change a signature on either side and the typecheck names
+ *     the line.
  *   * The context: `{ tenantId }`, story 1.4's shape with one field, and — beside it — the
  *     audit ACTOR the writes stamp. There is no auth yet, so the single seeded Tenant and the
  *     single demo user are stated here, once each. `resolveRequestContext` replaces both
@@ -52,13 +54,9 @@ import {
 import {
   DEMO_TENANT_ID,
   getDb,
+  inTenantTransaction,
   loadProjectBundle,
   loadReview,
-  recordChangeRequestCandidates,
-  recordExplainDisposition,
-  recordManualMapping,
-  recordMapDisposition,
-  recordPlanDisposition,
   type Db,
 } from '@momo/db';
 
@@ -113,18 +111,15 @@ export function getClientView(input: ProjectInput) {
   return getClientViewUseCase(projectReadDeps(), webContext(), input);
 }
 
-/** The project write port, wired. Built per call, for the same reason as the read port. */
+/**
+ * The project write deps, wired: the one tenant transaction every write use case runs its change
+ * and its audit record in (AD-14). Built per call, for the same reason as the read port.
+ */
 function projectWriteDeps() {
   return {
     handle: webDb(),
     actor: WEB_ACTOR,
-    projectWrite: {
-      recordMapDisposition,
-      recordPlanDisposition,
-      recordExplainDisposition,
-      recordChangeRequestCandidates,
-      recordManualMapping,
-    },
+    transaction: inTenantTransaction,
   } satisfies ProjectWriteDeps<Db>;
 }
 

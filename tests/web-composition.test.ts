@@ -12,35 +12,47 @@ import { asOfDate, buildDemoState, currentPeriod } from '../packages/db/src/fixt
  * is assignable to `ChangeRequestCandidatesInput`, so `explainTickets` calling
  * `markChangeRequestCandidates` typechecks, and every harness test (which wires its own deps)
  * stays green. Nothing else asserts the Tenant or the audit actor this file states either. So
- * each export is called once and exactly the matching repository function must receive
- * `(handle, DEMO_TENANT_ID, 'user:linh', { ...input, kind })`.
+ * each export is called once: exactly one tenant transaction must open, on the restricted handle
+ * for `DEMO_TENANT_ID`; inside it exactly the matching repository member must receive
+ * `({ actor: 'user:linh', at: anchor }, { ...input, kind })`, and the audit sink exactly one
+ * record of the matching action.
  *
  * In `tests/`, not beside the file: it has to import and mock `@momo/db`, and AD-1 lets exactly
  * one `apps/web` file do that (`pnpm depcruise`, rule `apps-not-to-db`). `tests/` sits outside
  * that graph.
  */
 
-const spies = vi.hoisted(() => ({
-  handle: { marker: 'restricted-handle' },
-  getDb: vi.fn(),
-  recordMapDisposition: vi.fn(async () => {}),
-  recordPlanDisposition: vi.fn(async () => {}),
-  recordExplainDisposition: vi.fn(async () => {}),
-  recordChangeRequestCandidates: vi.fn(async () => {}),
-  recordManualMapping: vi.fn(async () => {}),
-  loadProjectBundle: vi.fn(),
-  loadReview: vi.fn(),
-}));
+const spies = vi.hoisted(() => {
+  const anchor = new Date('2026-09-01T00:00:00Z');
+  const repository = {
+    projectAnchor: vi.fn(async (_projectId: string) => anchor),
+    recordMapDisposition: vi.fn(async () => {}),
+    recordPlanDisposition: vi.fn(async () => ({ wpId: 'wp-new-spy' })),
+    recordExplainDisposition: vi.fn(async () => {}),
+    recordChangeRequestCandidates: vi.fn(async () => {}),
+    recordManualMapping: vi.fn(async () => {}),
+  };
+  const append = vi.fn(async (_entry: unknown) => {});
+  return {
+    anchor,
+    handle: { marker: 'restricted-handle' },
+    getDb: vi.fn(),
+    repository,
+    append,
+    inTenantTransaction: vi.fn(
+      async (_handle: unknown, _tenantId: string, work: (scope: unknown) => Promise<unknown>) =>
+        work({ projectWrite: repository, audit: { append } }),
+    ),
+    loadProjectBundle: vi.fn(),
+    loadReview: vi.fn(),
+  };
+});
 
 vi.mock('@momo/db', async (importOriginal) => ({
   // DEMO_TENANT_ID stays real; every function that would reach a database is a spy.
   ...(await importOriginal<typeof import('@momo/db')>()),
   getDb: spies.getDb,
-  recordMapDisposition: spies.recordMapDisposition,
-  recordPlanDisposition: spies.recordPlanDisposition,
-  recordExplainDisposition: spies.recordExplainDisposition,
-  recordChangeRequestCandidates: spies.recordChangeRequestCandidates,
-  recordManualMapping: spies.recordManualMapping,
+  inTenantTransaction: spies.inTenantTransaction,
   loadProjectBundle: spies.loadProjectBundle,
   loadReview: spies.loadReview,
 }));
@@ -68,12 +80,14 @@ const CASES: readonly {
   readonly call: () => Promise<unknown>;
   readonly recorder: Recorder;
   readonly command: Record<string, unknown>;
+  readonly action: string;
 }[] = [
   {
     binding: 'mapTickets',
     call: () => composition.mapTickets({ projectId: 'prj-ec2', wpId: 'wp-1-2', ticketIds: TICKETS }),
     recorder: 'recordMapDisposition',
     command: { projectId: 'prj-ec2', wpId: 'wp-1-2', ticketIds: TICKETS, kind: 'map' },
+    action: 'disposition.map',
   },
   {
     binding: 'planTicketsAsWorkPackage',
@@ -81,24 +95,28 @@ const CASES: readonly {
       composition.planTicketsAsWorkPackage({ projectId: 'prj-ec2', name: 'Scope', ticketIds: TICKETS }),
     recorder: 'recordPlanDisposition',
     command: { projectId: 'prj-ec2', name: 'Scope', ticketIds: TICKETS, kind: 'plan' },
+    action: 'disposition.plan',
   },
   {
     binding: 'explainTickets',
     call: () => composition.explainTickets({ projectId: 'prj-ec2', note: 'Why.', ticketIds: TICKETS }),
     recorder: 'recordExplainDisposition',
     command: { projectId: 'prj-ec2', note: 'Why.', ticketIds: TICKETS, kind: 'explain' },
+    action: 'disposition.explain',
   },
   {
     binding: 'markChangeRequestCandidates',
     call: () => composition.markChangeRequestCandidates({ projectId: 'prj-ec2', ticketIds: TICKETS }),
     recorder: 'recordChangeRequestCandidates',
     command: { projectId: 'prj-ec2', ticketIds: TICKETS, kind: 'cr_candidate' },
+    action: 'disposition.cr_candidate',
   },
   {
     binding: 'mapTicket',
     call: () => composition.mapTicket({ projectId: 'prj-ec2', ticketId: 'bk-issue-1', wpId: '' }),
     recorder: 'recordManualMapping',
     command: { projectId: 'prj-ec2', ticketId: 'bk-issue-1', wpId: '' },
+    action: 'mapping.unmap',
   },
 ];
 
@@ -107,16 +125,25 @@ beforeEach(() => {
   spies.getDb.mockReturnValue(spies.handle);
 });
 
-describe.each(CASES)('the $binding binding', ({ call, recorder, command }) => {
-  it(`reaches ${recorder} and nothing else, for the demo Tenant as user:linh`, async () => {
+describe.each(CASES)('the $binding binding', ({ call, recorder, command, action }) => {
+  it(`reaches ${recorder} and nothing else, for the demo Tenant as user:linh, audited as ${action}`, async () => {
     expect(await call()).toEqual({ ok: true, value: undefined });
 
     expect(spies.getDb).toHaveBeenCalledWith(APP_URL);
-    expect(spies[recorder]).toHaveBeenCalledTimes(1);
-    expect(spies[recorder]).toHaveBeenCalledWith(spies.handle, DEMO_TENANT_ID, 'user:linh', command);
+    expect(spies.inTenantTransaction).toHaveBeenCalledTimes(1);
+    expect(spies.inTenantTransaction).toHaveBeenCalledWith(
+      spies.handle,
+      DEMO_TENANT_ID,
+      expect.any(Function),
+    );
+    const stamp = { actor: 'user:linh', at: spies.anchor };
+    expect(spies.repository[recorder]).toHaveBeenCalledTimes(1);
+    expect(spies.repository[recorder]).toHaveBeenCalledWith(stamp, command);
     for (const other of RECORDERS.filter((name) => name !== recorder)) {
-      expect(spies[other], `${other} must not be called`).not.toHaveBeenCalled();
+      expect(spies.repository[other], `${other} must not be called`).not.toHaveBeenCalled();
     }
+    expect(spies.append).toHaveBeenCalledTimes(1);
+    expect(spies.append).toHaveBeenCalledWith(expect.objectContaining({ ...stamp, action }));
   });
 });
 
@@ -211,8 +238,9 @@ describe.each(READ_CASES)('the $binding read binding', ({ call, port, check }) =
     expect(spies[port]).toHaveBeenCalledWith(spies.handle, DEMO_TENANT_ID, 'prj-ec2');
     const other = port === 'loadReview' ? 'loadProjectBundle' : 'loadReview';
     expect(spies[other], `${other} must not be called`).not.toHaveBeenCalled();
+    expect(spies.inTenantTransaction, 'a read must not open a write transaction').not.toHaveBeenCalled();
     for (const recorder of RECORDERS) {
-      expect(spies[recorder], `a read must not reach ${recorder}`).not.toHaveBeenCalled();
+      expect(spies.repository[recorder], `a read must not reach ${recorder}`).not.toHaveBeenCalled();
     }
   });
 });

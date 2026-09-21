@@ -120,11 +120,16 @@ export interface ReadUseCase {
   /**
    * How the harness invokes a `write`. Required for one, forbidden otherwise.
    *
-   * Given the port wired to the RESTRICTED role's handle and a test actor, for the same reason
-   * as `invoke`: the harness decides the role, the entry decides only how to build its
-   * command. It returns the use case's `Result` untouched.
+   * Given the write deps chosen by the caller, for the same reason as `invoke`: the caller
+   * decides the transaction and the role, the entry decides only how to build its command. It
+   * returns the use case's `Result` untouched. Generic in the handle, because two callers drive
+   * it: the write harness (the RESTRICTED role's handle and `packages/db`'s tenant transaction)
+   * and the audit gate (`tests/audited-use-cases.test.ts`, a fake transaction, no database).
    */
-  readonly invokeWrite?: (deps: ProjectWriteDeps<Db>, target: WriteTarget) => Promise<unknown>;
+  readonly invokeWrite?: <Handle>(
+    deps: ProjectWriteDeps<Handle>,
+    target: WriteTarget,
+  ) => Promise<unknown>;
 }
 
 /**

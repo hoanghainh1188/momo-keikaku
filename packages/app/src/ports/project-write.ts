@@ -1,25 +1,31 @@
+import type { AuditSink } from '../audit';
+import type { TenantTransaction } from './tenant-transaction';
+
 /**
  * The port the five project write use cases depend on — FR-29's four Dispositions and FR-21's
- * manual Mapping.
+ * manual Mapping — reshaped by story 1.3 slice 1 onto the tenant transaction.
  *
  * DECLARED HERE, SATISFIED STRUCTURALLY, exactly like `ProjectReadPort`: `packages/db` may not
- * import `@momo/app`, so its write functions (`packages/db/src/repo-writes.ts`) are shaped to
- * match these members and TypeScript checks the match with a `satisfies` at the composition
- * root. The handle is a type parameter; the members are function-typed PROPERTIES so the
- * parameters are checked strictly rather than bivariantly.
+ * import `@momo/app`, so `packages/db/src/repo-writes.ts` is shaped to match these types and
+ * TypeScript checks the match with a `satisfies` at each composition root. The members are
+ * function-typed PROPERTIES so their parameters are checked strictly rather than bivariantly.
  *
- * EACH MEMBER IS ONE TRANSACTION. The adapter opens `withTenant(handle, tenantId, …)`, reads the
- * Project (its `demoAnchor` is the event time), and writes the event rows plus their
- * `audit_log` row inside it — AD-14's "the change and its record commit together or not at
- * all". A Project the Tenant cannot see is reported the way the read port reports it: the
- * member REJECTS with `project <projectId> not found …` (see `isProjectNotFound`), and because
- * the rejection happens inside the transaction, nothing lands.
+ * ONE TRANSACTION PER USE CASE (AD-14). The deps carry a `TenantTransaction` whose scope holds the
+ * project write REPOSITORY and the AUDIT SINK, both bound to that one transaction for that one
+ * Tenant. A use case opens it once, reads the Project's anchor, makes its change through the
+ * repository and calls `audit.record` on the same scope — so the change and its record commit
+ * together or not at all. The repository no longer writes `audit_log`; the audit sink is the one
+ * writer of it, and `audit.record` the one caller.
  *
- * THE FOUR DISPOSITION COMMANDS CARRY THEIR `kind` as a literal. Without it the port could be
+ * An invisible Project is reported the way the read port reports it: `projectAnchor` REJECTS
+ * with `project <projectId> not found …` (see `isProjectNotFound`), inside the transaction, so
+ * nothing lands.
+ *
+ * THE FOUR DISPOSITION COMMANDS CARRY THEIR `kind` as a literal. Without it the repository could be
  * miswired silently: a Change Request candidate's command (`projectId`, `ticketIds`) is a
  * structural SUBSET of the other three, so `recordChangeRequestCandidates` would type-check in
- * the Explain slot at the composition root — measured — and every Explain would land as a
- * candidate. The literal makes each slot accept its own function only.
+ * the Explain slot — measured in story 1.2 slice 4 — and every Explain would land as a candidate.
+ * The literal makes each slot accept its own function only.
  *
  * `actor` is audit data, passed beside the Tenant. It is not a `UseCaseContext` field: adding
  * one there is story 1.4's decision. The composition root states it once, next to the Tenant,
@@ -69,27 +75,45 @@ export interface ManualMappingCommand {
   readonly wpId: string;
 }
 
-type WriteMember<Handle, Command> = (
-  handle: Handle,
-  tenantId: string,
-  actor: string,
-  command: Command,
-) => Promise<void>;
+/**
+ * Who and when, stamped on every row one write lands: the actor from the deps, and the event
+ * time — the Project's `demoAnchor`, read inside the transaction by `projectAnchor` (no Clock
+ * consumer yet). The Tenant is not here: the repository is bound to its transaction's Tenant.
+ */
+export interface WriteStamp {
+  readonly actor: string;
+  readonly at: Date;
+}
 
-export interface ProjectWritePort<Handle> {
-  readonly recordMapDisposition: WriteMember<Handle, MapDispositionCommand>;
-  readonly recordPlanDisposition: WriteMember<Handle, PlanDispositionCommand>;
-  readonly recordExplainDisposition: WriteMember<Handle, ExplainDispositionCommand>;
-  readonly recordChangeRequestCandidates: WriteMember<Handle, ChangeRequestCandidateCommand>;
-  readonly recordManualMapping: WriteMember<Handle, ManualMappingCommand>;
+type WriteMember<Command, Landed = void> = (stamp: WriteStamp, command: Command) => Promise<Landed>;
+
+/**
+ * The project write repository, BOUND TO ONE TRANSACTION AND ONE TENANT: every member issues its
+ * statements on the scope's transaction and opens none of its own.
+ */
+export interface ProjectWriteRepository {
+  /** The Project's event time; rejects with the not-found wording for an invisible Project. */
+  readonly projectAnchor: (projectId: string) => Promise<Date>;
+  readonly recordMapDisposition: WriteMember<MapDispositionCommand>;
+  /** Returns the id of the Work Package it created, which the audit payload records. */
+  readonly recordPlanDisposition: WriteMember<PlanDispositionCommand, { readonly wpId: string }>;
+  readonly recordExplainDisposition: WriteMember<ExplainDispositionCommand>;
+  readonly recordChangeRequestCandidates: WriteMember<ChangeRequestCandidateCommand>;
+  readonly recordManualMapping: WriteMember<ManualMappingCommand>;
+}
+
+/** What one project write transaction hands its work: the repository and the audit sink. */
+export interface ProjectWriteScope {
+  readonly projectWrite: ProjectWriteRepository;
+  readonly audit: AuditSink;
 }
 
 /**
- * What a project write use case is given: the port, the handle it is called with, and the
- * actor the audit rows name. All three are chosen by the composition root.
+ * What a project write use case is given: the transaction to open, the handle it is opened on,
+ * and the actor the rows name. All three are chosen by the composition root.
  */
 export interface ProjectWriteDeps<Handle> {
   readonly handle: Handle;
   readonly actor: string;
-  readonly projectWrite: ProjectWritePort<Handle>;
+  readonly transaction: TenantTransaction<Handle, ProjectWriteScope>;
 }
