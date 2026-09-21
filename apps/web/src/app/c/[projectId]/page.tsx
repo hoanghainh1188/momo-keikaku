@@ -1,7 +1,6 @@
 import Link from 'next/link';
-import { getProjectReview } from '@/server/composition';
+import { getClientView } from '@/server/composition';
 import { valueOrNotFound } from '@/server/result';
-import { clientProjection, DEFAULT_VISIBILITY } from '@momo/domain';
 import { HealthBadge } from '@/components/ui';
 import { GanttRow, ganttScale } from '@/components/gantt';
 
@@ -11,9 +10,10 @@ export const dynamic = 'force-dynamic';
  * FR-34/FR-35/FR-36 preview. R0 renders the projection live; persisting a
  * Published Snapshot is R1 and is deliberately not built here.
  *
- * Everything on this page comes from `clientProjection`, which returns a type with
- * no money, Rate, person, Tracker Account or Ticket-content fields — so the
- * omission is checked by the compiler rather than by discipline.
+ * Everything on this page comes from the `getClientView` use case, whose projection
+ * (`clientProjection`, default visibility) is a type with no money, Rate, person,
+ * Tracker Account or Ticket-content fields — so the omission is checked by the
+ * compiler rather than by discipline. The page computes nothing from the domain.
  */
 export default async function ClientViewPage({
   params,
@@ -21,8 +21,7 @@ export default async function ClientViewPage({
   params: Promise<{ projectId: string }>;
 }) {
   const { projectId } = await params;
-  const { bundle, review } = valueOrNotFound(await getProjectReview({ projectId }));
-  const c = clientProjection(review, bundle.project.name, DEFAULT_VISIBILITY);
+  const { clientName, projection: c } = valueOrNotFound(await getClientView({ projectId }));
 
   const dates = c.schedule
     .flatMap((s) => [s.baselineStart, s.baselineFinish, s.currentStart, s.currentFinish])
@@ -39,7 +38,7 @@ export default async function ClientViewPage({
         <div style={{ padding: 40 }}>
           <h1 className="report-title">{c.projectName}</h1>
           <div className="report-sub">
-            {bundle.meta.clientName} · Report as of {c.asOf.slice(0, 10)} · Effort in 工数 (h)
+            {clientName} · Report as of {c.asOf.slice(0, 10)} · Effort in 工数 (h)
           </div>
 
           <section className="section" style={{ marginTop: 32 }}>

@@ -24,6 +24,9 @@
       "@momo/domain": [
         "../../packages/domain/src/index.ts"
       ],
+      "@momo/domain/present": [
+        "../../packages/domain/src/present/index.ts"
+      ],
       "@momo/db": [
         "../../packages/db/src/index.ts"
       ],

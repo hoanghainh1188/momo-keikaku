@@ -1,4 +1,4 @@
-import { cssPercent, hours, share, type Mh, type Ratio } from '@momo/domain';
+import { cssPercent, hours, share, type Mh, type Ratio } from '@momo/domain/present';
 
 /**
  * The signature element: one square-cornered bar split into the four FR-20 buckets,

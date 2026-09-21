@@ -1,6 +1,6 @@
 import { getProjectReview } from '@/server/composition';
 import { valueOrNotFound } from '@/server/result';
-import { hours } from '@momo/domain';
+import { hours } from '@momo/domain/present';
 import { Section } from '@/components/ui';
 
 export const dynamic = 'force-dynamic';

@@ -1,6 +1,6 @@
-import { getProjectReview } from '@/server/composition';
+import { getProjectMapping } from '@/server/composition';
 import { valueOrNotFound } from '@/server/result';
-import { compareBigint, hours, mappingHead, share } from '@momo/domain';
+import { hours, share } from '@momo/domain/present';
 import { Internal, Section, UnplannedChip } from '@/components/ui';
 import { ScopeLedgerBar } from '@/components/scope-ledger-bar';
 import { MapTicketForm } from '@/components/map-ticket-form';
@@ -14,21 +14,9 @@ export default async function MappingPage({
   params: Promise<{ projectId: string }>;
 }) {
   const { projectId } = await params;
-  const { bundle, review: r } = valueOrNotFound(await getProjectReview({ projectId }));
-  const head = mappingHead(bundle.input.mappingEvents);
-  const leafWps = bundle.wps
-    .filter((w) => w.isLeaf && !w.isMilestone)
-    .map((w) => ({ id: w.id, label: `${w.wbsCode} ${w.name}` }));
-  const wpLabel = new Map(leafWps.map((w) => [w.id, w.label]));
-
-  const tickets = [...bundle.input.pinnedSnapshot.tickets]
-    .map((t) => ({
-      ...t,
-      mh: r.attribution.hoursByTicket.get(t.trackerIssueId) ?? 0n,
-      mapping: head.get(t.trackerIssueId),
-    }))
-    .sort((a, b) => compareBigint(b.mh, a.mh))
-    .slice(0, 60);
+  // Rows arrive joined to their Work Package labels and ordered (`getProjectMapping`).
+  const m = valueOrNotFound(await getProjectMapping({ projectId }));
+  const leafWps = m.leafWps.map((w) => ({ id: w.id, label: w.label }));
 
   return (
     <div className="sheet">
@@ -41,14 +29,14 @@ export default async function MappingPage({
 
       <Section title="Coverage" id="coverage">
         <ScopeLedgerBar
-          segments={r.scopeLedger}
-          openingBalanceMh={r.openingBalanceMh}
-          totalMh={r.attribution.cumulative.totalMh}
+          segments={m.scopeLedger}
+          openingBalanceMh={m.openingBalanceMh}
+          totalMh={m.totalMh}
         />
         <p className="caption" style={{ marginTop: 16 }}>
-          {share(r.coverage.mappedHourShare)} of hours mapped ·{' '}
-          {share(r.coverage.mappedTicketShare)} of Tickets mapped ·{' '}
-          {r.coverage.unmappedTickets} Unmapped Tickets. The share of Tickets and the share of
+          {share(m.coverage.mappedHourShare)} of hours mapped ·{' '}
+          {share(m.coverage.mappedTicketShare)} of Tickets mapped ·{' '}
+          {m.coverage.unmappedTickets} Unmapped Tickets. The share of Tickets and the share of
           hours are reported separately on purpose.
         </p>
       </Section>
@@ -69,7 +57,7 @@ export default async function MappingPage({
             </tr>
           </thead>
           <tbody>
-            {bundle.rules.map((rule) => (
+            {m.rules.map((rule) => (
               <tr key={rule.id} data-testid={`rule-${rule.id}`}>
                 <td className="num">{rule.priority}</td>
                 <td>{rule.name}</td>
@@ -78,7 +66,7 @@ export default async function MappingPage({
                     {rule.match.field} = {rule.match.value}
                   </code>
                 </td>
-                <td>{wpLabel.get(rule.wpId) ?? rule.wpId}</td>
+                <td>{rule.wpLabel}</td>
                 <td className="num">{rule.currentlyMapped}</td>
               </tr>
             ))}
@@ -109,7 +97,7 @@ export default async function MappingPage({
             </tr>
           </thead>
           <tbody>
-            {tickets.map((t) => (
+            {m.tickets.map((t) => (
               <tr key={t.trackerIssueId}>
                 <td>{t.key}</td>
                 <td>{t.title}</td>
@@ -117,20 +105,16 @@ export default async function MappingPage({
                 <td>{t.statusId}</td>
                 <td className="num">{hours(t.mh)}</td>
                 <td>
-                  {t.mapping?.wpId ? (
-                    wpLabel.get(t.mapping.wpId) ?? t.mapping.wpId
-                  ) : (
-                    <UnplannedChip>Unmapped</UnplannedChip>
-                  )}
+                  {t.wpLabel ?? <UnplannedChip>Unmapped</UnplannedChip>}
                 </td>
                 <td>
-                  <span className="tag">{t.mapping?.source ?? 'none'}</span>
+                  <span className="tag">{t.source}</span>
                 </td>
                 <td>
                   <MapTicketForm
                     projectId={projectId}
                     ticketId={t.trackerIssueId}
-                    currentWpId={t.mapping?.wpId ?? ''}
+                    currentWpId={t.wpId ?? ''}
                     leafWps={leafWps}
                   />
                 </td>

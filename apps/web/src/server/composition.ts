@@ -31,7 +31,9 @@
 import {
   config,
   explainTickets as explainTicketsUseCase,
+  getClientView as getClientViewUseCase,
   getProjectHeader as getProjectHeaderUseCase,
+  getProjectMapping as getProjectMappingUseCase,
   getProjectReview as getProjectReviewUseCase,
   mapTicket as mapTicketUseCase,
   mapTickets as mapTicketsUseCase,
@@ -99,6 +101,16 @@ export function getProjectHeader(input: ProjectInput) {
 /** The bundle and its Review, for every project page. See `packages/app`'s `getProjectReview`. */
 export function getProjectReview(input: ProjectInput) {
   return getProjectReviewUseCase(projectReadDeps(), webContext(), input);
+}
+
+/** The Mapping surface, joined and ordered. See `packages/app`'s `getProjectMapping`. */
+export function getProjectMapping(input: ProjectInput) {
+  return getProjectMappingUseCase(projectReadDeps(), webContext(), input);
+}
+
+/** The client projection, default visibility. See `packages/app`'s `getClientView`. */
+export function getClientView(input: ProjectInput) {
+  return getClientViewUseCase(projectReadDeps(), webContext(), input);
 }
 
 /** The project write port, wired. Built per call, for the same reason as the read port. */

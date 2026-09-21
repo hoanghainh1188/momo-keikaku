@@ -1,18 +1,7 @@
 import Link from 'next/link';
 import { getProjectReview } from '@/server/composition';
 import { valueOrNotFound } from '@/server/result';
-import {
-  costOf,
-  hours,
-  hoursSigned,
-  isBehindPlan,
-  present,
-  ratio,
-  share,
-  wholePercent,
-  yen,
-  type Mh,
-} from '@momo/domain';
+import { hours, hoursSigned, present, share, wholePercent, yen, type Mh } from '@momo/domain/present';
 import { HealthBadge, Internal, MetricCell, Section, UnplannedChip } from '@/components/ui';
 import { ScopeLedgerBar } from '@/components/scope-ledger-bar';
 import { DispositionRail } from '@/components/disposition-rail';
@@ -96,7 +85,7 @@ export default async function ReviewPage({
               label="SPI"
               metric={r.evm.spi}
               formula="SPI = EV ÷ PV"
-              note={`${hours(r.evm.evMh)}h ÷ ${hours(r.evm.pvMh)}h — ${isBehindPlan(r.evm.spi) ? 'behind plan' : 'on or ahead of plan'}`}
+              note={`${hours(r.evm.evMh)}h ÷ ${hours(r.evm.pvMh)}h — ${r.behindPlan ? 'behind plan' : 'on or ahead of plan'}`}
               testId="m-spi"
             />
             <MetricCell
@@ -168,9 +157,7 @@ export default async function ReviewPage({
                     <span className="unit">h</span>
                   </td>
                   <td className="num">
-                    {r.unplanned.cumulative.unplannedMh === 0n
-                      ? '—'
-                      : share(ratio(c.mh, r.unplanned.cumulative.unplannedMh))}
+                    {c.share === null ? '—' : share(c.share)}
                   </td>
                   <td className="caption">{COMPONENT_SOURCE[c.key]}</td>
                 </tr>
@@ -370,14 +357,14 @@ export default async function ReviewPage({
               <EvmRow
                 name="PV — Planned Value"
                 value={`${hours(r.evm.pvMh)}h`}
-                money={yen(costOf(r.evm.pvMh, p.defaultRateYenPerHour))}
+                money={yen(r.money.pvJpy)}
                 formula="Baseline hours spread over baseline working days, to the as-of date"
                 reading="What the Baseline said would be earned by now"
               />
               <EvmRow
                 name="EV — Earned Value"
                 value={`${hours(r.evm.evMh)}h`}
-                money={yen(costOf(r.evm.evMh, p.defaultRateYenPerHour))}
+                money={yen(r.money.evJpy)}
                 formula="Σ Baseline hours × Percent Complete"
                 reading="What has actually been earned"
                 testId="evm-ev"

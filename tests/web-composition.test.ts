@@ -1,7 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { computeReview } from '@momo/domain';
+import type { ProjectReview } from '../packages/app/src/ports/project-read';
+import { MAPPING_TICKET_LIMIT } from '../packages/app/src/use-cases/get-project-mapping';
+import { asOfDate, buildDemoState, currentPeriod } from '../packages/db/src/fixtures';
 
 /**
- * The composition root's five write bindings, wired to spies — no database.
+ * The composition root's bindings — the five writes, then the four reads — wired to spies, no
+ * database.
  *
  * The `satisfies` checks cannot see a binding pointed at the WRONG use case: `ExplainTicketsInput`
  * is assignable to `ChangeRequestCandidatesInput`, so `explainTickets` calling
@@ -23,10 +28,12 @@ const spies = vi.hoisted(() => ({
   recordExplainDisposition: vi.fn(async () => {}),
   recordChangeRequestCandidates: vi.fn(async () => {}),
   recordManualMapping: vi.fn(async () => {}),
+  loadProjectBundle: vi.fn(),
+  loadReview: vi.fn(),
 }));
 
 vi.mock('@momo/db', async (importOriginal) => ({
-  // DEMO_TENANT_ID and the read functions stay real; nothing here reaches a database.
+  // DEMO_TENANT_ID stays real; every function that would reach a database is a spy.
   ...(await importOriginal<typeof import('@momo/db')>()),
   getDb: spies.getDb,
   recordMapDisposition: spies.recordMapDisposition,
@@ -34,6 +41,8 @@ vi.mock('@momo/db', async (importOriginal) => ({
   recordExplainDisposition: spies.recordExplainDisposition,
   recordChangeRequestCandidates: spies.recordChangeRequestCandidates,
   recordManualMapping: spies.recordManualMapping,
+  loadProjectBundle: spies.loadProjectBundle,
+  loadReview: spies.loadReview,
 }));
 
 const APP_URL = 'postgres://momo_app:momo_app@localhost:55433/momo_keikaku';
@@ -107,6 +116,103 @@ describe.each(CASES)('the $binding binding', ({ call, recorder, command }) => {
     expect(spies[recorder]).toHaveBeenCalledWith(spies.handle, DEMO_TENANT_ID, 'user:linh', command);
     for (const other of RECORDERS.filter((name) => name !== recorder)) {
       expect(spies[other], `${other} must not be called`).not.toHaveBeenCalled();
+    }
+  });
+});
+
+/**
+ * The read bindings, the same way: each must reach the read port as the demo Tenant, on the
+ * restricted handle, and run ITS use case. The two projection reads (the web → domain/present
+ * edge moved the Client View's projection and the Mapping join off the pages) both load the
+ * Review, so a binding pointed at the other one would still typecheck — the value's shape is
+ * what tells them apart. The Review is the demo fixture computed through the domain, no
+ * database; the bundle carries the fields the projections read.
+ */
+function demoReview(): ProjectReview {
+  const state = buildDemoState();
+  const pinnedSnapshot = state.snapshots[state.snapshots.length - 1]!;
+  const input = {
+    project: state.project,
+    calendar: state.calendar,
+    wps: state.wps,
+    baselineVersions: state.baselineVersions,
+    activeBaselineSeq: state.activeBaselineSeq,
+    ledger: state.ledger,
+    mappingEvents: state.mappingEvents,
+    pinnedSnapshot,
+    resources: state.resources,
+    period: currentPeriod(state),
+    asOf: asOfDate(state),
+    dispositions: [],
+  };
+  const bundle = {
+    project: state.project,
+    meta: { clientName: 'Demo Client' },
+    input,
+    wps: state.wps,
+    rules: state.fixture.mappingRules.map((rule) => ({ ...rule, currentlyMapped: 0 })),
+  };
+  return { bundle, review: computeReview(input) } as unknown as ProjectReview;
+}
+
+const REVIEW = demoReview();
+
+const READ_CASES: readonly {
+  readonly binding: string;
+  readonly call: () => Promise<{ ok: boolean; value?: unknown }>;
+  readonly port: 'loadReview' | 'loadProjectBundle';
+  readonly check: (value: unknown) => void;
+}[] = [
+  {
+    binding: 'getProjectHeader',
+    call: () => composition.getProjectHeader({ projectId: 'prj-ec2' }),
+    port: 'loadProjectBundle',
+    check: (value) => expect(value).toBe(REVIEW.bundle),
+  },
+  {
+    binding: 'getProjectReview',
+    call: () => composition.getProjectReview({ projectId: 'prj-ec2' }),
+    port: 'loadReview',
+    check: (value) => expect(value).toBe(REVIEW),
+  },
+  {
+    binding: 'getClientView',
+    call: () => composition.getClientView({ projectId: 'prj-ec2' }),
+    port: 'loadReview',
+    check: (value) =>
+      expect(value).toMatchObject({
+        clientName: 'Demo Client',
+        projection: { projectName: REVIEW.bundle.project.name, evm: null },
+      }),
+  },
+  {
+    binding: 'getProjectMapping',
+    call: () => composition.getProjectMapping({ projectId: 'prj-ec2' }),
+    port: 'loadReview',
+    check: (value) => {
+      const mapping = value as { tickets: unknown[]; totalMh: bigint };
+      expect(mapping.tickets).toHaveLength(MAPPING_TICKET_LIMIT);
+      expect(mapping.totalMh).toBe(REVIEW.review.attribution.cumulative.totalMh);
+    },
+  },
+];
+
+describe.each(READ_CASES)('the $binding read binding', ({ call, port, check }) => {
+  it(`reaches ${port} for the demo Tenant and returns its own use case's value`, async () => {
+    spies.loadReview.mockResolvedValue(REVIEW);
+    spies.loadProjectBundle.mockResolvedValue(REVIEW.bundle);
+
+    const result = await call();
+    expect(result.ok).toBe(true);
+    check(result.value);
+
+    expect(spies.getDb).toHaveBeenCalledWith(APP_URL);
+    expect(spies[port]).toHaveBeenCalledTimes(1);
+    expect(spies[port]).toHaveBeenCalledWith(spies.handle, DEMO_TENANT_ID, 'prj-ec2');
+    const other = port === 'loadReview' ? 'loadProjectBundle' : 'loadReview';
+    expect(spies[other], `${other} must not be called`).not.toHaveBeenCalled();
+    for (const recorder of RECORDERS) {
+      expect(spies[recorder], `a read must not reach ${recorder}`).not.toHaveBeenCalled();
     }
   });
 });

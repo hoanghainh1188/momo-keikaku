@@ -31,7 +31,7 @@ export function GanttRow({
   baseline: { start: string; finish: string } | null;
   current: { start: string; finish: string } | null;
   /**
-   * Earned progress, already presented by the page through `@momo/domain`'s `present`: the
+   * Earned progress, already presented by the page through `@momo/domain/present`: the
    * fraction is layout geometry only (`geometryFraction`), the label the whole percentage
    * (`wholePercent`). This component does no arithmetic of its own on a ratio.
    */

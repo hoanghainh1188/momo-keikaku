@@ -352,6 +352,9 @@ function numberCensus(graph: unknown): (number | bigint)[] {
 
 const PROBE_PLACEHOLDER = '<probe>';
 
+/** The key of the one sanctioned float, `present`'s `earnedProgress(...).fraction`. */
+const GEOMETRY_KEY = 'fraction';
+
 function sortBySerialisation(items: unknown[]): unknown[] {
   // Keys precomputed: `sort` with a stringifying comparator serialises the same element
   // O(log n) times, and these arrays carry whole Ticket observations.
@@ -376,7 +379,15 @@ function canonicalise(node: unknown, token: string, key: string | null): unknown
   if (node === undefined) return '<undefined>';
   if (node === null) return null;
   if (typeof node === 'string') return node.replaceAll(token, PROBE_PLACEHOLDER);
-  if (typeof node === 'number') return key !== null && ALLOCATED_SEQ_KEYS.has(key) ? '<seq>' : node;
+  if (typeof node === 'number') {
+    if (key !== null && ALLOCATED_SEQ_KEYS.has(key)) return '<seq>';
+    // The ONE sanctioned float in any result (AD-4): `earnedProgress`'s layout-geometry
+    // `fraction`, which the Client View's schedule carries so the Gantt can draw its fill. It
+    // is compared as its exact decimal text, because the codec below refuses every float —
+    // which is what keeps a float creeping back into a figure loud, under any other key.
+    if (key === GEOMETRY_KEY && !Number.isInteger(node)) return `<geometry ${String(node)}>`;
+    return node;
+  }
   if (typeof node !== 'object') return node;
   if (node instanceof Date) return node.toISOString();
   if (node instanceof Map) {
@@ -539,6 +550,13 @@ async function invokeMeasured(entry: ReadUseCase, target: UseCaseTarget): Promis
     sink = null;
   }
 }
+
+/**
+ * How many relabelled strings a read's demo result must carry before "the probe carries the
+ * same labels" means anything. An entry whose result is legitimately smaller states its own
+ * floor, and why, in the registry (`minimumLabels`).
+ */
+const DEFAULT_MINIMUM_LABELS = 100;
 
 /** Rethrows with the use case named, so a broken own-Tenant read is not a bare stack. */
 function required(entry: ReadUseCase, label: string, outcome: Outcome): unknown {
@@ -825,8 +843,9 @@ describe.skipIf(!reachable)('the cross-tenant harness, driven against two probe 
             required(entry, 'the demo Tenant', got().demo),
             new Set(PROBE_A.labels.keys()),
           );
+          const floor = entry.minimumLabels ?? DEFAULT_MINIMUM_LABELS;
           expect(demoLabels.length, `${entry.name} returned no labelled data at all`).toBeGreaterThan(
-            100,
+            floor,
           );
 
           for (const [probe, outcome] of [

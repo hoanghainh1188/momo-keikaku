@@ -8,7 +8,9 @@
 //
 // Deliberately free of `../config`: a pure use-case test, or the harness, imports this module
 // without needing a single environment variable.
+export { getClientView } from './get-client-view';
 export { getProjectHeader } from './get-project-header';
+export { getProjectMapping } from './get-project-mapping';
 export { getProjectReview } from './get-project-review';
 export {
   explainTickets,
