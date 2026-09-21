@@ -159,7 +159,7 @@ describe.skipIf(!reachable)('sign-in and the request context, against Postgres (
 
   afterAll(async () => {
     await removeExtras();
-    await removeProbeTenant(owner(), PROBE.tenantId);
+    await removeProbeTenant(owner(), PROBE);
   });
 
   it('keeps the session cookie cache off — every request reaches the session table', () => {
@@ -423,7 +423,7 @@ describe.skipIf(!reachable)('sign-in and the request context, against Postgres (
       });
     expect(await count()).toEqual({ users: Object.keys(DEMO_USERS).length, members: Object.keys(DEMO_USERS).length });
 
-    await removeProbeTenant(owner(), probe.tenantId);
+    await removeProbeTenant(owner(), probe);
     expect(await count()).toEqual({ users: 0, members: 0 });
   });
 });

@@ -13,14 +13,17 @@ export interface MembershipRow {
 }
 
 /**
- * THE ONE READER OF `tenant_membership` (story 1.4 slice 1): every Tenant `userId` belongs to,
- * with its role and Projects, ordered by Tenant id so "the single membership" and "several" are
- * decided on a stable answer.
+ * THE ONE READER OF `tenant_membership` FOR REQUEST RESOLUTION (story 1.4 slice 1): every Tenant
+ * `userId` belongs to, with its role and Projects, ordered by Tenant id so "the single membership"
+ * and "several" are decided on a stable answer.
  *
  * Called by `packages/app`'s `resolveRequestContext` — through the composition root — and by
  * nothing else; `source-discipline.test.ts` fails when another application module imports the
- * table or queries it. The table is `global` (no tenant policy: it is what the Tenant is resolved
- * from), so the read needs no `withTenant`; it still runs on a `tx`, per the bare-handle rule.
+ * table or queries it. The one other module that may is the table's one WRITER,
+ * `repo-membership-write.ts` (story 1.4 slice 2), which locks and changes rows inside an audited
+ * tenant transaction and never answers a request's context. The table is `global` (no tenant
+ * policy: it is what the Tenant is resolved from), so the read needs no `withTenant`; it still
+ * runs on a `tx`, per the bare-handle rule.
  */
 export async function membershipsOf(db: Db, userId: string): Promise<MembershipRow[]> {
   const rows = await db.transaction((tx) =>

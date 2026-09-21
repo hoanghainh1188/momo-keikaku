@@ -114,11 +114,13 @@ describe('the bare db handle never issues a query', () => {
   });
 });
 
-describe('the tenant-membership bridge has one reader (story 1.4 slice 1)', () => {
+describe('the tenant-membership bridge has one reader for request resolution, one writer (story 1.4)', () => {
   /**
-   * `resolveRequestContext` is the one place a membership is read, and it reads through
-   * `membershipsOf` (`repo-membership.ts`). So among the modules that SHIP — every tracked
-   * TypeScript/JavaScript file outside the tests — only that reader, the seed (which writes the
+   * `resolveRequestContext` is the one place a membership is read to resolve a request, and it
+   * reads through `membershipsOf` (`repo-membership.ts`); story 1.4 slice 2's audited membership
+   * use cases are the one place it is changed, through `membershipWriterOn`
+   * (`repo-membership-write.ts`). So among the modules that SHIP — every tracked TypeScript/
+   * JavaScript file outside the tests — only that reader, that writer, the seed (which writes the
    * demo members) and the probe Tenants (which write and remove theirs) may import the Drizzle
    * symbol, and no other one may name the table in a query. Tests are outside the rule: a test has
    * to be able to seed a membership and look one up.
@@ -128,6 +130,7 @@ describe('the tenant-membership bridge has one reader (story 1.4 slice 1)', () =
    */
   const ALLOWED_IMPORTERS = new Set([
     'packages/db/src/repo-membership.ts',
+    'packages/db/src/repo-membership-write.ts',
     'packages/db/src/seed.ts',
     'packages/db/src/probe-tenants.ts',
   ]);
@@ -145,7 +148,7 @@ describe('the tenant-membership bridge has one reader (story 1.4 slice 1)', () =
       (path) => /\.(ts|tsx|js|jsx|mjs|cjs|mts|cts)$/.test(path) && !isTest(path),
     );
 
-  it('imports `tenantMembership` only in its reader, the seed and the probe Tenants', () => {
+  it('imports `tenantMembership` only in its reader, its writer, the seed and the probe Tenants', () => {
     const importers = applicationSources().filter((path) => {
       if (path === DEFINITION) return false;
       const contents = code(path);
@@ -179,6 +182,16 @@ describe('the tenant-membership bridge has one reader (story 1.4 slice 1)', () =
         'packages/db/src/index.ts',
         'packages/db/src/repo-membership.ts',
       ].sort(),
+    );
+  });
+
+  it('has its writer, `membershipWriterOn`, named only where it is defined and composed', () => {
+    // One writer, pinned the way the reader is: defined in `repo-membership-write.ts` and composed
+    // into the one tenant transaction every audited write runs in — so a second module building
+    // its own membership writer (outside the transaction, or on a handle of its own) fails here.
+    const namers = applicationSources().filter((path) => /\bmembershipWriterOn\b/.test(code(path)));
+    expect(namers.sort()).toEqual(
+      ['packages/db/src/repo-membership-write.ts', 'packages/db/src/tenant-transaction.ts'].sort(),
     );
   });
 

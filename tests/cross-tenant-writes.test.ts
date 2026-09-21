@@ -19,6 +19,7 @@ import {
   drive as driveWith,
   idPort,
   LANDED_TABLE,
+  REMOVED_TABLE,
   landedRows,
   newSince,
   owner,
@@ -26,6 +27,7 @@ import {
   restrictedWriteDeps as restrictedWriteDepsWith,
   allRows,
   rowCounts,
+  stageProbeMembers,
   targetOf,
   withoutSeq,
   type Outcome,
@@ -54,7 +56,10 @@ import { requestContextFor } from './request-context';
  *
  * Story 1.3 slice 2 put the organisation writes on the same surface, so they are driven here like
  * every other write: a foreign Department, Program or Project id answers `not_found` and lands
- * nothing for either Tenant. The one write that names no existing row (`createDepartment`, marked
+ * nothing for either Tenant. Story 1.4 slice 2's membership writes too — called as a Tenant Admin
+ * who holds a `tenant_admin` membership in BOTH probes (`stageProbeMembers`), so WB replaying WA's
+ * member is refused at the target lookup; the tenant-membership bridge, which has no row-level
+ * security, is read and counted by an explicit `tenant_id` filter beside the tenant-owned tables. The one write that names no existing row (`createDepartment`, marked
  * `namesNoExistingRow` in the registry) is asserted to land in the caller's Tenant only.
  *
  * Its own probe Tenants, not `cross-tenant.test.ts`'s: vitest runs the two files in parallel,
@@ -118,6 +123,10 @@ describe.skipIf(!reachable)('the write use cases, against two probe Tenants as t
   beforeAll(async () => {
     await createProbeTenant(owner(), PROBE_W);
     await createProbeTenant(owner(), PROBE_V);
+    // The harness's user is a Tenant Admin of BOTH probes (the membership writes re-check the
+    // caller against the bridge), so a foreign membership write can only be refused at the target.
+    await stageProbeMembers(PROBE_W);
+    await stageProbeMembers(PROBE_V);
     const [project] = await withTenant(owner(), PROBE_W.tenantId, (tx) =>
       tx.select().from(schema.project).where(eq(schema.project.id, PROBE_W.projectId)),
     );
@@ -132,7 +141,7 @@ describe.skipIf(!reachable)('the write use cases, against two probe Tenants as t
     const failures: string[] = [];
     for (const probe of [PROBE_W, PROBE_V]) {
       try {
-        await removeProbeTenant(owner(), probe.tenantId);
+        await removeProbeTenant(owner(), probe);
         const left = Object.entries(await rowCounts(probe.tenantId)).filter(([, n]) => n > 0);
         if (left.length > 0) failures.push(`${probe.tenantId} left rows in ${left.map(([t]) => t).join(', ')}`);
       } catch (error) {
@@ -174,6 +183,34 @@ describe.skipIf(!reachable)('the write use cases, against two probe Tenants as t
           `${entry.name} changed row counts when probe Tenant WB wrote to WA's rows — a ` +
             'foreign write must land nothing in any tenant-owned table, for either Tenant',
         ).toEqual(before);
+      });
+
+      it('answers not_found and lands nothing when every id it names exists in neither Tenant', async () => {
+        // Run as WA, where the same caller's own writes succeed (below) — for the membership
+        // writes, a Tenant Admin with a membership there — so this not_found comes from the
+        // target lookup, not from who is asking; the foreign replay above is the same refusal.
+        const absent = (id: string) => `xt-absent-${id}`;
+        const own = ownTarget();
+        const target: WriteTarget = {
+          ...own,
+          projectId: absent('project'),
+          ticketIds: [absent('ticket-1'), absent('ticket-2')],
+          wpId: absent('wp'),
+          departmentId: absent('department'),
+          programId: absent('program'),
+          memberUserId: absent('member'),
+          staleProjectId: absent('stale'),
+          secondAdminUserId: absent('admin'),
+        };
+        const before = { w: await allRows(PROBE_W.tenantId), v: await allRows(PROBE_V.tenantId) };
+        const outcome = await drive(entry, target);
+        const after = { w: await allRows(PROBE_W.tenantId), v: await allRows(PROBE_V.tenantId) };
+
+        expect(outcome.error, `${entry.name} threw on ids that exist nowhere`).toBeUndefined();
+        expect(outcome.refused?.code, `${entry.name} did not answer not_found on ids that exist nowhere`).toBe(
+          'not_found',
+        );
+        expect(after, `${entry.name} changed rows on ids that exist nowhere`).toEqual(before);
       });
     },
   );
@@ -338,10 +375,11 @@ describe.skipIf(!reachable)('the write use cases, against two probe Tenants as t
       // …and nothing else moved: every other table — any not in `landedRows`, and any in it the
       // write is expected to leave alone — holds exactly the rows it held, row for row. The diff
       // above only sees the tables `landedRows` reads, and only new or changed rows by key.
+      const tableOf: Readonly<Record<keyof typeof expected, string>> = { ...LANDED_TABLE, ...REMOVED_TABLE };
       const expectedTables = new Set(
-        (Object.keys(LANDED_TABLE) as (keyof typeof LANDED_TABLE)[])
+        (Object.keys(tableOf) as (keyof typeof expected)[])
           .filter((key) => expected[key].length > 0)
-          .map((key) => LANDED_TABLE[key]),
+          .map((key) => tableOf[key]),
       );
       const untouched = (rows: Record<string, readonly string[]>) =>
         Object.fromEntries(Object.entries(rows).filter(([table]) => !expectedTables.has(table)));

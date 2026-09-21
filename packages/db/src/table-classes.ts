@@ -32,7 +32,9 @@
  *
  *   * `appPrivileges` overrides the class's grant. The four Better Auth tables are `global`
  *     (no tenant policy) but Better Auth writes them on the application role's connection, so
- *     they need DML; `tenant` and `tenant_membership` keep the class's SELECT.
+ *     they need DML. `tenant_membership` gets SELECT, UPDATE and DELETE and no INSERT (story 1.4
+ *     slice 2): its audited use cases revoke a membership, change its role and its Projects, and
+ *     adding a user to a Tenant is invitation work, later. `tenant` keeps the class's SELECT.
  *   * `tenantBridge` marks the ONE table that carries `tenant_id` without row-level security:
  *     `tenant_membership`, read to decide which Tenant a request acts in, and so read before any
  *     Tenant is known. `rls.test.ts` otherwise fails a `tenant_id` column with a null
@@ -137,8 +139,9 @@ export const TABLE_REGISTRY: readonly TableEntry[] = [
     table: 'tenant_membership',
     class: 'global',
     tenantColumn: null,
-    why: 'The bridge: which Tenants a user belongs to, as which role. Read to resolve the Tenant, so it cannot be filtered by one. Read by resolveRequestContext alone; written by audited use cases only (slice 2).',
+    why: 'The bridge: which Tenants a user belongs to, as which role. Read to resolve the Tenant, so it cannot be filtered by one. One reader for request resolution (resolveRequestContext), one writer (the audited membership use cases, story 1.4 slice 2), which filter by tenant_id explicitly. No INSERT: adding a user is invitation work.',
     tenantBridge: true,
+    appPrivileges: ['SELECT', 'UPDATE', 'DELETE'],
   },
   {
     table: 'department',
@@ -248,8 +251,8 @@ export const APP_PRIVILEGES: Readonly<Record<TableClass, readonly string[]>> = {
   'mutable-audited': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
   'derived': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
   // Read-only for the application role: rows here are created by the owner (the seed
-  // today, the tenant-provisioning use case in story 1.3). The Better Auth tables are the
-  // stated exception, per entry (`appPrivileges`).
+  // today, the tenant-provisioning use case in story 1.3). The Better Auth tables and the
+  // membership bridge are the stated exceptions, per entry (`appPrivileges`).
   'global': ['SELECT'],
   'operational': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
 } as const;

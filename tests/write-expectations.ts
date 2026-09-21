@@ -6,7 +6,9 @@
  * The five project writes' rows are exactly what the actions always wrote (story 1.2 slice 4 /
  * 1.3 slice 1, unchanged). The eight organisation writes' (story 1.3 slice 2) are the org row
  * after the change — whole, so a write touching another column shows — and one audit row stamped
- * with the harness's Clock, carrying the previous value where there is one.
+ * with the harness's Clock, carrying the previous value where there is one. The four membership
+ * writes' (story 1.4 slice 2) are the bridge row after the change — or, for a revocation, the row
+ * that is gone — and one Clock-stamped audit row on the member's user id.
  */
 import type { Landed } from './write-harness';
 import type { WriteTarget } from './read-use-cases';
@@ -34,6 +36,10 @@ export interface ExpectedRows {
   readonly departments: readonly Record<string, unknown>[];
   readonly programs: readonly Record<string, unknown>[];
   readonly projects: readonly Record<string, unknown>[];
+  /** Bridge rows new or changed, by `(user_id, tenant_id)` (story 1.4 slice 2). */
+  readonly memberships: readonly Record<string, unknown>[];
+  /** Bridge rows gone — a revocation. */
+  readonly membershipsRemoved: readonly Record<string, unknown>[];
 }
 
 export type Expect = (ctx: ExpectContext) => ExpectedRows;
@@ -46,6 +52,8 @@ export const NO_ROWS: ExpectedRows = {
   departments: [],
   programs: [],
   projects: [],
+  memberships: [],
+  membershipsRemoved: [],
 };
 
 function dispositionMappings({ target, at, actor }: ExpectContext, wpId: string) {
@@ -134,6 +142,13 @@ export function manualMapping(
 /** One organisation audit row, stamped with the Clock. */
 function orgAudit({ target, now, actor }: ExpectContext, action: string, on: string, payload: unknown) {
   return [{ tenantId: target.tenantId, actor, action, target: on, payload, at: now }];
+}
+
+/** The member's bridge row as it was before the write, in the target's Tenant. */
+function memberBefore({ before, target }: ExpectContext) {
+  const row = before.memberships.find((m) => m.userId === target.memberUserId);
+  if (!row) throw new Error(`the probe Tenant has no membership of ${target.memberUserId} to change`);
+  return row;
 }
 
 /** A row as it was before the write — the base an in-place change is expected against. */
@@ -296,6 +311,46 @@ export const EXPECTED: Readonly<Record<string, Expect>> = {
       audits: orgAudit(ctx, 'project.reassign_department', was.id, {
         before: { departmentId: was.departmentId, programId: was.programId },
         after: { departmentId, programId },
+      }),
+    };
+  },
+
+  // --- Membership changes (story 1.4 slice 2): the bridge row after the change (or gone), and one
+  // Clock-stamped audit row targeting the member's user id, carrying the previous value. --------
+  changeMemberRole: (ctx) => {
+    const was = memberBefore(ctx);
+    return {
+      ...NO_ROWS,
+      // The Projects are kept on a promotion, so a later demotion restores them.
+      memberships: [{ ...was, role: 'tenant_admin' }],
+      audits: orgAudit(ctx, 'membership.change_role', was.userId, { before: was.role, after: 'tenant_admin' }),
+    };
+  },
+  assignMemberProject: (ctx) => {
+    const was = memberBefore(ctx);
+    const after = [...was.projectIds, ctx.target.projectId];
+    return {
+      ...NO_ROWS,
+      memberships: [{ ...was, projectIds: after }],
+      audits: orgAudit(ctx, 'membership.assign_project', was.userId, { before: was.projectIds, after }),
+    };
+  },
+  unassignMemberProject: (ctx) => {
+    const was = memberBefore(ctx);
+    const after = was.projectIds.filter((id) => id !== ctx.target.staleProjectId);
+    return {
+      ...NO_ROWS,
+      memberships: [{ ...was, projectIds: after }],
+      audits: orgAudit(ctx, 'membership.unassign_project', was.userId, { before: was.projectIds, after }),
+    };
+  },
+  revokeMembership: (ctx) => {
+    const was = memberBefore(ctx);
+    return {
+      ...NO_ROWS,
+      membershipsRemoved: [was],
+      audits: orgAudit(ctx, 'membership.revoke', was.userId, {
+        before: { role: was.role, projectIds: was.projectIds },
       }),
     };
   },

@@ -474,6 +474,7 @@ work started and was deliberately deferred, with the evidence for the split.
 - source_spec: none
   summary: FR-1's "assign PMs to Projects" is not done in story 1.3; it belongs with `tenant_membership` (story 1.4's table, `project_ids`) and role reach (1.5).
   evidence: Decided by the founder on 2026-09-21: identity and membership do not exist before 1.4, and an interim `project_pm` table on the legacy `app_user` would be rewritten when 1.4 replaces it. The assignment is audited (NFR-A1 "role changes") when it lands.
+  resolved: 2026-09-21 in `spec-1-4-revocation-and-membership.md` — `assignMemberProject` / `unassignMemberProject` write `tenant_membership.project_ids`, audited. What a PM can then REACH through those Projects is still story 1.5's.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-3-audit-mechanism.md`
   summary: The audit gate drives each audited use case with ONE input (its registry entry's `invokeWrite`), so an action chosen on a branch is covered by the gate only on that branch — `mapTicket`'s unmap (`mapping.unmap`) is proved by the unit test and the write harness's unmap case, not by the gate.
@@ -559,6 +560,7 @@ work started and was deliberately deferred, with the evidence for the split.
 - source_spec: none
   summary: Story 1.4 slice 2 — revocation and membership changes (including PM assignment into `tenant_membership.project_ids`) as audited `app` use cases, refused on the revoked user's next request.
   evidence: Split from story 1.4 at Build's multi-goal gate (founder, 2026-09-21); independently shippable once slice 1's session and `RequestContext` exist.
+  resolved: 2026-09-21 in `spec-1-4-revocation-and-membership.md`. `revokeMembership`, `changeMemberRole`, `assignMemberProject` and `unassignMemberProject` are audited use cases (`membership.revoke` / `change_role` / `assign_project` / `unassign_project`, target = the member's user id, previous value in the payload), each gated on `tenant_admin` in the context and re-checked against the bridge under one ordered lock; the last Tenant Admin cannot be revoked or demoted. Written through `packages/db`'s one bridge writer (`repo-membership-write.ts`), every statement filtered by `tenant_id`. The app role holds SELECT, UPDATE, DELETE on `tenant_membership` (no INSERT). Revocation deletes the row; the resolver signs the user out on their next request and deletes that session (`tests/membership.test.ts`) — except a session that has not yet reached a first page (no `activeTenantId`), which resolves `no_access` and is kept (spec matrix row "Revoke before first page"). No screen, by decision.
 
 - source_spec: none
   summary: Story 1.4 slice 3 — Google sign-in.
@@ -601,3 +603,36 @@ work started and was deliberately deferred, with the evidence for the split.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-4-identity-and-request-context.md`
   summary: The middleware redirects an expired session's server-action POST with 307 (unverified, medium if real).
   evidence: A 307 replays the POST against `/sign-in`; a 303 may be correct for non-GET. Settle it by posting a Mapping form in `next dev` with an expired session, with and without JS, and seeing where the browser lands.
+
+## Deferred from: implementation of spec-1-4-revocation-and-membership (2026-09-21)
+
+- source_spec: `_bmad-output/planning-artifacts/architecture/architecture-momo-keikaku-2026-09-20/ARCHITECTURE-SPINE.md`
+  summary: The spine (AD-21's per-entry exceptions, AD-23's bridge) and the compiled `epic-1-context.md` still say `tenant_membership` is SELECT-only for the application role and read "by nothing else" than `resolveRequestContext`; since slice 2 the role holds SELECT, UPDATE, DELETE and the bridge has one writer (`membershipWriterOn`, pinned by `source-discipline.test.ts`).
+  evidence: The spec scoped the change to code, registry and SQL; the planning wording was left alone on purpose, because an amended planning doc gets an adversarial review first (up to two rounds). Amend AD-21 and AD-23 ("one reader for request resolution, one writer; no INSERT — invitation"), review, then regenerate the epic context.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-revocation-and-membership.md`
+  summary: Revocation ends only the session that makes the next request; a revoked user's OTHER sessions (another browser) each end on their own next request, and until then the rows stay in `session`.
+  evidence: By design (the use cases never touch sessions; the resolver ends a session whose active Tenant has no membership). Nothing is reachable through such a row — every request re-validates — but an operator reading `session` sees them. Sweep them with the session-expiry job when one exists, or have the resolver end all of the user's sessions for that Tenant.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-revocation-and-membership.md`
+  summary: The membership writes' `tenant_admin` check is local to them; no other use case checks a role, and a PM can still call every organisation write.
+  evidence: Decided by the founder for this slice (a local check ahead of story 1.5). Story 1.5 replaces it with the declared-roles mechanism and must keep the in-transaction re-check against the bridge (a server action's context can be stale).
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-revocation-and-membership.md`
+  summary: `tests/cross-tenant-writes.test.ts`'s "ids that exist in neither Tenant" run is made as the OWN probe Tenant (where the same caller's writes succeed), not as the foreign one.
+  evidence: The spec asked the foreign test to also run each entry with a target absent from both Tenants, "so the refusal is shown to come from the target lookup". Running it as WA — where the harness user is a Tenant Admin and every own-Tenant write succeeds — is what isolates the target as the cause; run as WB it would repeat the foreign replay. Every non-creating write is driven this way, not only the membership ones.
+
+
+## Deferred from: code review of spec-1-4-revocation-and-membership (2026-09-21)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-revocation-and-membership.md`
+  summary: `epic-1-context.md` still says the app role holds SELECT only on `tenant_membership` and that the bridge has a single reader.
+  evidence: Code review (B1). The context is compiled from the spine, whose AD-21/AD-23 wording is deferred until an adversarial review of the amendment; regenerate the context after the spine changes.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-revocation-and-membership.md`
+  summary: A Tenant Admin's membership may carry `projectIds` (kept on promotion, assignable); story 1.5 must not read them as a limit on a Tenant Admin's reach.
+  evidence: Code review (B6). Kept on purpose so a demotion restores the PM's Projects; only a schema comment says so today.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-revocation-and-membership.md`
+  summary: A user revoked from their only Tenant keeps `auth_user` and credential rows and can still sign in, landing on `no_access`.
+  evidence: Code review (B9). Revocation removes access, not the person; deactivating or deleting accounts needs an account-lifecycle decision (with invitation work).

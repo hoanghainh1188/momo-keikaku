@@ -25,7 +25,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON public."account" TO "momo_app";
 GRANT SELECT, INSERT, UPDATE, DELETE ON public."verification" TO "momo_app";
 
 -- tenant_membership (global)
-GRANT SELECT ON public."tenant_membership" TO "momo_app";
+GRANT SELECT, UPDATE, DELETE ON public."tenant_membership" TO "momo_app";
 
 -- department (mutable-audited)
 GRANT SELECT, INSERT, UPDATE, DELETE ON public."department" TO "momo_app";

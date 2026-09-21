@@ -1,10 +1,10 @@
 /**
- * THE MEMBERSHIP PORT (story 1.4 slice 1): the tenant-membership bridge, read.
+ * THE MEMBERSHIP PORT (story 1.4 slice 1): the tenant-membership bridge, read to resolve a request.
  *
- * `packages/db`'s `membershipsOf(handle, userId)` satisfies it structurally, and it is the ONE
- * reader of `tenant_membership` in the codebase (`packages/db/src/source-discipline.test.ts`).
- * `resolveRequestContext` is its one caller. Nothing here writes a membership: that is slice 2's
- * audited use case.
+ * `packages/db`'s `membershipsOf(handle, userId)` satisfies it structurally, and it is the one
+ * reader of `tenant_membership` for request resolution (`packages/db/src/source-discipline.test.ts`).
+ * `resolveRequestContext` is its one caller. Writes go the other way, through the bridge's one
+ * writer (`ports/membership-write.ts`, story 1.4 slice 2's audited use cases), never through here.
  */
 export interface MembershipRecord {
   readonly tenantId: string;
