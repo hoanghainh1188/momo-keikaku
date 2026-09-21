@@ -5,6 +5,9 @@
 // deprecated `baseUrl` took three edits instead of one). It now extends the base and
 // carries only what is genuinely root-specific: which files to check.
 //
+// `tests/` holds suites that span layers (the cross-tenant harness wires `packages/app`'s use
+// cases to `packages/db`'s repository), so it belongs to no package and is listed here.
+//
 // `exclude: ["apps"]` is why every new package under `packages/` is typechecked the day
 // it is created, and why `apps/web` needs its own `pnpm --filter @momo/web typecheck`.
 {
@@ -12,6 +15,7 @@
   "include": [
     "packages/**/*.ts",
     "scripts/**/*.ts",
+    "tests/**/*.ts",
     "vitest.config.ts",
     "drizzle.config.ts"
   ],

@@ -1,5 +1,5 @@
-import { loadReview } from '@momo/db';
-import { webDb, WEB_TENANT_ID } from '@/server/db';
+import { getProjectReview } from '@/server/composition';
+import { valueOrNotFound } from '@/server/result';
 import { hours } from '@momo/domain';
 import { Section } from '@/components/ui';
 import { GanttRow, ganttScale } from '@/components/gantt';
@@ -13,7 +13,7 @@ export default async function PlanPage({
   params: Promise<{ projectId: string }>;
 }) {
   const { projectId } = await params;
-  const { bundle, review: r } = await loadReview(webDb(), WEB_TENANT_ID, projectId);
+  const { bundle, review: r } = valueOrNotFound(await getProjectReview({ projectId }));
 
   const baselineByWp = new Map(bundle.baseline.wps.map((b) => [b.wpId, b]));
   const acByWp = r.attribution.acByWp;

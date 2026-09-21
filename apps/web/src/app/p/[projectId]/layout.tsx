@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
-import { loadProjectBundle } from '@momo/db';
-import { webDb, WEB_TENANT_ID } from '@/server/db';
+import { getProjectHeader } from '@/server/composition';
+import { valueOrNotFound } from '@/server/result';
 import { Shell } from '@/components/shell';
 
 export const dynamic = 'force-dynamic';
@@ -13,7 +13,7 @@ export default async function ProjectLayout({
   params: Promise<{ projectId: string }>;
 }) {
   const { projectId } = await params;
-  const bundle = await loadProjectBundle(webDb(), WEB_TENANT_ID, projectId);
+  const bundle = valueOrNotFound(await getProjectHeader({ projectId }));
   const observed = new Date(bundle.input.pinnedSnapshot.observedAt);
 
   return (

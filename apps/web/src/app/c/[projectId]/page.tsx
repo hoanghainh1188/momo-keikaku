@@ -1,6 +1,6 @@
 import Link from 'next/link';
-import { loadReview } from '@momo/db';
-import { webDb, WEB_TENANT_ID } from '@/server/db';
+import { getProjectReview } from '@/server/composition';
+import { valueOrNotFound } from '@/server/result';
 import { clientProjection, DEFAULT_VISIBILITY } from '@momo/domain';
 import { HealthBadge } from '@/components/ui';
 import { GanttRow, ganttScale } from '@/components/gantt';
@@ -21,7 +21,7 @@ export default async function ClientViewPage({
   params: Promise<{ projectId: string }>;
 }) {
   const { projectId } = await params;
-  const { bundle, review } = await loadReview(webDb(), WEB_TENANT_ID, projectId);
+  const { bundle, review } = valueOrNotFound(await getProjectReview({ projectId }));
   const c = clientProjection(review, bundle.project.name, DEFAULT_VISIBILITY);
 
   const dates = c.schedule

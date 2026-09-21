@@ -15,7 +15,9 @@
       "@momo/domain": ["./packages/domain/src/index.ts"],
       "@momo/domain/*": ["./packages/domain/src/*"],
       "@momo/db": ["./packages/db/src/index.ts"],
-      "@momo/db/*": ["./packages/db/src/*"]
+      "@momo/db/*": ["./packages/db/src/*"],
+      "@momo/app": ["./packages/app/src/index.ts"],
+      "@momo/app/*": ["./packages/app/src/*"]
     }
   }
 }

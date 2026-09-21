@@ -2,7 +2,8 @@
 title: 'Story 1.2 slice 3 — the seven read call sites move onto packages/app use cases'
 type: 'feature'
 created: '2026-09-21'
-status: 'ready-for-dev'
+status: 'done'
+baseline_commit: '45468c385595c83cf6f221dc8b51e6dbb8fbaa71'
 route: 'dispatch'
 review_loop_iteration: 0
 context:
@@ -134,25 +135,25 @@ the same change, so isolation cover follows the code instead of lagging it.
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `packages/app/src/result.ts` — `Result<T, AppError>`, the closed `code` enum (`not_found`,
+- [x] `packages/app/src/result.ts` — `Result<T, AppError>`, the closed `code` enum (`not_found`,
       `invalid_input`) and its message keys. No prose, no i18n lookup.
-- [ ] `packages/app/src/ports/project-read.ts` — the port the two use cases depend on, written so
+- [x] `packages/app/src/ports/project-read.ts` — the port the two use cases depend on, written so
       `packages/db`'s existing functions satisfy it structurally.
-- [ ] `packages/app/src/use-cases/` — `getProjectHeader` and `getProjectReview`, each
+- [x] `packages/app/src/use-cases/` — `getProjectHeader` and `getProjectReview`, each
       `(deps, ctx, input) => Promise<Result<…>>`, validating input and mapping a missing Project to
       `not_found`. Export them from `packages/app/src/index.ts` without dragging in `config.ts`.
-- [ ] `packages/app/package.json`, `tsconfig.base.json`, `vitest.config.ts` — declare
+- [x] `packages/app/package.json`, `tsconfig.base.json`, `vitest.config.ts` — declare
       `@momo/domain`, and add the `@momo/app` alias where the workspace resolves paths.
-- [ ] `apps/web/src/server/composition.ts` — the named composition root: builds the handle, wires
+- [x] `apps/web/src/server/composition.ts` — the named composition root: builds the handle, wires
       the port, constructs `{ tenantId }`, exports ready-to-call use cases. The only `apps/web`
       file importing `@momo/db`. Replaces `server/db.ts`.
-- [ ] The seven read call sites — call the use case, handle the `Result`'s error arm, render the
+- [x] The seven read call sites — call the use case, handle the `Result`'s error arm, render the
       same output.
-- [ ] `tests/cross-tenant.test.ts` + its registry — move the harness out of `packages/db`, point
+- [x] `tests/cross-tenant.test.ts` + its registry — move the harness out of `packages/db`, point
       the enumeration at `packages/app`'s use cases, and keep every assertion, the no-database
       gate and the probe-Tenant lifecycle. `probe-tenants.ts` stays in `packages/db` (it writes
       through Drizzle); `vitest.config.ts` gains `tests/**/*.test.ts` and the `@momo/app` alias.
-- [ ] `_bmad-output/implementation-artifacts/deferred-work.md` — record the second carve-out, and
+- [x] `_bmad-output/implementation-artifacts/deferred-work.md` — record the second carve-out, and
       anything found and not fixed.
 
 **Acceptance Criteria:**
@@ -172,9 +173,102 @@ the same change, so isolation cover follows the code instead of lagging it.
 
 ## Implementation Notes
 
+**What landed.** `packages/app` gains `result.ts` (`Result<T, AppError>`, the closed enum
+`not_found | invalid_input`, one message key each, `ok`/`fail`), `ports/project-read.ts`
+(`ProjectReadPort<Handle>`, `ProjectReadDeps<Handle>`, the restated `ProjectBundle`/`ProjectReview`,
+and `isProjectNotFound`), and `use-cases/` — `getProjectHeader` and `getProjectReview`, each
+`(deps, ctx, input) => Promise<Result<…>>`, sharing one internal `runProjectRead` that validates
+with zod, calls the port with `ctx.tenantId`, maps an invisible Project to `not_found` and lets
+everything else propagate. `use-cases/index.ts` exports the two use cases and nothing else,
+because its namespace IS the read surface the harness enumerates; it does not import `config`.
+`apps/web/src/server/db.ts` became `composition.ts` (git rename); the seven call sites call its
+`getProjectHeader`/`getProjectReview` and unwrap through `server/result.ts`'s exhaustive
+`valueOrNotFound`, which renders Next's 404 for both codes. The harness and its registry moved
+to `tests/` (git renames), and `tsconfig.base.json`, the root `tsconfig.json`, `vitest.config.ts`
+and `eslint.config.js` (the `tests` tree joins the fenced sources) learned the directory and the
+`@momo/app` alias.
+
+**The handle is a type parameter of the port**, not a closure the composition root builds. That
+is what lets `packages/db`'s functions be handed over *as they are* —
+`projectRead: { loadProjectBundle, loadReview }` — so the match really is structural, and the
+`satisfies ProjectReadDeps<Db>` at the composition root is where TypeScript checks it. The port's
+members are function-typed properties rather than methods, so the check is strict rather than
+bivariant.
+
+**How an invisible Project becomes `not_found`.** `repo.ts` rejects with a plain `Error`
+reading `project <id> not found — …`, and this slice may not change `packages/db`'s behaviour, so
+`isProjectNotFound` matches that prefix on the caller's own `projectId`. A connection failure,
+another Project's not-found, anything else: rethrown. Pinned from both sides and recorded in
+deferred-work with the durable fix.
+
+**The harness now drives the use cases.** `invoke` takes `(deps: ProjectReadDeps<Db>, target)`
+and returns the use case's `Result` untouched; the harness splits it into `value`, `refused` or a
+thrown `error`. An own-Tenant `refused` is a failure like a throw. The cross-Tenant probe is
+stricter than it was at repository level: it must be the error arm with `not_found` — not a
+throw, not an `ok` — and the whole outcome, error arm included, is scanned for probe A's token.
+The two golden-figure checks go through `getProjectReview`, the same use case the Review page
+calls. Every other assertion is unchanged; the file still runs 23, and 4 without a database.
+
+**Behaviour the pages did not have before:** a Project id that does not resolve now renders
+Next's 404 (`/p/nope/review`, `/c/nope` → 404) where it used to throw into a 500. That is the
+`not_found` arm doing its job, not a change to what an existing Project renders.
+
 ## Spec Change Log
 
+- 2026-09-21 — the second acceptance criterion ("exactly one file imports `@momo/db`") and the
+  verification grep ("exactly one hit") are not met, and cannot be within this spec: its own Code
+  Map and Never list keep `actions.ts` out of scope, and `actions.ts` imports `drizzle-orm` at :4
+  and `@momo/db` at :5. The grep lists two files, `composition.ts` and `actions.ts`. Laundering
+  `actions.ts`'s import through a re-export in the composition root would have produced one hit
+  while leaving the violation in place, so it was not done. The criterion is met for every READ
+  call site; the remainder closes with the writes slice. Recorded in deferred-work.
+- 2026-09-21 — the Code Map says `config.ts` "exports an **eager** `config` singleton". It does not
+  any more: `config` is a getter per key, so importing it reads no environment
+  (`config.test.ts`'s header still says eager and is stale). The instruction the claim supported —
+  keep the use cases out from behind `config` — was followed anyway: `use-cases/index.ts` does not
+  import it, and the harness imports that module rather than the barrel.
+- 2026-09-21 — the Verification section's `pnpm test packages/db/src/cross-tenant.test.ts` is now
+  `pnpm test tests/cross-tenant.test.ts`: the file moved, as the Tasks list requires.
+- 2026-09-21 — added `packages/app/src/use-cases/project-reads.test.ts` (16 tests, no database),
+  which the Tasks list did not name. The I/O matrix's `invalid_input` row has no other home — the
+  harness never sends a malformed id — and the "anything else propagates" rule is what makes the
+  swallow sabotage meaningful, so it is pinned where it is cheap.
+- 2026-09-21 — `apps/web/src/server/result.ts` (`valueOrNotFound`) is a file the Tasks list did not
+  name: the seven call sites' error-arm handling, written once and exhaustive over the closed enum.
+- 2026-09-21 (review fixes) — `apps/web/src/server/result.test.ts` pins `valueOrNotFound`: the `ok`
+  value unchanged, and both codes throwing Next's not-found error (digest
+  `NEXT_HTTP_ERROR_FALLBACK;404`), watched to fail with a plain throw in its place. The schema now
+  refuses a NUL in `projectId` (Postgres rejects it, so `/p/%00/review` was a 500), watched to
+  fail with the refinement removed. `ProjectInput` is derived from the schema; `details` is built
+  without mutation; `fail` lost its unused type parameter; the barrel exports the result and port
+  modules as types only, keeping `ok`/`fail`/`isProjectNotFound` package-internal; the two
+  composition roots dropped the return annotation so the `satisfies` is what checks.
+
 ## Review Triage Log
+
+Round 1, 2026-09-21 — blind-hunter (B), edge-case-hunter (E), verification-gap (V).
+
+| # | Finding | Verdict | Evidence | Route |
+|---|---|---|---|---|
+| B5 / V1 | `valueOrNotFound` and the new 404 behaviour have no automated test | medium | `apps/web` has no test file; replacing `notFound()` with a throw regresses to 500 with every gate green | patch |
+| B1 / V2 | A registry entry's `name` and `invoke` can disagree, so `getProjectHeader` could lose RLS cover silently | medium | The gate compares names only; both use cases share deps/input and `mustSurface`. Gap pre-dates this slice (repository level) | defer |
+| B2 / V3 | A use case exported from the `@momo/app` barrel instead of `use-cases/index.ts` escapes the coverage gate | medium | `readSurfaceFunctionNames()` reads only `use-cases/index.ts`; `composition.ts` imports from the barrel. Same class as the existing "enumerates one module" entry | defer |
+| B3 | The barrel exports runtime helpers (`fail`, `ok`, `isProjectNotFound`, `APP_ERROR_MESSAGE_KEYS`) to inbound adapters | low | `export *` of `result` and `ports/project-read`; `apps/web` needs only types from them | patch |
+| B4 / E1 | A NUL byte in `projectId` (`/p/%00/review`) passes zod, Postgres rejects it (`null character not permitted`, measured), page 500s | low | `z.string().min(1)` only. Whitespace/over-long ids answer 404 already — that part is false | patch |
+| B6 | Every project page loads the bundle twice (layout + page) | low | Pre-existing; the composition root is now the one place to fix it (React `cache()`) | defer |
+| B7 | `ProjectInput` is declared as an interface and as a zod schema, untied | low | `project-input.ts`; a field added to one leaves the other stale | patch |
+| B8 | `@momo/app` vitest alias unused by the harness | false | The harness imports by path on purpose (no `config`); the alias costs nothing and serves future tests | reject |
+| B9 | `satisfies` is redundant with the return annotation; comments credit the wrong construct | low | `composition.ts` and `restrictedDeps()` are annotated `(): ProjectReadDeps<Db>` | patch |
+| B10a / V-other | `config.test.ts` header still says `config` parses `process.env` eagerly | low | Measured at `config.test.ts:13-14` | patch |
+| B10b | ARCHITECTURE-SPINE.md:81 still says "One carve-out" | low | Planning doc; editing it invalidates the epic context cache and is a planning decision — already recorded in deferred-work | defer |
+| B10c | AC-2 wording should be amended | — | Fix is an edit to this spec | reject |
+| B11 | Cross-probe failure message omits which error code came back | low | `tests/cross-tenant.test.ts` cross-probe `expect` message | patch |
+| B12 | `fail<C>`'s type parameter is discarded by its return type | low | `result.ts` returns `Result<never, AppError>` | patch |
+| B13 | `runProjectRead` builds `details` by mutation in a loop | low | Project coding rules require immutable patterns | patch |
+| B14 | Edited comments not re-wrapped; stray double blank line in deferred-work.md | low | `ci.yml`, `cross-tenant.test.ts`, `read-use-cases.ts`, `deferred-work.md` | patch |
+| E2 | AC-5 ("swallow → completeness fails") is met only when the own-Tenant read also fails; a pure swallow is caught by the not_found probe instead | — | Sabotage #3/#4. The swallow IS caught; the mismatch is the AC's wording — fix is a spec edit | reject |
+| E3 | AC-2 unmet: `actions.ts` still imports `@momo/db` and `drizzle-orm` | — | The frozen intent excludes the writes ("reads only; … `actions.ts` is the file that still imports Drizzle"); already in Change Log and deferred-work | reject |
+| E4 | The barrel re-exports `config` beside the use cases | false | `config` is lazy; `use-cases/index.ts` does not import it, which is what the task asks | reject |
 
 ## Design Notes
 
@@ -212,3 +306,33 @@ export REQUIRE_DB=1
 point a page back at `@momo/db` directly; make a use case return the raw error instead of
 `not_found`; ask for another Tenant's Project id through the use case; break the port's shape at
 the composition root and watch the typecheck name it.
+
+### Results, 2026-09-21
+
+Against `postgres:18.6-alpine` on 55433 with both keys and `REQUIRE_DB=1` exported.
+
+| Command | Result |
+| --- | --- |
+| `pnpm lint`, `pnpm typecheck`, `pnpm --filter @momo/web typecheck`, `pnpm --filter @momo/worker typecheck` | all exit 0 |
+| `pnpm install --frozen-lockfile` | passes (the lockfile gained `@momo/app → @momo/domain`) |
+| `pnpm test` | **165 passed across 14 files** after review round 1 (160 across 13 before it; 146 across 12 before this slice) — measured in full |
+| `pnpm test tests/cross-tenant.test.ts` | 23 passed |
+| the same with no `DATABASE_URL`/`APP_DATABASE_URL`/`REQUIRE_DB` | **4 passed, 19 skipped** |
+| `grep -rln "@momo/db\|drizzle-orm" apps/web/src` | `server/composition.ts` and `app/actions.ts` — see the Change Log |
+| the six routes on `next dev` as `momo_app` | all **200**; Review renders 2936.0 / 1661.5 / 0.91; `/p/nope/review` and `/c/nope` → **404** |
+| the six routes against a worktree of the baseline commit, same database | HTML **identical** after stripping script/link tags and Next's per-build `$ACTION_ID_…` hashes |
+| `pg_stat_activity` during a request | `momo_app` |
+| `SELECT id FROM tenant` after all sabotage runs | `ten-momo` alone |
+
+**Sabotage — each watched to fail, then restored.**
+
+| # | Sabotage | What caught it |
+| --- | --- | --- |
+| 1 | `export { getProjectHeader as getSabotageProbe }` added to `use-cases/index.ts` | the pure gate, with **no database**: *"these functions are exported from packages/app/src/use-cases/index.ts and have no entry in tests/read-use-cases.ts: getSabotageProbe"* |
+| 2 | the `not_found` mapping removed, so the repository's error is thrown raw | 2 failures: *"getProjectHeader THREW when probe Tenant B asked for A's Project id, instead of answering not_found"*, and the same for `getProjectReview` |
+| 3 | the use case swallowing every failure into `ok({})` | 2 failures: *"… did not answer not_found … it answered ok, so it turned an invisible Project into a value"* |
+| 4 | 3, plus the repository failing for the caller's OWN Tenant (tenant and project arguments swapped) | 10 failures, the completeness floor among them: *"getProjectHeader under xtprobe-a-000589 did not return 630 of the 630 fixture values"*. The symmetry and token scans stayed green — every Tenant got the same empty default — which is exactly the blind spot the floor exists for |
+| 5 | the use case ignoring `ctx` and reading a fixed Tenant | 15 failures: token scans, symmetry, numbers, labels, the demo-Tenant direction and the cross probe |
+| 6 | `projectRead: { loadProjectBundle: loadReview, … }` at the composition root | web typecheck, TS2322 at `composition.ts` |
+| 7 | the port's `loadReview` promising a field the repository does not return | TS2322 at `composition.ts`, at the harness's own composition root, and at the fake port in the unit test |
+| 8 | a page pointed back at `@momo/db` directly | **nothing automated** — lint and typecheck stay at 0; only the grep shows it. The gate is the next slice's; recorded in deferred-work |
