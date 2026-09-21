@@ -41,7 +41,12 @@ import * as s from './schema';
 import { MAINTENANCE_SETTING } from './table-classes';
 import { withTenant, type Tx } from './with-tenant';
 
-const TRUNCATE_ORDER = [
+/**
+ * Every table the reseed empties, children first. It must name every table in `TABLE_REGISTRY`:
+ * there are no foreign keys, so `CASCADE` reaches nothing and a table left off keeps its rows
+ * across a reseed. `registry.test.ts` holds it to the registry.
+ */
+export const TRUNCATE_ORDER: readonly string[] = [
   'audit_log',
   'disposition_event',
   'mapping_event',

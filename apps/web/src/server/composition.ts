@@ -133,17 +133,24 @@ export function getClientView(input: ProjectInput) {
 }
 
 /**
+ * The one id generator for the process. Module-scoped because it keeps UUIDv7's monotonic state
+ * (ids minted in one Clock millisecond must still sort by creation), which a per-call generator
+ * would reset. Building it reads no configuration, so importing this file still reads nothing.
+ */
+const webIds = uuidV7IdsOn(systemClock);
+
+/**
  * The write deps, wired: the one tenant transaction every write use case runs its change and its
  * audit record in (AD-14), the Clock and the id port. One value for every write — it satisfies
  * the project writes' deps and the organisation writes' alike. Built per call, for the same
- * reason as the read port.
+ * reason as the read port (the id generator inside it is the process's one, above).
  */
 function writeDeps() {
   return {
     handle: webDb(),
     actor: WEB_ACTOR,
     clock: systemClock,
-    ids: uuidV7IdsOn(systemClock),
+    ids: webIds,
     transaction: inTenantTransaction,
   } satisfies WriteDeps<Db>;
 }

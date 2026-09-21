@@ -41,12 +41,16 @@ export const department = pgTable('department', {
  * may sit in one of its owning Department's Programs, or in none. `mutable-audited`: renamed in
  * place, every change audited by the use case that makes it.
  */
-export const program = pgTable('program', {
-  id: text('id').primaryKey(),
-  tenantId: text('tenant_id').notNull(),
-  departmentId: text('department_id').notNull(),
-  name: text('name').notNull(),
-});
+export const program = pgTable(
+  'program',
+  {
+    id: text('id').primaryKey(),
+    tenantId: text('tenant_id').notNull(),
+    departmentId: text('department_id').notNull(),
+    name: text('name').notNull(),
+  },
+  (t) => ({ byDepartment: index('program_department_idx').on(t.departmentId) }),
+);
 
 export const appUser = pgTable('app_user', {
   id: text('id').primaryKey(),
@@ -56,32 +60,36 @@ export const appUser = pgTable('app_user', {
   role: text('role').notNull(), // tenant_admin | pm | client_viewer
 });
 
-export const project = pgTable('project', {
-  id: text('id').primaryKey(),
-  tenantId: text('tenant_id').notNull(),
-  departmentId: text('department_id').notNull(),
-  /**
-   * Optional (story 1.3 slice 2): a Program of THIS Project's owning Department, or none. The
-   * rule is the use cases' (`packages/app`'s org writes check it inside the transaction); there is
-   * no foreign key, per the demo deviation above. Moving a Project between Programs changes this
-   * column and nothing else.
-   */
-  programId: text('program_id'),
-  name: text('name').notNull(),
-  clientName: text('client_name').notNull(),
-  contractType: text('contract_type').notNull(),
-  tzOffsetMinutes: integer('tz_offset_minutes').notNull(),
-  teireiWeekday: integer('teirei_weekday').notNull(),
-  defaultRateJpy: integer('default_rate_jpy').notNull(),
-  eacMethod: text('eac_method').notNull(),
-  calendarJp: boolean('calendar_jp').notNull(),
-  calendarVn: boolean('calendar_vn').notNull(),
-  /**
-   * AD-15 + review G-5: the demo runs on a fixed clock so fixture freshness and the
-   * "current" Reporting Period behave as they did when the fixtures were recorded.
-   */
-  demoAnchor: timestamp('demo_anchor', { withTimezone: true }).notNull(),
-});
+export const project = pgTable(
+  'project',
+  {
+    id: text('id').primaryKey(),
+    tenantId: text('tenant_id').notNull(),
+    departmentId: text('department_id').notNull(),
+    /**
+     * Optional (story 1.3 slice 2): a Program of THIS Project's owning Department, or none. The
+     * rule is the use cases' (`packages/app`'s org writes check it inside the transaction); there
+     * is no foreign key, per the demo deviation above. Moving a Project between Programs changes
+     * this column and nothing else.
+     */
+    programId: text('program_id'),
+    name: text('name').notNull(),
+    clientName: text('client_name').notNull(),
+    contractType: text('contract_type').notNull(),
+    tzOffsetMinutes: integer('tz_offset_minutes').notNull(),
+    teireiWeekday: integer('teirei_weekday').notNull(),
+    defaultRateJpy: integer('default_rate_jpy').notNull(),
+    eacMethod: text('eac_method').notNull(),
+    calendarJp: boolean('calendar_jp').notNull(),
+    calendarVn: boolean('calendar_vn').notNull(),
+    /**
+     * AD-15 + review G-5: the demo runs on a fixed clock so fixture freshness and the
+     * "current" Reporting Period behave as they did when the fixtures were recorded.
+     */
+    demoAnchor: timestamp('demo_anchor', { withTimezone: true }).notNull(),
+  },
+  (t) => ({ byProgram: index('project_program_idx').on(t.programId) }),
+);
 
 export const resource = pgTable('resource', {
   id: text('id').primaryKey(),

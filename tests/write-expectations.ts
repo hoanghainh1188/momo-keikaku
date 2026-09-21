@@ -255,6 +255,13 @@ export const EXPECTED: Readonly<Record<string, Expect>> = {
         programId,
         clientName: 'Harness Client',
         contractType: '準委任',
+        tzOffsetMinutes: 540,
+        teireiWeekday: 1,
+        defaultRateJpy: 0,
+        eacMethod: 'typical',
+        calendarJp: true,
+        calendarVn: false,
+        demoAnchor: ctx.now.toISOString(),
       }),
     };
   },

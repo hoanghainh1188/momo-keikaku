@@ -168,6 +168,7 @@ describe('creating org units', () => {
         },
       },
     ]);
+    // Everything the row was created with, the defaults and the anchor included.
     expect(audits.map((a) => a.payload)).toEqual([
       {
         name: 'EC phase 3',
@@ -175,6 +176,13 @@ describe('creating org units', () => {
         programId: 'prg-x',
         clientName: 'Osaka Retail',
         contractType: '請負',
+        tzOffsetMinutes: 540,
+        teireiWeekday: 1,
+        defaultRateJpy: 0,
+        eacMethod: 'typical',
+        calendarJp: true,
+        calendarVn: false,
+        demoAnchor: '2026-09-21T09:30:00.000Z',
       },
     ]);
   });
@@ -362,6 +370,22 @@ describe('what the Tenant cannot see answers not_found, and nothing lands', () =
     await renameDepartment(deps, CTX, { departmentId: unseen, name: 'n' });
     expect(committed).toEqual([]);
     expect(audits).toEqual([]);
+  });
+});
+
+describe('a name is stored and audited trimmed', () => {
+  it('trims a created name in the row and in the record', async () => {
+    const { deps, committed, audits } = fakeDeps();
+    expect(await createDepartment(deps, CTX, { name: '  Delivery  ' })).toEqual(CREATED('new-1'));
+    expect(committed).toEqual([{ member: 'insertDepartment', arg: { id: 'new-1', name: 'Delivery' } }]);
+    expect(audits.map((a) => a.payload)).toEqual([{ name: 'Delivery' }]);
+  });
+
+  it('trims a new name in the rename and in the record\'s `after`', async () => {
+    const { deps, committed, audits } = fakeDeps();
+    expect(await renameDepartment(deps, CTX, { departmentId: 'dep-y', name: '  Delivery  ' })).toEqual(OK);
+    expect(committed).toEqual([{ member: 'renameDepartment', arg: { id: 'dep-y', name: 'Delivery' } }]);
+    expect(audits.map((a) => a.payload)).toEqual([{ before: 'Design', after: 'Delivery' }]);
   });
 });
 

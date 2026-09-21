@@ -5,6 +5,7 @@ import {
   createProject,
   reassignProjectDepartment,
   reassignProjectProgram,
+  renameDepartment,
 } from '../packages/app/src/use-cases';
 import { closeAllPools } from '../packages/db/src/client';
 import {
@@ -131,6 +132,25 @@ describe.skipIf(!reachable)('the organisation rules, against a probe Tenant as t
     }
     expect(left, 'the org suite left probe rows behind').toEqual([]);
   }, 120_000);
+
+  it('stores and audits a name trimmed, on a create and on a rename', async () => {
+    const id = createdId(await createDepartment(deps(), ctx, { name: '  Delivery  ' }));
+    const stored = async () =>
+      (await landedRows(PROBE_O.tenantId)).departments.find((d) => d.id === id)?.name;
+    expect(await stored()).toBe('Delivery');
+    expect(await lastAudit()).toMatchObject({ action: 'department.create', payload: { name: 'Delivery' } });
+
+    await renameDepartment(deps(), ctx, { departmentId: id, name: 'Other' });
+    expect(await renameDepartment(deps(), ctx, { departmentId: id, name: '  Delivery  ' })).toEqual({
+      ok: true,
+      value: undefined,
+    });
+    expect(await stored()).toBe('Delivery');
+    expect(await lastAudit()).toMatchObject({
+      action: 'department.rename',
+      payload: { before: 'Other', after: 'Delivery' },
+    });
+  });
 
   it('refuses a Program of another Department on a Project — invalid_input, nothing lands', async () => {
     const before = await allRows(PROBE_O.tenantId);

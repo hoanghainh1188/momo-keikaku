@@ -110,6 +110,12 @@ async function visibleProject(org: OrgRepository, projectId: string) {
 }
 
 /**
+ * The rule code an `invalid_input` names under `details.programId` when a Program is not one of
+ * the Project's owning Department's. Declared once, here, so no caller spells it again.
+ */
+export const PROGRAM_NOT_IN_DEPARTMENT = 'program_not_in_department';
+
+/**
  * THE RULE: a Program is accepted on a Project only if it belongs to the Project's owning
  * Department. Checked inside the transaction, against rows this Tenant can see — a Program it
  * cannot see is `not_found` first, never `invalid_input`, so a foreign Program's existence is not
@@ -123,7 +129,7 @@ async function programFor(
   if (programId === null) return null;
   const program = await visibleProgram(org, programId);
   if (program.departmentId !== departmentId) {
-    refuse('invalid_input', { programId: ['program_not_in_department'] });
+    refuse('invalid_input', { programId: [PROGRAM_NOT_IN_DEPARTMENT] });
   }
   return program.id;
 }
@@ -195,7 +201,8 @@ export async function renameProgram<Handle>(
 /**
  * FR-1: a new Project — its name, owning Department, optional Program (only one of that
  * Department's), client name and contract type. Every other column takes `NEW_PROJECT_DEFAULTS`,
- * and `demo_anchor` the Clock's `now`.
+ * and `demo_anchor` the Clock's `now`. The record carries every column the row was created with
+ * (the anchor as an ISO instant), not only the ones the caller supplied.
  */
 export async function createProject<Handle>(
   deps: OrgWriteDeps<Handle>,
@@ -206,7 +213,7 @@ export async function createProject<Handle>(
     const department = await visibleDepartment(scope.org, command.departmentId);
     const programId = await programFor(scope.org, command.programId, department.id);
     const id = deps.ids.next();
-    await scope.org.insertProject({
+    const row: NewProjectRow = {
       id,
       name: command.name,
       departmentId: department.id,
@@ -215,13 +222,14 @@ export async function createProject<Handle>(
       contractType: command.contractType,
       ...NEW_PROJECT_DEFAULTS,
       demoAnchor: stamp.at,
-    });
+    };
+    await scope.org.insertProject(row);
+    // Everything the row was created with — the defaulted columns and the anchor included — so
+    // the record alone says what the Project started as. The id is the record's target.
+    const { id: _target, demoAnchor, ...created } = row;
     await audit.record(scope, stamp, 'project.create', id, {
-      name: command.name,
-      departmentId: department.id,
-      programId,
-      clientName: command.clientName,
-      contractType: command.contractType,
+      ...created,
+      demoAnchor: demoAnchor.toISOString(),
     });
     return { id };
   });

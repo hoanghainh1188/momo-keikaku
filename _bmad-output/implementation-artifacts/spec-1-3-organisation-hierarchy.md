@@ -117,6 +117,39 @@ composition root — which AD-1 is amended (separately, reviewed) to let import 
 - Given the six routes and the five existing forms, when compared with the baseline, then HTML and
   landed rows are identical.
 
+### Review Findings
+
+Code review of story 1.3 (PRs #23 and #24, `1fdb06d..625d2c5`), 2026-09-21 — blind-hunter,
+edge-case-hunter, verification-gap, acceptance-auditor.
+
+- [x] [Review][Patch] UUIDv7 ids minted in one Clock millisecond sort randomly; the composition root rebuilds the generator per call [packages/adapters/src/ids.ts:14]
+- [x] [Review][Patch] `TRUNCATE_ORDER` is not checked against `TABLE_REGISTRY`; a reseed breaks silently if a table is missed [packages/db/src/seed.ts:44]
+- [x] [Review][Patch] The own-Tenant write harness does not check that a write left every other table unchanged [tests/cross-tenant-writes.test.ts]
+- [x] [Review][Patch] `project.create`'s audit payload omits the defaulted columns and `demoAnchor` it wrote [packages/app/src/use-cases/org-writes.ts]
+- [x] [Review][Patch] `org-input.ts` claims the Never list excludes a length bound; it excludes only uniqueness [packages/app/src/use-cases/org-input.ts:22]
+- [x] [Review][Patch] No index on `program.department_id` or `project.program_id` [packages/db/src/schema.ts:44]
+- [x] [Review][Patch] Name trimming (stored and audited value) is untested [packages/app/src/use-cases/org-input.ts]
+- [x] [Review][Patch] `details` carries a non-zod rule code (`program_not_in_department`) its doc does not allow [packages/app/src/result.ts]
+- [x] [Review][Patch] The gate passes a create use case that stops returning `{ id }` [tests/audited-use-cases.test.ts]
+- [x] [Review][Defer] `findDepartment`/`findProgram` row locks untested, like `findProject`'s [packages/db/src/repo-org.ts:76] — deferred: needs the two-connection barrier harness
+- [x] [Review][Defer] AC3's Published Snapshots and Program roll-up cannot be tested yet [tests/org-writes.test.ts] — deferred: neither table nor read exists
+- [x] [Review][Defer] The audited-use-case gate trusts each use case's own declaration, not NFR-A1's list [tests/audited-use-cases.test.ts] — deferred: needs NFR-A1 groups mapped to actions
+- [x] [Review][Defer] `epic-1-context.md` still states the four-argument `audit.record(ctx, …)` form [_bmad-output/implementation-artifacts/epic-1-context.md] — deferred: compiled context, regenerated from planning docs
+
+**Rejected**
+
+- `FOR UPDATE` on existence checks serialises concurrent creates — low: single-user demo; fix needs per-call lock modes.
+- A same-Department `reassignProjectDepartment` is recorded as a Department move — low: behaviour is consistent; a routing rule is added complexity.
+- `WriteScope`/`WriteStamp`/row types exported under the same names by `@momo/db` and `@momo/app` — low: compiles; no file imports both names (carried from round 1).
+- The spec's notes, round-1 triage row B1 and `status` drift from the code — fix edits the spec under review.
+- `auditSinkOn(tx, tenantId)` takes two arguments where siblings take `Bound` — low: cosmetic.
+- Zero-width-only names pass the blank check — low: unlikely; fix adds a guard.
+- No-op rename/reassign records `before === after` — low: carried rejection from round 1.
+- The harness never drives a real Department move — low: `tests/org-writes.test.ts` does, with `allRows`.
+- Create writes carry no `before`/`after` keys, against the commit message — low: claim wording only.
+- `demo.seed` is outside `AUDIT_ACTIONS` — low: the seed is tooling, exempted and documented.
+- The story is marked `review` without PM assignment — false as a defect: moved to 1.4/1.5 by the founder's decision.
+
 ## Implementation Notes
 
 **Ports (`packages/app/src/ports/`).** `clock.ts` (`Clock { now }` — `systemClock` satisfies it
