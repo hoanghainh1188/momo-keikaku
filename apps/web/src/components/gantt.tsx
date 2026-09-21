@@ -23,14 +23,19 @@ export function GanttRow({
   scale,
   baseline,
   current,
-  pctComplete,
+  earned,
   isMilestone,
   slipped,
 }: {
   scale: GanttScale;
   baseline: { start: string; finish: string } | null;
   current: { start: string; finish: string } | null;
-  pctComplete: number;
+  /**
+   * Earned progress, already presented by the page through `@momo/domain`'s `present`: the
+   * fraction is layout geometry only (`geometryFraction`), the label the whole percentage
+   * (`wholePercent`). This component does no arithmetic of its own on a ratio.
+   */
+  earned: { fraction: number; label: string };
   isMilestone: boolean;
   slipped: boolean;
 }) {
@@ -74,9 +79,9 @@ export function GanttRow({
             className="gantt-earned"
             style={{
               left: `${pct(scale, current.start)}%`,
-              width: `${Math.max((pct(scale, current.finish) - pct(scale, current.start)) * pctComplete, 0)}%`,
+              width: `${Math.max((pct(scale, current.finish) - pct(scale, current.start)) * earned.fraction, 0)}%`,
             }}
-            title={`Earned ${(pctComplete * 100).toFixed(0)}%`}
+            title={`Earned ${earned.label}%`}
           />
         </>
       ) : null}

@@ -1,6 +1,6 @@
 import { getProjectReview } from '@/server/composition';
 import { valueOrNotFound } from '@/server/result';
-import { hours } from '@momo/domain';
+import { earnedProgress, hours, ZERO, type Mh } from '@momo/domain';
 import { Section } from '@/components/ui';
 import { GanttRow, ganttScale } from '@/components/gantt';
 
@@ -25,19 +25,19 @@ export default async function PlanPage({
     if (!w.parentId) continue;
     children.set(w.parentId, [...(children.get(w.parentId) ?? []), w]);
   }
-  const rollUp = (id: string): { mh: number; baselineMh: number; acMh: number; start: string | null; finish: string | null } => {
+  const rollUp = (id: string): { mh: Mh; baselineMh: Mh; acMh: Mh; start: string | null; finish: string | null } => {
     const kids = children.get(id) ?? [];
-    let mh = 0;
-    let baselineMh = 0;
-    let acMh = 0;
+    let mh = 0n;
+    let baselineMh = 0n;
+    let acMh = 0n;
     let start: string | null = null;
     let finish: string | null = null;
     for (const k of kids) {
       const sub = k.isLeaf
         ? {
             mh: k.plannedMh,
-            baselineMh: baselineByWp.get(k.id)?.baselineMh ?? 0,
-            acMh: acByWp.get(k.id) ?? 0,
+            baselineMh: baselineByWp.get(k.id)?.baselineMh ?? 0n,
+            acMh: acByWp.get(k.id) ?? 0n,
             start: k.start,
             finish: k.finish,
           }
@@ -71,7 +71,7 @@ export default async function PlanPage({
       <div className="report-sub" style={{ marginTop: 8 }}>
         Active Baseline <strong>{bundle.baseline.id}</strong> recorded{' '}
         {bundle.meta.baselineRecordedAt.slice(0, 10)} — “{bundle.meta.baselineReason}” · BAC{' '}
-        {hours(r.evm.bacMh)}h over {bundle.baseline.wps.filter((b) => b.baselineMh > 0).length}{' '}
+        {hours(r.evm.bacMh)}h over {bundle.baseline.wps.filter((b) => b.baselineMh > 0n).length}{' '}
         baselined leaf Work Packages.
       </div>
 
@@ -98,9 +98,9 @@ export default async function PlanPage({
                 const isSummary = !w.isLeaf;
                 const b = baselineByWp.get(w.id);
                 const agg = isSummary ? rollUp(w.id) : null;
-                const baselineMh = agg ? agg.baselineMh : (b?.baselineMh ?? 0);
+                const baselineMh = agg ? agg.baselineMh : (b?.baselineMh ?? 0n);
                 const plannedMh = agg ? agg.mh : w.plannedMh;
-                const acMh = agg ? agg.acMh : (acByWp.get(w.id) ?? 0);
+                const acMh = agg ? agg.acMh : (acByWp.get(w.id) ?? 0n);
                 const start = agg ? agg.start : w.start;
                 const finish = agg ? agg.finish : w.finish;
                 const ev = evByWp.get(w.id);
@@ -120,9 +120,9 @@ export default async function PlanPage({
                       {w.isMilestone ? <span className="tag">milestone</span> : null}
                       {!b && w.isLeaf ? <span className="tag unplanned">non-baselined</span> : null}
                     </td>
-                    <td className="num">{baselineMh ? hours(baselineMh) : '—'}</td>
-                    <td className="num">{plannedMh ? hours(plannedMh) : '—'}</td>
-                    <td className="num">{acMh ? hours(acMh) : '—'}</td>
+                    <td className="num">{baselineMh !== 0n ? hours(baselineMh) : '—'}</td>
+                    <td className="num">{plannedMh !== 0n ? hours(plannedMh) : '—'}</td>
+                    <td className="num">{acMh !== 0n ? hours(acMh) : '—'}</td>
                     <td className="caption">
                       {b ? `${b.start} → ${b.finish}` : '—'}
                     </td>
@@ -134,7 +134,7 @@ export default async function PlanPage({
                         scale={scale}
                         baseline={b ? { start: b.start, finish: b.finish } : null}
                         current={start && finish ? { start, finish } : null}
-                        pctComplete={ev?.pctComplete ?? 0}
+                        earned={earnedProgress(ev?.pctComplete ?? ZERO)}
                         isMilestone={w.isMilestone}
                         slipped={
                           w.isMilestone && b ? !w.milestoneDoneAt && bundle.input.asOf > b.finish : false

@@ -196,7 +196,7 @@ Each of these is a deliberate, noted choice, not an oversight.
 | Spine says | Demo does | Why |
 |---|---|---|
 | pnpm 12.4.2, Node 24.21, TypeScript 6, Next 16.3.5, Postgres 18.6 | pnpm **9.15**, Node 24.13, TypeScript 5.7, Next **15.5**, Postgres **18.6** | The versions available on this machine and in the registry. Postgres matches. |
-| Effort as `bigint` milli-hours | integer `number` milli-hours | Exact to 2^53 mh; avoids `bigint` friction through Drizzle and JSON for a demo. Integer milli-hours, and the single rounding site in `domain/present`, are unchanged. |
+| Money as integer JPY, carried as `bigint` (AD-4) | the yen columns (`project.default_rate_jpy`, `rate_entry.yen_per_hour`) stay Postgres `integer` and are read into `bigint` | No migration in the arithmetic slice; every Rate fits int4. Anything that later writes a `bigint` yen value back must widen the column to `bigint` first. |
 | `apps/worker` with pg-boss schedules | ingest runs inside the seed | The build brief defers the scheduler. The ingest use case itself is unchanged and would move to the worker as-is. |
 | RLS, `withTenant`, composite FKs, non-owner role | `tenant_id` columns only | Single-user local run. No code reads across tenants, so this can be added without a data migration. |
 | Append-only enforced by triggers and grants | enforced by convention | Same reason. |

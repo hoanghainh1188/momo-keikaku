@@ -1,6 +1,7 @@
 import type { EvmResult } from './evm';
+import { ratioText, share, thresholdText } from './present';
 import type { ProjectConfig } from './types';
-import type { Metric } from './units';
+import { ONE, type Ratio, type RatioMetric } from './units';
 
 /** FR-31: three Health Indicators plus an overall status. */
 export type HealthColour = 'green' | 'amber' | 'red' | 'unavailable';
@@ -18,15 +19,34 @@ export interface HealthInput {
   evm: EvmResult;
   thresholds: ProjectConfig['thresholds'];
   /** FR-31: the Reporting Period's Unplanned share, excluding Opening Balances */
-  unplannedSharePeriod: number | null;
-  unplannedShareCumulative: number | null;
+  unplannedSharePeriod: Ratio | null;
+  unplannedShareCumulative: Ratio | null;
   /** FR-31: Schedule is at least amber when a Milestone is past its Baseline date and not done */
   slippedMilestones: { wbsCode: string; name: string; baselineDate: string }[];
   measurementBasis: 'hours' | 'count';
 }
 
-const ratioColour = (v: number, t: ProjectConfig['thresholds']): HealthColour =>
-  v >= t.ratioGreen ? 'green' : v >= t.ratioAmber ? 'amber' : 'red';
+/**
+ * AD-4: THE ONLY PLACE A RATIO MEETS A THRESHOLD. Exact, by cross-multiplication —
+ * `spi ≥ 95/100` is `spi.num × 100 ≥ spi.den × 95` — so a value sitting exactly on a boundary
+ * lands on the side the rule says, where a float could land on either. Neither side is
+ * reduced first, and a negative denominator is handled rather than assumed away.
+ *
+ * Returns -1, 0 or 1 as `a` is below, equal to or above `b`.
+ */
+export function compareRatio(a: Ratio, b: { num: bigint; den: bigint }): -1 | 0 | 1 {
+  const difference = a.num * b.den - b.num * a.den;
+  const signedDen = a.den * b.den;
+  const d = signedDen < 0n ? -difference : difference;
+  return d < 0n ? -1 : d > 0n ? 1 : 0;
+}
+
+/** The Review's "behind plan" wording: SPI strictly below 1, compared exactly. */
+export const isBehindPlan = (spi: RatioMetric): boolean =>
+  spi.kind === 'value' && compareRatio(spi.value, ONE) < 0;
+
+const ratioColour = (v: Ratio, t: ProjectConfig['thresholds']): HealthColour =>
+  compareRatio(v, t.ratioGreen) >= 0 ? 'green' : compareRatio(v, t.ratioAmber) >= 0 ? 'amber' : 'red';
 
 const worse = (a: HealthColour, b: HealthColour): HealthColour => {
   const rank: Record<HealthColour, number> = { green: 0, unavailable: 1, amber: 2, red: 3 };
@@ -65,12 +85,12 @@ export function computeHealth(input: HealthInput): {
     let colour = ratioColour(evm.cpiAllIn.value, t);
     let rule = `${cap(colour)} because CPI (all-in) ${fmt(evm.cpiAllIn)} ${ruleText(evm.cpiAllIn.value, t)}`;
     const tcpiCrossed =
-      evm.bacExhausted || (evm.tcpi.kind === 'value' && evm.tcpi.value > t.tcpiRed);
+      evm.bacExhausted || (evm.tcpi.kind === 'value' && compareRatio(evm.tcpi.value, t.tcpiRed) > 0);
     if (tcpiCrossed) {
       colour = 'red';
       rule = evm.bacExhausted
         ? 'Red because BAC is exhausted (BAC − AC ≤ 0)'
-        : `Red because TCPI ${fmt(evm.tcpi)} > ${t.tcpiRed} — the remaining work must beat the planned efficiency`;
+        : `Red because TCPI ${fmt(evm.tcpi)} > ${thresholdText(t.tcpiRed)} — the remaining work must beat the planned efficiency`;
     }
     effort = { key: 'effort_cost', colour, driver: `CPI ${fmt(evm.cpiAllIn)}`, rule };
   } else {
@@ -97,8 +117,12 @@ export function computeHealth(input: HealthInput): {
   } else {
     const s = input.unplannedSharePeriod;
     const colour: HealthColour =
-      s < t.unplannedGreenBelow ? 'green' : s <= t.unplannedAmberMax ? 'amber' : 'red';
-    const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
+      compareRatio(s, t.unplannedGreenBelow) < 0
+        ? 'green'
+        : compareRatio(s, t.unplannedAmberMax) <= 0
+          ? 'amber'
+          : 'red';
+    const pct = share;
     unplanned = {
       key: 'unplanned',
       colour,
@@ -128,10 +152,10 @@ export function computeHealth(input: HealthInput): {
 const label = (k: HealthIndicator['key']) =>
   k === 'schedule' ? 'Schedule' : k === 'effort_cost' ? 'Effort/Cost' : 'Unplanned Work';
 const cap = (c: HealthColour) => c.charAt(0).toUpperCase() + c.slice(1);
-const fmt = (m: Metric) => (m.kind === 'value' ? m.value.toFixed(2) : '—');
-const ruleText = (v: number, t: ProjectConfig['thresholds']) =>
-  v >= t.ratioGreen
-    ? `≥ ${t.ratioGreen}`
-    : v >= t.ratioAmber
-      ? `is between ${t.ratioAmber} and ${t.ratioGreen}`
-      : `< ${t.ratioAmber}`;
+const fmt = (m: RatioMetric) => (m.kind === 'value' ? ratioText(m.value) : '—');
+const ruleText = (v: Ratio, t: ProjectConfig['thresholds']) =>
+  compareRatio(v, t.ratioGreen) >= 0
+    ? `≥ ${thresholdText(t.ratioGreen)}`
+    : compareRatio(v, t.ratioAmber) >= 0
+      ? `is between ${thresholdText(t.ratioAmber)} and ${thresholdText(t.ratioGreen)}`
+      : `< ${thresholdText(t.ratioAmber)}`;

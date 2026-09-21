@@ -1,6 +1,6 @@
 import { getProjectReview } from '@/server/composition';
 import { valueOrNotFound } from '@/server/result';
-import { hours, mappingHead, share } from '@momo/domain';
+import { compareBigint, hours, mappingHead, share } from '@momo/domain';
 import { Internal, Section, UnplannedChip } from '@/components/ui';
 import { ScopeLedgerBar } from '@/components/scope-ledger-bar';
 import { MapTicketForm } from '@/components/map-ticket-form';
@@ -24,10 +24,10 @@ export default async function MappingPage({
   const tickets = [...bundle.input.pinnedSnapshot.tickets]
     .map((t) => ({
       ...t,
-      mh: r.attribution.hoursByTicket.get(t.trackerIssueId) ?? 0,
+      mh: r.attribution.hoursByTicket.get(t.trackerIssueId) ?? 0n,
       mapping: head.get(t.trackerIssueId),
     }))
-    .sort((a, b) => b.mh - a.mh)
+    .sort((a, b) => compareBigint(b.mh, a.mh))
     .slice(0, 60);
 
   return (

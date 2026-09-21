@@ -1,4 +1,5 @@
 import type { LedgerEntry, SnapshotRead, TicketObservation } from './types';
+import type { Mh } from './units';
 
 /**
  * FR-25 / FR-42 / AD-7: derive Actuals Ledger entries from the difference between
@@ -35,12 +36,12 @@ export function ingestSnapshot(input: IngestInput): IngestResult {
 
   for (const t of next.tickets) {
     const before = prevByTicket.get(t.trackerIssueId);
-    const prevMh = before?.actualMh ?? 0;
-    const nowMh = t.actualMh ?? 0;
+    const prevMh = before?.actualMh ?? 0n;
+    const nowMh = t.actualMh ?? 0n;
 
     if (!before) {
       // FR-42 first sighting.
-      if (nowMh === 0) continue;
+      if (nowMh === 0n) continue;
       const kind = isFirstSnapshot ? 'opening_balance' : 'delta';
       entries.push({
         seq: seq++,
@@ -56,7 +57,7 @@ export function ingestSnapshot(input: IngestInput): IngestResult {
     }
 
     const delta = nowMh - prevMh;
-    if (delta === 0) continue;
+    if (delta === 0n) continue;
     // FR-25: negative deltas are recorded, never discarded.
     entries.push({
       seq: seq++,
@@ -90,13 +91,13 @@ export function ingestSnapshot(input: IngestInput): IngestResult {
 export function checkLedgerInvariant(
   entries: LedgerEntry[],
   lastSnapshot: SnapshotRead,
-): { ok: boolean; violations: { ticketId: string; ledger: number; observed: number }[] } {
-  const byTicket = new Map<string, number>();
-  for (const e of entries) byTicket.set(e.ticketId, (byTicket.get(e.ticketId) ?? 0) + e.deltaMh);
-  const violations: { ticketId: string; ledger: number; observed: number }[] = [];
+): { ok: boolean; violations: { ticketId: string; ledger: Mh; observed: Mh }[] } {
+  const byTicket = new Map<string, Mh>();
+  for (const e of entries) byTicket.set(e.ticketId, (byTicket.get(e.ticketId) ?? 0n) + e.deltaMh);
+  const violations: { ticketId: string; ledger: Mh; observed: Mh }[] = [];
   for (const t of lastSnapshot.tickets) {
-    const ledger = byTicket.get(t.trackerIssueId) ?? 0;
-    const observed = t.actualMh ?? 0;
+    const ledger = byTicket.get(t.trackerIssueId) ?? 0n;
+    const observed = t.actualMh ?? 0n;
     if (ledger !== observed) violations.push({ ticketId: t.trackerIssueId, ledger, observed });
   }
   return { ok: violations.length === 0, violations };

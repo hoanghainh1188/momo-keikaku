@@ -7,6 +7,7 @@ import {
   hours,
   present,
   share,
+  sum,
 } from '@momo/domain';
 import { asOfDate, buildDemoState, currentPeriod } from './fixtures';
 
@@ -54,6 +55,12 @@ describe('demo dataset — golden EVM figures', () => {
   it('lands on the Reporting Period that contains the demo anchor', () => {
     expect(currentPeriod(state).label).toBe('2026-09-11 – 2026-09-17');
     expect(asOfDate(state)).toBe('2026-09-16');
+  });
+
+  it('carries effort as exact bigint milli-hours and ratios unreduced (AD-4)', () => {
+    expect(r.evm.bacMh).toBe(2_936_000n);
+    expect(r.evm.acMh).toBe(1_661_495n);
+    expect(r.evm.spi.kind === 'value' && r.evm.spi.value).toEqual({ num: r.evm.evMh, den: r.evm.pvMh });
   });
 
   it('reports the headline EVM figures in effort hours', () => {
@@ -109,9 +116,10 @@ describe('demo dataset — golden EVM figures', () => {
   });
 
   it('keeps the four scope-ledger buckets mutually exclusive and summing to the total', () => {
-    const sum = r.scopeLedger.reduce((a, s) => a + s.mh, 0);
-    expect(sum).toBe(r.attribution.cumulative.totalMh);
-    expect(hours(sum)).toBe('1661.5');
+    const total = sum(r.scopeLedger.map((s) => s.mh));
+    expect(total).toBe(r.attribution.cumulative.totalMh);
+    expect(total).toBe(1_661_495n);
+    expect(hours(total)).toBe('1661.5');
   });
 
   it('groups Unmapped Work by Tracker attribute — the UJ-3 bug story', () => {
@@ -121,6 +129,20 @@ describe('demo dataset — golden EVM figures', () => {
       ['Infrastructure', 5, '32.6'],
     ]);
     expect(r.coverage.unmappedTickets).toBe(22);
+  });
+
+  it('reports Mapping coverage and the scope-ledger shares as the baseline rendered them', () => {
+    // Measured from the Review and Mapping pages at the baseline commit (3c52748), before the
+    // shares became exact Ratios: 90.0% of hours, 81.0% of Tickets, and the bar's legend.
+    expect(share(r.coverage.mappedHourShare)).toBe('90.0%');
+    expect(share(r.coverage.mappedTicketShare)).toBe('81.0%');
+    expect(Object.fromEntries(r.scopeLedger.map((s) => [s.key, share(s.share)]))).toEqual({
+      'mapped-baselined': '82.1%',
+      'mapped-non-baselined': '0.0%',
+      'catch-all': '4.8%',
+      'catch-all-overflow': '3.1%',
+      unmapped: '10.0%',
+    });
   });
 
   it('flags the slipped milestone that keeps Schedule out of green', () => {
@@ -147,6 +169,18 @@ describe('client projection (FR-34 / AD-12)', () => {
   });
 
   it('carries no money, rates, people, Tracker Accounts or Ticket content', () => {
+    // No exact quantity at all: a `bigint` (milli-hours, yen) or a `Ratio` (whose num/den are
+    // milli-hours) is a magnitude the client is not shown, even when no field names money.
+    const exact: string[] = [];
+    const walk = (node: unknown, path: string): void => {
+      if (typeof node === 'bigint') exact.push(`${path} is a bigint`);
+      else if (node !== null && typeof node === 'object') {
+        if ('num' in node && 'den' in node) exact.push(`${path} is a Ratio`);
+        for (const [k, v] of Object.entries(node)) walk(v, `${path}.${k}`);
+      }
+    };
+    walk(c, '$');
+    expect(exact).toEqual([]);
     const serialised = JSON.stringify(c);
     expect(serialised).not.toMatch(/¥/);
     expect(serialised).not.toMatch(/yenPerHour|jpy|Jpy/);

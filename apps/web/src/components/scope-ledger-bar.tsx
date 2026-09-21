@@ -1,4 +1,4 @@
-import { hours, share } from '@momo/domain';
+import { cssPercent, hours, share, type Mh, type Ratio } from '@momo/domain';
 
 /**
  * The signature element: one square-cornered bar split into the four FR-20 buckets,
@@ -24,11 +24,11 @@ export function ScopeLedgerBar({
   openingBalanceMh,
   totalMh,
 }: {
-  segments: { key: string; label: string; mh: number; share: number }[];
-  openingBalanceMh: number;
-  totalMh: number;
+  segments: { key: string; label: string; mh: Mh; share: Ratio }[];
+  openingBalanceMh: Mh;
+  totalMh: Mh;
 }) {
-  const visible = segments.filter((s) => s.mh > 0);
+  const visible = segments.filter((s) => s.mh > 0n);
   return (
     <div data-testid="scope-ledger-bar">
       <div className="label" style={{ marginBottom: 6 }}>
@@ -41,7 +41,7 @@ export function ScopeLedgerBar({
           <div
             key={s.key}
             className={`scope-seg ${CLASS[s.key] ?? 'unplanned'}`}
-            style={{ width: `${s.share * 100}%` }}
+            style={{ width: cssPercent(s.share) }}
             title={`${s.label}: ${hours(s.mh)}h (${share(s.share)})`}
             data-testid={`scope-seg-${s.key}`}
           />

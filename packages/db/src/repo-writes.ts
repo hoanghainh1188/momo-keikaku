@@ -1,3 +1,4 @@
+import { encode } from '@momo/domain';
 import { eq, sql } from 'drizzle-orm';
 import type { Db } from './client';
 import { projectNotFound } from './project-not-found';
@@ -14,6 +15,10 @@ import { withTenant, type Tx } from './with-tenant';
  * composition root's `satisfies ProjectWriteDeps<Db>` is where TypeScript checks the match. The
  * four Disposition commands carry their `kind` as a literal so that check can tell them apart
  * (see the port's header).
+ *
+ * AUDIT PAYLOADS GO THROUGH THE CODEC (AD-4): every `audit_log.payload` is written as
+ * `encode(...)`, so a `bigint` in a later payload is stored as its decimal string instead of
+ * throwing inside the driver, and a float is refused naming its path rather than stored lossily.
  *
  * EACH FUNCTION IS ONE `withTenant` TRANSACTION (AD-14): the event rows and the `audit_log` row
  * commit together or not at all. Every table touched carries FORCE row-level security, so the
@@ -154,7 +159,7 @@ async function recordDisposition(
     actor: stamp.actor,
     action: `disposition.${kind}`,
     target: projectId,
-    payload: { ticketIds: [...ticketIds], wpId, note },
+    payload: encode({ ticketIds: [...ticketIds], wpId, note }),
     at: stamp.at,
   });
 }
@@ -222,7 +227,7 @@ export function recordPlanDisposition(
       isCatchAll: false,
       start: null,
       finish: null,
-      plannedMh: 0,
+      plannedMh: 0n,
       completedAt: null,
       milestoneDoneAt: null,
       assignedResourceIds: [],
@@ -293,7 +298,7 @@ export function recordManualMapping(
       actor,
       action: wpId === '' ? 'mapping.unmap' : 'mapping.map',
       target: ticketId,
-      payload: { wpId },
+      payload: encode({ wpId }),
       at: stamp.at,
     });
   });

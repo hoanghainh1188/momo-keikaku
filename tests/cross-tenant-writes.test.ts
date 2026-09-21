@@ -1,5 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { eq, sql } from 'drizzle-orm';
+import { z } from 'zod';
+import { decode } from '@momo/domain';
 import type { ProjectWriteDeps } from '../packages/app/src/ports/project-write';
 import type { AppError } from '../packages/app/src/result';
 import { mapTicket } from '../packages/app/src/use-cases';
@@ -253,7 +255,7 @@ const EXPECTED: Readonly<Record<string, Expect>> = {
           isCatchAll: false,
           start: null,
           finish: null,
-          plannedMh: 0,
+          plannedMh: 0n,
           completedAt: null,
           milestoneDoneAt: null,
           assignedResourceIds: [],
@@ -324,6 +326,24 @@ describe('every write use case is accounted for', () => {
 
 // --- against the database --------------------------------------------------------------------
 
+/**
+ * The audit payload shapes a probe Tenant carries: the seed's, and the two the writes record.
+ * `audit_log.payload` is written through the domain's codec (AD-4), so it is read back through
+ * it too, in the shape the reader states — never compared as raw `jsonb` column text, which reorders keys.
+ */
+const auditPayloadJson = z.union([
+  z.object({ ticketIds: z.array(z.string()), wpId: z.string().nullable(), note: z.string().nullable() }).strict(),
+  z.object({ wpId: z.string() }).strict(),
+  z
+    .object({
+      snapshots: z.number().int(),
+      ledgerEntries: z.number().int(),
+      mappingEvents: z.number().int(),
+      anchor: z.string(),
+    })
+    .strict(),
+]);
+
 /** The rows a write may land, for one Tenant, keyed so a later read can be diffed. */
 async function landedRows(tenantId: string) {
   return withTenant(owner(), tenantId, async (tx) => ({
@@ -335,7 +355,9 @@ async function landedRows(tenantId: string) {
       .select()
       .from(schema.dispositionEvent)
       .where(eq(schema.dispositionEvent.tenantId, tenantId)),
-    audits: await tx.select().from(schema.auditLog).where(eq(schema.auditLog.tenantId, tenantId)),
+    audits: (
+      await tx.select().from(schema.auditLog).where(eq(schema.auditLog.tenantId, tenantId))
+    ).map((row) => ({ ...row, payload: decode(row.payload, auditPayloadJson) })),
     workPackages: await tx
       .select()
       .from(schema.workPackage)

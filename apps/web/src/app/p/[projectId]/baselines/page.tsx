@@ -1,6 +1,6 @@
 import { getProjectReview } from '@/server/composition';
 import { valueOrNotFound } from '@/server/result';
-import { hours } from '@momo/domain';
+import { hours, sum } from '@momo/domain';
 import { Section } from '@/components/ui';
 
 export const dynamic = 'force-dynamic';
@@ -39,8 +39,8 @@ export default async function BaselinesPage({
                 <td>{b.id}</td>
                 <td>{b.recordedAt.slice(0, 10)}</td>
                 <td>{b.reason}</td>
-                <td className="num">{b.wps.filter((w) => w.baselineMh > 0).length}</td>
-                <td className="num">{hours(b.wps.reduce((a, w) => a + w.baselineMh, 0))}h</td>
+                <td className="num">{b.wps.filter((w) => w.baselineMh > 0n).length}</td>
+                <td className="num">{hours(sum(b.wps.map((w) => w.baselineMh)))}h</td>
                 <td>{b.seq === bundle.input.activeBaselineSeq ? <span className="tag done">active</span> : null}</td>
               </tr>
             ))}

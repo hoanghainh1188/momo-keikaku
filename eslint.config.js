@@ -17,8 +17,8 @@
 //
 // Deliberately NOT here:
 //   * No `recommended` ruleset, from ESLint or typescript-eslint. A repo-wide lint
-//     baseline is scope no requirement states; this config enforces the two architectural
-//     bans and nothing else. The parser is configured only so the source can be read.
+//     baseline is scope no requirement states; this config enforces the architectural bans
+//     (clock and environment, tenant isolation, and AD-4's arithmetic fences) and nothing else. The parser is configured only so the source can be read.
 //   * No type-aware linting, so no `projectService`/`project` — nothing here needs types,
 //     and turning it on would put the typecheck's cost inside the lint gate.
 //   * No import-direction rules (AD-1). Those are dependency-cruiser's
@@ -108,6 +108,50 @@ const envSyntax = [
   },
 ];
 
+// --- the arithmetic bans (story 1.2 slice 5, AD-4) ------------------------------------------
+//
+// AD-4: numbers are exact integers until presentation, and presentation is `domain/present`.
+// Two fences hold that after the slice that made it true:
+//
+//   * ROUNDING ONLY IN `present/`. `Math.round|floor|ceil|trunc` and `.toFixed` are errors in
+//     `packages/domain` outside `packages/domain/src/present/`. The two sanctioned integer
+//     steps outside it are the `divRoundHalfEven` and `ceilDiv` helpers in `units.ts`, which
+//     are bigint arithmetic and need neither. (TypeScript already refuses `Math.round(bigint)`;
+//     this catches the float that would have to exist first.)
+//   * ONE `JSON.stringify`, IN THE CODEC. Everywhere in non-test application source except
+//     `packages/domain/src/present/codec.ts`, whose `stringify` only ever sees `encode`'s
+//     output and so can never meet a `bigint`.
+//
+// Both are fences BY LOCATION, not by type: this config deliberately runs without type
+// information (see the header), so "`JSON.stringify` of a value that may hold a bigint" cannot
+// be expressed, and banning the call outside the codec is its syntactic equivalent. Tooling
+// (`scripts/`) and tests are outside the second fence: a fixture generator writing JSON files
+// and a test serialising a result for a failure message are not stored values.
+
+const roundingProperties = ['round', 'floor', 'ceil', 'trunc'].map((property) => ({
+  object: 'Math',
+  property,
+  message:
+    'AD-4: rounding happens only in packages/domain/src/present/, from the exact value. Carry effort and money as bigint and a ratio as a Ratio; for a stored-shape integer use divRoundHalfEven or ceilDiv from units.ts.',
+}));
+
+const toFixedProperties = [
+  {
+    property: 'toFixed',
+    message:
+      'AD-4: rounding for display happens only in packages/domain/src/present/ (ratioText, hours, share, ...), from the exact value, half-even.',
+  },
+];
+
+const stringifyProperties = [
+  {
+    object: 'JSON',
+    property: 'stringify',
+    message:
+      'AD-4: JSON.stringify must never meet a bigint. Use stringify/encode from @momo/domain (packages/domain/src/present/codec.ts), the one codec every stored value goes through.',
+  },
+];
+
 // --- the tenant-isolation bans (story 1.2) ------------------------------------------------
 //
 // Unlike the two above, these are NOT switchable per file group: there is no sanctioned home
@@ -165,11 +209,13 @@ const tenantSyntax = [
  * and the surviving entries are re-declared in full because a later flat-config block
  * replaces a rule's options rather than merging them.
  */
-const fence = ({ clock, env }) => ({
+const fence = ({ clock, env, stringify = false, arithmetic = false }) => ({
   'no-restricted-properties': [
     'error',
     ...(clock ? clockProperties : []),
     ...(env ? envProperties : []),
+    ...(stringify ? stringifyProperties : []),
+    ...(arithmetic ? [...roundingProperties, ...toFixedProperties] : []),
   ],
   'no-restricted-syntax': [
     'error',
@@ -198,20 +244,33 @@ export default tseslint.config(
   {
     name: 'momo/fence-both',
     files: applicationSources,
-    rules: fence({ clock: true, env: true }),
+    rules: fence({ clock: true, env: true, stringify: true }),
+  },
+  {
+    // AD-4: no rounding in the domain outside its presentation module.
+    name: 'momo/fence-domain-arithmetic',
+    files: moduleExtensions.map((ext) => `packages/domain/**/*.${ext}`),
+    ignores: moduleExtensions.map((ext) => `packages/domain/src/present/**/*.${ext}`),
+    rules: fence({ clock: true, env: true, stringify: true, arithmetic: true }),
+  },
+  {
+    // AD-4: the codec is the one home of `JSON.stringify` in non-test source.
+    name: 'momo/fence-codec',
+    files: ['packages/domain/src/present/codec.ts'],
+    rules: fence({ clock: true, env: true, stringify: false }),
   },
   {
     // The clock's home. It may read the clock — that is its entire job — and may not read
     // the environment.
     name: 'momo/fence-clock-adapter',
     files: ['packages/adapters/src/clock.ts'],
-    rules: fence({ clock: false, env: true }),
+    rules: fence({ clock: false, env: true, stringify: true }),
   },
   {
     // The config's home. It may read the environment and may not read the clock.
     name: 'momo/fence-config-module',
     files: ['packages/app/src/config.ts'],
-    rules: fence({ clock: true, env: false }),
+    rules: fence({ clock: true, env: false, stringify: true }),
   },
   {
     // Tooling. `scripts/`, `vitest.config.ts` and `drizzle.config.ts` legitimately read the
@@ -228,8 +287,20 @@ export default tseslint.config(
     // skip, and this slice may not change an existing test. They may NOT read the wall
     // clock — no test does today, and a test that started to would be nondeterministic,
     // which is the whole reason the clock ban exists.
+    //
+    // The `JSON.stringify` fence does not apply: a test serialising a result for a failure
+    // message is not a stored value. The rounding fence is re-applied to domain tests below.
     name: 'momo/fence-tests',
     files: moduleExtensions.map((ext) => `**/*.test.${ext}`),
     rules: fence({ clock: true, env: false }),
+  },
+  {
+    // AD-4's rounding fence covers ALL of `packages/domain` outside `present/`, tests included.
+    // It has to come after `momo/fence-tests`, which would otherwise replace the rule for them.
+    // `tests/lint-fences.test.ts` pins this ordering.
+    name: 'momo/fence-domain-tests-arithmetic',
+    files: moduleExtensions.map((ext) => `packages/domain/**/*.test.${ext}`),
+    ignores: moduleExtensions.map((ext) => `packages/domain/src/present/**/*.${ext}`),
+    rules: fence({ clock: true, env: false, arithmetic: true }),
   },
 );
