@@ -7,7 +7,7 @@ paradigm: 'modular monolith, hexagonal (ports & adapters) around a pure function
 scope: 'momo-keikaku v1: builds R0 and fixes the invariants that R1 and Post-Q1 must not break'
 status: final
 created: '2026-09-20'
-updated: '2026-09-20 (scheduling update)'
+updated: '2026-09-21 (AD-1: composition-root carve-out)'
 binds: [FR-1, FR-2, FR-3, FR-4, FR-5, FR-6a, FR-6b, FR-7, FR-8, FR-9, FR-10, FR-11, FR-12, FR-13, FR-14, FR-15, FR-16, FR-17, FR-18, FR-19, FR-20, FR-21, FR-22, FR-23, FR-24, FR-25, FR-26, FR-27, FR-28, FR-29, FR-30, FR-31, FR-32, FR-33, FR-34, FR-35, FR-36, FR-37, FR-38, FR-39, FR-40, FR-41, FR-42, FR-43, NFR-S1, NFR-S2, NFR-S3, NFR-S4, NFR-S5, NFR-S6, NFR-S7, NFR-S8, NFR-D1, NFR-A1, NFR-C1, NFR-R1, NFR-R2, NFR-P1, NFR-I1, NFR-U1, NFR-O1]
 sources:
   - _bmad-output/planning-artifacts/sprint-change-proposal-2026-09-20.md (A-1 … A-6)
@@ -78,7 +78,7 @@ Arrows show allowed imports. Nothing imports `apps/*`. `domain` and `i18n` impor
 - **Rule:**
   - The import graph is exactly the one in the diagram above, and `dependency-cruiser` fails CI on any violation. `packages/domain` has no runtime dependencies except `zod`. `apps/web` and `apps/worker` call only `packages/app` use cases (and `packages/i18n` for text), never repositories or Drizzle directly.
   - `Date.now()`, `new Date()` without arguments and `process.env` are forbidden outside `packages/adapters/clock` and `packages/app/config`. dependency-cruiser cannot see calls, so this is enforced by ESLint `no-restricted-syntax` (`NewExpression[callee.name='Date'][arguments.length=0]`, `CallExpression[callee.object.name='Date'][callee.property.name='now']`) and `no-restricted-properties` for `process.env`, with file-scoped overrides for the two allowed modules.
-  - **One carve-out:** `packages/db/auth` is the only sanctioned Better Auth ↔ Drizzle binding, exported to `apps/web` as an adapter that implements `IdentityPort` (AD-23). Role, membership and revocation changes never go through it; they go through `app` use cases so AD-14 still holds.
+  - **Two carve-outs, each a named path rather than a pattern.** (1) `packages/db/auth` is the only sanctioned Better Auth ↔ Drizzle binding, exported to `apps/web` as an adapter that implements `IdentityPort` (AD-23). Role, membership and revocation changes never go through it; they go through `app` use cases so AD-14 still holds. (2) Each app's **composition root** — `apps/web/src/server/composition.ts` today — is the one file in that app permitted to import `@momo/db`: it builds the restricted-role handle, hands the repository to the ports `packages/app` declares (a structural match TypeScript checks at that line) and constructs the use-case context. It wires; it never queries. dependency-cruiser allows exactly those paths. Added 2026-09-21 by story 1.2 slice 3.
   - Message catalogs live in `packages/i18n/{en,ja}.json`, not under `apps/web`, so the worker can render mail (FR-17, FR-36) without importing an app.
   - **Two scheduling edges are forbidden outright** (AD-25, AD-27): `domain/schedule` may not import `domain/attribution`, so nothing derived from Tracker evidence can become a scheduling input by accident; and `db/repositories/schedule` may not be imported outside `packages/app/schedule`, so the scheduler stays the only writer of derived dates.
 
@@ -428,7 +428,7 @@ flowchart TB
 - **Rule:**
   - Exactly one non-RLS bridge exists: `tenant_membership(user_id, tenant_id, role, project_ids)`, class `global`. It is read by `resolveRequestContext` in `packages/app/authz` and by nothing else.
   - The session carries an explicit `activeTenantId`, validated against the bridge on **every** request (a Client Viewer may be invited by more than one Tenant in R1). The Better Auth session cookie cache is disabled, so revocation and the configurable idle expiry (default 8 h, FR-3) take effect on the next request.
-  - Better Auth's `user`, `session`, `account` and `verification` tables are `global` and exempt from AD-3's FORCE-RLS set, because the session is resolved before a Tenant is known. They are reached only through `IdentityPort`, implemented by `packages/db/auth` (the AD-1 carve-out), which returns `{ userId, email, locale }` for user ids the caller has **already** read under `withTenant`.
+  - Better Auth's `user`, `session`, `account` and `verification` tables are `global` and exempt from AD-3's FORCE-RLS set, because the session is resolved before a Tenant is known. They are reached only through `IdentityPort`, implemented by `packages/db/auth` (AD-1's Better Auth carve-out), which returns `{ userId, email, locale }` for user ids the caller has **already** read under `withTenant`.
   - `user.locale` is persisted, and mail sent outside a request (FR-17 Connector errors, FR-36 client notifications) is rendered in that locale from `packages/i18n`.
   - There is no non-tenant `connector_schedule` table. Snapshot scheduling state is tenant-owned; the worker's fan-out reads the `operational` due-list, and every handler re-verifies its Connector under `withTenant(tenant_id)` from the payload (AD-3).
   - Role, membership, invitation and revocation changes go through `app` use cases and are audited (AD-14), never through the Better Auth adapter.
