@@ -18,6 +18,8 @@ export interface ShellProps {
   clientName: string;
   snapshotLabel: string;
   snapshotAgeMinutes: number;
+  /** The signed-in user's role in this Tenant, as a label (story 1.4: no longer a constant). */
+  roleLabel: string;
   children: ReactNode;
 }
 
@@ -27,6 +29,7 @@ export function Shell({
   clientName,
   snapshotLabel,
   snapshotAgeMinutes,
+  roleLabel,
   children,
 }: ShellProps) {
   const [collapsed, setCollapsed] = useState(false);
@@ -53,7 +56,7 @@ export function Shell({
             Snapshot {snapshotLabel} · {formatAge(snapshotAgeMinutes)}
           </span>
         </div>
-        <div className="userchip">Linh · PM</div>
+        <div className="userchip">{roleLabel}</div>
       </header>
 
       <nav className={`sidebar${collapsed ? ' collapsed' : ''}`} aria-label="Project surfaces">

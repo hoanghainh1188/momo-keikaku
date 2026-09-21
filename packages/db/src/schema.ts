@@ -52,13 +52,104 @@ export const program = pgTable(
   (t) => ({ byDepartment: index('program_department_idx').on(t.departmentId) }),
 );
 
-export const appUser = pgTable('app_user', {
+/**
+ * THE IDENTITY TABLES (story 1.4 slice 1): Better Auth 1.7.5's four core models, bound only
+ * through `packages/db/auth` (AD-1 carve-out 1). All four are `global` — a session resolves
+ * before any Tenant is known — so they carry no `tenant_id` and no row-level security; the
+ * application role holds DML on them because Better Auth writes them on its own connection.
+ *
+ * Better Auth's Drizzle adapter looks a model up as `schema[modelName]` and a field as
+ * `table[fieldName]`, so the PROPERTY names below are Better Auth's own camelCase field names
+ * (`emailVerified`, `userId`, `expiresAt`, …); only the column strings are snake_case. The user
+ * model is renamed to the table `auth_user`, because `user` is a reserved word in Postgres.
+ *
+ * Two fields are this product's, not Better Auth's, and neither is client-writable (`input:
+ * false` in `packages/db/auth`): `auth_user.locale` and `session.active_tenant_id`. The active
+ * Tenant is written by `IdentityPort.setActiveTenant` from `resolveRequestContext`, which is also
+ * the one place it is validated against `tenant_membership` — on every request.
+ *
+ * No foreign keys, per the demo deviation above; Better Auth deletes a user's sessions and
+ * accounts itself, and nothing in this slice deletes a user.
+ */
+export const authUser = pgTable('auth_user', {
   id: text('id').primaryKey(),
-  tenantId: text('tenant_id').notNull(),
-  email: text('email').notNull(),
   name: text('name').notNull(),
-  role: text('role').notNull(), // tenant_admin | pm | client_viewer
+  email: text('email').notNull().unique(),
+  emailVerified: boolean('email_verified').notNull().default(false),
+  image: text('image'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
+  /** The UI language (FR-44). `en` until story 1.9 ships the Japanese catalog. */
+  locale: text('locale').notNull().default('en'),
 });
+
+export const session = pgTable(
+  'session',
+  {
+    id: text('id').primaryKey(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    token: text('token').notNull().unique(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
+    ipAddress: text('ip_address'),
+    userAgent: text('user_agent'),
+    userId: text('user_id').notNull(),
+    /**
+     * The Tenant this session acts in, or null until `resolveRequestContext` picks the user's one
+     * membership. Deliberately NOT named `tenant_id`: the session is not tenant-owned, and the
+     * value is only trusted after the resolver has matched it against `tenant_membership`.
+     */
+    activeTenantId: text('active_tenant_id'),
+  },
+  (t) => ({ byUser: index('session_user_idx').on(t.userId) }),
+);
+
+export const account = pgTable(
+  'account',
+  {
+    id: text('id').primaryKey(),
+    accountId: text('account_id').notNull(),
+    providerId: text('provider_id').notNull(),
+    userId: text('user_id').notNull(),
+    accessToken: text('access_token'),
+    refreshToken: text('refresh_token'),
+    idToken: text('id_token'),
+    accessTokenExpiresAt: timestamp('access_token_expires_at', { withTimezone: true }),
+    refreshTokenExpiresAt: timestamp('refresh_token_expires_at', { withTimezone: true }),
+    scope: text('scope'),
+    /** The credential provider's scrypt hash. Never returned by Better Auth. */
+    password: text('password'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
+  },
+  (t) => ({ byUser: index('account_user_idx').on(t.userId) }),
+);
+
+export const verification = pgTable(
+  'verification',
+  {
+    id: text('id').primaryKey(),
+    identifier: text('identifier').notNull(),
+    value: text('value').notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
+  },
+  (t) => ({ byIdentifier: index('verification_identifier_idx').on(t.identifier) }),
+);
+
+/**
+ * The four Better Auth models, keyed by MODEL name — the object `packages/db/auth` hands the
+ * Drizzle adapter, which looks each model up as `schema[modelName]` (so the user model is keyed
+ * `auth_user`). The tenant-membership bridge is not here and not in this module at all: see
+ * `schema-membership.ts`.
+ */
+export const authSchema = {
+  auth_user: authUser,
+  session,
+  account,
+  verification,
+};
 
 export const project = pgTable(
   'project',
@@ -268,7 +359,10 @@ export const schemaTables = {
   tenant,
   department,
   program,
-  appUser,
+  authUser,
+  session,
+  account,
+  verification,
   project,
   resource,
   rateEntry,

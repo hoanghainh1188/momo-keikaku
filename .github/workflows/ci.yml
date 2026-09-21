@@ -40,8 +40,9 @@
 #     a use case must surface comes back, and every NUMBER matches the demo Tenant's;
 #   * the reach measurement — the tenant-owned tables no read use case touches are declared
 #     in the registry and compared against what a Drizzle query logger measures. 14 of the
-#     16 tenant-owned tables are reached; `app_user` and `audit_log` are declared, with
-#     reasons, and either direction of change fails the build;
+#     16 tenant-owned tables are reached; `program` and `audit_log` are declared, with
+#     reasons, and either direction of change fails the build (story 1.4 slice 1 removed
+#     `app_user`; the identity tables and the membership bridge are `global`);
 #   * table-level isolation over that MEASURED set — for every table a use case was seen
 #     reading, the restricted role inside `withTenant` must see no row belonging to anybody
 #     else. This one was added after a sabotage: `USING (true)` on `baseline_wp` or
@@ -76,7 +77,7 @@
 #
 # So this file gates on what is real: lint, all three typechecks, dependency-cruiser and the
 # test suite. Measured on 2026-09-21 — `pnpm lint`, all three typechecks and `pnpm depcruise`
-# exit 0, and `pnpm test` passes 266 tests across 18 files against the prepared
+# exit 0, and `pnpm test` passes 562 tests across 33 files (story 1.4 slice 1; 266 across 18 at the first measurement) against the prepared
 # Postgres service below (165 across 14 before story 1.2 slice 4, 146 across 12 before slice 3,
 # 123 across 11 before slice 2, 72 across 7 before slice 1, 53 across 4 before story 1.1
 # slice B2).
@@ -155,6 +156,20 @@
 #     importing `@momo/adapters`, by alias or relative path (`pnpm depcruise`,
 #     `apps-adapters-only-from-composition-root`). The full table is in
 #     spec-1-3-organisation-hierarchy.md.
+#   * tests + dependency-cruiser (identity and the request context, story 1.4 slice 1) — sign-in,
+#     the membership bridge and `resolveRequestContext` (tests/identity.test.ts against Postgres;
+#     the resolver, the middleware gate and the auth options without one). Six sabotages, each
+#     watched to fail and then restored: `session.cookieCache` enabled (packages/db/auth
+#     auth.test.ts + four identity.test.ts rows); `tenantMembership` imported by a module in
+#     packages/app (source-discipline.test.ts); `better-auth` or `@momo/db-auth` imported from
+#     apps/web/src/components (`pnpm depcruise`, `better-auth-only-in-db-auth`,
+#     `web-db-auth-only-from-composition-root`) — and, after the depcruise `exclude` was narrowed so
+#     edges into node_modules `dist/` are no longer dropped, the better-auth rule watched to fire on
+#     resolved edges; a tenant id literal in apps/web (tests/web-composition.test.ts text scan);
+#     the resolver's membership match skipped (4 failures across the resolver unit test, the
+#     composition test and identity.test.ts); `tenantBridge` set on `department` (registry.test.ts,
+#     plus rls.sql drift when its tenantColumn is nulled too). The full table is in
+#     spec-1-4-identity-and-request-context.md.
 
 # THESE GATES REPORT; THEY DO NOT BLOCK. The repository is private on a free plan, so
 # GitHub refuses branch protection ("Upgrade to GitHub Pro or make this repository
@@ -220,6 +235,12 @@ jobs:
       # round-trip tests and the isolation gates would pass by not running, which is the
       # same as not having them.
       REQUIRE_DB: '1'
+      # Story 1.4 slice 1 (sign-in). CI-only values, not secrets: the seed hashes SEED_DEMO_PASSWORD
+      # for the demo users `linh` and `hoang`; the Better Auth pair is read only by the web process
+      # (and the tests that build an instance take their own).
+      SEED_DEMO_PASSWORD: ci-demo-password-2026
+      BETTER_AUTH_SECRET: ci-only-better-auth-secret-0123456789abcdef
+      BETTER_AUTH_URL: http://localhost:3101
 
     steps:
       - uses: actions/checkout@v4

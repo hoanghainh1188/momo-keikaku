@@ -30,6 +30,7 @@ import {
   withoutSeq,
   type Outcome,
 } from './write-harness';
+import { requestContextFor } from './request-context';
 
 /**
  * THE WRITE HALF OF THE CROSS-TENANT HARNESS (story 1.2 slice 4).
@@ -358,7 +359,7 @@ describe.skipIf(!reachable)('the write use cases, against two probe Tenants as t
       const before = await landedRows(PROBE_W.tenantId);
       const result = await mapTicket(
         restrictedWriteDeps(),
-        { tenantId: target.tenantId },
+        requestContextFor(target.tenantId),
         { projectId: target.projectId, ticketId: target.ticketIds[0], wpId: '' },
       );
       expect(result).toEqual({ ok: true, value: undefined });

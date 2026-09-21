@@ -7,6 +7,7 @@ import {
   mapTickets as mapTicketsUseCase,
   markChangeRequestCandidates,
   planTicketsAsWorkPackage,
+  requestContext,
 } from '@/server/composition';
 import {
   parseChangeRequestCandidatesForm,
@@ -28,12 +29,17 @@ import { writeLanded } from '@/server/result';
  *
  * `not_found` and `invalid_input` are both an early return, exactly as an unusable form always
  * was: nothing written, nothing revalidated. Anything else the use case throws propagates.
+ *
+ * Each action RESOLVES THE REQUEST CONTEXT ONCE (story 1.4 slice 1) — `requestContext()`, which
+ * redirects a signed-out request to /sign-in — and passes it to every binding it calls, so the
+ * audit actor is the signed-in user and the Tenant is theirs.
  */
 
 /** FR-29 *Map*: the hours leave Unplanned Work immediately (FR-21 attribution). */
 export async function mapTickets(formData: FormData): Promise<void> {
   const input = parseMapTicketsForm(formData);
-  if (!writeLanded(await mapTicketsUseCase(input))) return;
+  const ctx = await requestContext();
+  if (!writeLanded(await mapTicketsUseCase(input, ctx))) return;
   revalidatePath(`/p/${input.projectId}/review`);
   revalidatePath(`/p/${input.projectId}/mapping`);
 }
@@ -44,7 +50,8 @@ export async function mapTickets(formData: FormData): Promise<void> {
  */
 export async function planTickets(formData: FormData): Promise<void> {
   const input = parsePlanTicketsForm(formData);
-  if (!writeLanded(await planTicketsAsWorkPackage(input))) return;
+  const ctx = await requestContext();
+  if (!writeLanded(await planTicketsAsWorkPackage(input, ctx))) return;
   revalidatePath(`/p/${input.projectId}/review`);
   revalidatePath(`/p/${input.projectId}/plan`);
 }
@@ -52,7 +59,8 @@ export async function planTickets(formData: FormData): Promise<void> {
 /** FR-29 *Explain*: attaches a note. Clients see it only if a snapshot is published. */
 export async function explainTickets(formData: FormData): Promise<void> {
   const input = parseExplainTicketsForm(formData);
-  if (!writeLanded(await explainTicketsUseCase(input))) return;
+  const ctx = await requestContext();
+  if (!writeLanded(await explainTicketsUseCase(input, ctx))) return;
   revalidatePath(`/p/${input.projectId}/review`);
   revalidatePath(`/c/${input.projectId}`);
 }
@@ -60,14 +68,16 @@ export async function explainTickets(formData: FormData): Promise<void> {
 /** FR-29 *Change Request candidate*: collects the Tickets into a list. */
 export async function crCandidate(formData: FormData): Promise<void> {
   const input = parseChangeRequestCandidatesForm(formData);
-  if (!writeLanded(await markChangeRequestCandidates(input))) return;
+  const ctx = await requestContext();
+  if (!writeLanded(await markChangeRequestCandidates(input, ctx))) return;
   revalidatePath(`/p/${input.projectId}/review`);
 }
 
 /** Map a single Ticket from the Mapping surface (FR-21 manual Mapping). */
 export async function mapSingleTicket(formData: FormData): Promise<void> {
   const input = parseMapTicketForm(formData);
-  if (!writeLanded(await mapTicket(input))) return;
+  const ctx = await requestContext();
+  if (!writeLanded(await mapTicket(input, ctx))) return;
   revalidatePath(`/p/${input.projectId}/mapping`);
   revalidatePath(`/p/${input.projectId}/review`);
 }

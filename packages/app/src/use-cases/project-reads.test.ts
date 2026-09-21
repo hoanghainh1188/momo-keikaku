@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { ProjectBundle, ProjectReadDeps, ProjectReview } from '../ports/project-read';
 import { getProjectHeader, getProjectReview } from '.';
+import type { RequestContext } from '../authz/request-context';
+
+/** A signed-in caller in `tenantId` (story 1.4 slice 1: the context is the whole RequestContext). */
+function ctxOf(tenantId: string): RequestContext {
+  return { tenantId, userId: 'test-reader', roles: ['pm'], projectIds: [], locale: 'en' };
+}
 
 /**
  * The two project read use cases against a fake port — no database, no environment.
@@ -51,7 +57,7 @@ const CASES = [
 describe.each(CASES)('$name', ({ run, expected }) => {
   it('returns exactly what the port returned, for the context\'s Tenant', async () => {
     const { deps, calls } = fakeDeps(() => 'ok');
-    const result = await run(deps, { tenantId: 'ten-a' }, { projectId: 'prj-1' });
+    const result = await run(deps, ctxOf('ten-a'), { projectId: 'prj-1' });
 
     expect(result).toEqual({ ok: true, value: expected });
     if (result.ok) expect(result.value).toBe(expected);
@@ -61,7 +67,7 @@ describe.each(CASES)('$name', ({ run, expected }) => {
 
   it('answers not_found — never a throw — for a Project the Tenant cannot see', async () => {
     const { deps } = fakeDeps((projectId) => notFoundError(projectId));
-    const result = await run(deps, { tenantId: 'ten-b' }, { projectId: 'prj-of-a' });
+    const result = await run(deps, ctxOf('ten-b'), { projectId: 'prj-of-a' });
 
     // No `details`: the refusal must carry nothing, so it cannot disclose anything.
     expect(result).toEqual({
@@ -76,12 +82,12 @@ describe.each(CASES)('$name', ({ run, expected }) => {
     // a default would render it as a Project with no data.
     const outage = new Error('connect ECONNREFUSED 127.0.0.1:55433');
     const { deps } = fakeDeps(() => outage);
-    await expect(run(deps, { tenantId: 'ten-a' }, { projectId: 'prj-1' })).rejects.toBe(outage);
+    await expect(run(deps, ctxOf('ten-a'), { projectId: 'prj-1' })).rejects.toBe(outage);
   });
 
   it('does not mistake another Project\'s not-found for this one', async () => {
     const { deps } = fakeDeps(() => notFoundError('prj-other'));
-    await expect(run(deps, { tenantId: 'ten-a' }, { projectId: 'prj-1' })).rejects.toThrow(
+    await expect(run(deps, ctxOf('ten-a'), { projectId: 'prj-1' })).rejects.toThrow(
       'project prj-other not found',
     );
   });
@@ -94,7 +100,7 @@ describe.each(CASES)('$name', ({ run, expected }) => {
     ['NUL-bearing', { projectId: 'prj\0ec2' }],
   ])('answers invalid_input for an %s projectId, without calling the port', async (_label, input) => {
     const { deps, calls } = fakeDeps(() => 'ok');
-    const result = await run(deps, { tenantId: 'ten-a' }, input as { projectId: string });
+    const result = await run(deps, ctxOf('ten-a'), input as { projectId: string });
 
     expect(result.ok).toBe(false);
     if (result.ok) return;

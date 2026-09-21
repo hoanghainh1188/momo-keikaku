@@ -19,7 +19,9 @@ if (!url) {
 }
 
 export default {
-  schema: './packages/db/src/schema.ts',
+  // Two files: the tenant-membership bridge sits in its own module so the `@momo/db` barrel
+  // cannot re-export it (story 1.4 slice 1 — it has one reader).
+  schema: ['./packages/db/src/schema.ts', './packages/db/src/schema-membership.ts'],
   out: './packages/db/drizzle',
   dialect: 'postgresql',
   dbCredentials: { url },

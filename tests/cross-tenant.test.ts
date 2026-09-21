@@ -32,6 +32,7 @@ import {
 } from '../packages/db/src/probe-tenants';
 import { REGISTERED_TABLES, TENANT_OWNED } from '../packages/db/src/table-classes';
 import { withTenant } from '../packages/db/src/with-tenant';
+import { requestContextFor } from './request-context';
 
 /**
  * THE CROSS-TENANT HARNESS. This is the automated test NFR-S1 asks for.
@@ -673,7 +674,7 @@ describe.skipIf(!reachable)('the cross-tenant harness, driven against two probe 
       // still pass, about the wrong data, which is why this one comes first.
       const result = await getProjectReview(
         restrictedDeps(),
-        { tenantId: PROBE_A.tenantId },
+        requestContextFor(PROBE_A.tenantId),
         { projectId: PROBE_A.projectId },
       );
       if (!result.ok) throw new Error(`getProjectReview answered ${result.error.code}`);
@@ -709,7 +710,7 @@ describe.skipIf(!reachable)('the cross-tenant harness, driven against two probe 
       // figures the rest of the suite pins would move, and it would look like a domain bug.
       const result = await getProjectReview(
         restrictedDeps(),
-        { tenantId: DEMO_TENANT_ID },
+        requestContextFor(DEMO_TENANT_ID),
         { projectId: DEMO_PROJECT_ID },
       );
       if (!result.ok) throw new Error(`getProjectReview answered ${result.error.code}`);
@@ -991,7 +992,8 @@ describe.skipIf(!reachable)('the cross-tenant harness, driven against two probe 
       const covered = TENANT_OWNED.map((owned) => owned.table).filter((table) =>
         reached.has(table),
       );
-      // 17 tenant-owned tables, three declared unreached. A number here, so "the harness covers
+      // 16 tenant-owned tables, two declared unreached (story 1.4 slice 1 removed `app_user`;
+      // the identity tables are `global`). A number here, so "the harness covers
       // every read use case" is a measurement rather than a claim.
       expect(covered.length).toBe(TENANT_OWNED.length - UNREACHED_TENANT_OWNED_TABLES.length);
     });

@@ -1,8 +1,21 @@
-// `packages/db/auth` is the single sanctioned Better Auth <-> Drizzle binding, exposed
-// to `apps/web` as an identity port. It is one of AD-1's two named carve-outs (the other is
+// `packages/db/auth` is the single sanctioned Better Auth <-> Drizzle binding, exposed to
+// `apps/web` as an identity port. It is one of AD-1's two named carve-outs (the other is
 // `apps/web/src/server/composition.ts`), which is why it is its own unit rather than a folder
 // inside `packages/db/src`.
 //
-// Skeleton: the identity tables, the adapter and the port arrive with story 1.4. Role,
-// membership and revocation changes go through app use cases, never through here.
-export {};
+// It is the ONLY package that imports `better-auth`, and in `apps/web` only the composition root
+// imports it (`pnpm depcruise`, rules `better-auth-only-in-db-auth` and
+// `web-db-auth-only-from-composition-root`). Role, membership and revocation changes go through
+// app use cases, never through here (story 1.4 slices 2–4).
+export { AUTH_BASE_PATH, SESSION_UPDATE_AGE_SECONDS, authOptions, createAuth } from './auth';
+export type { Auth, CreateAuthOptions } from './auth';
+export { identityOn, type BetterAuthIdentity, type SessionIdentity } from './identity';
+export {
+  SERVED_AUTH_ENDPOINTS,
+  serveAllowlisted,
+  sessionForMiddleware,
+  signInWithPassword,
+  signOutOf,
+  type MiddlewareSession,
+} from './bindings';
+export { hashPassword } from './password';

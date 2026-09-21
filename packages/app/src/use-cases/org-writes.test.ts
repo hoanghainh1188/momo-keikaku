@@ -7,7 +7,7 @@ import type {
   ProgramRow,
   ProjectPlacementRow,
 } from '../ports/org-write';
-import type { UseCaseContext } from './context';
+import type { RequestContext } from '../authz/request-context';
 import {
   createDepartment,
   createProgram,
@@ -34,8 +34,9 @@ import { NEW_PROJECT_DEFAULTS } from './org-writes';
  */
 
 const HANDLE = { marker: 'handle' };
+/** The signed-in caller; the audit actor is derived from its user id (story 1.4 slice 1). */
+const CTX: RequestContext = { tenantId: 'ten-a', userId: 'test-admin', roles: ['pm'], projectIds: [], locale: 'en' };
 const ACTOR = 'user:test-admin';
-const CTX: UseCaseContext = { tenantId: 'ten-a' };
 const NOW = new Date('2026-09-21T09:30:00Z');
 
 interface World {
@@ -74,7 +75,6 @@ function fakeDeps(world: World = WORLD) {
 
   const deps: OrgWriteDeps<typeof HANDLE> = {
     handle: HANDLE,
-    actor: ACTOR,
     clock: { now: () => NOW },
     ids: { next: () => `new-${(issued += 1)}` },
     transaction: async (_handle, tenantId, work) => {
@@ -314,7 +314,7 @@ describe('renames record the previous value', () => {
     ['renameProject', () => renameProject, { projectId: 'prj-1', name: 'EC phase 2b' }, 'project.rename', 'prj-1', 'EC phase 2'],
   ] as const)('%s', async (_name, useCase, input, action, target, before) => {
     const { deps, committed, audits } = fakeDeps();
-    const run = useCase() as (d: typeof deps, c: UseCaseContext, i: typeof input) => Promise<unknown>;
+    const run = useCase() as (d: typeof deps, c: RequestContext, i: typeof input) => Promise<unknown>;
     expect(await run(deps, CTX, input)).toEqual(OK);
     expect(committed).toEqual([{ member: _name, arg: { id: target, name: input.name } }]);
     expect(audits).toEqual([

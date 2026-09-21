@@ -1,6 +1,6 @@
 import type { Result } from '../result';
 import type { ProjectBundle, ProjectReadDeps } from '../ports/project-read';
-import type { UseCaseContext } from './context';
+import type { RequestContext } from '../authz/request-context';
 import { runProjectRead, type ProjectInput } from './project-input';
 
 /**
@@ -17,7 +17,7 @@ import { runProjectRead, type ProjectInput } from './project-input';
  */
 export async function getProjectHeader<Handle>(
   deps: ProjectReadDeps<Handle>,
-  ctx: UseCaseContext,
+  ctx: RequestContext,
   input: ProjectInput,
 ): Promise<Result<ProjectBundle>> {
   return runProjectRead(ctx, input, (tenantId, projectId) =>

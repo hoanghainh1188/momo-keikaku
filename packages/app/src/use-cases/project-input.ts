@@ -8,7 +8,7 @@
 import { z } from 'zod';
 import { fail, ok, type Result } from '../result';
 import { isProjectNotFound } from '../ports/project-read';
-import type { UseCaseContext } from './context';
+import type { RequestContext } from '../authz/request-context';
 
 /**
  * Every inbound boundary is validated by zod (ARCHITECTURE-SPINE.md).
@@ -37,7 +37,7 @@ export type ProjectInput = Readonly<z.infer<typeof projectInputSchema>>;
  * apart from it.
  */
 export async function runProjectRead<T>(
-  ctx: UseCaseContext,
+  ctx: RequestContext,
   input: ProjectInput,
   load: (tenantId: string, projectId: string) => Promise<T>,
 ): Promise<Result<T>> {

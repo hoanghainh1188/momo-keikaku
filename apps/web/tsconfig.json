@@ -35,6 +35,9 @@
       ],
       "@momo/adapters": [
         "../../packages/adapters/src/index.ts"
+      ],
+      "@momo/db-auth": [
+        "../../packages/db/auth/src/index.ts"
       ]
     },
     "isolatedModules": true

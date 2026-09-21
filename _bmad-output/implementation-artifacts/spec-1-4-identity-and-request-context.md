@@ -2,7 +2,7 @@
 title: 'Story 1.4 slice 1 — identity tables, the tenant-membership bridge, a per-request RequestContext, and email + password sign-in'
 type: 'feature'
 created: '2026-09-21'
-status: 'ready-for-dev'
+status: 'done'
 baseline_commit: '7830e3b6729b5e5ae11f26dad194dae508b08918'
 route: 'dispatch'
 review_loop_iteration: 0
@@ -150,17 +150,17 @@ use as a named AD-15 exception. Rate-limiting the sign-in action is deferred on 
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `packages/db/src/schema.ts`, `table-classes.ts`, `sql/generate.ts`, `sql/*.sql`, `registry.test.ts`, `rls.test.ts` -- add the five identity tables with snake_case columns (`auth_user`), remove `app_user`, add the privilege override and the bridge flag, regenerate -- AR-40, AD-21
-- [ ] `packages/db/src/repo-membership.ts` + `packages/db/src/source-discipline.test.ts` -- the single `tenant_membership` reader, and the narrowed source test described under Boundaries -- "nothing else reads that table"
-- [ ] `packages/db/auth/src/{auth,identity}.ts` -- `createAuth({ db, secret, baseURL, idleHours, generateId })`: `betterAuth` with the Drizzle adapter, `emailAndPassword` (sign-up disabled), `expiresIn` = idle hours, `updateAge` 5 min, no cookie cache, `disabledPaths`, session `additionalFields.activeTenantId` (`input: false`), user `locale` (`input: false`), `nextCookies()` last. Also a `hashPassword` wrapper for the seed, and an `IdentityPort` implementation (`sessionFrom(headers)` with `disableRefresh`, `setActiveTenant`, `endSession`). Sign-in and sign-out are auth bindings, not port methods. The spine's `{ userId, email, locale }` lookup is deferred to 1.7 -- AD-1 carve-out 1
-- [ ] `packages/app/src/authz/{request-context,resolve-request-context}.ts` + tests, `ports/identity.ts`, `ports/membership.ts` -- `RequestContext` and the resolver. When no active tenant is set it chooses the single membership (zero or several → a distinct `no_access` outcome) and persists it through `IdentityPort` -- AR-40
-- [ ] `packages/app/src/**`, `config.ts` -- replace `UseCaseContext` with `RequestContext`, and the actor with `ctx.userId`; add the lazy keys `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `SESSION_IDLE_TIMEOUT_HOURS` and `SEED_DEMO_PASSWORD` -- AD-12
-- [ ] `apps/web/src/server/composition.ts`, `app/api/auth/[...all]/route.ts`, `src/middleware.ts`, `app/sign-in/{page,actions}.tsx`, `app/no-access/page.tsx`, a sign-out control in `app/layout.tsx`, `next.config` -- the web edge.
+- [x] `packages/db/src/schema.ts`, `table-classes.ts`, `sql/generate.ts`, `sql/*.sql`, `registry.test.ts`, `rls.test.ts` -- add the five identity tables with snake_case columns (`auth_user`), remove `app_user`, add the privilege override and the bridge flag, regenerate -- AR-40, AD-21
+- [x] `packages/db/src/repo-membership.ts` + `packages/db/src/source-discipline.test.ts` -- the single `tenant_membership` reader, and the narrowed source test described under Boundaries -- "nothing else reads that table"
+- [x] `packages/db/auth/src/{auth,identity}.ts` -- `createAuth({ db, secret, baseURL, idleHours, generateId })`: `betterAuth` with the Drizzle adapter, `emailAndPassword` (sign-up disabled), `expiresIn` = idle hours, `updateAge` 5 min, no cookie cache, `disabledPaths`, session `additionalFields.activeTenantId` (`input: false`), user `locale` (`input: false`), `nextCookies()` last. Also a `hashPassword` wrapper for the seed, and an `IdentityPort` implementation (`sessionFrom(headers)` with `disableRefresh`, `setActiveTenant`, `endSession`). Sign-in and sign-out are auth bindings, not port methods. The spine's `{ userId, email, locale }` lookup is deferred to 1.7 -- AD-1 carve-out 1
+- [x] `packages/app/src/authz/{request-context,resolve-request-context}.ts` + tests, `ports/identity.ts`, `ports/membership.ts` -- `RequestContext` and the resolver. When no active tenant is set it chooses the single membership (zero or several → a distinct `no_access` outcome) and persists it through `IdentityPort` -- AR-40
+- [x] `packages/app/src/**`, `config.ts` -- replace `UseCaseContext` with `RequestContext`, and the actor with `ctx.userId`; add the lazy keys `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `SESSION_IDLE_TIMEOUT_HOURS` and `SEED_DEMO_PASSWORD` -- AD-12
+- [x] `apps/web/src/server/composition.ts`, `app/api/auth/[...all]/route.ts`, `src/middleware.ts`, `app/sign-in/{page,actions}.tsx`, `app/no-access/page.tsx`, a sign-out control in `app/layout.tsx`, `next.config` -- the web edge.
   - The middleware runs on the nodejs runtime. It calls `getSession` with `returnHeaders`, forwards `Set-Cookie`, and redirects when there is no session.
   - `requestContext()` is injectable for tests. It redirects to `/sign-in` or `/no-access` by outcome.
-- [ ] `scripts/seed.ts`, `packages/db/src/seed.ts`, `fixtures.ts`, `probe-tenants.ts` -- the script reads `SEED_DEMO_PASSWORD`, hashes it through `@momo/db-auth`, and passes the hash to `seed(db, { demoPasswordHash })`. It creates users `linh` and `hoang` with fixed UUIDv7 ids, credential accounts and memberships, and quotes identifiers in `TRUNCATE`. Probe Tenants get their own members, removed by tenant and user id -- OQ decisions
-- [ ] `tests/**` (the harnesses, `web-composition`, `audited-use-cases`) -- build a `RequestContext`; the actor assertions use the context's user
-- [ ] `tests/identity.test.ts` (Postgres) -- the I/O matrix through `auth.api` and `resolveRequestContext`:
+- [x] `scripts/seed.ts`, `packages/db/src/seed.ts`, `fixtures.ts`, `probe-tenants.ts` -- the script reads `SEED_DEMO_PASSWORD`, hashes it through `@momo/db-auth`, and passes the hash to `seed(db, { demoPasswordHash })`. It creates users `linh` and `hoang` with fixed UUIDv7 ids, credential accounts and memberships, and quotes identifiers in `TRUNCATE`. Probe Tenants get their own members, removed by tenant and user id -- OQ decisions
+- [x] `tests/**` (the harnesses, `web-composition`, `audited-use-cases`) -- build a `RequestContext`; the actor assertions use the context's user
+- [x] `tests/identity.test.ts` (Postgres) -- the I/O matrix through `auth.api` and `resolveRequestContext`:
   - idle expiry: set `expires_at` in the past;
   - sliding: set `expires_at` to `now + expiresIn − updateAge − 1s`, call `getSession` with `returnHeaders`, and assert that `expires_at` moved and a `Set-Cookie` came back;
   - a single-membership sign-in persists `active_tenant_id`;
@@ -168,9 +168,9 @@ use as a named AD-15 exception. Rate-limiting the sign-in action is deferred on 
   - `/no-access` renders for a user with zero memberships;
   - each of the four Better Auth tables round-trips through the adapter;
   - no probe identity rows remain after the harness runs.
-- [ ] `apps/web` middleware unit test -- a `Request` in, `Set-Cookie` forwarded, redirect when there is no session
-- [ ] `.dependency-cruiser.cjs`, `.github/workflows/ci.yml` -- the `better-auth` and `@momo/db-auth` import rules; the new environment variables in the test job
-- [ ] `ARCHITECTURE-SPINE.md` (AD-1, AD-15), `deferred-work.md` -- the amendment after an adversarial review (up to two rounds); a deferred entry for the sign-in rate limit
+- [x] `apps/web` middleware unit test -- a `Request` in, `Set-Cookie` forwarded, redirect when there is no session
+- [x] `.dependency-cruiser.cjs`, `.github/workflows/ci.yml` -- the `better-auth` and `@momo/db-auth` import rules; the new environment variables in the test job
+- [x] `ARCHITECTURE-SPINE.md` (AD-1, AD-15), `deferred-work.md` -- the amendment after an adversarial review (up to two rounds); a deferred entry for the sign-in rate limit
 
 **Acceptance Criteria:**
 - Given the catalog, when `rls.test` runs, then the five identity tables exist with no RLS, and the app role's privileges match the registry, including the override.
@@ -209,3 +209,118 @@ use as a named AD-15 exception. Rate-limiting the sign-in action is deferred on 
 
 **Manual checks:**
 - Preview `web` on port 3101: signed-out redirect, sign in, write a mapping, audit row actor, sign out.
+
+## Implementation Notes
+
+- **Tables.** `auth_user`, `session`, `account`, `verification` in `schema.ts` (camelCase properties,
+  snake_case columns, `authSchema` keyed by model name for the adapter). `tenant_membership` lives in
+  its own module, `schema-membership.ts`, which the `@momo/db` barrel does not re-export (the barrel
+  is `export * from './schema'`, so the symbol could not stay in `schema.ts`); `drizzle.config.ts`
+  reads both files. Registry: 22 tables, 16 tenant-owned; per-entry `appPrivileges` (DML on the four
+  Better Auth tables) and `tenantBridge` (tenant_membership only), read through `appPrivilegesOf` /
+  `TENANT_BRIDGES`. SQL regenerated.
+- **Reader.** `packages/db/src/repo-membership.ts` `membershipsOf(db, userId)`, on a `tx`, ordered by
+  Tenant; exported by the barrel as the only way to the table.
+- **`@momo/db-auth`.** `createAuth`/`authOptions` (factory, everything as arguments), `identityOn`
+  (`sessionFrom` with `disableRefresh`, `setActiveTenant` via `internalAdapter.updateSession`,
+  `endSession`), `bindings.ts` (`serveAllowlisted`, `sessionForMiddleware`, `signInWithPassword`,
+  `signOutOf`), `hashPassword`. Cookie prefix `momo`; telemetry off.
+- **App.** `authz/request-context.ts` (`RequestContext`, `Role`, `Locale`, `auditActorOf`),
+  `authz/resolve-request-context.ts` (`signed_in` / `no_access` / `signed_out`; deletes a session
+  whose active Tenant does not match; persists the single membership; logs "several" through
+  `onNoAccess`; memberships with an unknown role are ignored). `ports/identity.ts`,
+  `ports/membership.ts`. `UseCaseContext` deleted; `AuditedWriteDeps.actor` removed — the runner
+  stamps `auditActorOf(ctx)`. Config: `BETTER_AUTH_SECRET` (32+), `BETTER_AUTH_URL` (URL),
+  `SESSION_IDLE_TIMEOUT_HOURS` (int 1–720, default 8), `SEED_DEMO_PASSWORD` (8+), all lazy getters.
+- **Web.** Composition root: lazily memoised auth instance and id port; `requestContext()` (React
+  `cache()` over the resolution, redirects to `/sign-in` or `/no-access`), `signInState()`
+  (non-redirecting, for the root layout and `/no-access`); every binding is `(input, ctx?)` — a server
+  action resolves once and passes `ctx`; auth bindings `handleAuthRequest`, `refreshSession`,
+  `signInWithEmail`, `signOut`. `middleware.ts` (Node runtime) → `server/session-gate.ts`
+  (`isPublicPath`, forwards `Set-Cookie`, redirects). `/sign-in` (client form, `useActionState`, one
+  generic message, lands on `/`), `/no-access`, the sign-out form in the root layout, the allowlisted
+  route handler. The top-bar chip shows the role from the context instead of the constant "Linh · PM".
+- **Seed.** `demo-identities.ts` (fixed UUIDv7 ids for `linh`/`hoang`, `actorOf`); `writeTenantRows`
+  writes users, memberships and — when `passwordHash` is given — credential accounts; probes get
+  prefixed users with opaque names and no accounts; `removeProbeTenant` deletes members by Tenant and
+  their sessions/accounts/users by user id; `TRUNCATE` quotes identifiers; `scripts/seed.ts` hashes
+  `SEED_DEMO_PASSWORD` through `@momo/db-auth`. Seeded history actor: `user:019b76da-…051111111111`.
+
+## Spec Change Log
+
+- 2026-09-21 — files the Tasks list did not name: `packages/db/src/schema-membership.ts` (see above),
+  `packages/db/src/demo-identities.ts`, `packages/db/auth/src/{bindings,password}.ts` and
+  `auth.test.ts`, `apps/web/src/server/session-gate.ts` (+ test; the middleware file stays a two-line
+  wiring so the gate is testable without the composition root), `apps/web/src/components/sign-out.tsx`,
+  `apps/web/src/app/sign-in/sign-in-form.tsx`, `tests/request-context.ts`,
+  `packages/app/src/authz/resolve-request-context.test.ts`.
+- 2026-09-21 — the bridge source test excludes test files (a test must be able to seed a membership)
+  and strips comments before matching.
+- 2026-09-21 (spine review) — `.dependency-cruiser.cjs`'s `exclude` narrowed to our own build output:
+  the bare `dist` exclusion dropped every edge into better-auth's `dist/`, so
+  `better-auth-only-in-db-auth` could never fire. Found by round 1 of
+  `reviews/review-adversarial-ad1-identity.md`; the rule was then watched to fire on resolved edges.
+
+## Verification Results (2026-09-21)
+
+Against `postgres:18.6-alpine` on 55433 with `REQUIRE_DB=1`; locally `app_user` had to be dropped
+before `drizzle-kit push` (rename prompt; recorded in deferred-work), then `pnpm db:policies`,
+`pnpm seed` with `SEED_DEMO_PASSWORD`.
+
+| Command | Result |
+| --- | --- |
+| `pnpm lint`, `pnpm typecheck`, `pnpm --filter @momo/web typecheck` | exit 0 |
+| `pnpm depcruise` | exit 0 — 153 modules, 421 dependencies |
+| `pnpm test` | **562 passed across 33 files** (510 across 29 before) |
+
+**Sabotages — each watched to fail, then restored.**
+
+| # | Sabotage | What caught it |
+| --- | --- | --- |
+| 1 | `session.cookieCache: { enabled: true }` | `packages/db/auth/src/auth.test.ts`; `tests/identity.test.ts` (4 more rows) |
+| 2 | `tenantMembership` imported from a module in `packages/app` | `source-discipline.test.ts` |
+| 3 | `better-auth` / `@momo/db-auth` imported from `apps/web/src/components` | `pnpm depcruise` (`better-auth-only-in-db-auth`, `web-db-auth-only-from-composition-root`); rule re-proved on resolved edges after the `exclude` fix |
+| 4 | `'ten-momo'` literal in an `apps/web` file | `tests/web-composition.test.ts` text scan |
+| 5 | the resolver's membership match skipped | 4 failures: resolver unit test ×2, `web-composition`, `identity` |
+| 6 | `tenantBridge` on `department` | `registry.test.ts` (plus drift/count failures when its tenantColumn is nulled) |
+
+**Manual (`next dev`, port 3101).** Signed out, `/p/prj-ec2/plan` and `/c/prj-ec2` → 307 `/sign-in`.
+Wrong password and unknown email → identical 401. `/sign-up/email`, `/reset-password/abc` → 404.
+Signed in as `linh` via `/api/auth/sign-in/email` (curl): `/p/prj-ec2/plan` 200, chip "PM",
+`active_tenant_id` persisted on first render; the Mapping form posted without JS wrote
+`audit_log` actor `user:019b76da-a800-7000-8000-051111111111`, tenant `ten-momo`. Session due for
+refresh → the middleware slid `expires_at` to 8 h and sent `Set-Cookie`. Tampered
+`active_tenant_id` → 307 `/sign-in`, session row deleted. `hoang`: chip "Tenant Admin"; sign-out form
+→ 303 `/sign-in`, replaying the old cookie → 307 `/sign-in`. Zero memberships and two memberships →
+307 `/no-access` (the second logged its reason). The browser form itself was not driven (the agent
+does not type passwords into a browser); the sign-in page was checked visually at 375 px.
+
+## Review Triage Log
+
+Review round 1 (2026-09-21): Blind Hunter, Edge Case Hunter, Verification Gap. B = blind, E = edge case, V = verification gap.
+
+| # | Finding | Verdict | Route | Evidence |
+|---|---|---|---|---|
+| B1 | `/` redirects every sign-in to `/p/prj-ec2/review` | low | defer | Pre-existing literal in `app/page.tsx`; only the demo Tenant exists in this slice. |
+| B2, E2, V3 | Middleware matcher excludes by prefix, disagrees with `isPublicPath`; matcher untested | low | patch | `(?!…sign-in…)` skipped `/sign-inx`, `/sign-in/x`; anchored, and a matcher-vs-`isPublicPath` table test added. |
+| B3 | Every `APIError` on sign-in silently equals "wrong password" | low | patch | A misconfiguration would be invisible; now logs status and code only for non-credential errors. |
+| B4, V1 | `signInWithPassword` success path and `rememberMe: true` never exercised | medium | patch | Only refusals called the binding; new identity row signs in through it and slides the session. |
+| B5 | Sign-in action validates without zod, no length caps | low | patch | Spine rule; zod schema added (email ≤ 254, password 1–128). |
+| V2 | Sign-in server action untested | medium | patch | `actions.test.ts` added: refusal, invalid forms, redirect to `/`. |
+| V4 | Nothing checks the demo seed's users, credential accounts, memberships | medium | patch | New DB-gated identity row per `DEMO_USERS` entry. |
+| B6, E4 | `setActiveTenant` throws if the session vanishes mid-render | low | reject | Needs a concurrent sign-out racing the first render; fix adds a branch to the port. |
+| B7 | No FK / role CHECK on `tenant_membership`; unknown role signs out unlogged | low | reject | No membership writes exist in this slice; unknown role is tested; no FKs by the demo deviation. |
+| B8 | `/no-access` copy wrong for several memberships; log repeats per request | low | patch (copy) / reject (log) | Copy made neutral; log is once per request via `cache()`. |
+| B9 | Pool budget per bundle not recorded | low | reject | Performance note without a demonstrated failure. |
+| B10 | `config.ts` comment names non-existent `parseConfig` callers | low | patch | No non-test caller exists (grep); comment corrected. |
+| B11 | README-DEMO says "No authentication", no env vars | low | patch | README updated. |
+| B12 | Sign-out control is a fixed overlay over `/c/` and `/no-access` | maybe-false | reject | Cosmetic at most (low); not observed. |
+| B13 | Comment names `MembershipPort`; duplicated `SessionIdentity`; empty role chip | low / false | patch (name) / reject | Name fixed; the duplicate is required (db-auth cannot import app) and checked by `satisfies`; roles are never empty (resolver keeps known roles only). |
+| E1 | Middleware 307 on an expired session's action POST | maybe-false | defer | A 303 may be right for non-GET; needs a signed-out action POST observed in `next dev`. |
+| E3 | `endpointOf` comment contradicts trailing-slash stripping | low | patch | Comment corrected. |
+| E5 | `getSession` throw in middleware → 500 | false | reject | A database outage failing loudly is correct; a bad cookie resolves to null, not a throw. |
+| E6 | `SESSION_IDLE_TIMEOUT_HOURS=` (empty) throws instead of defaulting | low | reject | Fails loudly naming the key. |
+| E7 | Probe removal would delete a user with another membership | false | reject | Probe users are prefixed per probe and belong to no other Tenant. |
+| E8 | Empty `roles` renders an empty chip | false | reject | See B13. |
+| E9 | Duplicate memberships per Tenant | false | reject | Primary key `(user_id, tenant_id)`. |
+| E10 | Callers of `membershipsOf` not pinned | low | patch | Source test now pins the identifier to five shipping files, the resolver among them. |

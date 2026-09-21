@@ -9,7 +9,7 @@ import type { z } from 'zod';
 import { refusingNonMembers, type AuditScope } from '../audit';
 import type { AuditedWriteDeps, WriteStamp } from '../ports/audited-write';
 import { fail, ok, type AppError, type AppErrorCode, type Result } from '../result';
-import type { UseCaseContext } from './context';
+import { auditActorOf, type RequestContext } from '../authz/request-context';
 
 /** The offending field names, by zod issue code. Structured, never prose, never a value. */
 export function invalidInputDetails(error: z.ZodError): NonNullable<AppError['details']> {
@@ -71,7 +71,7 @@ export interface WritePlan<Scope, Command> {
 export async function runAuditedWrite<Handle, Scope extends AuditScope, Command, Value = void>(
   schema: z.ZodType<Command>,
   deps: AuditedWriteDeps<Handle, Scope>,
-  ctx: UseCaseContext,
+  ctx: RequestContext,
   input: unknown,
   plan: WritePlan<Scope, Command>,
   work: (scope: Scope, stamp: WriteStamp, command: Command) => Promise<Value>,
@@ -84,7 +84,8 @@ export async function runAuditedWrite<Handle, Scope extends AuditScope, Command,
     const value = await deps.transaction(deps.handle, ctx.tenantId, async (scope) => {
       const at = await plan.at(scope, command);
       const guarded: Scope = { ...scope, audit: refusingNonMembers(scope.audit) };
-      return work(guarded, { actor: deps.actor, at }, command);
+      // The actor is the signed-in user of this request (story 1.4 slice 1), never a deps value.
+      return work(guarded, { actor: auditActorOf(ctx), at }, command);
     });
     return ok(value);
   } catch (error) {

@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
-import { getProjectHeader } from '@/server/composition';
+import type { Role } from '@momo/app';
+import { getProjectHeader, requestContext } from '@/server/composition';
 import { valueOrNotFound } from '@/server/result';
 import { Shell } from '@/components/shell';
 
@@ -13,7 +14,10 @@ export default async function ProjectLayout({
   params: Promise<{ projectId: string }>;
 }) {
   const { projectId } = await params;
-  const bundle = valueOrNotFound(await getProjectHeader({ projectId }));
+  // Resolved once per render (the page's binding shares it through React `cache()`); redirects
+  // to /sign-in or /no-access before anything under /p/ renders.
+  const ctx = await requestContext();
+  const bundle = valueOrNotFound(await getProjectHeader({ projectId }, ctx));
   const observed = new Date(bundle.input.pinnedSnapshot.observedAt);
 
   return (
@@ -23,10 +27,22 @@ export default async function ProjectLayout({
       clientName={bundle.meta.clientName}
       snapshotLabel={formatJst(observed)}
       snapshotAgeMinutes={bundle.meta.snapshotAgeMinutes}
+      roleLabel={roleLabel(ctx.roles)}
     >
       {children}
     </Shell>
   );
+}
+
+const ROLE_LABELS: Readonly<Record<Role, string>> = {
+  tenant_admin: 'Tenant Admin',
+  pm: 'PM',
+  client_viewer: 'Client Viewer',
+  internal_viewer: 'Internal Viewer',
+};
+
+function roleLabel(roles: readonly Role[]): string {
+  return roles.map((role) => ROLE_LABELS[role]).join(' · ');
 }
 
 function formatJst(d: Date): string {

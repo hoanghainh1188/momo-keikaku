@@ -2,9 +2,14 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import * as schemaModule from './schema';
+// A test, not application source: `source-discipline.test.ts` pins who may import the bridge's
+// Drizzle symbol among the modules that ship, and a registry check has to be able to name it.
+import { tenantMembership } from './schema-membership';
 import {
   APPEND_ONLY,
   APP_PRIVILEGES,
+  TENANT_BRIDGES,
+  appPrivilegesOf,
   CANONICAL_APP_ROLE,
   CANONICAL_MAINTENANCE_ROLE,
   CLIENT_ALLOCATED_SEQ,
@@ -28,10 +33,13 @@ import { TRUNCATE_ORDER } from './seed';
 
 const SQL_DIR = fileURLToPath(new URL('../sql/', import.meta.url));
 
-/** Every table `schema.ts` declares, by its SQL name, read off the Drizzle objects. */
+/**
+ * Every table `schema.ts` and `schema-membership.ts` declare, by its SQL name, read off the
+ * Drizzle objects. (drizzle-kit reads both files; see `drizzle.config.ts`.)
+ */
 function schemaTableNames(): string[] {
   const names: string[] = [];
-  for (const value of Object.values(schemaModule.schemaTables)) {
+  for (const value of [...Object.values(schemaModule.schemaTables), tenantMembership]) {
     // Drizzle keeps the SQL name behind a symbol rather than a property, so it is read
     // from the symbol registry rather than assumed to match the exported binding — which
     // it does not: `rateEntry` is `rate_entry`.
@@ -59,15 +67,32 @@ describe('the table-class registry is the single source', () => {
     expect(new Set(TRUNCATE_ORDER).size, 'a table is truncated twice').toBe(TRUNCATE_ORDER.length);
   });
 
-  it('holds the 18 tables of this release, 17 of them tenant-owned', () => {
+  it('holds the 22 tables of this release, 16 of them tenant-owned', () => {
     // Pinned as numbers as well as names: a future change that removes a table and adds
     // another keeps the name lists agreeing with `schema.ts` while silently changing what
-    // this story was reasoned about.
-    expect(TABLE_REGISTRY).toHaveLength(18);
-    expect(TENANT_OWNED).toHaveLength(17);
+    // this story was reasoned about. Story 1.4 slice 1: `app_user` out; the four Better Auth
+    // tables and the tenant-membership bridge in, all `global`.
+    expect(TABLE_REGISTRY).toHaveLength(22);
+    expect(TENANT_OWNED).toHaveLength(16);
     expect(TABLE_REGISTRY.filter((e) => e.tenantColumn === null).map((e) => e.table)).toEqual([
       'tenant',
+      'auth_user',
+      'session',
+      'account',
+      'verification',
+      'tenant_membership',
     ]);
+    expect(TABLE_REGISTRY.filter((e) => e.class === 'global').map((e) => e.table).sort()).toEqual(
+      ['account', 'auth_user', 'session', 'tenant', 'tenant_membership', 'verification'],
+    );
+  });
+
+  it('flags exactly one table as the tenant bridge, and it is tenant_membership', () => {
+    // The flag is what lets `rls.test.ts` accept a `tenant_id` column with no policy. On a
+    // second table it would switch isolation off there with every other gate still green.
+    expect(TENANT_BRIDGES.map((e) => e.table)).toEqual(['tenant_membership']);
+    expect(TENANT_BRIDGES[0]!.class).toBe('global');
+    expect(TENANT_BRIDGES[0]!.tenantColumn).toBeNull();
   });
 
   it('classes the nine insert-only tables append-only', () => {
@@ -99,11 +124,26 @@ describe('the table-class registry is the single source', () => {
     }
   });
 
-  it('gives the application role read-only access to the global class', () => {
+  it('gives the application role read-only access to the global class, except the Better Auth tables', () => {
     // `tenant` has no isolation policy — it is what `tenant_id` points at — so the grant
     // is the only thing standing between the application role and writing another Tenant's
-    // row. It reads, and that is all.
+    // row. It reads, and that is all. So does the membership bridge: a membership is written
+    // by an audited use case (slice 2), never by a request as a side effect.
     expect(APP_PRIVILEGES.global).toEqual(['SELECT']);
+    const overridden = TABLE_REGISTRY.filter((e) => e.appPrivileges !== undefined);
+    expect(overridden.map((e) => e.table).sort()).toEqual([
+      'account',
+      'auth_user',
+      'session',
+      'verification',
+    ]);
+    for (const entry of overridden) {
+      expect(appPrivilegesOf(entry), entry.table).toEqual(['SELECT', 'INSERT', 'UPDATE', 'DELETE']);
+    }
+    expect(appPrivilegesOf(TABLE_REGISTRY.find((e) => e.table === 'tenant')!)).toEqual(['SELECT']);
+    expect(
+      appPrivilegesOf(TABLE_REGISTRY.find((e) => e.table === 'tenant_membership')!),
+    ).toEqual(['SELECT']);
   });
 });
 
@@ -212,6 +252,10 @@ describe('the checked-in SQL is what the generator emits', () => {
   it('never grants TRUNCATE to the application role, in any class', () => {
     for (const [klass, privileges] of Object.entries(APP_PRIVILEGES)) {
       expect(privileges, `${klass} grants TRUNCATE`).not.toContain('TRUNCATE');
+    }
+    // …nor through a per-entry override.
+    for (const entry of TABLE_REGISTRY) {
+      expect(appPrivilegesOf(entry), `${entry.table} grants TRUNCATE`).not.toContain('TRUNCATE');
     }
   });
 });

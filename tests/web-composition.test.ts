@@ -11,11 +11,18 @@ import { asOfDate, buildDemoState, currentPeriod } from '../packages/db/src/fixt
  * The `satisfies` checks cannot see a binding pointed at the WRONG use case: `ExplainTicketsInput`
  * is assignable to `ChangeRequestCandidatesInput`, so `explainTickets` calling
  * `markChangeRequestCandidates` typechecks, and every harness test (which wires its own deps)
- * stays green. Nothing else asserts the Tenant or the audit actor this file states either. So
- * each export is called once: exactly one tenant transaction must open, on the restricted handle
- * for `DEMO_TENANT_ID`; inside it exactly the matching repository member must receive
- * `({ actor: 'user:linh', at: anchor }, { ...input, kind })`, and the audit sink exactly one
- * record of the matching action.
+ * stays green. So each export is called once: exactly one tenant transaction must open, on the
+ * restricted handle, for the Tenant THE SESSION RESOLVED TO; inside it exactly the matching
+ * repository member must receive `({ actor: 'user:<the session's user>', at: anchor }, { ...input,
+ * kind })`, and the audit sink exactly one record of the matching action.
+ *
+ * Story 1.4 slice 1: there is no constant Tenant or actor in the composition root any more. The
+ * context comes from `resolveRequestContext` over the request's headers — here `next/headers` is
+ * mocked, `@momo/db-auth`'s identity adapter answers a fake session, and `@momo/db`'s one
+ * membership reader answers a fake membership — so every assertion below names the session's
+ * Tenant and user, which appear nowhere in `apps/web`. The last block pins the resolution itself:
+ * signed out, tampered, no access, the lazily built auth instance, and a context a server action
+ * hands in.
  *
  * The organisation bindings the same way, plus the two outbound adapters the composition root
  * wires for them: `@momo/adapters` is mocked, so the test sees that the audit `at` is the Clock's
@@ -56,6 +63,21 @@ const spies = vi.hoisted(() => {
     setProjectDepartment: vi.fn(async () => {}),
   };
   const append = vi.fn(async (_entry: unknown) => {});
+  type AuthBuild = { readonly generateId: () => string } & Record<string, unknown>;
+  const authInstance = { marker: 'auth-instance' };
+  const authBuilds: AuthBuild[] = [];
+  /** The session the fake identity adapter answers: a user and the Tenant it last acted in. */
+  const session = {
+    token: 'tok-session',
+    userId: '019b76da-a800-7000-8000-0c3333333333',
+    activeTenantId: 'ten-from-session' as string | null,
+    locale: 'en',
+  };
+  const identity = {
+    sessionFrom: vi.fn(async (_headers: Headers) => session as typeof session | null),
+    setActiveTenant: vi.fn(async (_token: string, _tenantId: string) => {}),
+    endSession: vi.fn(async (_token: string) => {}),
+  };
   return {
     anchor,
     /** What the mocked `systemClock` answers — distinct from the anchor. */
@@ -72,17 +94,52 @@ const spies = vi.hoisted(() => {
     ),
     loadProjectBundle: vi.fn(),
     loadReview: vi.fn(),
+    session,
+    identity,
+    membershipsOf: vi.fn(async (_handle: unknown, _userId: string) => [
+      { tenantId: 'ten-from-session', role: 'pm', projectIds: ['prj-ec2'] },
+    ]),
+    authInstance,
+    /** Every options object `createAuth` was built with — never cleared, the instance is per process. */
+    authBuilds,
+    createAuth: vi.fn((options: AuthBuild) => {
+      authBuilds.push(options);
+      return authInstance;
+    }),
+    requestHeaders: new Headers({ cookie: 'momo.session_token=signed' }),
   };
 });
 
 vi.mock('@momo/db', async (importOriginal) => ({
-  // DEMO_TENANT_ID stays real; every function that would reach a database is a spy.
   ...(await importOriginal<typeof import('@momo/db')>()),
   getDb: spies.getDb,
   inTenantTransaction: spies.inTenantTransaction,
   loadProjectBundle: spies.loadProjectBundle,
   loadReview: spies.loadReview,
+  membershipsOf: spies.membershipsOf,
 }));
+
+vi.mock('@momo/db-auth', () => ({
+  createAuth: spies.createAuth,
+  identityOn: (auth: unknown) => {
+    expect(auth).toBe(spies.authInstance);
+    return spies.identity;
+  },
+  serveAllowlisted: vi.fn(),
+  sessionForMiddleware: vi.fn(),
+  signInWithPassword: vi.fn(),
+  signOutOf: vi.fn(),
+}));
+
+/**
+ * `next/headers` is resolved from `apps/web` (the root does not depend on `next`), so the mock is
+ * registered under the path the composition root's import actually resolves to.
+ */
+const nextHeadersPath = await vi.hoisted(async () => {
+  const { createRequire } = await import('node:module');
+  return createRequire(new URL('../apps/web/package.json', import.meta.url)).resolve('next/headers');
+});
+vi.mock(nextHeadersPath, () => ({ headers: async () => spies.requestHeaders }));
 
 vi.mock('@momo/adapters', () => ({
   systemClock: { now: () => spies.now, nowMs: () => spies.now.getTime() },
@@ -91,9 +148,16 @@ vi.mock('@momo/adapters', () => ({
 
 const APP_URL = 'postgres://momo_app:momo_app@localhost:55433/momo_keikaku';
 vi.stubEnv('APP_DATABASE_URL', APP_URL);
+vi.stubEnv('BETTER_AUTH_SECRET', 'web-composition-test-secret-0123456789');
+vi.stubEnv('BETTER_AUTH_URL', 'http://localhost:3101');
 
-const { DEMO_TENANT_ID } = await import('@momo/db');
 const composition = await import('../apps/web/src/server/composition');
+/** Importing the composition root builds nothing that reads configuration (`next build`). */
+const authBuildsAtImport = spies.authBuilds.length;
+
+/** The Tenant and the actor every binding must use: the SESSION's, never a constant. */
+const SESSION_TENANT = 'ten-from-session';
+const SESSION_ACTOR = `user:${spies.session.userId}`;
 
 const RECORDERS = [
   'recordMapDisposition',
@@ -155,20 +219,23 @@ const CASES: readonly {
 beforeEach(() => {
   vi.clearAllMocks();
   spies.getDb.mockReturnValue(spies.handle);
+  spies.session.activeTenantId = SESSION_TENANT;
+  spies.identity.sessionFrom.mockImplementation(async () => spies.session);
 });
 
 describe.each(CASES)('the $binding binding', ({ call, recorder, command, action }) => {
-  it(`reaches ${recorder} and nothing else, for the demo Tenant as user:linh, audited as ${action}`, async () => {
+  it(`reaches ${recorder} and nothing else, for the session's Tenant as its user, audited as ${action}`, async () => {
     expect(await call()).toEqual({ ok: true, value: undefined });
 
     expect(spies.getDb).toHaveBeenCalledWith(APP_URL);
     expect(spies.inTenantTransaction).toHaveBeenCalledTimes(1);
     expect(spies.inTenantTransaction).toHaveBeenCalledWith(
       spies.handle,
-      DEMO_TENANT_ID,
+      SESSION_TENANT,
       expect.any(Function),
     );
-    const stamp = { actor: 'user:linh', at: spies.anchor };
+    expect(spies.identity.sessionFrom).toHaveBeenCalledWith(spies.requestHeaders);
+    const stamp = { actor: SESSION_ACTOR, at: spies.anchor };
     expect(spies.repository[recorder]).toHaveBeenCalledTimes(1);
     expect(spies.repository[recorder]).toHaveBeenCalledWith(stamp, command);
     for (const other of RECORDERS.filter((name) => name !== recorder)) {
@@ -290,14 +357,14 @@ const ORG_CASES: readonly {
 ];
 
 describe.each(ORG_CASES)('the $binding organisation binding', ({ call, writer, change, action, target }) => {
-  it(`reaches org.${writer} and nothing else, for the demo Tenant as user:linh, stamped by the Clock, audited as ${action}`, async () => {
+  it(`reaches org.${writer} and nothing else, for the session's Tenant as its user, stamped by the Clock, audited as ${action}`, async () => {
     // A create answers the id the id port minted — the one its record names; the rest nothing.
     const created = writer.startsWith('insert');
     expect(await call()).toEqual({ ok: true, value: created ? { id: spies.newId } : undefined });
 
     expect(spies.getDb).toHaveBeenCalledWith(APP_URL);
     expect(spies.inTenantTransaction).toHaveBeenCalledTimes(1);
-    expect(spies.inTenantTransaction).toHaveBeenCalledWith(spies.handle, DEMO_TENANT_ID, expect.any(Function));
+    expect(spies.inTenantTransaction).toHaveBeenCalledWith(spies.handle, SESSION_TENANT, expect.any(Function));
     expect(spies.org[writer]).toHaveBeenCalledTimes(1);
     expect(spies.org[writer]).toHaveBeenCalledWith(expect.objectContaining(change));
     for (const other of ORG_WRITERS.filter((name) => name !== writer)) {
@@ -308,7 +375,7 @@ describe.each(ORG_CASES)('the $binding organisation binding', ({ call, writer, c
     }
     expect(spies.append).toHaveBeenCalledTimes(1);
     expect(spies.append).toHaveBeenCalledWith(
-      expect.objectContaining({ actor: 'user:linh', at: spies.now, action, target }),
+      expect.objectContaining({ actor: SESSION_ACTOR, at: spies.now, action, target }),
     );
   });
 });
@@ -391,7 +458,7 @@ const READ_CASES: readonly {
 ];
 
 describe.each(READ_CASES)('the $binding read binding', ({ call, port, check }) => {
-  it(`reaches ${port} for the demo Tenant and returns its own use case's value`, async () => {
+  it(`reaches ${port} for the session's Tenant and returns its own use case's value`, async () => {
     spies.loadReview.mockResolvedValue(REVIEW);
     spies.loadProjectBundle.mockResolvedValue(REVIEW.bundle);
 
@@ -401,7 +468,7 @@ describe.each(READ_CASES)('the $binding read binding', ({ call, port, check }) =
 
     expect(spies.getDb).toHaveBeenCalledWith(APP_URL);
     expect(spies[port]).toHaveBeenCalledTimes(1);
-    expect(spies[port]).toHaveBeenCalledWith(spies.handle, DEMO_TENANT_ID, 'prj-ec2');
+    expect(spies[port]).toHaveBeenCalledWith(spies.handle, SESSION_TENANT, 'prj-ec2');
     const other = port === 'loadReview' ? 'loadProjectBundle' : 'loadReview';
     expect(spies[other], `${other} must not be called`).not.toHaveBeenCalled();
     expect(spies.inTenantTransaction, 'a read must not open a write transaction').not.toHaveBeenCalled();
@@ -411,5 +478,126 @@ describe.each(READ_CASES)('the $binding read binding', ({ call, port, check }) =
     for (const writer of ORG_WRITERS) {
       expect(spies.org[writer], `a read must not reach org.${writer}`).not.toHaveBeenCalled();
     }
+  });
+});
+
+/**
+ * The request context itself (story 1.4 slice 1): where it comes from, and what happens when the
+ * request does not resolve to one. A redirect from `next/navigation` throws an error whose digest
+ * names the target; nothing past it runs, so no port is reached.
+ */
+describe('the request context the bindings run with', () => {
+  const redirectTarget = async (call: () => Promise<unknown>): Promise<string> => {
+    try {
+      await call();
+    } catch (error) {
+      const digest = (error as { digest?: unknown }).digest;
+      if (typeof digest === 'string' && digest.startsWith('NEXT_REDIRECT')) return digest.split(';')[2]!;
+      throw error;
+    }
+    throw new Error('expected a redirect, and the binding returned');
+  };
+
+  const reachedNothing = () => {
+    expect(spies.loadReview).not.toHaveBeenCalled();
+    expect(spies.loadProjectBundle).not.toHaveBeenCalled();
+    expect(spies.inTenantTransaction).not.toHaveBeenCalled();
+  };
+
+  it('redirects a signed-out request to /sign-in before any port is reached', async () => {
+    spies.identity.sessionFrom.mockResolvedValue(null);
+    expect(await redirectTarget(() => composition.getProjectReview({ projectId: 'prj-ec2' }))).toBe('/sign-in');
+    expect(await redirectTarget(() => composition.mapTicket({ projectId: 'prj-ec2', ticketId: 't', wpId: '' }))).toBe(
+      '/sign-in',
+    );
+    reachedNothing();
+  });
+
+  it('signs out a session whose active Tenant has no membership — deleting it — and redirects', async () => {
+    spies.session.activeTenantId = 'ten-tampered';
+    expect(await redirectTarget(() => composition.getProjectHeader({ projectId: 'prj-ec2' }))).toBe('/sign-in');
+    expect(spies.identity.endSession).toHaveBeenCalledWith('tok-session');
+    reachedNothing();
+  });
+
+  it('redirects a signed-in user with no membership to /no-access', async () => {
+    spies.membershipsOf.mockResolvedValueOnce([]);
+    spies.session.activeTenantId = null;
+    expect(await redirectTarget(() => composition.getClientView({ projectId: 'prj-ec2' }))).toBe('/no-access');
+    reachedNothing();
+  });
+
+  it('runs with the context a server action hands in, resolving nothing itself', async () => {
+    spies.loadReview.mockResolvedValue(REVIEW);
+    const handed = {
+      tenantId: 'ten-handed',
+      userId: 'user-handed',
+      roles: ['pm'] as const,
+      projectIds: [],
+      locale: 'en' as const,
+    };
+    expect((await composition.getProjectReview({ projectId: 'prj-ec2' }, handed)).ok).toBe(true);
+    expect(spies.loadReview).toHaveBeenCalledWith(spies.handle, 'ten-handed', 'prj-ec2');
+    expect(spies.identity.sessionFrom).not.toHaveBeenCalled();
+  });
+
+  it('builds the one auth instance lazily, from the configuration, and reuses it', async () => {
+    await composition.signInState();
+    await composition.signInState();
+    // One build for the whole process (every test above resolved a context through it), and it
+    // was built from the configuration, with the id port as its id generator.
+    expect(authBuildsAtImport, 'importing the composition root built the auth instance').toBe(0);
+    expect(spies.authBuilds).toHaveLength(1);
+    expect(spies.authBuilds[0]).toMatchObject({
+      db: spies.handle,
+      secret: 'web-composition-test-secret-0123456789',
+      baseURL: 'http://localhost:3101',
+      idleHours: 8,
+    });
+    expect(spies.authBuilds[0]!.generateId()).toBe(spies.newId);
+  });
+
+  it('answers the non-redirecting sign-in state for the root layout and /no-access', async () => {
+    expect(await composition.signInState()).toBe('signed_in');
+    spies.identity.sessionFrom.mockResolvedValueOnce(null);
+    expect(await composition.signInState()).toBe('signed_out');
+  });
+});
+
+/**
+ * "No constant tenant id or actor literal remains in apps/web" (story 1.4 slice 1). Scanned as
+ * text, over every source file of the app: the demo Tenant's id, the demo users' ids, an audit
+ * actor literal, `DEMO_TENANT_ID`, or an object literal stating a `tenantId` would each be a way
+ * for a page or the composition root to act as somebody the session did not resolve to.
+ */
+describe('apps/web states no Tenant and no actor of its own', () => {
+  it('carries no tenant id, demo user id, actor literal or tenantId literal in any source file', async () => {
+    const { readdirSync, readFileSync, statSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    const { fileURLToPath } = await import('node:url');
+    const { DEMO_USERS } = await import('../packages/db/src/demo-identities');
+    const { DEMO_TENANT_ID } = await import('../packages/db/src/repo');
+
+    const root = fileURLToPath(new URL('../apps/web/src/', import.meta.url));
+    const walk = (dir: string): string[] =>
+      readdirSync(dir).flatMap((name) => {
+        const path = join(dir, name);
+        return statSync(path).isDirectory() ? walk(path) : /\.(ts|tsx)$/.test(name) ? [path] : [];
+      });
+
+    const banned: readonly (readonly [string, RegExp])[] = [
+      ['the demo Tenant id', new RegExp(DEMO_TENANT_ID)],
+      ['DEMO_TENANT_ID', /\bDEMO_TENANT_ID\b/],
+      ...Object.values(DEMO_USERS).map((user) => [`a demo user id (${user.email})`, new RegExp(user.id)] as const),
+      ['an audit actor literal', /['"`]user:/],
+      ['a tenantId stated as a literal', /\btenantId\s*:/],
+      ['a constant actor', /\bactor\s*:/],
+    ];
+
+    const offences = walk(root).flatMap((file) => {
+      const text = readFileSync(file, 'utf8');
+      return banned.filter(([, pattern]) => pattern.test(text)).map(([what]) => `${file}: ${what}`);
+    });
+    expect(offences).toEqual([]);
   });
 });

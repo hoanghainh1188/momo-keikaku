@@ -21,6 +21,7 @@ import {
   type TicketObservation,
   type WorkPackage,
 } from '@momo/domain';
+import { actorOf, DEMO_USERS } from './demo-identities';
 
 /** Walk up from the working directory to the repo root (the folder holding `fixtures/`). */
 function repoRoot(): string {
@@ -218,7 +219,8 @@ export function buildDemoState(anchorIso?: string): DemoState {
     wpId: m.wpId,
     source: 'manual' as const,
     at: fixture.baseline.recordedAt,
-    actor: 'user:linh',
+    // The demo PM, by the id the seed gives her (story 1.4): `user:<id>`, like every audited write.
+    actor: actorOf(DEMO_USERS.linh.id),
   }));
 
   // --- replay the Connector

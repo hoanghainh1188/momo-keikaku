@@ -27,5 +27,10 @@ export type {
 } from './repo-writes';
 export type { DepartmentRow, NewProjectRow, ProgramRow, ProjectPlacementRow } from './repo-org';
 export { inTenantTransaction, type WriteScope } from './tenant-transaction';
+// The membership bridge crosses as its ONE READER (story 1.4 slice 1), never as its Drizzle table:
+// `tenantMembership` lives in `schema-membership.ts`, which this barrel deliberately does not
+// re-export, so the only way an application reaches the table is `membershipsOf` — and the only
+// caller of that is `resolveRequestContext`, through the composition root.
+export { membershipsOf, type MembershipRow } from './repo-membership';
 export * from './table-classes';
 export * from './with-tenant';

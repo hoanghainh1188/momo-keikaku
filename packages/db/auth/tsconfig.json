@@ -1,0 +1,9 @@
+// See packages/db/tsconfig.json — same reason: TypeScript 6 defaults `types` to none.
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "noEmit": true
+  },
+  "include": ["src/**/*.ts"]
+}

@@ -4,7 +4,7 @@ import type { NewProjectRow, OrgRepository, OrgWriteDeps, OrgWriteScope } from '
 import type { WriteStamp } from '../ports/audited-write';
 import type { Result } from '../result';
 import { refuse, runAuditedWrite } from './audited-write';
-import type { UseCaseContext } from './context';
+import type { RequestContext } from '../authz/request-context';
 import {
   createDepartmentInputSchema,
   createProgramInputSchema,
@@ -90,7 +90,7 @@ export interface Created {
 function runOrgWrite<Handle, Command, Value = void>(
   schema: z.ZodType<Command>,
   deps: OrgWriteDeps<Handle>,
-  ctx: UseCaseContext,
+  ctx: RequestContext,
   input: unknown,
   work: (scope: OrgWriteScope, stamp: WriteStamp, command: Command) => Promise<Value>,
 ): Promise<Result<Value>> {
@@ -137,7 +137,7 @@ async function programFor(
 /** FR-1: a new Department in the caller's Tenant. */
 export async function createDepartment<Handle>(
   deps: OrgWriteDeps<Handle>,
-  ctx: UseCaseContext,
+  ctx: RequestContext,
   input: CreateDepartmentInput,
 ): Promise<Result<Created>> {
   return runOrgWrite(createDepartmentInputSchema, deps, ctx, input, async (scope, stamp, command) => {
@@ -151,7 +151,7 @@ export async function createDepartment<Handle>(
 /** FR-1: renames a Department; the record carries the previous name. */
 export async function renameDepartment<Handle>(
   deps: OrgWriteDeps<Handle>,
-  ctx: UseCaseContext,
+  ctx: RequestContext,
   input: RenameDepartmentInput,
 ): Promise<Result<void>> {
   return runOrgWrite(renameDepartmentInputSchema, deps, ctx, input, async (scope, stamp, command) => {
@@ -167,7 +167,7 @@ export async function renameDepartment<Handle>(
 /** FR-1: a new Program in one of the caller's Departments. A Program never changes Department. */
 export async function createProgram<Handle>(
   deps: OrgWriteDeps<Handle>,
-  ctx: UseCaseContext,
+  ctx: RequestContext,
   input: CreateProgramInput,
 ): Promise<Result<Created>> {
   return runOrgWrite(createProgramInputSchema, deps, ctx, input, async (scope, stamp, command) => {
@@ -185,7 +185,7 @@ export async function createProgram<Handle>(
 /** FR-1: renames a Program; the record carries the previous name. */
 export async function renameProgram<Handle>(
   deps: OrgWriteDeps<Handle>,
-  ctx: UseCaseContext,
+  ctx: RequestContext,
   input: RenameProgramInput,
 ): Promise<Result<void>> {
   return runOrgWrite(renameProgramInputSchema, deps, ctx, input, async (scope, stamp, command) => {
@@ -206,7 +206,7 @@ export async function renameProgram<Handle>(
  */
 export async function createProject<Handle>(
   deps: OrgWriteDeps<Handle>,
-  ctx: UseCaseContext,
+  ctx: RequestContext,
   input: CreateProjectInput,
 ): Promise<Result<Created>> {
   return runOrgWrite(createProjectInputSchema, deps, ctx, input, async (scope, stamp, command) => {
@@ -238,7 +238,7 @@ export async function createProject<Handle>(
 /** FR-1: renames a Project; the record carries the previous name. */
 export async function renameProject<Handle>(
   deps: OrgWriteDeps<Handle>,
-  ctx: UseCaseContext,
+  ctx: RequestContext,
   input: RenameProjectInput,
 ): Promise<Result<void>> {
   return runOrgWrite(renameProjectInputSchema, deps, ctx, input, async (scope, stamp, command) => {
@@ -261,7 +261,7 @@ export async function renameProject<Handle>(
  */
 export async function reassignProjectProgram<Handle>(
   deps: OrgWriteDeps<Handle>,
-  ctx: UseCaseContext,
+  ctx: RequestContext,
   input: ReassignProjectProgramInput,
 ): Promise<Result<void>> {
   return runOrgWrite(
@@ -288,7 +288,7 @@ export async function reassignProjectProgram<Handle>(
  */
 export async function reassignProjectDepartment<Handle>(
   deps: OrgWriteDeps<Handle>,
-  ctx: UseCaseContext,
+  ctx: RequestContext,
   input: ReassignProjectDepartmentInput,
 ): Promise<Result<void>> {
   return runOrgWrite(

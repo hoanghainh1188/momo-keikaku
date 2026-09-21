@@ -12,14 +12,26 @@ GRANT USAGE ON SCHEMA public TO "momo_app", "momo_maintenance";
 -- tenant (global)
 GRANT SELECT ON public."tenant" TO "momo_app";
 
+-- auth_user (global)
+GRANT SELECT, INSERT, UPDATE, DELETE ON public."auth_user" TO "momo_app";
+
+-- session (global)
+GRANT SELECT, INSERT, UPDATE, DELETE ON public."session" TO "momo_app";
+
+-- account (global)
+GRANT SELECT, INSERT, UPDATE, DELETE ON public."account" TO "momo_app";
+
+-- verification (global)
+GRANT SELECT, INSERT, UPDATE, DELETE ON public."verification" TO "momo_app";
+
+-- tenant_membership (global)
+GRANT SELECT ON public."tenant_membership" TO "momo_app";
+
 -- department (mutable-audited)
 GRANT SELECT, INSERT, UPDATE, DELETE ON public."department" TO "momo_app";
 
 -- program (mutable-audited)
 GRANT SELECT, INSERT, UPDATE, DELETE ON public."program" TO "momo_app";
-
--- app_user (mutable-audited)
-GRANT SELECT, INSERT, UPDATE, DELETE ON public."app_user" TO "momo_app";
 
 -- project (mutable-audited)
 GRANT SELECT, INSERT, UPDATE, DELETE ON public."project" TO "momo_app";

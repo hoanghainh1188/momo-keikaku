@@ -31,10 +31,14 @@
 // their environment — where they can read it — would hand the whole separation back. The
 // promise is unchanged: a process that reads a key it has not been given fails naming that
 // key, at the first read rather than at the first query. `parseConfig` still parses the whole
-// schema at once, for callers (the migration scripts) that genuinely need both.
+// schema at once; today only its tests call it, and any whole-schema caller must supply EVERY
+// required key — both connection strings, the Better Auth secret and URL, and the seed password.
 //
-// Later stories extend this schema (session idle timeout, mail transport, the fixture-mode
-// clock anchor) by adding keys here — never by reading the environment somewhere else.
+// Later stories extend this schema (mail transport, the fixture-mode clock anchor) by adding
+// keys here — never by reading the environment somewhere else. Story 1.4 slice 1 added the four
+// identity keys below: the Better Auth secret and base URL, the session idle timeout, and the
+// demo password the seed hashes. Only the web process reads the first three, and only the seed
+// the fourth, which is exactly what the per-key getters are for.
 import { z } from 'zod';
 
 const configSchema = z.object({
@@ -55,6 +59,35 @@ const configSchema = z.object({
         'is required — the PostgreSQL connection string for the restricted application role, e.g. postgres://momo_app:momo_app@host:port/db',
     })
     .min(1, 'must not be empty — it is the restricted application role connection string'),
+
+  // Better Auth signs its session cookie with this. Required, never defaulted: a default secret
+  // is a secret everybody has. 32 characters is Better Auth's own floor for a production secret.
+  BETTER_AUTH_SECRET: z
+    .string({
+      error: 'is required — the secret Better Auth signs session cookies with (32+ characters)',
+    })
+    .min(32, 'must be at least 32 characters — it signs every session cookie'),
+
+  // The origin the web app is served from, e.g. http://localhost:3101. Better Auth checks the
+  // Origin of every state-changing request against it.
+  BETTER_AUTH_URL: z
+    .string({ error: 'is required — the web app origin, e.g. http://localhost:3101' })
+    .url('must be an absolute URL — the web app origin, e.g. http://localhost:3101'),
+
+  // FR (sign-in scope): the idle timeout, configurable, default 8 hours. A session that sees no
+  // page or action request for this long is refused on the next one.
+  SESSION_IDLE_TIMEOUT_HOURS: z.coerce
+    .number({ error: 'must be a whole number of hours' })
+    .int('must be a whole number of hours')
+    .min(1, 'must be at least 1 hour')
+    .max(24 * 30, 'must be at most 720 hours (30 days)')
+    .default(8),
+
+  // The password the seed gives the demo users `linh` and `hoang` (founder decision,
+  // 2026-09-21). Required by `pnpm seed` and nothing else; CI sets it.
+  SEED_DEMO_PASSWORD: z
+    .string({ error: 'is required by the seed — the demo users\' password (8+ characters)' })
+    .min(8, 'must be at least 8 characters — it is the demo users\' password'),
 });
 
 export type AppConfig = z.infer<typeof configSchema>;
@@ -109,5 +142,17 @@ export const config: AppConfig = {
   },
   get APP_DATABASE_URL(): string {
     return parseConfigKey(process.env, 'APP_DATABASE_URL');
+  },
+  get BETTER_AUTH_SECRET(): string {
+    return parseConfigKey(process.env, 'BETTER_AUTH_SECRET');
+  },
+  get BETTER_AUTH_URL(): string {
+    return parseConfigKey(process.env, 'BETTER_AUTH_URL');
+  },
+  get SESSION_IDLE_TIMEOUT_HOURS(): number {
+    return parseConfigKey(process.env, 'SESSION_IDLE_TIMEOUT_HOURS');
+  },
+  get SEED_DEMO_PASSWORD(): string {
+    return parseConfigKey(process.env, 'SEED_DEMO_PASSWORD');
   },
 };

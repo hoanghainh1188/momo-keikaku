@@ -22,8 +22,10 @@
  * This module reads no environment and no clock. It takes its handle as an argument.
  */
 import { stringify } from '@momo/domain';
-import { sql } from 'drizzle-orm';
+import { eq, inArray, sql } from 'drizzle-orm';
 import type { Db } from './client';
+import { account, authUser, session } from './schema';
+import { tenantMembership } from './schema-membership';
 import { buildDemoState, type DemoState } from './fixtures';
 import { MAINTENANCE_SETTING, TABLE_REGISTRY } from './table-classes';
 import { writeTenantRows, type TenantRowWriteOptions } from './seed';
@@ -398,7 +400,31 @@ export async function removeProbeTenant(owner: Db, tenantId: string): Promise<vo
   });
 }
 
+/**
+ * Deletes the probe Tenant's PEOPLE (story 1.4 slice 1): its memberships by Tenant id, and the
+ * users those memberships name — with their sessions and credential accounts — by user id.
+ *
+ * The identity tables and the membership bridge are `global` (no tenant column), so the
+ * registry walk below skips them by design; without this a probe's users would outlive it and
+ * the next run would collide on their emails. Users are found through the Tenant's memberships
+ * before those are deleted, in the same transaction, so a crash leaves both or neither.
+ */
+async function deleteTenantMembers(tx: Tx, tenantId: string): Promise<void> {
+  const members = await tx
+    .select({ userId: tenantMembership.userId })
+    .from(tenantMembership)
+    .where(eq(tenantMembership.tenantId, tenantId));
+  const userIds = members.map((row) => row.userId);
+  if (userIds.length > 0) {
+    await tx.delete(session).where(inArray(session.userId, userIds));
+    await tx.delete(account).where(inArray(account.userId, userIds));
+    await tx.delete(authUser).where(inArray(authUser.id, userIds));
+  }
+  await tx.delete(tenantMembership).where(eq(tenantMembership.tenantId, tenantId));
+}
+
 async function deleteTenantRows(tx: Tx, tenantId: string): Promise<void> {
+  await deleteTenantMembers(tx, tenantId);
   // Reverse registry order. The registry documents itself as being in dependency order,
   // and reading it here is one list fewer than writing a second one — `seed.ts`'s
   // TRUNCATE_ORDER is already recorded in deferred-work as duplication worth removing.
