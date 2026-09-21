@@ -18,6 +18,7 @@ import {
   TEST_NOW,
   drive as driveWith,
   idPort,
+  LANDED_TABLE,
   landedRows,
   newSince,
   owner,
@@ -302,6 +303,7 @@ describe.skipIf(!reachable)('the write use cases, against two probe Tenants as t
 
     it.each(WRITES.map((entry) => [entry.name, entry] as const))('%s', async (_name, entry) => {
       const target = ownTarget();
+      const rowsBefore = await allRows(PROBE_W.tenantId);
       const before = await landedRows(PROBE_W.tenantId);
       const ninesBefore = before.workPackages.filter(
         (w) => w.projectId === target.projectId && w.wbsCode.startsWith('9.'),
@@ -332,6 +334,20 @@ describe.skipIf(!reachable)('the write use cases, against two probe Tenants as t
         },
         `${entry.name} did not land the rows it must`,
       ).toEqual(expected);
+      // …and nothing else moved: every other table — any not in `landedRows`, and any in it the
+      // write is expected to leave alone — holds exactly the rows it held, row for row. The diff
+      // above only sees the tables `landedRows` reads, and only new or changed rows by key.
+      const expectedTables = new Set(
+        (Object.keys(LANDED_TABLE) as (keyof typeof LANDED_TABLE)[])
+          .filter((key) => expected[key].length > 0)
+          .map((key) => LANDED_TABLE[key]),
+      );
+      const untouched = (rows: Record<string, readonly string[]>) =>
+        Object.fromEntries(Object.entries(rows).filter(([table]) => !expectedTables.has(table)));
+      expect(
+        untouched(await allRows(PROBE_W.tenantId)),
+        `${entry.name} changed a table it must leave alone`,
+      ).toEqual(untouched(rowsBefore));
       // Mapping seqs are allocated as one consecutive run, in Ticket order.
       const seqs = landed.mappingEvents.map((row) => row.seq);
       expect(seqs).toEqual(seqs.map((_, index) => seqs[0]! + index));

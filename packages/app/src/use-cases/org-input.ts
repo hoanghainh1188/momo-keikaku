@@ -19,8 +19,8 @@ const id = z.string().min(1).refine(noNul, NUL_MESSAGE);
 
 /**
  * A name a Tenant Admin typed: trimmed, then refused when blank or NUL-bearing. The TRIMMED value
- * is what is stored and what the audit payload records. No length bound and no uniqueness rule —
- * the slice's Never list keeps both out.
+ * is what is stored and what the audit payload records. No uniqueness rule — the slice's Never
+ * list keeps it out. No length bound either, but by this slice's own decision, not the Never list.
  */
 const name = z.string().trim().min(1).refine(noNul, NUL_MESSAGE);
 

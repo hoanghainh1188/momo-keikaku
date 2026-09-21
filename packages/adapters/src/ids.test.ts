@@ -26,4 +26,20 @@ describe('uuidV7IdsOn', () => {
     const ids = Array.from({ length: 100 }, () => ticking.next());
     expect([...ids].sort()).toEqual(ids);
   });
+
+  it('sorts ids minted in one fixed Clock millisecond in creation order', () => {
+    const fixed = uuidV7IdsOn(at(1_800_000_000_000));
+    const ids = Array.from({ length: 1000 }, () => fixed.next());
+    expect(new Set(ids).size).toBe(ids.length);
+    expect([...ids].sort()).toEqual(ids);
+  });
+
+  it('still hands out increasing ids when the Clock steps backwards', () => {
+    const steps = [1_800_000_000_005, 1_800_000_000_005, 1_800_000_000_001, 1_800_000_000_000];
+    let i = 0;
+    const stepping = uuidV7IdsOn({ nowMs: () => steps[i++] ?? 0 });
+    const ids = steps.map(() => stepping.next());
+    expect([...ids].sort()).toEqual(ids);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
 });

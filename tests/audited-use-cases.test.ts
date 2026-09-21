@@ -307,9 +307,11 @@ describe.each(AUDITED)('audited use case %s', (name, actions) => {
         committed!.entry.at,
         `${label} stamped its record with the wrong time (${stamp === AT ? 'the anchor' : 'the Clock'} expected)`,
       ).toEqual(stamp);
-      // A create answers the id it minted, and that id is what its record names.
+      // A create answers the id it minted, and that id is what its record names — required of
+      // every `create*` write, so one that stops answering `{ id }` fails; any other write that
+      // answers a value is held to the same shape.
       const value = (run.returned as { value?: unknown }).value;
-      if (value !== undefined) {
+      if (name.startsWith('create') || value !== undefined) {
         expect(value, `${label} answered a value that is not the id its record names`).toEqual({
           id: committed!.entry.target,
         });

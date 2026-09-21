@@ -1,17 +1,18 @@
 # Handoff — 2026-09-21 (updated at the end of the 2026-09-21 session)
 
-State at `main` = `97e9fe1` (PR #21 merged).
+State at `main` = the merge of PR #25 (story 1.3's code-review fixes), on top of `625d2c5`.
 
 Two sessions are covered. **2026-09-20** took the project from "planning
 finished, no CI, 46 tests" to "three build slices merged, six CI gates, 123
 tests, tenant isolation enforced in the database". **2026-09-21** added the
-cross-tenant harness — **NFR-S1 is discharged** — and then finished every
-unblocked slice of story 1.2: the reads (PR #16) and the writes (PR #18) moved
-onto `packages/app` use cases, **dependency-cruiser is on**, the arithmetic is
-exact (`bigint` milli-hours and yen, unreduced ratios, one codec — PR #20), and
-the open `apps/web → packages/domain` edge was decided and gated (PR #21). The
-suite is **338 tests across 24 files**. Only story 1.2's watermark slice is
-left, and it is blocked.
+cross-tenant harness — **NFR-S1 is discharged** — finished every unblocked
+slice of story 1.2 (reads and writes onto `packages/app` use cases,
+**dependency-cruiser on**, exact arithmetic and one codec, the `apps/web →
+domain/present` edge decided), and then built **story 1.3 end to end**: the
+audit mechanism (PR #23), the organisation hierarchy (PR #24), and a four-layer
+code review whose nine fixes are PR #25. **Story 1.3 is `done`.** The suite is
+**510 tests across 29 files**. Story 1.2 is left with only its blocked watermark
+slice. **The next session starts story 1.4** — see "Next, in order".
 
 ---
 
@@ -72,19 +73,24 @@ to their share. Track upgrade-style work separately from feature work.
 | #19 | AD-1 states what the gate enforces and what it does not; rules narrowed to the carve-outs |
 | #20 | Story 1.2 slice 5 — exact arithmetic (`bigint`, `Ratio`, `compareRatio`) and the one jsonb codec |
 | #21 | `apps/web` imports `domain/present` only; Client View and Mapping reads; AD-1/AD-4/AD-12 amended |
+| #22 | Handoff |
+| #23 | Story 1.3 slice 1 — the audit mechanism: one tenant transaction per write, `audit.record`, closed `AUDIT_ACTIONS`, the audited-use-case gate |
+| #24 | Story 1.3 slice 2 — `program`, eight audited org writes (`before`/`after`), `Clock` and UUIDv7 id ports; AD-1: the composition root may import `packages/adapters` |
+| #25 | Story 1.3 code review — nine fixes (monotonic UUIDv7, seed truncate gate, whole-Tenant write checks, full `project.create` audit, indexes); this handoff |
 
 **CI has ten steps**, all watched to fail before being trusted: lint (the
 clock/env fence, the tenant bans, and AD-4's arithmetic fences — rounding only
 in `domain/present`, `JSON.stringify` only in the codec), three typechecks,
 **dependency-cruiser** (no database), a Postgres 18.6-alpine service, a prepare
 step (schema → pgboss roles → RLS/grants/triggers → seed), and the suite.
-**338 tests across 24 files**, up from 46 across 3. The gates report and do not
+**510 tests across 29 files**, up from 46 across 3. The gates report and do not
 block (no branch protection on a private free-plan repo).
 
 **The import direction is gated.** `.dependency-cruiser.cjs` fails on: Drizzle
 in any `apps/*` file; `packages/db` from `apps/web` except the composition root
 (`apps/web/src/server/composition.ts`) and `packages/db/auth`; `packages/db`
-from any other app; `apps/web` importing any `packages/domain` module but
+from any other app; `packages/adapters` from any `apps/*` file but the composition
+root, and from `packages/app|domain|db` at all; `apps/web` importing any `packages/domain` module but
 `present/index.ts`; the AD-1 scheduling edges (forward-looking); and any import
 it cannot resolve. What it does not enforce yet is listed in AD-1 and tracked in
 `deferred-work.md` — the worker's `pg-boss`/`pg`, package-to-package
@@ -94,6 +100,18 @@ directions, raw `pg` in `apps/web`, and pages' own `bigint` arithmetic.
 the row to `domain/present`; every ratio is an unreduced `Ratio`, compared to a
 threshold only through `compareRatio`; `domain/present/codec` is the one path
 for `jsonb`. `tests/lint-fences.test.ts` proves the lint fences still fire.
+
+**Every audited change is recorded in its own transaction (AD-14).** A write use
+case opens exactly one tenant transaction through `TenantTransaction`
+(`packages/app/src/ports/tenant-transaction.ts`, satisfied by `packages/db`'s
+`inTenantTransaction`); the change and `audit.record(scope, stamp, action,
+target, payload)` run in that scope, so a rolled-back change leaves no audit
+row. `AUDIT_ACTIONS` (`packages/app/src/audit`) is closed — six Disposition/
+Mapping actions, then eight org actions — and refused on every path.
+`tests/audited-use-cases.test.ts` enumerates the use-case surface with no
+database; Postgres rollback tests prove the rule for real. Org writes stamp
+`at` from the `Clock` port; project writes still use the Project's
+`demoAnchor` (tracked).
 
 **Tenant isolation is real**, verified directly in SQL: as the application role
 with no tenant set a read returns 0 rows, with the right tenant 1, with a wrong
@@ -141,21 +159,48 @@ reading.
 
 ## Next, in order
 
-### 1. Story 1.3 — the organisation, and the record of who changed it
+### 1. Story 1.4 — sign in, and be revoked (start here, in a new session)
 
-Story 1.2 is done except for its watermark slice, which is **blocked** (it needs
-the `seq` allocation Epic 2 and Epic 5 write), so 1.2 stays `in-progress` in
-`sprint-status.yaml` until then. Story 1.3 is the next unblocked story: the
-Tenant › Department › Program › Project shape, and the audit mechanism that
-1.4, 1.5, 1.6 and 1.7 rely on. It will be the first story to write through an
-audit module rather than inserting `audit_log` rows directly, and the first
-whose use cases are neither project reads nor Dispositions.
+Run `/bmad-build story 1.4 — Sign in, and be revoked`. The story is at
+`epics.md:575`; its estimate and dependencies are in
+`oq12-sprint-planning-2026-09-20.md`. `epic-1-context.md` is current as of
+PR #24 (the spine has not changed since), so Build should load it rather than
+recompile — check the freshness rule anyway.
 
-What story 1.2 leaves for later, all in `deferred-work.md` (**109 entries**):
-the harness registry still carries read-era names; the Plan Work Package id
-`wp-new-<anchor>` is a global primary key (a second Plan collides); no
-dependency-cruiser rule has an automated test; pages still do some `bigint`
-arithmetic of their own; and CI never runs `next build`.
+What it has to deliver (AC summary): Better Auth's `user`, `session`,
+`account`, `verification` tables as class `global` (exempt from FORCE-RLS),
+reached only through `IdentityPort` implemented by `packages/db/auth` (AD-1
+carve-out 1, today an empty skeleton `@momo/db-auth`); `tenant_membership` as
+the one non-RLS bridge, read only by `resolveRequestContext`, which validates
+the session's explicit `activeTenantId` **on every request**; idle timeout
+(default 8 h) with the Better Auth cookie cache **disabled**, so revocation and
+expiry bite on the very next request; revocation as an audited `app` use case,
+never a write through the auth adapter; email + password and Google only;
+password reset through a mail port (console mailer locally).
+
+What exists that it builds on, and what it replaces:
+- **`UseCaseContext` is `{ tenantId }`** (`packages/app/src/use-cases/context.ts`),
+  built once in `composition.ts` from `DEMO_TENANT_ID`; the audit actor is
+  `WEB_ACTOR = 'user:linh'` beside it. `RequestContext { tenantId, userId, roles,
+  projectIds, locale }` (spine AD-12) replaces both — every use case and both
+  harnesses construct a context today, so budget for that ripple.
+- **The legacy `app_user` table** (seeded `user-linh` pm, `user-hoang`
+  tenant_admin) is declared unreached in the harness; 1.4 replaces it with the
+  identity tables plus `tenant_membership`, and the reach entry must come out.
+- **PM assignment moved here from 1.3** (founder decision 2026-09-21):
+  `tenant_membership.project_ids` is its home; role reach itself is 1.5's. It
+  is audited ("role changes" on NFR-A1) — add its action to `AUDIT_ACTIONS`.
+- **The audit mechanism, `Clock` and id ports are ready**: new audited writes
+  (revocation, membership changes) go through `runAuditedWrite`; add a scope
+  family to `inTenantTransaction` for identity/membership repositories.
+- **Local-run traps already decided** (epic context): configure Better Auth's
+  Next cookies plugin or session cookies are silently never set; export
+  next-intl middleware from `proxy.ts`.
+
+Expect Build's gates to ask the founder: how to slice it (identity tables +
+`resolveRequestContext` first, then sign-in methods, then revocation/reset is a
+natural split); Google OAuth credentials for local and CI (a test double, or
+real client ids?); and whether the mail port lands here or with Epic 8's SES.
 
 ### 2. Story 1.2's watermark slice — blocked
 
@@ -163,13 +208,19 @@ Advisory locks before `seq` allocation. Needs Epic 2 and Epic 5's writers.
 
 ### 3. Story 1.1 slice B3
 
-`pnpm dev` in one command. Blocked on **story 2.1's migration**. Sequence it
-after 2.1.
+`pnpm dev` in one command. Blocked on **story 2.1's migration**.
 
 ### 4. Then the rest of Epic 1
 
-Stories 1.4 through 1.9. Epic 1 is 156 h and is the calibration point for the
-whole estimate.
+Stories 1.5 through 1.9. Epic 1 is 156 h and is the calibration point for the
+whole estimate — its closing is the first date-slip checkpoint (above).
+
+What story 1.3 left, in `deferred-work.md` (**130 entries**): the
+Program-within-Department rule is held by use cases and row locks, with no
+foreign key and no concurrency test; `audit_log.at` mixes fixture and wall time;
+the audited-use-case gate trusts declarations rather than NFR-A1's list;
+`apps/worker` has no composition root yet (it needs one for story 1.8's fixture
+clock); CI never runs `next build`.
 
 ---
 
@@ -207,6 +258,16 @@ whole estimate.
   were both showing `review` with slices outstanding.
 - **All three constraint types stay in R0**; the critical path is the
   minimum-Float chain.
+- **The composition root may also import `packages/adapters`** (founder,
+  2026-09-21, AD-1 amended after two adversarial rounds) to wire the `Clock`
+  and the UUIDv7 id generator; ids take their millisecond from the Clock and
+  keep a monotonic counter. `apps/worker` gets its own named composition root
+  the day it first needs an adapter.
+- **Story 1.3 decisions (founder, 2026-09-21)**: no Organisation UI until
+  sign-in and roles exist; PM assignment belongs to 1.4/1.5; no deleting or
+  archiving org units, no name-uniqueness rule; new Projects take documented
+  defaults (`NEW_PROJECT_DEFAULTS`) for columns later stories own, including a
+  default Rate of 0 until story 1.6.
 
 ---
 
@@ -237,6 +298,11 @@ whole estimate.
   `APP_DATABASE_URL`; create it with the two lines above if it is missing.
 - A shell without `pnpm` needs `corepack enable` once; `packageManager` pins
   pnpm 12.4.2.
+- If Postgres is not answering on 55433, Docker Desktop may be stopped: start it,
+  then `pnpm db:up`. After a schema change, re-run the prepare steps
+  (`drizzle-kit push --force`, `pnpm db:policies`, `pnpm seed`).
+- A PreToolUse hook blocks `git commit` in any Bash command that also contains
+  an `-n` flag (it reads it as `--no-verify`); run `grep -n`/`sed -n` separately.
 - **The local clone goes stale**: work lands via PRs merged from other
   sessions. `git fetch` before measuring anything, or a stale ref reads exactly
   like a missing artifact.

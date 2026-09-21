@@ -232,6 +232,13 @@ const auditPayloadJson = z.union([
       programId: z.string().nullable(),
       clientName: z.string(),
       contractType: z.string(),
+      tzOffsetMinutes: z.number().int(),
+      teireiWeekday: z.number().int(),
+      defaultRateJpy: z.number().int(),
+      eacMethod: z.string(),
+      calendarJp: z.boolean(),
+      calendarVn: z.boolean(),
+      demoAnchor: z.string(),
     })
     .strict(),
   z.object({ before: z.string().nullable(), after: z.string().nullable() }).strict(),
@@ -266,6 +273,17 @@ export async function landedRows(tenantId: string) {
 }
 
 export type Landed = Awaited<ReturnType<typeof landedRows>>;
+
+/** The SQL table each `landedRows` key reads — what `allRows` keys the same rows by. */
+export const LANDED_TABLE: Readonly<Record<keyof Landed, string>> = {
+  mappingEvents: 'mapping_event',
+  dispositions: 'disposition_event',
+  audits: 'audit_log',
+  workPackages: 'work_package',
+  departments: 'department',
+  programs: 'program',
+  projects: 'project',
+};
 
 /**
  * The rows of a MUTABLE table that are new or different since `before` — by id, compared whole.

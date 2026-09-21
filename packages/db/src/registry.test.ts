@@ -14,6 +14,7 @@ import {
   TENANT_OWNED,
 } from './table-classes';
 import { generateAll, seqAllocatorName } from './sql/generate';
+import { TRUNCATE_ORDER } from './seed';
 
 /**
  * The registry, against the ORM and against the checked-in SQL. No database.
@@ -49,6 +50,13 @@ describe('the table-class registry is the single source', () => {
     expect(new Set(REGISTERED_TABLES).size, 'a table is registered twice').toBe(
       REGISTERED_TABLES.length,
     );
+  });
+
+  it('is what the reseed truncates, table for table', () => {
+    // No foreign keys, so `TRUNCATE … CASCADE` covers nothing the list leaves out: a table
+    // missing here would keep its rows across `pnpm seed`, silently.
+    expect([...TRUNCATE_ORDER].sort()).toEqual([...REGISTERED_TABLES].sort());
+    expect(new Set(TRUNCATE_ORDER).size, 'a table is truncated twice').toBe(TRUNCATE_ORDER.length);
   });
 
   it('holds the 18 tables of this release, 17 of them tenant-owned', () => {

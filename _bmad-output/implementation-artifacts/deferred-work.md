@@ -537,3 +537,21 @@ work started and was deliberately deferred, with the evidence for the split.
 - source_spec: `_bmad-output/planning-artifacts/architecture/architecture-momo-keikaku-2026-09-20/ARCHITECTURE-SPINE.md`
   summary: `db/seed` has no way to receive the `Clock` AD-15 says it creates records through: `packages/db` may not import `packages/adapters`.
   evidence: Found by the same review. The seed's operator entry point (`scripts/seed.ts`) is outside the graph and can inject a clock; wire it there when story 1.8 introduces the fixture-mode clock the seed must share.
+
+## Deferred from: code review of spec-1-3-organisation-hierarchy (2026-09-21)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-3-organisation-hierarchy.md`
+  summary: `findDepartment` and `findProgram`'s row locks (added for correct rename `before` values) are untested, like `findProject`'s.
+  evidence: Code review of story 1.3. Removing `.for('update')` from either leaves every suite green; two concurrent renames would record the same stale `before`. Same two-connection barrier harness as the `findProject` entry above.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-3-organisation-hierarchy.md`
+  summary: Story 1.3 AC3's "Published Snapshots unchanged" and "only the Program roll-up changes" cannot be tested yet.
+  evidence: Code review of story 1.3. No published-snapshot table and no Program roll-up read exist; `allRows` covers every tenant-owned table, so the snapshot half becomes covered automatically when Epic 5 adds the table. The roll-up half needs the first read that aggregates by Program.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-3-organisation-hierarchy.md`
+  summary: The audited-use-case gate checks each use case's own declaration, not NFR-A1's list; a write on the list declared `{ unaudited: '<reason>' }` would pass.
+  evidence: Code review of story 1.3 (AC4). Safe today because nothing is declared unaudited. Fix: map NFR-A1's action groups to the use cases that implement them, and refuse an `unaudited` declaration for any of them.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-3-organisation-hierarchy.md`
+  summary: `epic-1-context.md` and story 1.3's AC state `audit.record(ctx, action, target, payload)`; the code's signature is `record(scope, stamp, action, target, payload)`.
+  evidence: Code review of story 1.3. Slice 1's spec records the extra `scope` and the `{ actor, at }` stamp as deliberate (the transaction must be explicit); the planning wording should follow when AD-14 is next touched, and the compiled epic context regenerates from it.

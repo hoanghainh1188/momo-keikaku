@@ -34,8 +34,11 @@ export interface AppError {
   readonly messageKey: AppErrorMessageKey;
   /**
    * Structured, never prose, and never anything the caller did not already supply — for
-   * `invalid_input`, the offending field names. A `not_found` carries none, so an error
-   * cannot become the channel a foreign Tenant's data leaks through.
+   * `invalid_input`, the offending field names, each mapped to codes: zod issue codes for a
+   * malformed command, or a named rule code for a well-formed one that breaks a rule (such as
+   * `PROGRAM_NOT_IN_DEPARTMENT`, declared once beside the use case that raises it). A
+   * `not_found` carries none, so an error cannot become the channel a foreign Tenant's data
+   * leaks through.
    */
   readonly details?: Readonly<Record<string, readonly string[]>>;
 }
