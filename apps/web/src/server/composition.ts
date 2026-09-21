@@ -1,13 +1,13 @@
 /**
  * `apps/web`'s COMPOSITION ROOT — and the only file under `apps/web` permitted to import
- * `@momo/db`.
+ * `@momo/db`. `.dependency-cruiser.cjs` (rule `apps-not-to-db`) names this exact path, and
+ * `pnpm depcruise` fails CI on any other `apps/*` file importing `packages/db` or Drizzle.
  *
  * AD-1 says an inbound adapter may call use cases and nothing else. Something still has to
  * build the database handle, pick the role, and hand `packages/db`'s repository to
- * `packages/app`'s use cases as the port they declare — and that something is this file,
- * named, so the next slice's dependency-cruiser rule can allow exactly this path rather than
- * a pattern. It is a deliberate SECOND carve-out beside `packages/db/auth`, which
- * ARCHITECTURE-SPINE.md calls the only one; recorded in deferred-work.md.
+ * `packages/app`'s use cases as the ports they declare — and that something is this file,
+ * named, so the rule allows exactly this path rather than a pattern. It is AD-1's second
+ * carve-out beside `packages/db/auth` (ARCHITECTURE-SPINE.md, amended 2026-09-21).
  *
  * WHAT IT WIRES:
  *
@@ -16,39 +16,64 @@
  *     owner's credential would make every policy inert. `@momo/db` cannot read the
  *     configuration itself (the environment fence, and it may not import `@momo/app`), so
  *     the connection string is read here and passed in.
- *   * The port. `packages/db`'s `loadProjectBundle` and `loadReview` are handed over as they
- *     are: `packages/app` declares `ProjectReadPort` and these functions satisfy it
- *     STRUCTURALLY. The `satisfies` below is where TypeScript checks that match — change a
- *     signature on either side and the typecheck names this line.
- *   * The context: `{ tenantId }`, story 1.4's shape with one field. There is no auth yet,
- *     so the single seeded Tenant is stated here, once, instead of at seven call sites.
- *     `resolveRequestContext` replaces `webContext()` when it lands.
+ *   * The ports. `packages/db`'s repository functions are handed over as they are:
+ *     `packages/app` declares `ProjectReadPort` and `ProjectWritePort`, and these functions
+ *     satisfy them STRUCTURALLY. The two `satisfies` below are where TypeScript checks that
+ *     match — change a signature on either side and the typecheck names the line.
+ *   * The context: `{ tenantId }`, story 1.4's shape with one field, and — beside it — the
+ *     audit ACTOR the writes stamp. There is no auth yet, so the single seeded Tenant and the
+ *     single demo user are stated here, once each. `resolveRequestContext` replaces both
+ *     lines together when it lands.
  *
- * `webDb()` and `WEB_TENANT_ID` are still exported for ONE caller, `apps/web/src/app/actions.ts`,
- * whose five write actions have not moved onto use cases yet (the next slice, together with
- * the gate). No read call site may use them: the pages call `getProjectHeader` and
- * `getProjectReview` below.
+ * WHAT IT EXPORTS: use-case bindings, and nothing else — never the handle, the Tenant, a
+ * repository function or a Drizzle schema (AD-1). It wires; it never queries.
  */
 import {
   config,
+  explainTickets as explainTicketsUseCase,
   getProjectHeader as getProjectHeaderUseCase,
   getProjectReview as getProjectReviewUseCase,
+  mapTicket as mapTicketUseCase,
+  mapTickets as mapTicketsUseCase,
+  markChangeRequestCandidates as markChangeRequestCandidatesUseCase,
+  planTicketsAsWorkPackage as planTicketsAsWorkPackageUseCase,
+  type ChangeRequestCandidatesInput,
+  type ExplainTicketsInput,
+  type MapTicketInput,
+  type MapTicketsInput,
+  type PlanTicketsInput,
   type ProjectInput,
   type ProjectReadDeps,
+  type ProjectWriteDeps,
   type UseCaseContext,
 } from '@momo/app';
-import { DEMO_TENANT_ID, getDb, loadProjectBundle, loadReview, type Db } from '@momo/db';
+import {
+  DEMO_TENANT_ID,
+  getDb,
+  loadProjectBundle,
+  loadReview,
+  recordChangeRequestCandidates,
+  recordExplainDisposition,
+  recordManualMapping,
+  recordMapDisposition,
+  recordPlanDisposition,
+  type Db,
+} from '@momo/db';
 
 /** The handle, on the restricted application role. Pools are memoised inside `getDb`. */
-export function webDb(): Db {
+function webDb(): Db {
   return getDb(config.APP_DATABASE_URL);
 }
 
+/** The Tenant every request in this release belongs to. Story 1.4 resolves it per request. */
+const WEB_TENANT_ID = DEMO_TENANT_ID;
+
 /**
- * The Tenant every request in this release belongs to. Read by `webContext()` and, until the
- * writes move, by `actions.ts` — nowhere else.
+ * The audit actor every write in this release is stamped with — the demo's single PM. Stated
+ * here, beside the Tenant, so neither `packages/db` nor the use cases name a user; story 1.4
+ * replaces it with the signed-in user on the RequestContext.
  */
-export const WEB_TENANT_ID = DEMO_TENANT_ID;
+const WEB_ACTOR = 'user:linh';
 
 /** The context every use case is called with. Story 1.4 resolves this per request. */
 function webContext(): UseCaseContext {
@@ -74,4 +99,44 @@ export function getProjectHeader(input: ProjectInput) {
 /** The bundle and its Review, for every project page. See `packages/app`'s `getProjectReview`. */
 export function getProjectReview(input: ProjectInput) {
   return getProjectReviewUseCase(projectReadDeps(), webContext(), input);
+}
+
+/** The project write port, wired. Built per call, for the same reason as the read port. */
+function projectWriteDeps() {
+  return {
+    handle: webDb(),
+    actor: WEB_ACTOR,
+    projectWrite: {
+      recordMapDisposition,
+      recordPlanDisposition,
+      recordExplainDisposition,
+      recordChangeRequestCandidates,
+      recordManualMapping,
+    },
+  } satisfies ProjectWriteDeps<Db>;
+}
+
+/** FR-29 *Map*. See `packages/app`'s `mapTickets`. */
+export function mapTickets(input: MapTicketsInput) {
+  return mapTicketsUseCase(projectWriteDeps(), webContext(), input);
+}
+
+/** FR-29 *Plan*. See `packages/app`'s `planTicketsAsWorkPackage`. */
+export function planTicketsAsWorkPackage(input: PlanTicketsInput) {
+  return planTicketsAsWorkPackageUseCase(projectWriteDeps(), webContext(), input);
+}
+
+/** FR-29 *Explain*. See `packages/app`'s `explainTickets`. */
+export function explainTickets(input: ExplainTicketsInput) {
+  return explainTicketsUseCase(projectWriteDeps(), webContext(), input);
+}
+
+/** FR-29 *Change Request candidate*. See `packages/app`'s `markChangeRequestCandidates`. */
+export function markChangeRequestCandidates(input: ChangeRequestCandidatesInput) {
+  return markChangeRequestCandidatesUseCase(projectWriteDeps(), webContext(), input);
+}
+
+/** FR-21 manual Mapping of one Ticket. See `packages/app`'s `mapTicket`. */
+export function mapTicket(input: MapTicketInput) {
+  return mapTicketUseCase(projectWriteDeps(), webContext(), input);
 }

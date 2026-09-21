@@ -3,8 +3,9 @@
 // `apps/worker`) may call only what this barrel exposes.
 //
 // Story 1.2 slice 3 brings the first use cases: the two project reads, the port they depend
-// on, and the `Result` they return. Authorisation (1.5), audit (1.3) and the RequestContext
-// (1.4) attach to this layer later; none of them exists yet.
+// on, and the `Result` they return. Slice 4 adds the five project writes and their port.
+// Authorisation (1.5), audit (1.3) and the RequestContext (1.4) attach to this layer later;
+// none of them exists yet.
 //
 // `./use-cases` does not import `./config`, so code that needs the use cases and not the
 // configuration can import `packages/app/src/use-cases` directly. `config` is lazy (a getter
@@ -21,6 +22,25 @@ export type {
   ProjectReadPort,
   ProjectReview,
 } from './ports/project-read';
+export type {
+  ChangeRequestCandidateCommand,
+  ExplainDispositionCommand,
+  ManualMappingCommand,
+  MapDispositionCommand,
+  PlanDispositionCommand,
+  ProjectWriteDeps,
+  ProjectWritePort,
+} from './ports/project-write';
 export * from './use-cases';
 export type { UseCaseContext } from './use-cases/context';
 export type { ProjectInput } from './use-cases/project-input';
+// The one runtime value besides the use cases and `config`: the Explain note's length bound,
+// so the action's truncation and the use case's validation cannot drift apart.
+export { EXPLAIN_NOTE_MAX } from './use-cases/project-write-input';
+export type {
+  ChangeRequestCandidatesInput,
+  ExplainTicketsInput,
+  MapTicketInput,
+  MapTicketsInput,
+  PlanTicketsInput,
+} from './use-cases/project-write-input';

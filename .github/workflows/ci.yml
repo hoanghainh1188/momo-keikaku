@@ -57,19 +57,29 @@
 # returns a default, fails it. `packages/app/src/use-cases/project-reads.test.ts` pins the
 # `Result` contract with no database.
 #
-# Still absent: dependency-cruiser (it waits on the next slice moving actions.ts's five
-# write actions onto use cases — actions.ts still imports drizzle-orm and @momo/db), the
-# golden Published Snapshot recompute per formulaVersion, the compaction-then-recompute
-# test, the ComputationInputs closure test, the concurrency test and the six scheduler
-# gates. Adding a gate before its code exists would make CI red on day one for a reason
-# nobody could fix that day — which is the failure epics.md warns about for the
-# dependency-cruiser gate specifically.
+# STORY 1.2 SLICE 4 moved actions.ts's five write actions onto `packages/app` use cases and
+# SWITCHED DEPENDENCY-CRUISER ON, in that order. `pnpm depcruise` (.dependency-cruiser.cjs,
+# no database) fails on any `apps/*` import of `packages/db` or `drizzle-orm` outside the two
+# named carve-outs — `apps/web/src/server/composition.ts` and `packages/db/auth` — and carries
+# AD-1's two scheduling edges plus "the composition root never imports the schedule/plan-input
+# repositories" as forward-looking rules. Scope is AC-6's, not all of AD-1: `apps/worker`'s
+# `pg-boss`/`pg` imports stay out (recorded in deferred-work.md). The writes joined the
+# harness too: `tests/cross-tenant-writes.test.ts` proves a foreign-Tenant write answers
+# `not_found` and lands nothing in any tenant-owned table, and an own-Tenant write lands exactly
+# the rows the action always wrote.
 #
-# So this file gates on what is real: lint, all three typechecks and the test suite.
-# Measured on 2026-09-21 — `pnpm lint` exits 0, all three typechecks exit 0, and `pnpm test`
-# passes 165 tests across 14 files against the prepared Postgres service below (146 across
-# 12 before story 1.2 slice 3, 123 across 11 before story 1.2 slice 2, 72 across 7 before
-# slice 1, 53 across 4 before story 1.1 slice B2).
+# Still absent: the golden Published Snapshot recompute per formulaVersion, the
+# compaction-then-recompute test, the ComputationInputs closure test, the concurrency test and
+# the six scheduler gates. Adding a gate before its code exists would make CI red on day one
+# for a reason nobody could fix that day — which is why dependency-cruiser waited for the
+# writes slice.
+#
+# So this file gates on what is real: lint, all three typechecks, dependency-cruiser and the
+# test suite. Measured on 2026-09-21 — `pnpm lint`, all three typechecks and `pnpm depcruise`
+# exit 0, and `pnpm test` passes 266 tests across 18 files against the prepared
+# Postgres service below (165 across 14 before story 1.2 slice 4, 146 across 12 before slice 3,
+# 123 across 11 before slice 2, 72 across 7 before slice 1, 53 across 4 before story 1.1
+# slice B2).
 #
 # Every gate here has been watched to fail, because a gate nobody has seen fail is
 # indistinguishable from a green light:
@@ -114,6 +124,16 @@
 #     repository failing for the caller's own Tenant — by the completeness floor), and one
 #     ignoring the context's Tenant (15 failures). A drifted port is caught by the typecheck
 #     at the composition root, TS2322. The full table is in spec-1-2-web-read-use-cases.md.
+#   * dependency-cruiser (story 1.2 slice 4) — `@momo/db` imported from a page (by value and
+#     type-only), `drizzle-orm` from actions.ts, `packages/db` reached by a relative path from
+#     a component, and a temporary file at each forward-looking scheduling path
+#     (domain/schedule importing attribution; db/repositories/schedule imported outside
+#     app/schedule; db/repositories/plan-input imported by the composition root) each fail
+#     `pnpm depcruise` naming the file and the rule.
+#   * tests (the writes, story 1.2 slice 4) — a write use case exported with no registry entry
+#     (caught with NO database), a write ignoring the context's Tenant, the not_found mapping
+#     removed from the write path, and the write port miswired or drifted at the composition
+#     root (TS2322). The full table is in spec-1-2-web-write-use-cases.md.
 
 # THESE GATES REPORT; THEY DO NOT BLOCK. The repository is private on a free plan, so
 # GitHub refuses branch protection ("Upgrade to GitHub Pro or make this repository
@@ -142,7 +162,7 @@ concurrency:
 
 jobs:
   verify:
-    name: lint + 3 typechecks + tests
+    name: lint + 3 typechecks + depcruise + tests
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -235,6 +255,14 @@ jobs:
       - name: Lint (clock/env fence)
         if: always()
         run: pnpm lint
+
+      # The import-direction gate (AD-1, story 1.2 AC-6). No database: it reads the import
+      # graph only. It is the gate that fails when a page or an action imports `@momo/db` or
+      # `drizzle-orm` again — which lint and all three typechecks let through (measured in
+      # story 1.2 slice 3). The rules and their scope are in .dependency-cruiser.cjs.
+      - name: Dependency-cruiser (import direction)
+        if: always()
+        run: pnpm depcruise
 
       # The round-trip tests need something to read. `push` applies schema.ts through
       # drizzle-kit rather than a migration, which is correct while Epic 2's single

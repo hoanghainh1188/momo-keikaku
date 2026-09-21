@@ -1,0 +1,24 @@
+// dependency-cruiser's resolver config, and nothing else's (`.dependency-cruiser.cjs`).
+//
+// Why not apps/web/tsconfig.json: dependency-cruiser's tsconfig-paths plugin resolves `paths`
+// against the CURRENT DIRECTORY when the config has no `baseUrl` (and TypeScript 6 deprecates
+// `baseUrl`), so apps/web's `"@/*": ["./src/*"]` resolved to <root>/src and every `@/…` import
+// went unresolved — shown by the `not-to-unresolvable` rule. Paths written from the repo root
+// resolve correctly. Keep `@/*` in step with apps/web/tsconfig.json; the `@momo/*` paths come
+// from the base unchanged.
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "paths": {
+      "@/*": ["./apps/web/src/*"],
+      "@momo/domain": ["./packages/domain/src/index.ts"],
+      "@momo/domain/*": ["./packages/domain/src/*"],
+      "@momo/db": ["./packages/db/src/index.ts"],
+      "@momo/db/*": ["./packages/db/src/*"],
+      "@momo/app": ["./packages/app/src/index.ts"],
+      "@momo/app/*": ["./packages/app/src/*"]
+    }
+  },
+  "include": ["apps/**/*.ts", "apps/**/*.tsx", "packages/**/*.ts"],
+  "exclude": ["node_modules", "**/node_modules", "**/.next"]
+}

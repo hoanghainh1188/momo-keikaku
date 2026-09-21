@@ -24,18 +24,21 @@
  * at repository level, like nothing at all — here it fails the completeness assertions (an
  * own-Tenant read) or the not_found assertion (a foreign Project id).
  *
- * WHAT IT DOES NOT INCLUDE. `apps/web/src/app/actions.ts` still issues two reads of its own —
- * `anchorOf` selects from `project`, `planTickets` from `work_package` — inside write
- * actions, on its own `withTenant`. They are steps inside a write, not use cases a reader
- * invokes, and they join when the writes move onto use cases (the next slice); a write entry
- * can then be registered beside the reads (see `UseCaseKind`). `scripts/peek-db.ts` still
- * calls the repository directly; it is tooling, not an inbound adapter.
+ * THE WRITES ARE ON IT TOO. Since story 1.2 slice 4 the same module exports the five project
+ * write use cases (FR-29's Dispositions and FR-21's manual Mapping), which used to live in
+ * `apps/web/src/app/actions.ts` with two reads of their own on a private `withTenant`. They
+ * are registered below as `kind: 'write'`, so the same no-database gate names a write
+ * exported with no entry, and `tests/cross-tenant-writes.test.ts` drives every one: a
+ * foreign-Tenant write must answer `not_found` and land nothing in any tenant-owned table, and
+ * an own-Tenant write must land exactly the rows the action always wrote. `scripts/peek-db.ts`
+ * still calls the repository directly; it is tooling, not an inbound adapter.
  *
  * WHY THIS LIVES IN `tests/`. It needs `@momo/app`'s use cases, `@momo/db`'s repository and
  * the wiring between them at once, which makes the harness a composition root of its own. A
  * suite spanning layers belongs to none of them.
  */
 import type { ProjectReadDeps } from '../packages/app/src/ports/project-read';
+import type { ProjectWriteDeps } from '../packages/app/src/ports/project-write';
 import * as readSurface from '../packages/app/src/use-cases';
 import type { Db } from '../packages/db/src/client';
 import type { DemoState } from '../packages/db/src/fixtures';
@@ -53,13 +56,27 @@ export interface UseCaseTarget {
 }
 
 /**
- * Whether the export is a read the harness must drive.
- *
- * `not-a-read` exists so that a future non-read export (a writer, a health check) can be
- * registered with a stated reason rather than silently omitted — the point of the gate is
- * that every export is ACCOUNTED FOR, not that every export is a read.
+ * What one write invocation is given: the Tenant it runs as, the Project it names, and ids to
+ * put in the command. The ids come from the Project's OWN Tenant's fixture — for the
+ * cross-Tenant probe too, which is the id-from-a-URL shape: a foreign Tenant replaying ids it
+ * has seen.
  */
-export type UseCaseKind = 'read' | 'not-a-read';
+export interface WriteTarget extends UseCaseTarget {
+  /** Two Ticket ids of the Project's Tenant. The single-Ticket write uses the first. */
+  readonly ticketIds: readonly [string, string];
+  /** A leaf Work Package of the Project's Tenant. */
+  readonly wpId: string;
+}
+
+/**
+ * What the export is, and so how the harness drives it.
+ *
+ * `read` is driven by `tests/cross-tenant.test.ts`, `write` by
+ * `tests/cross-tenant-writes.test.ts`. `not-a-read` exists so that a future export that is
+ * neither (a health check) can be registered with a stated reason rather than silently
+ * omitted — the point of the gate is that every export is ACCOUNTED FOR.
+ */
+export type UseCaseKind = 'read' | 'write' | 'not-a-read';
 
 export interface ReadUseCase {
   /** Must equal an exported function name of the read surface. Asserted, not assumed. */
@@ -94,6 +111,14 @@ export interface ReadUseCase {
    * fixture instead of going stale beside it.
    */
   readonly mustSurface?: (state: DemoState) => string[];
+  /**
+   * How the harness invokes a `write`. Required for one, forbidden otherwise.
+   *
+   * Given the port wired to the RESTRICTED role's handle and a test actor, for the same reason
+   * as `invoke`: the harness decides the role, the entry decides only how to build its
+   * command. It returns the use case's `Result` untouched.
+   */
+  readonly invokeWrite?: (deps: ProjectWriteDeps<Db>, target: WriteTarget) => Promise<unknown>;
 }
 
 /**
@@ -150,6 +175,10 @@ export function projectBundleLabels(state: DemoState): string[] {
   ];
 }
 
+/**
+ * Every export of the use-case surface, reads and writes alike. (The name predates the writes;
+ * `kind` is what tells them apart.)
+ */
 export const READ_USE_CASES: readonly ReadUseCase[] = [
   {
     name: 'getProjectHeader',
@@ -185,6 +214,71 @@ export const READ_USE_CASES: readonly ReadUseCase[] = [
         { projectId: target.projectId },
       ),
     mustSurface: projectBundleLabels,
+  },
+  {
+    name: 'mapTickets',
+    kind: 'write',
+    why:
+      'FR-29 Map (was actions.ts mapTickets): one mapping_event per Ticket, a disposition_event ' +
+      'and an audit_log row, in one withTenant transaction after reading project for its anchor.',
+    invokeWrite: (deps, target) =>
+      readSurface.mapTickets(
+        deps,
+        { tenantId: target.tenantId },
+        { projectId: target.projectId, wpId: target.wpId, ticketIds: target.ticketIds },
+      ),
+  },
+  {
+    name: 'planTicketsAsWorkPackage',
+    kind: 'write',
+    why:
+      'FR-29 Plan (was actions.ts planTickets): reads project and the Project\'s work_package ' +
+      'rows, inserts a new work_package, then the mapping_events, disposition_event and audit_log.',
+    invokeWrite: (deps, target) =>
+      readSurface.planTicketsAsWorkPackage(
+        deps,
+        { tenantId: target.tenantId },
+        { projectId: target.projectId, name: 'Harness Plan', ticketIds: target.ticketIds },
+      ),
+  },
+  {
+    name: 'explainTickets',
+    kind: 'write',
+    why:
+      'FR-29 Explain (was actions.ts explainTickets): a disposition_event carrying the note and ' +
+      'an audit_log row, after reading project for its anchor.',
+    invokeWrite: (deps, target) =>
+      readSurface.explainTickets(
+        deps,
+        { tenantId: target.tenantId },
+        { projectId: target.projectId, note: 'Harness note.', ticketIds: target.ticketIds },
+      ),
+  },
+  {
+    name: 'markChangeRequestCandidates',
+    kind: 'write',
+    why:
+      'FR-29 Change Request candidate (was actions.ts crCandidate): a disposition_event and an ' +
+      'audit_log row, after reading project for its anchor.',
+    invokeWrite: (deps, target) =>
+      readSurface.markChangeRequestCandidates(
+        deps,
+        { tenantId: target.tenantId },
+        { projectId: target.projectId, ticketIds: target.ticketIds },
+      ),
+  },
+  {
+    name: 'mapTicket',
+    kind: 'write',
+    why:
+      'FR-21 manual Mapping (was actions.ts mapSingleTicket): one manual mapping_event and an ' +
+      'audit_log row, after reading project for its anchor. The unmap arm is asserted separately.',
+    invokeWrite: (deps, target) =>
+      readSurface.mapTicket(
+        deps,
+        { tenantId: target.tenantId },
+        { projectId: target.projectId, ticketId: target.ticketIds[0], wpId: target.wpId },
+      ),
   },
 ] as const;
 
@@ -244,7 +338,7 @@ export const UNREACHED_TENANT_OWNED_TABLES: readonly UnreachedTable[] = [
   {
     table: 'audit_log',
     why:
-      'Written by the seed and by `apps/web`\'s actions, never read. Story 1.7 gives the ' +
+      'Written by the seed and by the write use cases, never read. Story 1.7 gives the ' +
       'Tenant Admin the log viewer, which is the read use case that will bring it into this ' +
       'harness — and the day it does, this entry has to come out or the reach assertion fails.',
   },
