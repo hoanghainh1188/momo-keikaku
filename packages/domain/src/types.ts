@@ -1,5 +1,5 @@
 import type { IsoDate } from './calendar';
-import type { Mh } from './units';
+import type { Jpy, Mh, Ratio } from './units';
 
 /** AD-6: the FR-19 whitelist. Descriptions and comments are never carried. */
 export interface TicketObservation {
@@ -104,7 +104,7 @@ export interface Resource {
   departmentId: string;
   trackerAccountIds: string[];
   /** FR-12: dated Rate history. */
-  rates: { effectiveFrom: IsoDate; yenPerHour: number }[];
+  rates: { effectiveFrom: IsoDate; yenPerHour: Jpy }[];
 }
 
 export interface ProjectConfig {
@@ -114,21 +114,25 @@ export interface ProjectConfig {
   contractType: '請負' | '準委任';
   tzOffsetMinutes: number;
   teireiWeekday: number;
-  defaultRateYenPerHour: number;
+  defaultRateYenPerHour: Jpy;
   eacMethod: 'typical';
+  /**
+   * AD-4: thresholds are exact `Ratio` constants, met only through `compareRatio` in
+   * `health.ts` — `spi ≥ 0.95` is `num × 100 ≥ den × 95`, never a float comparison.
+   */
   thresholds: {
-    ratioGreen: number; // >= green
-    ratioAmber: number; // >= amber, below = red
-    tcpiRed: number;
-    unplannedGreenBelow: number; // share
-    unplannedAmberMax: number;
+    ratioGreen: Ratio; // >= green
+    ratioAmber: Ratio; // >= amber, below = red
+    tcpiRed: Ratio;
+    unplannedGreenBelow: Ratio; // share
+    unplannedAmberMax: Ratio;
   };
 }
 
 export const DEFAULT_THRESHOLDS: ProjectConfig['thresholds'] = {
-  ratioGreen: 0.95,
-  ratioAmber: 0.85,
-  tcpiRed: 1.1,
-  unplannedGreenBelow: 0.1,
-  unplannedAmberMax: 0.2,
+  ratioGreen: { num: 95n, den: 100n },
+  ratioAmber: { num: 85n, den: 100n },
+  tcpiRed: { num: 11n, den: 10n },
+  unplannedGreenBelow: { num: 1n, den: 10n },
+  unplannedAmberMax: { num: 2n, den: 10n },
 };

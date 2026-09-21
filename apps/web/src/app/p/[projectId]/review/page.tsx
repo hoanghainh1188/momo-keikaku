@@ -1,7 +1,18 @@
 import Link from 'next/link';
 import { getProjectReview } from '@/server/composition';
 import { valueOrNotFound } from '@/server/result';
-import { hours, hoursSigned, present, share, yen } from '@momo/domain';
+import {
+  costOf,
+  hours,
+  hoursSigned,
+  isBehindPlan,
+  present,
+  ratio,
+  share,
+  wholePercent,
+  yen,
+  type Mh,
+} from '@momo/domain';
 import { HealthBadge, Internal, MetricCell, Section, UnplannedChip } from '@/components/ui';
 import { ScopeLedgerBar } from '@/components/scope-ledger-bar';
 import { DispositionRail } from '@/components/disposition-rail';
@@ -85,7 +96,7 @@ export default async function ReviewPage({
               label="SPI"
               metric={r.evm.spi}
               formula="SPI = EV ÷ PV"
-              note={`${hours(r.evm.evMh)}h ÷ ${hours(r.evm.pvMh)}h — ${spi.text !== '—' && Number(spi.text) < 1 ? 'behind plan' : 'on or ahead of plan'}`}
+              note={`${hours(r.evm.evMh)}h ÷ ${hours(r.evm.pvMh)}h — ${isBehindPlan(r.evm.spi) ? 'behind plan' : 'on or ahead of plan'}`}
               testId="m-spi"
             />
             <MetricCell
@@ -157,9 +168,9 @@ export default async function ReviewPage({
                     <span className="unit">h</span>
                   </td>
                   <td className="num">
-                    {r.unplanned.cumulative.unplannedMh === 0
+                    {r.unplanned.cumulative.unplannedMh === 0n
                       ? '—'
-                      : share(c.mh / r.unplanned.cumulative.unplannedMh)}
+                      : share(ratio(c.mh, r.unplanned.cumulative.unplannedMh))}
                   </td>
                   <td className="caption">{COMPONENT_SOURCE[c.key]}</td>
                 </tr>
@@ -227,7 +238,7 @@ export default async function ReviewPage({
               label="SV (schedule variance)"
               metric={{ text: hoursSigned(r.evm.svMh), unit: 'h' }}
               formula="SV = EV − PV"
-              note={r.evm.svMh < 0 ? 'Behind plan' : 'Ahead of plan'}
+              note={r.evm.svMh < 0n ? 'Behind plan' : 'Ahead of plan'}
               testId="m-sv"
             />
             <MetricCell label="SPI" metric={r.evm.spi} formula="SPI = EV ÷ PV" />
@@ -295,7 +306,7 @@ export default async function ReviewPage({
             </thead>
             <tbody>
               {r.divergence
-                .filter((d) => d.acMh !== 0 || d.baselineMh > 0)
+                .filter((d) => d.acMh !== 0n || d.baselineMh > 0n)
                 .map((d) => (
                   <tr key={d.wpId}>
                     <td>{d.wbsCode}</td>
@@ -319,10 +330,10 @@ export default async function ReviewPage({
                     <td className="num">{hours(d.baselineMh)}</td>
                     <td className="num">{hours(d.evMh)}</td>
                     <td className="num">{hours(d.acMh)}</td>
-                    <td className="num">{(d.pctComplete * 100).toFixed(0)}%</td>
+                    <td className="num">{wholePercent(d.pctComplete)}%</td>
                     <td>
                       <span className="tag">{d.pctBasis}</span>
-                      {d.lowEvidence && d.baselineMh > 0 ? (
+                      {d.lowEvidence && d.baselineMh > 0n ? (
                         <span className="tag">low evidence</span>
                       ) : null}
                     </td>
@@ -359,14 +370,14 @@ export default async function ReviewPage({
               <EvmRow
                 name="PV — Planned Value"
                 value={`${hours(r.evm.pvMh)}h`}
-                money={yen(Math.round((r.evm.pvMh * p.defaultRateYenPerHour) / 1000))}
+                money={yen(costOf(r.evm.pvMh, p.defaultRateYenPerHour))}
                 formula="Baseline hours spread over baseline working days, to the as-of date"
                 reading="What the Baseline said would be earned by now"
               />
               <EvmRow
                 name="EV — Earned Value"
                 value={`${hours(r.evm.evMh)}h`}
-                money={yen(Math.round((r.evm.evMh * p.defaultRateYenPerHour) / 1000))}
+                money={yen(costOf(r.evm.evMh, p.defaultRateYenPerHour))}
                 formula="Σ Baseline hours × Percent Complete"
                 reading="What has actually been earned"
                 testId="evm-ev"
@@ -569,9 +580,9 @@ function GroupRows({
     label: string;
     attribute: string;
     ticketCount: number;
-    mh: number;
+    mh: Mh;
     dispositioned: string | null;
-    tickets: { ticketId: string; key: string; title: string; mh: number; resolved: boolean; status: string }[];
+    tickets: { ticketId: string; key: string; title: string; mh: Mh; resolved: boolean; status: string }[];
   };
 }) {
   return (

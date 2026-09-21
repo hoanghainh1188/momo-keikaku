@@ -21,6 +21,7 @@
  *
  * This module reads no environment and no clock. It takes its handle as an argument.
  */
+import { stringify } from '@momo/domain';
 import { sql } from 'drizzle-orm';
 import type { Db } from './client';
 import { buildDemoState, type DemoState } from './fixtures';
@@ -184,6 +185,10 @@ export interface ProbeTenant {
  *   `TenantRowWriteOptions.seqOffset`; the bands must not overlap each other, the demo's,
  *   or `rls.test.ts`'s probe.
  */
+/** Quotes a value for a diagnostic without the storage codec, which refuses non-JSON input. */
+const quote = (value: unknown): string =>
+  typeof value === 'string' ? stringify(value) : String(value);
+
 export function buildProbeTenant(token: string, seqOffset: number): ProbeTenant {
   const demo = buildDemoState();
 
@@ -193,8 +198,8 @@ export function buildProbeTenant(token: string, seqOffset: number): ProbeTenant 
   for (const original of distinct) {
     if (original.includes(token)) {
       throw new Error(
-        `the probe token ${JSON.stringify(token)} already occurs in the demo fixture, in ` +
-          `${JSON.stringify(original)}. The harness asserts that a foreign token never ` +
+        `the probe token ${quote(token)} already occurs in the demo fixture, in ` +
+          `${quote(original)}. The harness asserts that a foreign token never ` +
           'appears in a result, so a token the fixture already carries makes that assertion ' +
           'meaningless. Choose another.',
       );

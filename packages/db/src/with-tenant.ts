@@ -1,3 +1,4 @@
+import { stringify } from '@momo/domain';
 import { sql } from 'drizzle-orm';
 import type { Db } from './client';
 import { TENANT_SETTING } from './table-classes';
@@ -54,7 +55,7 @@ export async function withTenant<T>(
 ): Promise<T> {
   if (!TENANT_ID_PATTERN.test(tenantId)) {
     throw new Error(
-      `withTenant was given ${JSON.stringify(tenantId)}, which is not a usable tenant id. ` +
+      `withTenant was given ${typeof tenantId === 'string' ? stringify(tenantId) : String(tenantId)}, which is not a usable tenant id. ` +
         'An empty or malformed id would set the isolation setting to a value no row carries, ' +
         'which reads exactly like correct isolation and is not.',
     );

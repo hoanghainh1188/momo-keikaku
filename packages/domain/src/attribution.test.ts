@@ -13,7 +13,7 @@ const project: ProjectConfig = {
   contractType: '準委任',
   tzOffsetMinutes: 540,
   teireiWeekday: 4,
-  defaultRateYenPerHour: 4000,
+  defaultRateYenPerHour: 4000n,
   eacMethod: 'typical',
   thresholds: DEFAULT_THRESHOLDS,
 };
@@ -53,7 +53,7 @@ const wp = (over: Partial<WorkPackage> & { id: string }): WorkPackage => ({
   isCatchAll: false,
   start: null,
   finish: null,
-  plannedMh: 0,
+  plannedMh: 0n,
   completedAt: null,
   milestoneDoneAt: null,
   assignedResourceIds: [],
@@ -158,7 +158,7 @@ describe('attribution (FR-20, FR-21, FR-24)', () => {
       name: 'R',
       departmentId: 'd',
       trackerAccountIds: ['acct-1'],
-      rates: [{ effectiveFrom: '2026-01-01', yenPerHour: 5000 }],
+      rates: [{ effectiveFrom: '2026-01-01', yenPerHour: 5000n }],
     },
   ];
   const wps = [
@@ -249,7 +249,7 @@ describe('attribution (FR-20, FR-21, FR-24)', () => {
       { seq: 4, ticketId: 'tu', wpId: 'WP-B', source: 'disposition' as const, at: 'x', actor: 'pm' },
     ];
     const after = run(entries, mapped);
-    expect(after.cumulative.unplannedMh).toBe(0);
+    expect(after.cumulative.unplannedMh).toBe(0n);
     expect(after.cumulative.mappedBaselinedMh).toBe(hoursToMh(8));
     expect(after.acByWp.get('WP-B')).toBe(hoursToMh(8));
   });
@@ -261,7 +261,7 @@ describe('attribution (FR-20, FR-21, FR-24)', () => {
 
   it('costs each entry at the Resource Rate in effect, and falls back to the Project default', () => {
     const r = run([entry(1, 'tb', 10, IN)]);
-    expect(r.cumulative.totalJpy).toBe(10 * 5000);
+    expect(r.cumulative.totalJpy).toBe(10n * 5000n);
     const unattributed = attribute({
       entries: [{ ...entry(1, 'tb', 10, IN), assigneeAccountId: 'acct-unlinked' }],
       head: mappingHead(events),
@@ -271,6 +271,6 @@ describe('attribution (FR-20, FR-21, FR-24)', () => {
       project,
       period,
     });
-    expect(unattributed.cumulative.totalJpy).toBe(10 * project.defaultRateYenPerHour);
+    expect(unattributed.cumulative.totalJpy).toBe(10n * project.defaultRateYenPerHour);
   });
 });

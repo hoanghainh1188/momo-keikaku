@@ -1,6 +1,8 @@
 import { addWorkingDays, nextWorkingDay, workingDaysBetween, type HolidayCalendar, type IsoDate } from './calendar';
 import type { EvmResult } from './evm';
+import { compareRatio } from './health';
 import type { BaselineVersion } from './types';
+import { ceilDiv, ZERO } from './units';
 
 /**
  * FR-32: forecast effort at completion (the EAC from the Project's EAC Method) and a
@@ -26,11 +28,18 @@ export function computeForecast(
   const baselineFinish = finishes[finishes.length - 1] ?? null;
 
   const note = 'Trend heuristic, not a PMI formula.';
-  if (!baselineStart || !baselineFinish || evm.spi.kind !== 'value' || evm.spi.value <= 0) {
+  if (
+    !baselineStart ||
+    !baselineFinish ||
+    evm.spi.kind !== 'value' ||
+    compareRatio(evm.spi.value, ZERO) <= 0
+  ) {
     return { eacMh: evm.eacMh, forecastFinish: null, baselineStart, baselineFinish, note };
   }
   const durationWd = workingDaysBetween(baselineStart, baselineFinish, cal);
-  const stretched = Math.ceil(durationWd / evm.spi.value);
+  // AD-27: whole working days, the ceiling of duration ÷ SPI taken over the exact Ratio.
+  const spi = evm.spi.value;
+  const stretched = Number(ceilDiv(BigInt(durationWd) * spi.den, spi.num));
   let finish = addWorkingDays(baselineStart, Math.max(stretched - 1, 0), cal);
   // FR-32: while EV < BAC the forecast is never earlier than the next working day.
   if (evm.evMh < evm.bacMh) {

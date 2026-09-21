@@ -3,7 +3,10 @@ import { buildCalendar } from './calendar';
 import { computeEvm, percentComplete, plannedValue } from './evm';
 import { computeHealth } from './health';
 import { DEFAULT_THRESHOLDS, type BaselineVersion, type TicketObservation, type WorkPackage } from './types';
-import { hoursToMh } from './units';
+import { hoursToMh, ratio, type Ratio } from './units';
+
+/** A Ratio metric, exactly as carried — unreduced. */
+const ratioMetric = (num: bigint, den: bigint) => ({ kind: 'value', value: ratio(num, den), unit: 'ratio' });
 
 /**
  * Golden EVM cases, hand-computed from the PMI formulas in docs/references
@@ -21,7 +24,7 @@ const wp = (over: Partial<WorkPackage> & { id: string }): WorkPackage => ({
   isCatchAll: false,
   start: null,
   finish: null,
-  plannedMh: 0,
+  plannedMh: 0n,
   completedAt: null,
   milestoneDoneAt: null,
   assignedResourceIds: [],
@@ -35,7 +38,7 @@ const ticket = (id: string, estimateHours: number | null, resolved: boolean): Ti
   statusId: resolved ? 'Closed' : 'Open',
   resolved,
   estimateMh: estimateHours === null ? null : hoursToMh(estimateHours),
-  actualMh: 0,
+  actualMh: 0n,
   assigneeAccountId: null,
   issueTypeId: 'Task',
   categoryIds: [],
@@ -46,7 +49,7 @@ const ticket = (id: string, estimateHours: number | null, resolved: boolean): Ti
 describe('plannedValue (FR-30: PV spread linearly over baseline working days)', () => {
   it('is 0 before the WP starts and the full Baseline after it finishes', () => {
     // 2026-06-01 Mon .. 2026-06-12 Fri = 10 working days
-    expect(plannedValue(hoursToMh(100), '2026-06-01', '2026-06-12', '2026-05-29', cal)).toBe(0);
+    expect(plannedValue(hoursToMh(100), '2026-06-01', '2026-06-12', '2026-05-29', cal)).toBe(0n);
     expect(plannedValue(hoursToMh(100), '2026-06-01', '2026-06-12', '2026-06-30', cal)).toBe(
       hoursToMh(100),
     );
@@ -70,35 +73,36 @@ describe('percentComplete (FR-30: never derived from burned effort)', () => {
     const tickets = [ticket('a', 30, true), ticket('b', 40, false), ticket('c', 30, false)];
     const r = percentComplete(tickets, hoursToMh(80), false);
     expect(r.basis).toBe('estimate');
-    expect(r.pct).toBeCloseTo(0.3, 10);
+    expect(r.pct).toEqual(ratio(hoursToMh(30), hoursToMh(100)));
   });
 
   it('uses the larger of Baseline hours and total estimate as the denominator', () => {
     // resolved 30h, total estimate 40h, baseline 80h -> 30/80
     const tickets = [ticket('a', 30, true), ticket('b', 10, false), ticket('c', 0.001, false)];
     const r = percentComplete(tickets, hoursToMh(80), false);
-    expect(r.pct).toBeCloseTo(30 / 80.001, 4);
+    // total estimate 40.001h < baseline 80h, so the denominator is the Baseline: 30/80, exactly.
+    expect(r.pct).toEqual(ratio(hoursToMh(30), hoursToMh(80)));
   });
 
   it('falls back to the count basis when any mapped Ticket has no estimate', () => {
     const tickets = [ticket('a', 10, true), ticket('b', null, true), ticket('c', 10, false)];
     const r = percentComplete(tickets, hoursToMh(80), false);
     expect(r.basis).toBe('count');
-    expect(r.pct).toBeCloseTo(2 / 3, 10);
+    expect(r.pct).toEqual(ratio(2n, 3n));
   });
 
   it('caps at 99% until the PM marks the WP complete, and flags low evidence', () => {
     const tickets = [ticket('a', 10, true), ticket('b', 10, true)];
     const open = percentComplete(tickets, hoursToMh(20), false);
-    expect(open.pct).toBe(0.99);
+    expect(open.pct).toEqual(ratio(99n, 100n));
     expect(open.lowEvidence).toBe(true); // fewer than three mapped Tickets
     const done = percentComplete(tickets, hoursToMh(20), true);
-    expect(done.pct).toBe(1);
+    expect(done.pct).toEqual(ratio(hoursToMh(20), hoursToMh(20))); // 1, unreduced
   });
 
   it('reports no evidence when nothing is mapped', () => {
     const r = percentComplete([], hoursToMh(20), false);
-    expect(r).toEqual({ pct: 0, basis: 'no-evidence', lowEvidence: true });
+    expect(r).toEqual({ pct: ratio(0n, 1n), basis: 'no-evidence', lowEvidence: true });
   });
 });
 
@@ -167,28 +171,25 @@ describe('computeEvm — golden case', () => {
 
   it('computes the variances and indices from the summed values, never by averaging', () => {
     expect(evm.svMh).toBe(hoursToMh(-25));
-    expect(evm.spi).toEqual({ kind: 'value', value: 0.75, unit: 'ratio' });
+    expect(evm.spi).toEqual(ratioMetric(hoursToMh(75), hoursToMh(100)));
     expect(evm.cvMh).toEqual({ kind: 'value', value: hoursToMh(-45), unit: 'mh' });
-    expect(evm.cpiAllIn.kind === 'value' && evm.cpiAllIn.value).toBeCloseTo(0.625, 10);
-    expect(evm.cpiPlannedScope.kind === 'value' && evm.cpiPlannedScope.value).toBeCloseTo(
-      0.8333333333,
-      8,
-    );
+    expect(evm.cpiAllIn).toEqual(ratioMetric(hoursToMh(75), hoursToMh(120)));
+    expect(evm.cpiPlannedScope).toEqual(ratioMetric(hoursToMh(75), hoursToMh(90)));
   });
 
   it('computes EAC Typical, ETC, VAC and TCPI', () => {
     expect(evm.eacMh).toEqual({ kind: 'value', value: hoursToMh(320), unit: 'mh' });
     expect(evm.etcMh).toEqual({ kind: 'value', value: hoursToMh(200), unit: 'mh' });
     expect(evm.vacMh).toEqual({ kind: 'value', value: hoursToMh(-120), unit: 'mh' });
-    expect(evm.tcpi.kind === 'value' && evm.tcpi.value).toBeCloseTo(1.5625, 10);
+    expect(evm.tcpi).toEqual(ratioMetric(hoursToMh(125), hoursToMh(80)));
   });
 
   it('drives the Health Indicators per FR-31', () => {
     const h = computeHealth({
       evm,
       thresholds: DEFAULT_THRESHOLDS,
-      unplannedSharePeriod: 0.25,
-      unplannedShareCumulative: 0.25,
+      unplannedSharePeriod: ratio(1n, 4n),
+      unplannedShareCumulative: ratio(1n, 4n),
       slippedMilestones: [],
       measurementBasis: 'hours',
     });
@@ -219,15 +220,15 @@ describe('FR-27 Ticket-Count Mode', () => {
       wps: [wp({ id: 'WP-1' })],
       mappedTicketsByWp: new Map([['WP-1', [ticket('t1', null, true), ticket('t2', null, false)]]]),
       acByWp: new Map(),
-      unplannedAcMh: 0,
-      totalAcMh: 0,
-      plannedScopeAcMh: 0,
+      unplannedAcMh: 0n,
+      totalAcMh: 0n,
+      plannedScopeAcMh: 0n,
       measurementBasis: 'count',
     });
     // Still computed on the count basis:
     expect(evm.pvMh).toBe(hoursToMh(50));
     expect(evm.evMh).toBe(hoursToMh(50)); // 1 of 2 resolved
-    expect(evm.spi).toEqual({ kind: 'value', value: 1, unit: 'ratio' });
+    expect(evm.spi).toEqual(ratioMetric(hoursToMh(50), hoursToMh(50)));
     // Unavailable, never 0:
     for (const m of [evm.cpiAllIn, evm.cvMh, evm.eacMh, evm.etcMh, evm.vacMh, evm.tcpi]) {
       expect(m.kind).toBe('unavailable');
@@ -240,62 +241,110 @@ describe('FR-31 threshold edges', () => {
     thresholds: DEFAULT_THRESHOLDS,
     slippedMilestones: [],
     measurementBasis: 'hours' as const,
-    unplannedShareCumulative: 0,
+    unplannedShareCumulative: ratio(0n, 1n),
   };
-  const evmWith = (spi: number, cpi: number) =>
+  const r = (text: string): Ratio => ratio(hoursToMh(text), 1000n);
+  // PV and EV are scaled so that EV ÷ PV is exactly the SPI passed (PV = 100 h × den,
+  // EV = 100 h × num), keeping the fixture internally consistent without any rounding.
+  const evmWith = (spi: Ratio, cpi: Ratio) =>
     ({
       formulaVersion: 'test',
       perWp: [],
       bacMh: hoursToMh(100),
-      pvMh: hoursToMh(100),
-      evMh: hoursToMh(100 * spi),
+      pvMh: hoursToMh(100) * spi.den,
+      evMh: hoursToMh(100) * spi.num,
       acMh: hoursToMh(10),
-      svMh: 0,
+      svMh: 0n,
       spi: { kind: 'value', value: spi, unit: 'ratio' },
-      cvMh: { kind: 'value', value: 0, unit: 'mh' },
+      cvMh: { kind: 'value', value: 0n, unit: 'mh' },
       cpiAllIn: { kind: 'value', value: cpi, unit: 'ratio' },
       cpiPlannedScope: { kind: 'value', value: cpi, unit: 'ratio' },
-      eacMh: { kind: 'value', value: 0, unit: 'mh' },
-      etcMh: { kind: 'value', value: 0, unit: 'mh' },
-      vacMh: { kind: 'value', value: 0, unit: 'mh' },
-      tcpi: { kind: 'value', value: 1.0, unit: 'ratio' },
+      eacMh: { kind: 'value', value: 0n, unit: 'mh' },
+      etcMh: { kind: 'value', value: 0n, unit: 'mh' },
+      vacMh: { kind: 'value', value: 0n, unit: 'mh' },
+      tcpi: { kind: 'value', value: ratio(1n, 1n), unit: 'ratio' },
       bacExhausted: false,
     }) as Parameters<typeof computeHealth>[0]['evm'];
 
   it('treats 0.95 as green and 0.85 as amber', () => {
     expect(
-      computeHealth({ ...base, evm: evmWith(0.95, 1.2), unplannedSharePeriod: 0 }).indicators[0]!
-        .colour,
+      computeHealth({ ...base, evm: evmWith(r('0.95'), r('1.2')), unplannedSharePeriod: ratio(0n, 1n) })
+        .indicators[0]!.colour,
     ).toBe('green');
     expect(
-      computeHealth({ ...base, evm: evmWith(0.85, 1.2), unplannedSharePeriod: 0 }).indicators[0]!
-        .colour,
+      computeHealth({ ...base, evm: evmWith(r('0.85'), r('1.2')), unplannedSharePeriod: ratio(0n, 1n) })
+        .indicators[0]!.colour,
     ).toBe('amber');
     expect(
-      computeHealth({ ...base, evm: evmWith(0.8499, 1.2), unplannedSharePeriod: 0 }).indicators[0]!
-        .colour,
+      computeHealth({ ...base, evm: evmWith(ratio(8499n, 10000n), r('1.2')), unplannedSharePeriod: ratio(0n, 1n) })
+        .indicators[0]!.colour,
     ).toBe('red');
   });
 
+  it('lands an SPI of exactly 95/100 on green, however it is written (exact comparison)', () => {
+    // Float division puts 0.95 on either side of the boundary depending on the operands
+    // (e.g. 2850/3000 vs 95/100); cross-multiplication cannot.
+    for (const [num, den] of [
+      [95n, 100n],
+      [2850n, 3000n],
+      [1900000n, 2000000n],
+      [-95n, -100n],
+    ] as const) {
+      const h = computeHealth({ ...base, evm: evmWith(ratio(num, den), r('1.2')), unplannedSharePeriod: ratio(0n, 1n) });
+      expect(h.indicators[0]!.colour, `${num}/${den}`).toBe('green');
+      expect(h.indicators[0]!.rule).toBe('Green because SPI 0.95 ≥ 0.95');
+    }
+    // A hair below the boundary: exactly less than 95/100, but the nearest double to it IS
+    // the double for 0.95, so a float comparison would call it green.
+    const hair = ratio(95n * 10n ** 18n - 1n, 100n * 10n ** 18n);
+    expect(
+      computeHealth({ ...base, evm: evmWith(hair, r('1.2')), unplannedSharePeriod: ratio(0n, 1n) })
+        .indicators[0]!.colour,
+    ).toBe('amber');
+    const below = computeHealth({
+      ...base,
+      evm: evmWith(ratio(949_999n, 1_000_000n), r('1.2')),
+      unplannedSharePeriod: ratio(0n, 1n),
+    });
+    expect(below.indicators[0]!.colour).toBe('amber');
+    // Presented to 2 dp it reads 0.95, and the rule still says why it is amber.
+    expect(below.indicators[0]!.rule).toBe('Amber because SPI 0.95 is between 0.85 and 0.95');
+  });
+
   it('puts the Unplanned Work share bands at <10%, 10–20% inclusive, and >20%', () => {
-    const colour = (s: number) =>
-      computeHealth({ ...base, evm: evmWith(1, 1), unplannedSharePeriod: s }).indicators[2]!.colour;
-    expect(colour(0.0999)).toBe('green');
-    expect(colour(0.1)).toBe('amber');
-    expect(colour(0.2)).toBe('amber');
-    expect(colour(0.2001)).toBe('red');
+    const colour = (s: Ratio) =>
+      computeHealth({ ...base, evm: evmWith(r('1'), r('1')), unplannedSharePeriod: s }).indicators[2]!.colour;
+    expect(colour(ratio(999n, 10000n))).toBe('green');
+    expect(colour(ratio(1n, 10n))).toBe('amber');
+    expect(colour(ratio(100n, 1000n))).toBe('amber');
+    expect(colour(ratio(2n, 10n))).toBe('amber');
+    expect(colour(ratio(2001n, 10000n))).toBe('red');
+  });
+
+  it('turns Effort/Cost red only when TCPI is strictly above 1.1', () => {
+    const at = (tcpi: Ratio) =>
+      computeHealth({
+        ...base,
+        evm: { ...evmWith(r('1'), r('1.2')), tcpi: { kind: 'value', value: tcpi, unit: 'ratio' } },
+        unplannedSharePeriod: ratio(0n, 1n),
+      }).indicators[1]!;
+    expect(at(ratio(110n, 100n)).colour).toBe('green');
+    expect(at(ratio(1101n, 1000n)).colour).toBe('red');
+    expect(at(ratio(1101n, 1000n)).rule).toBe(
+      'Red because TCPI 1.10 > 1.1 — the remaining work must beat the planned efficiency',
+    );
   });
 
   it('is never green overall while Schedule is red, even with CPI > 1', () => {
-    const h = computeHealth({ ...base, evm: evmWith(0.5, 1.4), unplannedSharePeriod: 0 });
+    const h = computeHealth({ ...base, evm: evmWith(r('0.5'), r('1.4')), unplannedSharePeriod: ratio(0n, 1n) });
     expect(h.overall).toBe('red');
   });
 
   it('makes Schedule at least amber when a milestone has slipped, whatever the SPI', () => {
     const h = computeHealth({
       ...base,
-      evm: evmWith(1.0, 1.2),
-      unplannedSharePeriod: 0,
+      evm: evmWith(r('1.0'), r('1.2')),
+      unplannedSharePeriod: ratio(0n, 1n),
       slippedMilestones: [{ wbsCode: '8.M3', name: 'Checkout', baselineDate: '2026-09-08' }],
     });
     expect(h.indicators[0]!.colour).toBe('amber');

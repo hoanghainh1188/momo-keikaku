@@ -14,7 +14,7 @@ import type {
   TicketObservation,
   WorkPackage,
 } from './types';
-import type { Mh } from './units';
+import { compareBigint, costOf, ratio, sum, ZERO, type Jpy, type Mh, type Ratio } from './units';
 
 export type DispositionKind = 'map' | 'plan' | 'cr_candidate' | 'explain';
 
@@ -51,7 +51,7 @@ export interface UnmappedGroup {
   attribute: string;
   ticketCount: number;
   mh: Mh;
-  jpy: number;
+  jpy: Jpy;
   dispositioned: DispositionKind | null;
   tickets: {
     ticketId: string;
@@ -84,7 +84,7 @@ export interface DivergenceRow {
   plannedMh: Mh;
   acMh: Mh;
   evMh: Mh;
-  pctComplete: number;
+  pctComplete: Ratio;
   pctBasis: WpMeasure['pctBasis'];
   lowEvidence: boolean;
   isCatchAll: boolean;
@@ -102,15 +102,15 @@ export interface ReviewResult {
   unplanned: {
     period: Buckets;
     cumulative: Buckets;
-    sharePeriod: number | null;
-    shareCumulative: number | null;
-    components: { key: string; label: string; mh: Mh; jpy: number }[];
+    sharePeriod: Ratio | null;
+    shareCumulative: Ratio | null;
+    components: { key: string; label: string; mh: Mh; jpy: Jpy }[];
   };
-  scopeLedger: { key: string; label: string; mh: Mh; share: number }[];
+  scopeLedger: { key: string; label: string; mh: Mh; share: Ratio }[];
   unmappedGroups: UnmappedGroup[];
   milestones: MilestoneRow[];
   divergence: DivergenceRow[];
-  coverage: { mappedTicketShare: number; mappedHourShare: number; unmappedTickets: number };
+  coverage: { mappedTicketShare: Ratio; mappedHourShare: Ratio; unmappedTickets: number };
   dispositions: DispositionEvent[];
   explainNotes: { note: string; ticketCount: number; mh: Mh }[];
   openingBalanceMh: Mh;
@@ -180,12 +180,12 @@ export function computeReview(input: ReviewInput): ReviewResult {
     .sort((a, b) => a.wbsCode.localeCompare(b.wbsCode));
 
   const sharePeriod =
-    attribution.period.totalMh > 0
-      ? attribution.period.unplannedMh / attribution.period.totalMh
+    attribution.period.totalMh > 0n
+      ? ratio(attribution.period.unplannedMh, attribution.period.totalMh)
       : null;
   const shareCumulative =
-    attribution.cumulative.totalMh > 0
-      ? attribution.cumulative.unplannedMh / attribution.cumulative.totalMh
+    attribution.cumulative.totalMh > 0n
+      ? ratio(attribution.cumulative.unplannedMh, attribution.cumulative.totalMh)
       : null;
 
   const health = computeHealth({
@@ -210,22 +210,22 @@ export function computeReview(input: ReviewInput): ReviewResult {
   for (const t of input.pinnedSnapshot.tickets) {
     const m = head.get(t.trackerIssueId);
     if (m?.wpId) continue;
-    const mh = attribution.hoursByTicket.get(t.trackerIssueId) ?? 0;
-    if (mh === 0) continue;
+    const mh = attribution.hoursByTicket.get(t.trackerIssueId) ?? 0n;
+    if (mh === 0n) continue;
     const attr = t.categoryIds[0] ?? t.issueTypeId;
     const g = groups.get(attr) ?? {
       key: attr,
       label: attr,
       attribute: t.categoryIds[0] ? 'category' : 'issue type',
       ticketCount: 0,
-      mh: 0,
-      jpy: 0,
+      mh: 0n,
+      jpy: 0n,
       dispositioned: null,
       tickets: [],
     };
     g.ticketCount += 1;
     g.mh += mh;
-    g.jpy += Math.round((mh * input.project.defaultRateYenPerHour) / 1000);
+    g.jpy += costOf(mh, input.project.defaultRateYenPerHour);
     g.tickets.push({
       ticketId: t.trackerIssueId,
       key: t.key,
@@ -237,12 +237,12 @@ export function computeReview(input: ReviewInput): ReviewResult {
     groups.set(attr, g);
   }
   for (const g of groups.values()) {
-    g.tickets.sort((a, b) => b.mh - a.mh);
+    g.tickets.sort((a, b) => compareBigint(b.mh, a.mh));
     const kinds = new Set(g.tickets.map((t) => dispositionByTicket.get(t.ticketId)));
     g.dispositioned =
       kinds.size === 1 && !kinds.has(undefined) ? ([...kinds][0] as DispositionKind) : null;
   }
-  const unmappedGroups = [...groups.values()].sort((a, b) => b.mh - a.mh);
+  const unmappedGroups = [...groups.values()].sort((a, b) => compareBigint(b.mh, a.mh));
 
   // --- Divergence by WP (Baseline vs Current Plan vs actual)
   const perWpById = new Map(evm.perWp.map((w) => [w.wpId, w]));
@@ -259,11 +259,11 @@ export function computeReview(input: ReviewInput): ReviewResult {
         baselineFinish: b?.finish ?? null,
         currentStart: w.start,
         currentFinish: w.finish,
-        baselineMh: b?.baselineMh ?? 0,
+        baselineMh: b?.baselineMh ?? 0n,
         plannedMh: w.plannedMh,
-        acMh: attribution.acByWp.get(w.id) ?? 0,
-        evMh: m?.evMh ?? 0,
-        pctComplete: m?.pctComplete ?? 0,
+        acMh: attribution.acByWp.get(w.id) ?? 0n,
+        evMh: m?.evMh ?? 0n,
+        pctComplete: m?.pctComplete ?? ZERO,
         pctBasis: m?.pctBasis ?? 'no-evidence',
         lowEvidence: m?.lowEvidence ?? true,
         isCatchAll: w.isCatchAll,
@@ -278,31 +278,36 @@ export function computeReview(input: ReviewInput): ReviewResult {
     (t) => !head.get(t.trackerIssueId)?.wpId,
   ).length;
   const coverage = {
-    mappedTicketShare: totalTickets === 0 ? 0 : (totalTickets - unmappedTickets) / totalTickets,
+    mappedTicketShare:
+      totalTickets === 0
+        ? ZERO
+        : ratio(BigInt(totalTickets - unmappedTickets), BigInt(totalTickets)),
     mappedHourShare:
-      attribution.cumulative.totalMh === 0
-        ? 0
-        : (attribution.cumulative.totalMh - attribution.cumulative.unmappedMh) /
-          attribution.cumulative.totalMh,
+      attribution.cumulative.totalMh === 0n
+        ? ZERO
+        : ratio(
+            attribution.cumulative.totalMh - attribution.cumulative.unmappedMh,
+            attribution.cumulative.totalMh,
+          ),
     unmappedTickets,
   };
 
   const c = attribution.cumulative;
-  const scopeTotal = c.totalMh || 1;
+  const scopeTotal = c.totalMh === 0n ? 1n : c.totalMh;
   const scopeLedger = [
     { key: 'mapped-baselined', label: 'Mapped to baselined WPs', mh: c.mappedBaselinedMh },
     { key: 'mapped-non-baselined', label: 'Mapped to non-baselined WPs', mh: c.mappedNonBaselinedMh },
     { key: 'catch-all', label: 'Catch-all (within Baseline)', mh: c.catchAllMh },
     { key: 'catch-all-overflow', label: 'Catch-all overflow', mh: c.catchAllOverflowMh },
     { key: 'unmapped', label: 'Unmapped Work', mh: c.unmappedMh },
-  ].map((s) => ({ ...s, share: s.mh / scopeTotal }));
+  ].map((s) => ({ ...s, share: ratio(s.mh, scopeTotal) }));
 
   const explainNotes = input.dispositions
     .filter((d) => d.kind === 'explain' && d.note)
     .map((d) => ({
       note: d.note!,
       ticketCount: d.ticketIds.length,
-      mh: d.ticketIds.reduce((a, t) => a + (attribution.hoursByTicket.get(t) ?? 0), 0),
+      mh: sum(d.ticketIds.map((t) => attribution.hoursByTicket.get(t) ?? 0n)),
     }));
 
   return {
@@ -323,18 +328,18 @@ export function computeReview(input: ReviewInput): ReviewResult {
       sharePeriod,
       shareCumulative,
       components: [
-        { key: 'unmapped', label: 'Unmapped Work', mh: c.unmappedMh, jpy: 0 },
+        { key: 'unmapped', label: 'Unmapped Work', mh: c.unmappedMh, jpy: 0n },
         {
           key: 'non-baselined',
           label: 'Hours on non-baselined WPs',
           mh: c.mappedNonBaselinedMh,
-          jpy: 0,
+          jpy: 0n,
         },
         {
           key: 'catch-all-overflow',
           label: 'Catch-all WP hours beyond Baseline',
           mh: c.catchAllOverflowMh,
-          jpy: 0,
+          jpy: 0n,
         },
       ],
     },

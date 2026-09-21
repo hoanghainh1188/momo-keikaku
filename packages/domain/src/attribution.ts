@@ -1,7 +1,7 @@
 import { periodContains, projectDate, type ReportingPeriod } from './calendar';
 import type { MappingHeadEntry } from './mapping';
 import type { BaselineVersion, LedgerEntry, ProjectConfig, Resource, WorkPackage } from './types';
-import { costOf, type Jpy, type Mh } from './units';
+import { costOf, minBigint, type Jpy, type Mh } from './units';
 
 /**
  * AD-9: attribution is computed here at query time from the ledger and the Mapping
@@ -27,15 +27,15 @@ export interface Buckets {
 }
 
 const emptyBuckets = (): Buckets => ({
-  mappedBaselinedMh: 0,
-  mappedNonBaselinedMh: 0,
-  catchAllMh: 0,
-  catchAllOverflowMh: 0,
-  unmappedMh: 0,
-  totalMh: 0,
-  unplannedMh: 0,
-  unplannedJpy: 0,
-  totalJpy: 0,
+  mappedBaselinedMh: 0n,
+  mappedNonBaselinedMh: 0n,
+  catchAllMh: 0n,
+  catchAllOverflowMh: 0n,
+  unmappedMh: 0n,
+  totalMh: 0n,
+  unplannedMh: 0n,
+  unplannedJpy: 0n,
+  totalJpy: 0n,
 });
 
 export interface AttributionInput {
@@ -64,7 +64,7 @@ function rateFor(
   accountId: string | null,
   onDate: string,
   project: ProjectConfig,
-): number {
+): Jpy {
   if (!accountId) return project.defaultRateYenPerHour;
   const r = resources.find((x) => x.trackerAccountIds.includes(accountId));
   // FR-13: hours from an unlinked Tracker Account are Unattributed, at the
@@ -91,7 +91,7 @@ export function attribute(input: AttributionInput): AttributionResult {
   const hoursByTicket = new Map<string, Mh>();
   /** running cumulative hours per Catch-all WP, to split at its Baseline hours */
   const catchAllRunning = new Map<string, Mh>();
-  let openingBalanceMh = 0;
+  let openingBalanceMh: Mh = 0n;
 
   const ordered = [...entries].sort((a, b) => a.seq - b.seq);
 
@@ -100,7 +100,7 @@ export function attribute(input: AttributionInput): AttributionResult {
     const yen = rateFor(resources, e.assigneeAccountId, onDate, project);
     const money = costOf(e.deltaMh, yen);
 
-    hoursByTicket.set(e.ticketId, (hoursByTicket.get(e.ticketId) ?? 0) + e.deltaMh);
+    hoursByTicket.set(e.ticketId, (hoursByTicket.get(e.ticketId) ?? 0n) + e.deltaMh);
 
     if (e.kind === 'opening_balance') {
       openingBalanceMh += e.deltaMh;
@@ -117,7 +117,7 @@ export function attribute(input: AttributionInput): AttributionResult {
     const baselineMap = e.activeBaselineVersionSeq
       ? baselineByVersion.get(e.activeBaselineVersionSeq)
       : undefined;
-    const baselineMh = wp && baselineMap ? (baselineMap.get(wp.id) ?? 0) : 0;
+    const baselineMh = wp && baselineMap ? (baselineMap.get(wp.id) ?? 0n) : 0n;
 
     type BucketField =
       | 'mappedBaselinedMh'
@@ -152,29 +152,29 @@ export function attribute(input: AttributionInput): AttributionResult {
 
     if (wp.isCatchAll) {
       // FR-24: LOE. AC counts only up to Baseline hours; the rest is Unplanned Work.
-      const already = catchAllRunning.get(wp.id) ?? 0;
+      const already = catchAllRunning.get(wp.id) ?? 0n;
       const after = already + e.deltaMh;
       catchAllRunning.set(wp.id, after);
       const cap = baselineMh;
-      const withinBefore = Math.min(already, cap);
-      const withinAfter = Math.min(after, cap);
+      const withinBefore = minBigint(already, cap);
+      const withinAfter = minBigint(after, cap);
       const within = withinAfter - withinBefore;
       const over = e.deltaMh - within;
-      if (within !== 0) {
+      if (within !== 0n) {
         push('catchAllMh', within, costOf(within, yen), false);
-        acByWp.set(wp.id, (acByWp.get(wp.id) ?? 0) + within);
+        acByWp.set(wp.id, (acByWp.get(wp.id) ?? 0n) + within);
       }
-      if (over !== 0) push('catchAllOverflowMh', over, costOf(over, yen), true);
+      if (over !== 0n) push('catchAllOverflowMh', over, costOf(over, yen), true);
       continue;
     }
 
-    if (baselineMh > 0) {
+    if (baselineMh > 0n) {
       push('mappedBaselinedMh', e.deltaMh, money, false);
-      acByWp.set(wp.id, (acByWp.get(wp.id) ?? 0) + e.deltaMh);
+      acByWp.set(wp.id, (acByWp.get(wp.id) ?? 0n) + e.deltaMh);
     } else {
       // FR-29 *Plan*: hours stay Unplanned Work until a Re-baseline includes the WP.
       push('mappedNonBaselinedMh', e.deltaMh, money, true);
-      acByWp.set(wp.id, (acByWp.get(wp.id) ?? 0) + e.deltaMh);
+      acByWp.set(wp.id, (acByWp.get(wp.id) ?? 0n) + e.deltaMh);
     }
   }
 

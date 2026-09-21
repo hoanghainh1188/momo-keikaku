@@ -541,7 +541,7 @@ describe.skipIf(!reachable)('tenant isolation, as the application role', () => {
 
     const asB = await withTenant(app(), TENANT_B, (tx) => tx.select().from(s.actualsLedgerEntry));
     expect(asB.map((row) => row.id)).toEqual(['led-rls-probe']);
-    expect(asB[0]!.deltaMh).toBe(4242);
+    expect(asB[0]!.deltaMh).toBe(4242n);
   });
 
   it('reports the tenant in force, and nothing outside a withTenant block', async () => {

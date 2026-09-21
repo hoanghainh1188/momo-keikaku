@@ -1,9 +1,28 @@
 import { workingDaysBetween, type HolidayCalendar, type IsoDate } from './calendar';
+import { compareRatio } from './health';
 import type { BaselineVersion, TicketObservation, WorkPackage } from './types';
-import { type Mh, type Metric, unavailable } from './units';
+import {
+  divRoundHalfEven,
+  maxBigint,
+  mhValue,
+  ONE,
+  ratio,
+  ratioValue,
+  sum,
+  unavailable,
+  ZERO,
+  type Mh,
+  type MhMetric,
+  type Ratio,
+  type RatioMetric,
+} from './units';
 
 /**
  * FR-30: EVM in effort hours. Pure. Every figure is compute(inputs, formulaVersion).
+ *
+ * AD-4: every quantity is exact — `bigint` milli-hours and unreduced `Ratio`s. PV, EV and EAC
+ * are stored-shape milli-hour integers, so each is ONE `divRoundHalfEven` from its exact
+ * quotient; nothing here rounds for display.
  */
 export const FORMULA_VERSION = 'evm-2026-09-20';
 
@@ -15,7 +34,7 @@ export interface WpMeasure {
   name: string;
   baselineMh: Mh;
   pvMh: Mh;
-  pctComplete: number; // 0..1
+  pctComplete: Ratio; // 0..1, exact
   pctBasis: PctBasis;
   lowEvidence: boolean;
   evMh: Mh;
@@ -49,14 +68,14 @@ export interface EvmResult {
   evMh: Mh;
   acMh: Mh;
   svMh: Mh;
-  spi: Metric;
-  cvMh: Metric;
-  cpiAllIn: Metric;
-  cpiPlannedScope: Metric;
-  eacMh: Metric;
-  etcMh: Metric;
-  vacMh: Metric;
-  tcpi: Metric;
+  spi: RatioMetric;
+  cvMh: MhMetric;
+  cpiAllIn: RatioMetric;
+  cpiPlannedScope: RatioMetric;
+  eacMh: MhMetric;
+  etcMh: MhMetric;
+  vacMh: MhMetric;
+  tcpi: RatioMetric;
   bacExhausted: boolean;
 }
 
@@ -69,39 +88,42 @@ export function plannedValue(
   cal: HolidayCalendar,
 ): Mh {
   const total = workingDaysBetween(start, finish, cal);
-  if (total === 0) return asOf >= finish ? baselineMh : 0;
-  if (asOf < start) return 0;
+  if (total === 0) return asOf >= finish ? baselineMh : 0n;
+  if (asOf < start) return 0n;
   if (asOf >= finish) return baselineMh;
   const elapsed = workingDaysBetween(start, asOf, cal);
-  return Math.round((baselineMh * elapsed) / total);
+  return divRoundHalfEven(baselineMh * BigInt(elapsed), BigInt(total));
 }
+
+/** FR-30's 99% cap, as an exact constant. */
+const PCT_CAP: Ratio = { num: 99n, den: 100n };
 
 /** FR-30: Percent Complete is never derived from burned effort. */
 export function percentComplete(
   tickets: TicketObservation[],
   baselineMh: Mh,
   completed: boolean,
-): { pct: number; basis: PctBasis; lowEvidence: boolean } {
-  if (tickets.length === 0) return { pct: 0, basis: 'no-evidence', lowEvidence: true };
+): { pct: Ratio; basis: PctBasis; lowEvidence: boolean } {
+  if (tickets.length === 0) return { pct: ZERO, basis: 'no-evidence', lowEvidence: true };
   const lowEvidence = tickets.length < 3;
-  const allEstimated = tickets.every((t) => t.estimateMh !== null && t.estimateMh > 0);
-  let pct: number;
+  const allEstimated = tickets.every((t) => t.estimateMh !== null && t.estimateMh > 0n);
+  let pct: Ratio;
   let basis: PctBasis;
   if (allEstimated) {
     basis = 'estimate';
-    const resolvedEst = tickets
-      .filter((t) => t.resolved)
-      .reduce((a, t) => a + (t.estimateMh ?? 0), 0);
-    const totalEst = tickets.reduce((a, t) => a + (t.estimateMh ?? 0), 0);
-    const denom = Math.max(baselineMh, totalEst);
-    pct = denom === 0 ? 0 : resolvedEst / denom;
+    const resolvedEst = sum(tickets.filter((t) => t.resolved).map((t) => t.estimateMh ?? 0n));
+    const totalEst = sum(tickets.map((t) => t.estimateMh ?? 0n));
+    const denom = maxBigint(baselineMh, totalEst);
+    pct = denom === 0n ? ZERO : ratio(resolvedEst, denom);
   } else {
     basis = 'count';
-    pct = tickets.filter((t) => t.resolved).length / tickets.length;
+    pct = ratio(BigInt(tickets.filter((t) => t.resolved).length), BigInt(tickets.length));
   }
   // FR-30: capped at 99% until the PM marks the WP complete.
-  if (!completed) pct = Math.min(pct, 0.99);
-  return { pct: Math.max(0, Math.min(1, pct)), basis, lowEvidence };
+  if (!completed && compareRatio(pct, PCT_CAP) > 0) pct = PCT_CAP;
+  if (compareRatio(pct, ZERO) < 0) pct = ZERO;
+  if (compareRatio(pct, ONE) > 0) pct = ONE;
+  return { pct, basis, lowEvidence };
 }
 
 export function computeEvm(input: EvmInput): EvmResult {
@@ -116,9 +138,9 @@ export function computeEvm(input: EvmInput): EvmResult {
     // Glossary: a Catch-all WP with Baseline hours is measured as Level of Effort,
     // so EV equals PV. Its hours beyond the Baseline are Unplanned Work (FR-24).
     const { pct, basis, lowEvidence } =
-      wp.isCatchAll && b.baselineMh > 0
+      wp.isCatchAll && b.baselineMh > 0n
         ? {
-            pct: b.baselineMh === 0 ? 0 : pv / b.baselineMh,
+            pct: ratio(pv, b.baselineMh),
             basis: 'loe' as const,
             lowEvidence: false,
           }
@@ -132,16 +154,16 @@ export function computeEvm(input: EvmInput): EvmResult {
       pctComplete: pct,
       pctBasis: basis,
       lowEvidence,
-      evMh: Math.round(b.baselineMh * pct),
-      acMh: input.acByWp.get(b.wpId) ?? 0,
+      evMh: divRoundHalfEven(b.baselineMh * pct.num, pct.den),
+      acMh: input.acByWp.get(b.wpId) ?? 0n,
       mappedTickets: tickets.length,
       resolvedTickets: tickets.filter((t) => t.resolved).length,
     });
   }
 
-  const bacMh = perWp.reduce((a, w) => a + w.baselineMh, 0);
-  const pvMh = perWp.reduce((a, w) => a + w.pvMh, 0);
-  const evMh = perWp.reduce((a, w) => a + w.evMh, 0);
+  const bacMh = sum(perWp.map((w) => w.baselineMh));
+  const pvMh = sum(perWp.map((w) => w.pvMh));
+  const evMh = sum(perWp.map((w) => w.evMh));
   const acMh = input.totalAcMh;
   const svMh = evMh - pvMh;
 
@@ -149,34 +171,32 @@ export function computeEvm(input: EvmInput): EvmResult {
   const noHours = input.measurementBasis === 'count';
   const NO_HOURS = 'tracker_provides_no_hours';
 
-  const ratio = (num: number, den: number, reason: string): Metric =>
-    den === 0
-      ? unavailable(reason)
-      : { kind: 'value', value: num / den, unit: 'ratio' };
+  const ratioOrUnavailable = (num: Mh, den: Mh, reason: string): RatioMetric =>
+    den === 0n ? unavailable(reason) : ratioValue(ratio(num, den));
 
-  const spi: Metric = pvMh === 0 ? unavailable('no_planned_value_yet') : { kind: 'value', value: evMh / pvMh, unit: 'ratio' };
-  const cpiAllIn: Metric = noHours ? unavailable(NO_HOURS) : ratio(evMh, acMh, 'no_actuals_yet');
-  const cpiPlanned: Metric = noHours
+  const spi = ratioOrUnavailable(evMh, pvMh, 'no_planned_value_yet');
+  const cpiAllIn: RatioMetric = noHours
     ? unavailable(NO_HOURS)
-    : ratio(evMh, input.plannedScopeAcMh, 'no_actuals_yet');
-  const cvMh: Metric = noHours ? unavailable(NO_HOURS) : { kind: 'value', value: evMh - acMh, unit: 'mh' };
+    : ratioOrUnavailable(evMh, acMh, 'no_actuals_yet');
+  const cpiPlanned: RatioMetric = noHours
+    ? unavailable(NO_HOURS)
+    : ratioOrUnavailable(evMh, input.plannedScopeAcMh, 'no_actuals_yet');
+  const cvMh: MhMetric = noHours ? unavailable(NO_HOURS) : mhValue(evMh - acMh);
 
-  // FR-30: EAC Typical = BAC / CPI (all-in). R0's only method.
-  const eacMh: Metric =
-    cpiAllIn.kind === 'value' && cpiAllIn.value > 0
-      ? { kind: 'value', value: Math.round(bacMh / cpiAllIn.value), unit: 'mh' }
+  // FR-30: EAC Typical = BAC / CPI (all-in) = BAC × AC / EV, exactly. R0's only method.
+  const eacMh: MhMetric =
+    cpiAllIn.kind === 'value' && compareRatio(cpiAllIn.value, ZERO) > 0
+      ? mhValue(divRoundHalfEven(bacMh * cpiAllIn.value.den, cpiAllIn.value.num))
       : unavailable(noHours ? NO_HOURS : 'no_cpi_yet');
-  const etcMh: Metric =
-    eacMh.kind === 'value' ? { kind: 'value', value: eacMh.value - acMh, unit: 'mh' } : unavailable(eacMh.reasonCode);
-  const vacMh: Metric =
-    eacMh.kind === 'value' ? { kind: 'value', value: bacMh - eacMh.value, unit: 'mh' } : unavailable(eacMh.reasonCode);
+  const etcMh: MhMetric = eacMh.kind === 'value' ? mhValue(eacMh.value - acMh) : unavailable(eacMh.reasonCode);
+  const vacMh: MhMetric = eacMh.kind === 'value' ? mhValue(bacMh - eacMh.value) : unavailable(eacMh.reasonCode);
 
-  const bacExhausted = !noHours && bacMh - acMh <= 0;
-  const tcpi: Metric = noHours
+  const bacExhausted = !noHours && bacMh - acMh <= 0n;
+  const tcpi: RatioMetric = noHours
     ? unavailable(NO_HOURS)
     : bacExhausted
       ? unavailable('bac_exhausted')
-      : { kind: 'value', value: (bacMh - evMh) / (bacMh - acMh), unit: 'ratio' };
+      : ratioValue(ratio(bacMh - evMh, bacMh - acMh));
 
   return {
     formulaVersion: FORMULA_VERSION,

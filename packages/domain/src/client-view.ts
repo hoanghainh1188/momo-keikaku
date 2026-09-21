@@ -1,5 +1,5 @@
 import type { ReviewResult } from './review';
-import { hours, ratio, share } from './present';
+import { earnedProgress, hours, ratioText, share } from './present';
 
 /**
  * FR-34 / AD-12: the client projection. It returns a SEPARATE type with no money,
@@ -34,7 +34,7 @@ export interface ClientOutputs {
     breakdown: { label: string; hours: string }[] | null;
   };
   milestones: { name: string; baselineDate: string; currentDate: string | null; doneDate: string | null; slipped: boolean }[];
-  schedule: { wbsCode: string; name: string; baselineStart: string | null; baselineFinish: string | null; currentStart: string | null; currentFinish: string | null; pctComplete: number }[];
+  schedule: { wbsCode: string; name: string; baselineStart: string | null; baselineFinish: string | null; currentStart: string | null; currentFinish: string | null; progress: { fraction: number; label: string } }[];
   evm: { label: string; value: string; unit: string | null }[] | null;
 }
 
@@ -89,11 +89,14 @@ export function clientProjection(
         baselineFinish: d.baselineFinish,
         currentStart: d.currentStart,
         currentFinish: d.currentFinish,
-        pctComplete: d.pctComplete,
+        // Presented, never the exact Ratio: its num/den are Baseline and earned milli-hours,
+        // which are not the client's to see. The label is the whole percentage; the fraction is
+        // layout geometry only.
+        progress: earnedProgress(d.pctComplete),
       })),
     evm: policy.showEvmDetail
       ? [
-          { label: 'SPI', value: review.evm.spi.kind === 'value' ? ratio(review.evm.spi.value) : '—', unit: null },
+          { label: 'SPI', value: review.evm.spi.kind === 'value' ? ratioText(review.evm.spi.value) : '—', unit: null },
           { label: 'Earned value', value: hours(review.evm.evMh), unit: 'h' },
         ]
       : null,

@@ -95,7 +95,7 @@ export const workPackage = pgTable(
     isCatchAll: boolean('is_catch_all').notNull(),
     start: date('start'),
     finish: date('finish'),
-    plannedMh: bigint('planned_mh', { mode: 'number' }).notNull(),
+    plannedMh: bigint('planned_mh', { mode: 'bigint' }).notNull(),
     completedAt: timestamp('completed_at', { withTimezone: true }),
     milestoneDoneAt: date('milestone_done_at'),
     assignedResourceIds: text('assigned_resource_ids').array().notNull(),
@@ -121,7 +121,7 @@ export const baselineWp = pgTable('baseline_wp', {
   wpId: text('wp_id').notNull(),
   start: date('start').notNull(),
   finish: date('finish').notNull(),
-  baselineMh: bigint('baseline_mh', { mode: 'number' }).notNull(),
+  baselineMh: bigint('baseline_mh', { mode: 'bigint' }).notNull(),
   isMilestone: boolean('is_milestone').notNull(),
 });
 
@@ -155,8 +155,8 @@ export const ticketObservation = pgTable(
     title: text('title').notNull(),
     statusId: text('status_id').notNull(),
     resolved: boolean('resolved').notNull(),
-    estimateMh: bigint('estimate_mh', { mode: 'number' }),
-    actualMh: bigint('actual_mh', { mode: 'number' }),
+    estimateMh: bigint('estimate_mh', { mode: 'bigint' }),
+    actualMh: bigint('actual_mh', { mode: 'bigint' }),
     assigneeAccountId: text('assignee_account_id'),
     issueTypeId: text('issue_type_id').notNull(),
     categoryIds: text('category_ids').array().notNull(),
@@ -175,7 +175,7 @@ export const actualsLedgerEntry = pgTable(
     connectorId: text('connector_id').notNull(),
     ticketId: text('ticket_id').notNull(),
     kind: text('kind').notNull(), // opening_balance | delta
-    deltaMh: bigint('delta_mh', { mode: 'number' }).notNull(),
+    deltaMh: bigint('delta_mh', { mode: 'bigint' }).notNull(),
     windowStart: timestamp('window_start', { withTimezone: true }),
     windowEnd: timestamp('window_end', { withTimezone: true }).notNull(),
     assigneeAccountId: text('assignee_account_id'),

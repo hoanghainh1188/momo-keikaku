@@ -96,7 +96,7 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
     isCatchAll: w.isCatchAll,
     start: w.start,
     finish: w.finish,
-    plannedMh: Number(w.plannedMh),
+    plannedMh: w.plannedMh,
     completedAt: w.completedAt ? w.completedAt.toISOString() : null,
     milestoneDoneAt: w.milestoneDoneAt,
     assignedResourceIds: w.assignedResourceIds,
@@ -120,7 +120,7 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
         wpId: x.wpId,
         start: x.start,
         finish: x.finish,
-        baselineMh: Number(x.baselineMh),
+        baselineMh: x.baselineMh,
         isMilestone: x.isMilestone,
       })),
   }));
@@ -135,7 +135,8 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
     trackerAccountIds: r.trackerAccountIds,
     rates: rateRows
       .filter((x) => x.resourceId === r.id)
-      .map((x) => ({ effectiveFrom: x.effectiveFrom, yenPerHour: x.yenPerHour })),
+      // The yen columns stay Postgres `integer`; they are read into `bigint` here (AD-4).
+      .map((x) => ({ effectiveFrom: x.effectiveFrom, yenPerHour: BigInt(x.yenPerHour) })),
   }));
 
   const [latestSnap] = await tx
@@ -160,8 +161,8 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
       title: o.title,
       statusId: o.statusId,
       resolved: o.resolved,
-      estimateMh: o.estimateMh === null ? null : Number(o.estimateMh),
-      actualMh: o.actualMh === null ? null : Number(o.actualMh),
+      estimateMh: o.estimateMh,
+      actualMh: o.actualMh,
       assigneeAccountId: o.assigneeAccountId,
       issueTypeId: o.issueTypeId,
       categoryIds: o.categoryIds,
@@ -178,7 +179,7 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
     seq: Number(e.seq),
     ticketId: e.ticketId,
     kind: e.kind as LedgerEntry['kind'],
-    deltaMh: Number(e.deltaMh),
+    deltaMh: e.deltaMh,
     windowStart: e.windowStart ? e.windowStart.toISOString() : null,
     windowEnd: e.windowEnd.toISOString(),
     assigneeAccountId: e.assigneeAccountId,
@@ -237,7 +238,7 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
     contractType: p.contractType as ProjectConfig['contractType'],
     tzOffsetMinutes: p.tzOffsetMinutes,
     teireiWeekday: p.teireiWeekday,
-    defaultRateYenPerHour: p.defaultRateJpy,
+    defaultRateYenPerHour: BigInt(p.defaultRateJpy),
     eacMethod: 'typical',
     thresholds: DEFAULT_THRESHOLDS,
   };

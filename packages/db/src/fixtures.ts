@@ -9,13 +9,16 @@ import {
   periodOf,
   projectDate,
   type BaselineVersion,
+  type BaselineWp,
   type HolidayCalendar,
   type LedgerEntry,
   type MappingEvent,
   type MappingRule,
   type ProjectConfig,
   type Resource,
+  type Mh,
   type SnapshotRead,
+  type TicketObservation,
   type WorkPackage,
 } from '@momo/domain';
 
@@ -30,13 +33,46 @@ function repoRoot(): string {
 }
 const ROOT = repoRoot();
 
+/**
+ * The fixture files are JSON, so their effort and money are JSON numbers — integer milli-hours
+ * and integer yen. The `Fixture*` types below say so honestly, and everything handed to the
+ * domain is converted to `bigint` on the way in (AD-4), through `mhFromJson`, which refuses a
+ * non-integer rather than rounding it.
+ */
+type RawTicket = Omit<TicketObservation, 'estimateMh' | 'actualMh'> & {
+  estimateMh: number | null;
+  actualMh: number | null;
+};
+type RawWorkPackage = Omit<WorkPackage, 'plannedMh'> & { plannedMh: number; baselineMh: number };
+type RawBaselineWp = Omit<BaselineWp, 'baselineMh'> & { baselineMh: number };
+
+/**
+ * An integer JSON number as `bigint`, refusing anything that is not a SAFE integer: a fraction,
+ * and also a number past 2^53, which `JSON.parse` has already rounded to the nearest double.
+ * Effort (milli-hours) and yen both come in through here, so nothing is rounded on the way in.
+ */
+export function integerFromJson(n: number): bigint {
+  if (!Number.isSafeInteger(n)) {
+    throw new RangeError(`fixture value ${n} is not a safe integer, so it cannot be carried exactly`);
+  }
+  return BigInt(n);
+}
+export const mhFromJson = (n: number): Mh => integerFromJson(n);
+const optionalMhFromJson = (n: number | null): Mh | null => (n === null ? null : mhFromJson(n));
+
+const ticketFromJson = (t: RawTicket): TicketObservation => ({
+  ...t,
+  estimateMh: optionalMhFromJson(t.estimateMh),
+  actualMh: optionalMhFromJson(t.actualMh),
+});
+
 export interface FixtureSnapshotFile {
   scenario: string;
   page: number;
   observedAtOffsetHours: number;
   recordedObservedAt: string;
   hoursFieldPresent: boolean;
-  tickets: SnapshotRead['tickets'];
+  tickets: RawTicket[];
 }
 
 export interface FixtureProject {
@@ -58,13 +94,13 @@ export interface FixtureProject {
   };
   resources: { id: string; name: string; accountId: string; yenPerHour: number; role: string }[];
   unlinkedAccount: string;
-  wps: (WorkPackage & { baselineMh: number })[];
+  wps: RawWorkPackage[];
   baseline: {
     id: string;
     seq: number;
     reason: string;
     recordedAt: string;
-    wps: BaselineVersion['wps'];
+    wps: RawBaselineWp[];
   };
   mappingRules: MappingRule[];
   seedMappings: { ticketId: string; wpId: string; source: 'manual' }[];
@@ -89,7 +125,7 @@ export function loadFixtureSnapshots(anchorIso: string): (SnapshotRead & { snaps
       snapshotId: `snap-${raw.scenario}-${String(raw.page).padStart(4, '0')}`,
       observedAt: new Date(anchor + raw.observedAtOffsetHours * 3600_000).toISOString(),
       hoursFieldPresent: raw.hoursFieldPresent,
-      tickets: raw.tickets,
+      tickets: raw.tickets.map(ticketFromJson),
     };
   });
 }
@@ -128,7 +164,7 @@ export function buildDemoState(anchorIso?: string): DemoState {
     contractType: fixture.project.contractType,
     tzOffsetMinutes: fixture.project.tzOffsetMinutes,
     teireiWeekday: fixture.project.teireiWeekday,
-    defaultRateYenPerHour: fixture.project.defaultRateYenPerHour,
+    defaultRateYenPerHour: integerFromJson(fixture.project.defaultRateYenPerHour),
     eacMethod: 'typical',
     thresholds: DEFAULT_THRESHOLDS,
   };
@@ -148,7 +184,7 @@ export function buildDemoState(anchorIso?: string): DemoState {
     isCatchAll: w.isCatchAll,
     start: w.start,
     finish: w.finish,
-    plannedMh: w.plannedMh,
+    plannedMh: mhFromJson(w.plannedMh),
     completedAt: w.completedAt,
     milestoneDoneAt: w.milestoneDoneAt,
     assignedResourceIds: w.assignedResourceIds,
@@ -160,7 +196,7 @@ export function buildDemoState(anchorIso?: string): DemoState {
       id: fixture.baseline.id,
       reason: fixture.baseline.reason,
       recordedAt: fixture.baseline.recordedAt,
-      wps: fixture.baseline.wps,
+      wps: fixture.baseline.wps.map((b) => ({ ...b, baselineMh: mhFromJson(b.baselineMh) })),
     },
   ];
 
@@ -169,7 +205,7 @@ export function buildDemoState(anchorIso?: string): DemoState {
     name: r.name,
     departmentId: fixture.department.id,
     trackerAccountIds: [r.accountId],
-    rates: [{ effectiveFrom: '2026-01-01', yenPerHour: r.yenPerHour }],
+    rates: [{ effectiveFrom: '2026-01-01', yenPerHour: integerFromJson(r.yenPerHour) }],
   }));
 
   // --- UJ-2: the PM's manual Mappings, recorded before the first snapshot.

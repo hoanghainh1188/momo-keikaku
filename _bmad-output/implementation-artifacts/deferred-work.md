@@ -184,6 +184,7 @@ work started and was deliberately deferred, with the evidence for the split.
 - source_spec: none
   summary: Story 1.2 slice — the arithmetic and codec discipline (AC 9): bigint milli-hours, integer JPY, unreduced {num,den} ratios, a single compareRatio site, rounding only in domain/present, and one jsonb codec so JSON.stringify never meets a bigint.
   evidence: Split from story 1.2 on 2026-09-20, and genuinely independent of tenancy — it is about how packages/domain represents numbers, not about who may read them. Measured: 13 domain modules, 20 references to number/Mh in types.ts, and 32 pinned assertions in demo-golden.test.ts. The spike uses number where the architecture decided bigint, so this is a representation rewrite across the domain core with its own risk profile, and the pinned golden values are the thing that must not move while it happens. Doing it early means later stories are written against the right representation; doing it late means rewriting them.
+  resolved: YES, 2026-09-21 in `spec-1-2-arithmetic-and-codec.md`. `Mh`/`Jpy` are `bigint` from the row (`bigint({ mode: 'bigint' })` on the five `*_mh` columns; the `integer` yen columns read into `bigint`) to `domain/present`; every ratio is an unreduced `Ratio`; `compareRatio` in `health.ts` is the one comparison site; rounding lives only in `domain/present` (half-even, from the exact value); `domain/present/codec.ts` carries every `audit_log.payload`. Two lint fences (rounding outside `present/`, `JSON.stringify` outside the codec) were each watched to fail. The six routes render HTML identical to the baseline commit.
 
 - source_spec: none
   summary: Story 1.2 slice — watermark advisory locks (part of AC 7): pg_advisory_xact_lock in its two-argument form, namespace 1 for a Project key and 2 for a Tenant key, taken before allocating any seq, with ComputationInputs captured under the shared form.
@@ -414,3 +415,23 @@ work started and was deliberately deferred, with the evidence for the split.
 - source_spec: `_bmad-output/planning-artifacts/architecture/architecture-momo-keikaku-2026-09-20/ARCHITECTURE-SPINE.md`
   summary: The remaining edges of AD-1's diagram have no dependency-cruiser rule: nothing imports `apps/*`, `packages/i18n` imports nothing from the workspace, `apps/*` do not import `packages/adapters`, `packages/adapters` does not import `packages/db`.
   evidence: Found by round 2 of the adversarial review of the AD-1 gate-on amendment, 2026-09-21. None has code to flag today (`packages/i18n` and most of `packages/adapters` do not exist yet), so each is green to add; write them with the next change to `.dependency-cruiser.cjs`, alongside the package-direction and raw-`pg` entries above.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-2-arithmetic-and-codec.md`
+  summary: The Review page now calls non-presentation domain helpers (`costOf`, `ratio`, `isBehindPlan`, `compareBigint`, `sum`) where it used to do the same arithmetic inline, which widens what the open `apps/web → packages/domain` edge carries.
+  evidence: Found while replacing the pages' inline rounding and comparisons (slice 5). No new importing file — the gantt component takes an already-presented `earned` prop instead — but PV/EV money on the Review (`yen(costOf(pvMh, defaultRate))`), a share of the Unplanned total, and the "behind plan" wording are still derived in a page. They belong in the Review's result (or a presentation layer) whichever way the web → domain decision goes; moving them is a new field on `ReviewResult`, which this slice's Never excluded.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-2-arithmetic-and-codec.md`
+  summary: `audit_log.payload` is decoded through the codec only by the write harness; no product code reads it yet, so its decode schema lives in `tests/cross-tenant-writes.test.ts`.
+  evidence: Slice 5. The payload shapes (the two write payloads and the seed's) are restated there as zod schemas; story 1.7's audit-log reader should own them, next to the audited-action enum, and the harness should import them from there.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-2-arithmetic-and-codec.md`
+  summary: AD-4's rounding fence covers `packages/domain` only; `Math.round`/`.toFixed` can come back into `apps/web` pages.
+  evidence: Review round 1 (B4). This slice moved every page's inline rounding into `domain/present`; nothing keeps it there. Extend the arithmetic fence to `apps/**` (with a narrow exception for layout geometry if one is needed) when `.dependency-cruiser.cjs`/lint next change; `formatAge` in `shell.tsx` is minutes, check it first.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-2-arithmetic-and-codec.md`
+  summary: Nothing enforces that `compareRatio` is the only ratio-vs-threshold site, or that `geometryFraction` is the only place a Ratio becomes a float.
+  evidence: Review round 1 (B5). A `Number(r.num) / Number(r.den)` or a relational operator on a ratio's parts outside `health.ts`/`present/` passes every gate. A `no-restricted-syntax` selector on `Number(<member>.num)` / `.den` outside those files, or a source-scan test like `source-discipline.test.ts`, would hold it.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-2-arithmetic-and-codec.md`
+  summary: The Review page's own derivations — PV/EV yen, the Unplanned component share, % complete, Gantt progress — are covered only by the manual identical-HTML diff.
+  evidence: Review round 1 (V3). `apps/web` has no render test; moving these into `ReviewResult` (already recorded) would put them under `demo-golden.test.ts`.

@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { sql } from 'drizzle-orm';
-import { hours, present } from '@momo/domain';
+import { hours, present, stringify } from '@momo/domain';
 import type { ProjectReadDeps } from '../packages/app/src/ports/project-read';
 import type { AppError } from '../packages/app/src/result';
 import { getProjectReview } from '../packages/app/src/use-cases';
@@ -336,14 +336,17 @@ function walkStrings(root: unknown, visit: (value: string, path: string) => void
  * `rules[].currentlyMapped` without touching BAC, AC or SPI at all, so the headline figures
  * alone do not close the vocabulary question.
  */
-function numberCensus(graph: unknown): number[] {
-  const numbers: number[] = [];
+function numberCensus(graph: unknown): (number | bigint)[] {
+  // `bigint` as well as `number` (AD-4): effort and money are `bigint` milli-hours and yen, and
+  // a census that looked only at `number` would silently drop every figure that matters —
+  // BAC, AC, PV, EV, every ratio's numerator and denominator — and pass about the counts.
+  const numbers: (number | bigint)[] = [];
   walkLeaves(graph, (value, _path, key) => {
-    if (typeof value !== 'number') return;
+    if (typeof value !== 'number' && typeof value !== 'bigint') return;
     if (key !== null && ALLOCATED_SEQ_KEYS.has(key)) return;
     numbers.push(value);
   });
-  return numbers.sort((a, b) => a - b);
+  return numbers.sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
 }
 
 
@@ -352,8 +355,12 @@ const PROBE_PLACEHOLDER = '<probe>';
 function sortBySerialisation(items: unknown[]): unknown[] {
   // Keys precomputed: `sort` with a stringifying comparator serialises the same element
   // O(log n) times, and these arrays carry whole Ticket observations.
+  //
+  // Serialised through the domain's codec (AD-4), not `JSON.stringify`: the graphs carry
+  // `bigint` milli-hours and `Ratio`s, which `JSON.stringify` throws on — and the codec also
+  // refuses a float, so a float that crept back into a result fails here, naming its path.
   return items
-    .map((item) => [JSON.stringify(item) ?? '', item] as const)
+    .map((item) => [stringify(item), item] as const)
     .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
     .map(([, item]) => item);
 }
@@ -671,6 +678,11 @@ describe.skipIf(!reachable)('the cross-tenant harness, driven against two probe 
         'catch-all-overflow': '50.8',
       });
       expect(hours(review.unplanned.cumulative.unplannedMh)).toBe('216.8');
+      // The numeric census sees the bigint figures, not only the counts: without this, a
+      // census that skipped `bigint` would compare two lists of counts and call it faithful.
+      const census = numberCensus(review);
+      expect(census, 'the census carries BAC').toContain(2_936_000n);
+      expect(census, 'the census carries AC').toContain(1_661_495n);
     });
 
     it('carries the demo Tenant alongside it, unchanged', async () => {

@@ -33,9 +33,10 @@
  * The composition root is `scripts/seed.ts`: this module takes its handle as an argument
  * because `packages/db` may not read the environment.
  */
+import { encode } from '@momo/domain';
 import { sql } from 'drizzle-orm';
 import type { Db } from './client';
-import { buildDemoState, type DemoState } from './fixtures';
+import { buildDemoState, mhFromJson, type DemoState } from './fixtures';
 import * as s from './schema';
 import { MAINTENANCE_SETTING } from './table-classes';
 import { withTenant, type Tx } from './with-tenant';
@@ -264,7 +265,7 @@ export async function writeTenantRows(
       wpId: b.wpId,
       start: b.start,
       finish: b.finish,
-      baselineMh: b.baselineMh,
+      baselineMh: mhFromJson(b.baselineMh),
       isMilestone: b.isMilestone,
     })),
   );
@@ -382,12 +383,13 @@ export async function writeTenantRows(
     actor: own('system:seed'),
     action: 'demo.seed',
     target: f.project.id,
-    payload: {
+    // AD-4: through the one codec, like every audit payload.
+    payload: encode({
       snapshots: state.snapshots.length,
       ledgerEntries: state.ledger.length,
       mappingEvents: state.mappingEvents.length,
       anchor: state.anchor,
-    },
+    }),
     at: new Date(state.anchor),
   });
 

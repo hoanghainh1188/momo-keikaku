@@ -157,7 +157,7 @@ export default async function ClientViewPage({
                     <td className="caption">
                       {sch.currentStart ? `${sch.currentStart} → ${sch.currentFinish}` : '—'}
                     </td>
-                    <td className="num">{(sch.pctComplete * 100).toFixed(0)}%</td>
+                    <td className="num">{sch.progress.label}%</td>
                     <td>
                       {scale ? (
                         <GanttRow
@@ -172,7 +172,7 @@ export default async function ClientViewPage({
                               ? { start: sch.currentStart, finish: sch.currentFinish }
                               : null
                           }
-                          pctComplete={sch.pctComplete}
+                          earned={sch.progress}
                           isMilestone={false}
                           slipped={false}
                         />

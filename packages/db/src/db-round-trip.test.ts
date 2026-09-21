@@ -121,26 +121,28 @@ describe.skipIf(!reachable)('persistence round trip — the database reproduces 
     expect(hours(review.unplanned.period.unplannedMh)).toBe('29.1');
   });
 
-  it('carries effort across the driver as integral numbers, never strings', async () => {
+  it('carries effort across the driver as bigint milli-hours, never strings or doubles', async () => {
     const { review } = await loadReview(db(), DEMO_TENANT_ID);
-    // The regression this file exists to catch. `schema.ts` declares these columns
-    // `bigint({ mode: 'number' })`, and that mode is what converts Postgres int8 into
-    // a JS number — node-postgres hands back a *string* otherwise, because int8 does
-    // not fit a double. A string still renders correctly through `hours()` while
-    // silently breaking every comparison and sum upstream of it, which is precisely
-    // the failure the assertions above would not catch on their own.
+    // The regression this file exists to catch. `schema.ts` declares the `*_mh` columns
+    // `bigint({ mode: 'bigint' })`, and that mode is what converts Postgres int8 into a JS
+    // `bigint` (AD-4) — node-postgres hands back a *string* otherwise, because int8 does not
+    // fit a double. A string still renders correctly through `hours()` while silently
+    // breaking every comparison and sum upstream of it, which is precisely the failure the
+    // assertions above would not catch on their own; a `number` would be exact here but is
+    // not the representation AD-4 decided.
     //
-    // Values are milli-hours, so 2936.0 h reads as 2936000 here.
+    // Values are milli-hours, so 2936.0 h reads as 2936000n here.
     for (const [label, value] of [
       ['BAC', review.evm.bacMh],
       ['PV', review.evm.pvMh],
       ['EV', review.evm.evMh],
       ['AC', review.evm.acMh],
     ] as const) {
-      expect(typeof value, `${label} crossed the driver as ${typeof value}`).toBe('number');
-      expect(Number.isInteger(value), `${label} is not integral`).toBe(true);
+      expect(typeof value, `${label} crossed the driver as ${typeof value}`).toBe('bigint');
     }
-    expect(review.evm.bacMh).toBe(2936000);
-    expect(review.evm.acMh).toBe(1661495);
+    // The integer yen columns are read into bigint too, and money stays integral.
+    expect(typeof review.attribution.cumulative.totalJpy).toBe('bigint');
+    expect(review.evm.bacMh).toBe(2936000n);
+    expect(review.evm.acMh).toBe(1661495n);
   });
 });
