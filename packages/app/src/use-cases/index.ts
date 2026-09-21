@@ -19,3 +19,13 @@ export {
   markChangeRequestCandidates,
   planTicketsAsWorkPackage,
 } from './project-writes';
+export {
+  createDepartment,
+  createProgram,
+  createProject,
+  reassignProjectDepartment,
+  reassignProjectProgram,
+  renameDepartment,
+  renameProgram,
+  renameProject,
+} from './org-writes';

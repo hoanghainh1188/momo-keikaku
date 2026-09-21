@@ -6,10 +6,10 @@
  * schema or helper exported there would be reported as a use case with no registry entry.
  */
 import { z } from 'zod';
-import { refusingNonMembers } from '../audit';
-import { fail, ok, type AppError, type Result } from '../result';
+import type { Result } from '../result';
 import { isProjectNotFound } from '../ports/project-read';
 import type { ProjectWriteDeps, ProjectWriteScope, WriteStamp } from '../ports/project-write';
+import { runAuditedWrite } from './audited-write';
 import type { UseCaseContext } from './context';
 
 /**
@@ -73,27 +73,17 @@ export type ChangeRequestCandidatesInput = Readonly<
 >;
 export type MapTicketInput = Readonly<z.infer<typeof mapTicketInputSchema>>;
 
-/** The offending field names, by zod issue code. Structured, never prose, never a value. */
-function invalidInputDetails(error: z.ZodError): NonNullable<AppError['details']> {
-  return error.issues.reduce<NonNullable<AppError['details']>>((acc, issue) => {
-    const field = issue.path.join('.') || '(input)';
-    return { ...acc, [field]: [...(acc[field] ?? []), issue.code] };
-  }, {});
-}
-
 /**
  * Validates the input, opens ONE tenant transaction for the caller's Tenant, reads the Project's
  * anchor inside it, and runs `work` on that transaction's scope with the stamp — then maps an
  * invisible Project to `not_found`.
  *
- * `work` makes the change through `scope.projectWrite` and records it through
- * `audit.record(scope, stamp, …)`, both on the one transaction opened here (AD-14). Nothing
- * in it may open another: this is the only transaction boundary a write use case has.
- *
- * NOTHING ELSE IS CAUGHT, for the reason the read path gives: a write that failed for any other
- * reason — an outage, a constraint, a refused audit insert — must not be reported as "this
- * Project does not exist", and must never be reported as success. The transaction has rolled
- * back by the time it propagates, so nothing landed.
+ * Since story 1.3 slice 2 this is `runAuditedWrite` (`./audited-write.ts`, the path every audited
+ * write shares) with the project writes' two particulars: the event time is the Project's
+ * `demoAnchor` (so the rows stay byte-identical — no Clock here), and an invisible Project is the
+ * adapter's `project <id> not found` rejection (`isProjectNotFound`). The rest of the contract —
+ * one transaction, `invalid_input` before it opens, the guarded audit sink, nothing else caught —
+ * is that function's, unchanged.
  */
 export async function runProjectWrite<Handle, Command extends { readonly projectId: string }>(
   schema: z.ZodType<Command>,
@@ -102,20 +92,15 @@ export async function runProjectWrite<Handle, Command extends { readonly project
   input: unknown,
   work: (scope: ProjectWriteScope, stamp: WriteStamp, command: Command) => Promise<void>,
 ): Promise<Result<void>> {
-  const parsed = schema.safeParse(input);
-  if (!parsed.success) return fail('invalid_input', invalidInputDetails(parsed.error));
-
-  const command = parsed.data;
-  try {
-    await deps.transaction(deps.handle, ctx.tenantId, async (scope) => {
-      const at = await scope.projectWrite.projectAnchor(command.projectId);
-      // The work sees only a guarded sink: a direct `append` with a non-enum action is refused.
-      const guarded = { ...scope, audit: refusingNonMembers(scope.audit) };
-      await work(guarded, { actor: deps.actor, at }, command);
-    });
-    return ok(undefined);
-  } catch (error) {
-    if (isProjectNotFound(error, command.projectId)) return fail('not_found');
-    throw error;
-  }
+  return runAuditedWrite(
+    schema,
+    deps,
+    ctx,
+    input,
+    {
+      at: (scope, command) => scope.projectWrite.projectAnchor(command.projectId),
+      isNotFound: (error, command) => isProjectNotFound(error, command.projectId),
+    },
+    work,
+  );
 }

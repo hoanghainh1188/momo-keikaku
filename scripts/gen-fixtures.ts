@@ -2,7 +2,7 @@
  * Deterministic generator for the demo dataset.
  *
  * Writes:
- *   fixtures/demo/project.json            — Tenant/Department/Project, Resources, Plan, Baseline, Mapping Rules, seed Mappings
+ *   fixtures/demo/project.json            — Tenant/Department/Program/Project, Resources, Plan, Baseline, Mapping Rules, seed Mappings
  *   fixtures/backlog/ec-phase2/000N.json  — six weekly Backlog-shaped Tracker Snapshots
  *
  * The snapshots carry `observedAtOffsetHours` relative to a time anchor rather than
@@ -499,6 +499,8 @@ const project = {
   anchor: '2026-09-16T09:00:00.000Z',
   tenant: { id: 'ten-momo', name: 'Momo Digital KK' },
   department: { id: 'dep-delivery', name: 'Delivery' },
+  // Story 1.3 slice 2: the demo Tenant's org carries one Program, and the Project sits in it.
+  program: { id: 'prg-ec-platform', name: 'EC platform' },
   project: {
     id: 'prj-ec2',
     name: 'EC phase 2',

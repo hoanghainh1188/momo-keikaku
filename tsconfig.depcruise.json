@@ -16,7 +16,8 @@
       "@momo/db": ["./packages/db/src/index.ts"],
       "@momo/db/*": ["./packages/db/src/*"],
       "@momo/app": ["./packages/app/src/index.ts"],
-      "@momo/app/*": ["./packages/app/src/*"]
+      "@momo/app/*": ["./packages/app/src/*"],
+      "@momo/adapters": ["./packages/adapters/src/index.ts"]
     }
   },
   "include": ["apps/**/*.ts", "apps/**/*.tsx", "packages/**/*.ts"],

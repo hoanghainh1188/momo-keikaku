@@ -79,6 +79,8 @@ export interface FixtureProject {
   anchor: string;
   tenant: { id: string; name: string };
   department: { id: string; name: string };
+  /** The demo Project's Program, in `department` (story 1.3 slice 2). */
+  program: { id: string; name: string };
   project: {
     id: string;
     name: string;

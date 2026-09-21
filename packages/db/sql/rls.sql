@@ -18,6 +18,20 @@ CREATE POLICY "maintenance_bypass" ON public."department"
   USING (true)
   WITH CHECK (true);
 
+-- program (mutable-audited): Org shape between Department and Project (FR-1). Created and renamed by Tenant Admins; every change is audited (story 1.3 slice 2).
+ALTER TABLE public."program" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public."program" FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "tenant_isolation" ON public."program";
+CREATE POLICY "tenant_isolation" ON public."program"
+  FOR ALL
+  USING ("tenant_id" = NULLIF(current_setting('app.tenant_id', true), ''))
+  WITH CHECK ("tenant_id" = NULLIF(current_setting('app.tenant_id', true), ''));
+DROP POLICY IF EXISTS "maintenance_bypass" ON public."program";
+CREATE POLICY "maintenance_bypass" ON public."program"
+  FOR ALL TO "momo_maintenance"
+  USING (true)
+  WITH CHECK (true);
+
 -- app_user (mutable-audited): Names and roles change. Story 1.4 replaces this with the identity tables plus the membership bridge.
 ALTER TABLE public."app_user" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public."app_user" FORCE ROW LEVEL SECURITY;

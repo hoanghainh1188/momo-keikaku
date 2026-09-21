@@ -388,7 +388,7 @@ work started and was deliberately deferred, with the evidence for the split.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-2-web-write-use-cases.md`
   summary: The dependency-cruiser gate enforces only `apps/*` → `packages/db`/Drizzle and the scheduling edges; the package-level directions AD-1 draws (`packages/db` ↛ `packages/app`, `packages/app` ↛ `packages/db`, `packages/domain` → `zod` only) are unenforced.
-  evidence: Review round 1 (B2). The structural-port design depends on `packages/db` never importing `@momo/app`; one such import would pass CI today. Green to add now; kept out because the approved intent scoped the gate to AC-6's wording. Add with the next change to `.dependency-cruiser.cjs`.
+  evidence: Review round 1 (B2). The structural-port design depends on `packages/db` never importing `@momo/app`; one such import would pass CI today. Green to add now; kept out because the approved intent scoped the gate to AC-6's wording. Add with the next change to `.dependency-cruiser.cjs`. UPDATE 2026-09-21 (story 1.3 slice 2): partly resolved — `packages/app`, `packages/domain` and `packages/db` importing `packages/adapters` is now gated (`inner-packages-not-to-adapters`); `db` ↔ `app` and `domain` → anything-but-`zod` remain.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-2-web-write-use-cases.md`
   summary: `apps-not-to-db` does not forbid the raw `pg` driver in `apps/web`, which is a worse bypass than Drizzle.
@@ -417,7 +417,7 @@ work started and was deliberately deferred, with the evidence for the split.
 
 - source_spec: `_bmad-output/planning-artifacts/architecture/architecture-momo-keikaku-2026-09-20/ARCHITECTURE-SPINE.md`
   summary: The remaining edges of AD-1's diagram have no dependency-cruiser rule: nothing imports `apps/*`, `packages/i18n` imports nothing from the workspace, `apps/*` do not import `packages/adapters`, `packages/adapters` does not import `packages/db`.
-  evidence: Found by round 2 of the adversarial review of the AD-1 gate-on amendment, 2026-09-21. None has code to flag today (`packages/i18n` and most of `packages/adapters` do not exist yet), so each is green to add; write them with the next change to `.dependency-cruiser.cjs`, alongside the package-direction and raw-`pg` entries above.
+  evidence: Found by round 2 of the adversarial review of the AD-1 gate-on amendment, 2026-09-21. None has code to flag today (`packages/i18n` and most of `packages/adapters` do not exist yet), so each is green to add; write them with the next change to `.dependency-cruiser.cjs`, alongside the package-direction and raw-`pg` entries above. UPDATE 2026-09-21 (story 1.3 slice 2): `apps/*` → `packages/adapters` is now gated (`apps-adapters-only-from-composition-root`, only the composition root may).
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-2-arithmetic-and-codec.md`
   summary: The Review page now calls non-presentation domain helpers (`costOf`, `ratio`, `isBehindPlan`, `compareBigint`, `sum`) where it used to do the same arithmetic inline, which widens what the open `apps/web → packages/domain` edge carries.
@@ -469,6 +469,7 @@ work started and was deliberately deferred, with the evidence for the split.
 - source_spec: none
   summary: Story 1.3 slice 2 — the organisation hierarchy: the `program` table (`mutable_audited`), and use cases to create, rename and reassign Departments, Programs and Projects (Program only within the Project's owning Department; moving a Project between Programs changes only roll-up), each audited with the previous value through slice 1's mechanism.
   evidence: Split from story 1.3 at the Build multi-goal gate on 2026-09-21, the founder choosing the audit mechanism first so the hierarchy is written on it rather than beside it. No Organisation UI in 1.3 either (decided the same day): the admin surface waits for sign-in and roles (1.4/1.5).
+  resolved: 2026-09-21 in `spec-1-3-organisation-hierarchy.md`. `program` (`mutable-audited`) and `project.program_id` exist; the eight organisation writes (create/rename Department, Program, Project; reassign a Project's Program or owning Department) are audited use cases on slice 1's mechanism, each recording the previous value, with the Program-within-Department rule checked inside the transaction. Still not done, as decided: PM assignment (entry below) and any Organisation UI.
 
 - source_spec: none
   summary: FR-1's "assign PMs to Projects" is not done in story 1.3; it belongs with `tenant_membership` (story 1.4's table, `project_ids`) and role reach (1.5).
@@ -477,6 +478,7 @@ work started and was deliberately deferred, with the evidence for the split.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-3-audit-mechanism.md`
   summary: The audit gate drives each audited use case with ONE input (its registry entry's `invokeWrite`), so an action chosen on a branch is covered by the gate only on that branch — `mapTicket`'s unmap (`mapping.unmap`) is proved by the unit test and the write harness's unmap case, not by the gate.
   evidence: Found building the gate. The gate asserts "exactly one record, of a declared action" per invocation, which a branch that skips `audit.record` would pass unless the gate drives that branch. Fix when a second branching write lands: let a registry entry carry several write inputs and drive each, requiring every declared action to be seen at least once.
+  resolved: 2026-09-21 in `spec-1-3-organisation-hierarchy.md`. A registry entry may carry `moreWrites` beside `invokeWrite`; the gate drives every input and requires each declared action to be recorded by at least one of them. `mapTicket`'s unmap is now driven by the gate.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-3-audit-mechanism.md`
   summary: The gate proves the audit contract against a FAKE transaction; only the five writes' DB-level rollback tests (`tests/cross-tenant-writes.test.ts`) prove Postgres really rolls the record back — and those loop over the registry's writes, so a new write gets them automatically only if it is driven through the same `inTenantTransaction`.
@@ -489,7 +491,49 @@ work started and was deliberately deferred, with the evidence for the split.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-3-audit-mechanism.md`
   summary: The transaction port and the audited-use-case gate are built around the project write scope; story 1.3 slice 2's organisation writes need a different scope and a matching fake.
   evidence: Review round 1 (B5). `inTenantTransaction` builds only a `ProjectWriteScope`, and the gate's `drive()` fakes only that. Generalise both when slice 2 adds its first write: a scope per repository family, composed, and a registry entry that supplies its own fake.
+  resolved: 2026-09-21 in `spec-1-3-organisation-hierarchy.md`. `packages/app` has a generic `AuditedWriteDeps<Handle, Scope>` and `runAuditedWrite` (the project writes' `runProjectWrite` is a thin wrapper, rows unchanged); `WriteDeps`/`WriteScope` compose every repository family. `packages/db`'s `inTenantTransaction` (now `tenant-transaction.ts`) builds one scope carrying the project write repository, the org repository and the audit sink on one `withTenant`. The gate fakes each repository family (`FAKE_FAMILIES`) over the whole scope rather than one project-shaped fake — a per-family fake in the gate rather than a per-entry one, since every write of a family shares it.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-3-audit-mechanism.md`
   summary: The audited-use-case gate drives each use case with one input, so `mapTicket`'s unmap branch (`mapping.unmap`) is not driven by the gate.
   evidence: Review round 1 (E2), and recorded by the implementation. Covered by the unit test and the harness's unmap test. Fix: a registry entry may supply several inputs, and the gate requires every declared action to be seen at least once.
+  resolved: 2026-09-21 in `spec-1-3-organisation-hierarchy.md` — the same change as the entry above (`moreWrites`).
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-3-organisation-hierarchy.md`
+  summary: ARCHITECTURE-SPINE.md's AD-1 does not yet draw the `apps/web/src/server/composition.ts → packages/adapters` edge the code, the `apps-adapters-only-from-composition-root` rule and this slice now rely on.
+  evidence: The founder's 2026-09-21 decision recorded in the spec says AD-1 "is amended (separately, reviewed)" to let the composition root import `packages/adapters` for the Clock and the id port. This build did not edit the spine; the amendment should add the edge to the composition-root carve-out paragraph and the new rule to "what the dependency-cruiser gate enforces now", and go through the adversarial review the earlier AD-1 amendments had. RESOLVED 2026-09-21: AD-1 amended in the same branch, two rounds of adversarial review (`reviews/review-adversarial-ad1-adapters.md`).
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-3-organisation-hierarchy.md`
+  summary: The Program-within-Department rule and "a Program never changes Department" are held by the use cases alone; the database would accept a `project.program_id` naming another Department's Program, or no Program at all.
+  evidence: The spec's Never list keeps foreign keys out (the schema's recorded demo deviation). The org writes check the rule inside the transaction and lock the Project row (`FOR UPDATE`) so two reassignments cannot both pass a stale check, and nothing else writes `program_id` — but the seed and probe writers insert it directly. A composite FK `(tenant_id, department_id, program_id)` → `program(tenant_id, department_id, id)` is the database-level form, with the FK work that lifts the deviation.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-3-organisation-hierarchy.md`
+  summary: A new Project's `default_rate_jpy` is 0 and its `demo_anchor` is the wall clock, both placeholders for later stories.
+  evidence: Documented in `NEW_PROJECT_DEFAULTS` (`packages/app/src/use-cases/org-writes.ts`). Story 1.6 creates the Project default Rate (its own table, audited), which should replace the column's 0; the anchor comes from the composition root's `systemClock` until story 1.8's fixture-mode clock exists, so a Project created in the demo today is anchored at real time, not the fixture's.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-3-organisation-hierarchy.md`
+  summary: The write harness's own-Tenant row check compares only the tables a write is expected to touch (`landedRows`: mapping, disposition, audit, work package, department, program, project); a write that also changed another table passes it.
+  evidence: Watched in the sabotage run: a Program move that also updated `connector` passed `tests/cross-tenant-writes.test.ts` and was caught only by `tests/org-writes.test.ts`'s whole-Tenant comparison (`allRows`). The foreign-Tenant probe counts every tenant-owned table, but counts cannot see an UPDATE. Comparing `allRows` before and after every own-Tenant write in the harness would close it for all writes at once.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-3-organisation-hierarchy.md`
+  summary: The org writes have no read side: nothing lists Departments or Programs, and `program` is declared unreached in the read harness.
+  evidence: The spec's Never list: no UI and no read use case for the org in 1.3. The first read (the Organisation admin surface, after 1.4/1.5, or a Program roll-up) must remove `program` from `UNREACHED_TENANT_OWNED_TABLES` or the reach assertion fails.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-3-organisation-hierarchy.md`
+  summary: `findProject`'s row lock — the only concurrent guard of the Program-within-Department rule — has no test.
+  evidence: Review round 1 (B3/V1). Removing `.for('update')` leaves every suite green; the interleaving reassign-Program-then-move-Department can commit a Project in one Department carrying another's Program. Needs a two-connection test with a barrier, which the write harness lacks; or a composite foreign key (the recorded demo deviation) that makes the database enforce it.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-3-organisation-hierarchy.md`
+  summary: `audit_log.at` mixes two time bases in one Tenant: project writes stamp the Project's fixture `demoAnchor`, org writes stamp wall time from the Clock.
+  evidence: Review round 1 (B8). Ordering or reading the log by `at` interleaves the two timelines; `seq` still gives true insertion order. Resolves when story 1.8's fixture-mode Clock drives both, or when project writes move off `demoAnchor`.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-3-organisation-hierarchy.md`
+  summary: The web app now bundles `@momo/adapters` (and its `uuid`) through `transpilePackages`, verified by typecheck only.
+  evidence: Review round 1 (V2). Same gap as the "CI never runs `next build`" entries: dropping `@momo/adapters` from `transpilePackages`, or `uuid` failing to resolve for Next, stays green in every gate. Covered by the eventual `next build` step or the Epic 8 image.
+
+- source_spec: `_bmad-output/planning-artifacts/architecture/architecture-momo-keikaku-2026-09-20/ARCHITECTURE-SPINE.md`
+  summary: `apps/worker` cannot reach the `Clock` (or any adapter): AD-15 needs the fixture clock in both roles, and the gate allows `packages/adapters` only from `apps/web`'s composition root.
+  evidence: Found by the adversarial review of the AD-1 adapters amendment, 2026-09-21. AD-1 now says the worker gets its own named composition root the day it first needs an adapter; name it in the spine and in `apps-adapters-only-from-composition-root` together — likely with story 1.8's fixture clock or the pg-boss adapter move.
+
+- source_spec: `_bmad-output/planning-artifacts/architecture/architecture-momo-keikaku-2026-09-20/ARCHITECTURE-SPINE.md`
+  summary: `db/seed` has no way to receive the `Clock` AD-15 says it creates records through: `packages/db` may not import `packages/adapters`.
+  evidence: Found by the same review. The seed's operator entry point (`scripts/seed.ts`) is outside the graph and can inject a clock; wire it there when story 1.8 introduces the fixture-mode clock the seed must share.

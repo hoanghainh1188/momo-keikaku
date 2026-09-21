@@ -7,7 +7,9 @@
 // web → domain/present edge (2026-09-21) adds the Client View and Mapping reads, so no page
 // computes from the domain.
 // Story 1.3 slice 1 adds the audit mechanism (`./audit`) and the tenant transaction the writes
-// run in. Authorisation (1.5) and the RequestContext (1.4) attach to this layer later.
+// run in; slice 2 generalises the write deps (`AuditedWriteDeps`, `WriteDeps`), adds the Clock and
+// id ports, and the eight organisation writes. Authorisation (1.5) and the RequestContext (1.4)
+// attach to this layer later.
 //
 // `./use-cases` does not import `./config`, so code that needs the use cases and not the
 // configuration can import `packages/app/src/use-cases` directly. `config` is lazy (a getter
@@ -33,8 +35,21 @@ export type {
   ProjectWriteDeps,
   ProjectWriteRepository,
   ProjectWriteScope,
-  WriteStamp,
 } from './ports/project-write';
+export type { AuditedWriteDeps, WriteStamp } from './ports/audited-write';
+export type { Clock } from './ports/clock';
+export type { IdGenerator } from './ports/ids';
+export type {
+  DepartmentRow,
+  NewProjectRow,
+  OrgRepository,
+  OrgWriteDeps,
+  OrgWriteScope,
+  ProgramRow,
+  ProjectPlacementRow,
+} from './ports/org-write';
+export type { WriteDeps, WriteScope } from './ports/write-deps';
+export type { Created } from './use-cases/org-writes';
 export type { TenantTransaction } from './ports/tenant-transaction';
 // Audit crosses as TYPES only, like the result and the ports: `audit.record` is a use case's to
 // call inside its own transaction, never an inbound adapter's.
@@ -59,3 +74,13 @@ export type {
   MapTicketsInput,
   PlanTicketsInput,
 } from './use-cases/project-write-input';
+export type {
+  CreateDepartmentInput,
+  CreateProgramInput,
+  CreateProjectInput,
+  ReassignProjectDepartmentInput,
+  ReassignProjectProgramInput,
+  RenameDepartmentInput,
+  RenameProgramInput,
+  RenameProjectInput,
+} from './use-cases/org-input';

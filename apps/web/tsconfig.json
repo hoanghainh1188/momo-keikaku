@@ -32,6 +32,9 @@
       ],
       "@momo/app": [
         "../../packages/app/src/index.ts"
+      ],
+      "@momo/adapters": [
+        "../../packages/adapters/src/index.ts"
       ]
     },
     "isolatedModules": true

@@ -13,6 +13,19 @@
 export * from './client';
 export * from './schema';
 export * from './repo';
-export * from './repo-writes';
+// The write side crosses as the tenant transaction and TYPES only: the repository builders
+// (`projectWriteRepositoryOn`, `orgRepositoryOn`) are reachable only through the scope
+// `inTenantTransaction` binds to one transaction, never as free functions a caller could run on a
+// handle of its own.
+export type {
+  ChangeRequestCandidateCommand,
+  ExplainDispositionCommand,
+  ManualMappingCommand,
+  MapDispositionCommand,
+  PlanDispositionCommand,
+  WriteStamp,
+} from './repo-writes';
+export type { DepartmentRow, NewProjectRow, ProgramRow, ProjectPlacementRow } from './repo-org';
+export { inTenantTransaction, type WriteScope } from './tenant-transaction';
 export * from './table-classes';
 export * from './with-tenant';

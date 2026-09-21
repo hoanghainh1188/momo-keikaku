@@ -51,12 +51,12 @@ describe('the table-class registry is the single source', () => {
     );
   });
 
-  it('holds the 17 tables of this release, 16 of them tenant-owned', () => {
+  it('holds the 18 tables of this release, 17 of them tenant-owned', () => {
     // Pinned as numbers as well as names: a future change that removes a table and adds
     // another keeps the name lists agreeing with `schema.ts` while silently changing what
     // this story was reasoned about.
-    expect(TABLE_REGISTRY).toHaveLength(17);
-    expect(TENANT_OWNED).toHaveLength(16);
+    expect(TABLE_REGISTRY).toHaveLength(18);
+    expect(TENANT_OWNED).toHaveLength(17);
     expect(TABLE_REGISTRY.filter((e) => e.tenantColumn === null).map((e) => e.table)).toEqual([
       'tenant',
     ]);

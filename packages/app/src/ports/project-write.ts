@@ -1,5 +1,7 @@
 import type { AuditSink } from '../audit';
-import type { TenantTransaction } from './tenant-transaction';
+import type { AuditedWriteDeps, WriteStamp } from './audited-write';
+
+export type { WriteStamp } from './audited-write';
 
 /**
  * The port the five project write use cases depend on — FR-29's four Dispositions and FR-21's
@@ -76,15 +78,12 @@ export interface ManualMappingCommand {
 }
 
 /**
- * Who and when, stamped on every row one write lands: the actor from the deps, and the event
- * time — the Project's `demoAnchor`, read inside the transaction by `projectAnchor` (no Clock
- * consumer yet). The Tenant is not here: the repository is bound to its transaction's Tenant.
+ * One repository write, stamped with who and when (`WriteStamp`, `./audited-write`): the actor
+ * from the deps, and the event time — the Project's `demoAnchor`, read inside the transaction by
+ * `projectAnchor` (the project writes keep the anchor, so their rows stay byte-identical; the
+ * organisation writes take a Clock). The Tenant is not in the stamp: the repository is bound to
+ * its transaction's Tenant.
  */
-export interface WriteStamp {
-  readonly actor: string;
-  readonly at: Date;
-}
-
 type WriteMember<Command, Landed = void> = (stamp: WriteStamp, command: Command) => Promise<Landed>;
 
 /**
@@ -110,10 +109,7 @@ export interface ProjectWriteScope {
 
 /**
  * What a project write use case is given: the transaction to open, the handle it is opened on,
- * and the actor the rows name. All three are chosen by the composition root.
+ * and the actor the rows name — slice 2's generic `AuditedWriteDeps` over this scope. All three
+ * are chosen by the composition root.
  */
-export interface ProjectWriteDeps<Handle> {
-  readonly handle: Handle;
-  readonly actor: string;
-  readonly transaction: TenantTransaction<Handle, ProjectWriteScope>;
-}
+export type ProjectWriteDeps<Handle> = AuditedWriteDeps<Handle, ProjectWriteScope>;

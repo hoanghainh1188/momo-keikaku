@@ -38,7 +38,7 @@
  * suite spanning layers belongs to none of them.
  */
 import type { ProjectReadDeps } from '../packages/app/src/ports/project-read';
-import type { ProjectWriteDeps } from '../packages/app/src/ports/project-write';
+import type { WriteDeps } from '../packages/app/src/ports/write-deps';
 import * as readSurface from '../packages/app/src/use-cases';
 import type { Db } from '../packages/db/src/client';
 import type { DemoState } from '../packages/db/src/fixtures';
@@ -66,7 +66,14 @@ export interface WriteTarget extends UseCaseTarget {
   readonly ticketIds: readonly [string, string];
   /** A leaf Work Package of the Project's Tenant. */
   readonly wpId: string;
+  /** The Project's owning Department (story 1.3 slice 2). */
+  readonly departmentId: string;
+  /** A Program of that Department — the one the Project sits in, in the fixture. */
+  readonly programId: string;
 }
+
+/** How a write is driven: the deps its caller chose, and the target's ids. */
+export type InvokeWrite = <Handle>(deps: WriteDeps<Handle>, target: WriteTarget) => Promise<unknown>;
 
 /**
  * What the export is, and so how the harness drives it.
@@ -126,10 +133,21 @@ export interface ReadUseCase {
    * it: the write harness (the RESTRICTED role's handle and `packages/db`'s tenant transaction)
    * and the audit gate (`tests/audited-use-cases.test.ts`, a fake transaction, no database).
    */
-  readonly invokeWrite?: <Handle>(
-    deps: ProjectWriteDeps<Handle>,
-    target: WriteTarget,
-  ) => Promise<unknown>;
+  readonly invokeWrite?: InvokeWrite;
+  /**
+   * FURTHER inputs the audit gate drives, beside `invokeWrite` — one per branch that records a
+   * different action (story 1.3 slice 2, resolving slice 1's E2). The gate requires every action
+   * a use case declares to be recorded by at least one of its invocations, so a branch that skips
+   * `audit.record` cannot hide behind the branch the registry happens to drive.
+   */
+  readonly moreWrites?: readonly InvokeWrite[];
+  /**
+   * Set, with the reason, on a write that names NO existing row — it creates in the caller's own
+   * Tenant from nothing but a name (`createDepartment`). There is no foreign id for another Tenant
+   * to replay, so the write harness asserts instead that it lands in the caller's Tenant only and
+   * nothing in the other. Every other write must answer `not_found` to a foreign id.
+   */
+  readonly namesNoExistingRow?: string;
 }
 
 /**
@@ -241,7 +259,7 @@ export const READ_USE_CASES: readonly ReadUseCase[] = [
     kind: 'read',
     why:
       'The Project bundle behind the project frame (apps/web p/[projectId]/layout.tsx): ' +
-      'repo.ts loadProjectBundle, 15 selects across 15 of the 17 tables, FOUR of them with ' +
+      'repo.ts loadProjectBundle, 15 selects across 15 of the 18 tables, FOUR of them with ' +
       'no WHERE clause at all (baseline_wp, rate_entry, tracker_snapshot, ' +
       'actuals_ledger_entry), so row-level security is their only filter. Two of those four ' +
       'are then re-filtered in memory, which is why table-level isolation is asserted ' +
@@ -371,6 +389,124 @@ export const READ_USE_CASES: readonly ReadUseCase[] = [
         { tenantId: target.tenantId },
         { projectId: target.projectId, ticketId: target.ticketIds[0], wpId: target.wpId },
       ),
+    moreWrites: [
+      // The unmap branch, which records `mapping.unmap`.
+      (deps, target) =>
+        readSurface.mapTicket(
+          deps,
+          { tenantId: target.tenantId },
+          { projectId: target.projectId, ticketId: target.ticketIds[0], wpId: '' },
+        ),
+    ],
+  },
+  // --- FR-1's organisation writes (story 1.3 slice 2) -------------------------------------------
+  {
+    name: 'createDepartment',
+    kind: 'write',
+    why: 'FR-1: inserts a department (id from the id port) and an audit_log row, Clock-stamped.',
+    invokeWrite: (deps, target) =>
+      readSurface.createDepartment(deps, { tenantId: target.tenantId }, { name: 'Harness Department' }),
+    namesNoExistingRow:
+      'It takes a name and nothing else, and creates in ctx.tenantId: there is no id a foreign ' +
+      'Tenant could replay, so the probe asserts the row lands for the caller and nothing for the other.',
+  },
+  {
+    name: 'renameDepartment',
+    kind: 'write',
+    why: 'FR-1: reads the department, updates its name, audits { before, after }.',
+    invokeWrite: (deps, target) =>
+      readSurface.renameDepartment(
+        deps,
+        { tenantId: target.tenantId },
+        { departmentId: target.departmentId, name: 'Harness Department renamed' },
+      ),
+  },
+  {
+    name: 'createProgram',
+    kind: 'write',
+    why: 'FR-1: reads the department, inserts a program in it, audits { departmentId, name }.',
+    invokeWrite: (deps, target) =>
+      readSurface.createProgram(
+        deps,
+        { tenantId: target.tenantId },
+        { departmentId: target.departmentId, name: 'Harness Program' },
+      ),
+  },
+  {
+    name: 'renameProgram',
+    kind: 'write',
+    why: 'FR-1: reads the program, updates its name, audits { before, after }.',
+    invokeWrite: (deps, target) =>
+      readSurface.renameProgram(
+        deps,
+        { tenantId: target.tenantId },
+        { programId: target.programId, name: 'Harness Program renamed' },
+      ),
+  },
+  {
+    name: 'createProject',
+    kind: 'write',
+    why:
+      'FR-1: reads the department and the program (which must be the department\'s), inserts a ' +
+      'project with the documented defaults and the Clock as demo_anchor, audits the placement.',
+    invokeWrite: (deps, target) =>
+      readSurface.createProject(
+        deps,
+        { tenantId: target.tenantId },
+        {
+          name: 'Harness Project',
+          departmentId: target.departmentId,
+          programId: target.programId,
+          clientName: 'Harness Client',
+          contractType: '準委任',
+        },
+      ),
+  },
+  {
+    name: 'renameProject',
+    kind: 'write',
+    why: 'FR-1: reads the project (locked), updates its name, audits { before, after }.',
+    invokeWrite: (deps, target) =>
+      readSurface.renameProject(
+        deps,
+        { tenantId: target.tenantId },
+        { projectId: target.projectId, name: 'Harness Project renamed' },
+      ),
+  },
+  {
+    name: 'reassignProjectProgram',
+    kind: 'write',
+    why:
+      'FR-1: reads the project (locked), clears its program_id — roll-up only, nothing else ' +
+      'moves — and audits { before, after }.',
+    invokeWrite: (deps, target) =>
+      readSurface.reassignProjectProgram(
+        deps,
+        { tenantId: target.tenantId },
+        { projectId: target.projectId, programId: null },
+      ),
+    moreWrites: [
+      // Into a Program rather than out of one: the same action, the branch that checks the rule.
+      (deps, target) =>
+        readSurface.reassignProjectProgram(
+          deps,
+          { tenantId: target.tenantId },
+          { projectId: target.projectId, programId: target.programId },
+        ),
+    ],
+  },
+  {
+    name: 'reassignProjectDepartment',
+    kind: 'write',
+    why:
+      'FR-1: reads the project (locked), the department and the program (which must be the new ' +
+      'department\'s), updates department_id and program_id together, audits both before and after.',
+    invokeWrite: (deps, target) =>
+      readSurface.reassignProjectDepartment(
+        deps,
+        { tenantId: target.tenantId },
+        { projectId: target.projectId, departmentId: target.departmentId, programId: target.programId },
+      ),
   },
 ] as const;
 
@@ -426,6 +562,14 @@ export const UNREACHED_TENANT_OWNED_TABLES: readonly UnreachedTable[] = [
       'row writer prefixes a HUMAN NAME rather than an id, so they literally contain the ' +
       'demo Tenant\'s resource names and the demo-marker scan would report a leak that is ' +
       'not one. Give those two rows opaque names in the same change.',
+  },
+  {
+    table: 'program',
+    why:
+      'Written by the organisation writes (story 1.3 slice 2), read by none of the READ use ' +
+      'cases: the Project bundle carries the Department\'s name but no Program, and there is no ' +
+      'read use case for the org in 1.3 (no Organisation UI). The first read of it — the admin ' +
+      'surface or a Program roll-up — brings it into this harness and must remove this entry.',
   },
   {
     table: 'audit_log',

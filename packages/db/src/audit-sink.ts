@@ -6,7 +6,8 @@ import type { Tx } from './with-tenant';
  * THE AUDIT SINK — the one writer of `audit_log` for the use cases (story 1.3 slice 1).
  *
  * `packages/app`'s `audit.record` is the one caller; it reaches this through the scope
- * `inTenantTransaction` (`repo-writes.ts`) builds, BOUND to that scope's transaction and Tenant.
+ * `inTenantTransaction` (`tenant-transaction.ts`) builds, BOUND to that scope's transaction and
+ * Tenant.
  * So the record commits with the change or not at all (AD-14): a rollback anywhere in the use
  * case's work takes the audit row with it, and a refused insert here rolls the change back.
  *

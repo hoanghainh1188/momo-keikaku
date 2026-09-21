@@ -1,5 +1,5 @@
 /**
- * Seeds the demo Tenant/Department/Project and replays the `fixture` Connector's six
+ * Seeds the demo Tenant/Department/Program/Project and replays the `fixture` Connector's six
  * weekly Tracker Snapshots into the Actuals Ledger (FR-19 on demand, no pg-boss cron
  * in the demo — the build brief defers the scheduler).
  *
@@ -7,7 +7,7 @@
  *
  * TWO HALVES, AND THE SPLIT IS LOAD-BEARING. `seedInTenant` below is the demo seed: it
  * refuses a second Tenant, opens the maintenance hatch and TRUNCATEs. `writeTenantRows`
- * is the *row writer* — the 16 inserts and nothing else — and it is shared with
+ * is the *row writer* — the 17 inserts and nothing else — and it is shared with
  * `probe-tenants.ts`, which builds the cross-tenant harness's two probe Tenants. One
  * definition, because two would drift and the harness would then be proving isolation
  * over a dataset that is not the one the application actually stores.
@@ -57,6 +57,7 @@ const TRUNCATE_ORDER = [
   'resource',
   'project',
   'app_user',
+  'program',
   'department',
   'tenant',
 ];
@@ -112,7 +113,7 @@ export interface TenantRowWriteResult {
 }
 
 /**
- * Writes one Tenant's complete dataset — all 16 inserts — and nothing else.
+ * Writes one Tenant's complete dataset — all 17 inserts — and nothing else.
  *
  * No TRUNCATE, no guard, no maintenance hatch: those belong to the demo seed, which is the
  * only caller that owns the whole database. This function assumes `tx` is already inside
@@ -143,6 +144,13 @@ export async function writeTenantRows(
   await tx
     .insert(s.department)
     .values({ id: f.department.id, tenantId, name: f.department.name });
+  // FR-1's middle tier (story 1.3 slice 2): one Program in the Department, holding the Project.
+  await tx.insert(s.program).values({
+    id: f.program.id,
+    tenantId,
+    departmentId: f.department.id,
+    name: f.program.name,
+  });
 
   // No auth in the demo: a single seeded PM session (build brief non-goal). Story 1.4
   // replaces this table with the identity tables plus the membership bridge.
@@ -167,6 +175,7 @@ export async function writeTenantRows(
     id: f.project.id,
     tenantId,
     departmentId: f.department.id,
+    programId: f.program.id,
     name: f.project.name,
     clientName: f.project.clientName,
     contractType: f.project.contractType,
@@ -413,7 +422,7 @@ export async function writeTenantRows(
 export async function seed(db: Db): Promise<void> {
   const state = buildDemoState();
   const tenantId = state.fixture.tenant.id;
-  // One transaction, one tenant: the truncate and all 16 inserts either land together or
+  // One transaction, one tenant: the truncate and all 17 inserts either land together or
   // not at all, and every one of them is issued with `app.tenant_id` bound.
   await withTenant(db, tenantId, (tx) => seedInTenant(tx, state));
 }

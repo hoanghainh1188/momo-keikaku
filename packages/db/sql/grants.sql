@@ -15,6 +15,9 @@ GRANT SELECT ON public."tenant" TO "momo_app";
 -- department (mutable-audited)
 GRANT SELECT, INSERT, UPDATE, DELETE ON public."department" TO "momo_app";
 
+-- program (mutable-audited)
+GRANT SELECT, INSERT, UPDATE, DELETE ON public."program" TO "momo_app";
+
 -- app_user (mutable-audited)
 GRANT SELECT, INSERT, UPDATE, DELETE ON public."app_user" TO "momo_app";
 
