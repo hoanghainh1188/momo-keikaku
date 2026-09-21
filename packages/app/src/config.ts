@@ -20,7 +20,7 @@
 //     holding DML on the `pgboss` schema plus exactly the per-table privileges the
 //     table-class registry states, and no TRUNCATE anywhere. From story 1.2 on this is
 //     what the APPLICATION connects as: `apps/web` (through
-//     `apps/web/src/server/db.ts`), `apps/worker`, `scripts/peek-db.ts` and both
+//     `apps/web/src/server/composition.ts`), `apps/worker`, `scripts/peek-db.ts` and both
 //     round-trip tests. That was the point of the story — FORCE row-level security does
 //     nothing against the superuser the owner happens to be, so policies read through the
 //     owner prove nothing.

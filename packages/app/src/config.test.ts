@@ -10,8 +10,9 @@ import { describe, expect, it } from 'vitest';
  * connection string.
  *
  * `parseConfig` takes the environment as an argument precisely so this needs no real one.
- * The import is dynamic behind two assignments only because the module also parses
- * `process.env` eagerly at load for the real boot path (recorded in deferred-work.md).
+ * The import is dynamic behind two assignments because the module once parsed
+ * `process.env` eagerly at load. It no longer does — `config` is a getter per key, read
+ * lazily — so the assignments are now belt and braces rather than required.
  */
 process.env.DATABASE_URL ??= 'postgres://owner:owner@localhost:55433/momo_keikaku';
 process.env.APP_DATABASE_URL ??= 'postgres://momo_app:momo_app@localhost:55433/momo_keikaku';

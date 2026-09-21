@@ -16,7 +16,8 @@
  *
  * It is deliberately NOT re-exported from `packages/db/src/index.ts`, for the same reason
  * `seed.ts` is not: nothing in an application should be able to write Tenants by importing
- * a barrel. It is imported by `cross-tenant.test.ts` and by nothing else.
+ * a barrel. It is imported by `tests/cross-tenant.test.ts` and by nothing else. It stays
+ * in this package when the harness moved out, because it writes through Drizzle.
  *
  * This module reads no environment and no clock. It takes its handle as an argument.
  */

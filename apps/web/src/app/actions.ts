@@ -3,7 +3,10 @@
 import { revalidatePath } from 'next/cache';
 import { eq, sql } from 'drizzle-orm';
 import { schema as s, withTenant, type Tx } from '@momo/db';
-import { webDb, WEB_TENANT_ID } from '@/server/db';
+// Out of scope for story 1.2 slice 3, which moved only the seven READ call sites: these five
+// write actions still reach `@momo/db` and Drizzle directly, and are the next slice's — which
+// is why the dependency-cruiser gate waits for it. Only this import's path changed here.
+import { webDb, WEB_TENANT_ID } from '@/server/composition';
 
 /**
  * FR-29 Dispositions. Every one of these is an explicit PM action, recorded as an

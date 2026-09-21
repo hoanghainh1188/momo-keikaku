@@ -4,43 +4,47 @@
  * NFR-S1 asks that tenant isolation be tested automatically, and epic 1's requirement is
  * sharper than that: the harness must enumerate the read use cases MECHANICALLY, so a new
  * one is covered the day it is written rather than the day somebody remembers to add it to
- * a list. This file is that enumeration. `cross-tenant.test.ts` drives it.
+ * a list. This file is that enumeration. `tests/cross-tenant.test.ts` drives it.
  *
  * HOW THE ENUMERATION IS MECHANICAL. `readSurfaceFunctionNames()` reads the exported
  * FUNCTIONS off the read surface's module namespace — not a hand-written list — and the
  * harness fails, with no database, naming any export that has no entry below. Adding an
  * exported read and forgetting the entry is therefore a red build, not a silent gap.
  *
- * WHERE THE READ SURFACE IS, AND WHAT THAT DOES NOT INCLUDE. The read-use-case surface is
- * `packages/db/src/repo.ts` and its two exported functions: every page in `apps/web`, and
- * `scripts/peek-db.ts`, load their data through them.
+ * WHERE THE READ SURFACE IS. Since story 1.2 slice 3 it is `packages/app`'s use cases —
+ * `packages/app/src/use-cases/index.ts`, whose every export is a use case. Every page in
+ * `apps/web` reaches its data through them, by way of the composition root
+ * (`apps/web/src/server/composition.ts`). Until that slice the pointer below named
+ * `packages/db/src/repo.ts`; moving it was, as planned, a change of one import, one module
+ * name and the `invoke` signature, and every assertion followed it unchanged.
  *
- * It is NOT every read in the product. `apps/web/src/app/actions.ts` issues two reads of
- * its own — `anchorOf` selects from `project`, and `planTickets` selects from
- * `work_package` — inside write actions, on the `tx` of its own `withTenant`, using the
- * barrel's `schema` and `withTenant` exports rather than `repo.ts`. This gate does not
- * enumerate them: they are steps inside a write, not use cases a reader invokes, and
- * `actions.ts` exports form actions taking `FormData` rather than anything a harness can
- * drive with a Tenant and a Project. The next slice's rewiring is where they join — when
- * those five actions become `packages/app` use cases, they become enumerable, and a write
- * entry can be registered beside the reads (see `UseCaseKind`).
+ * Driving the USE CASES rather than the repository buys one thing the repository-level
+ * enumeration could not prove: that a use case has not WIDENED what the repository returns.
+ * A use case that swallowed the repository's failure and answered with a default would look,
+ * at repository level, like nothing at all — here it fails the completeness assertions (an
+ * own-Tenant read) or the not_found assertion (a foreign Project id).
  *
- * THE ONE POINTER THAT MOVES. The next slice moves the use cases into `packages/app`.
- * When it does, the import below and
- * `READ_SURFACE_MODULE` are the change — one pointer — and every entry, every assertion
- * and the whole probe matrix follow it unchanged. The harness lands FIRST, before that
- * rewiring, deliberately: a harness that already exists is what guards the move, so a
- * rewiring that breaks isolation turns CI red while it is being made.
+ * WHAT IT DOES NOT INCLUDE. `apps/web/src/app/actions.ts` still issues two reads of its own —
+ * `anchorOf` selects from `project`, `planTickets` from `work_package` — inside write
+ * actions, on its own `withTenant`. They are steps inside a write, not use cases a reader
+ * invokes, and they join when the writes move onto use cases (the next slice); a write entry
+ * can then be registered beside the reads (see `UseCaseKind`). `scripts/peek-db.ts` still
+ * calls the repository directly; it is tooling, not an inbound adapter.
  *
- * Deliberately NOT re-exported from `packages/db/src/index.ts`: nothing an application
- * does involves enumerating its own read surface.
+ * WHY THIS LIVES IN `tests/`. It needs `@momo/app`'s use cases, `@momo/db`'s repository and
+ * the wiring between them at once, which makes the harness a composition root of its own. A
+ * suite spanning layers belongs to none of them.
  */
-import type { Db } from './client';
-import type { DemoState } from './fixtures';
-import * as readSurface from './repo';
+import type { ProjectReadDeps } from '../packages/app/src/ports/project-read';
+import * as readSurface from '../packages/app/src/use-cases';
+import type { Db } from '../packages/db/src/client';
+import type { DemoState } from '../packages/db/src/fixtures';
 
 /** Named in failure messages, so the reader is sent to the file rather than to a diff. */
-export const READ_SURFACE_MODULE = 'packages/db/src/repo.ts';
+export const READ_SURFACE_MODULE = 'packages/app/src/use-cases/index.ts';
+
+/** This file, named in the same messages. */
+export const REGISTRY_MODULE = 'tests/read-use-cases.ts';
 
 /** What a use case is invoked against: one Tenant, one Project. */
 export interface UseCaseTarget {
@@ -65,8 +69,15 @@ export interface ReadUseCase {
   readonly why: string;
   /** Required when `kind` is `not-a-read`: why the harness does not drive it. */
   readonly reason?: string;
-  /** How the harness invokes it. Required for a `read`. */
-  readonly invoke?: (handle: Db, target: UseCaseTarget) => Promise<unknown>;
+  /**
+   * How the harness invokes it. Required for a `read`.
+   *
+   * Given the port already wired to the RESTRICTED role's handle, so the harness decides the
+   * role and the entry decides only how to call its use case. It returns whatever the use
+   * case returns — a `Result` — and the harness, not the entry, unwraps it: an entry that
+   * unwrapped its own result could turn an error arm into a value on the way out.
+   */
+  readonly invoke?: (deps: ProjectReadDeps<Db>, target: UseCaseTarget) => Promise<unknown>;
   /**
    * The fixture values this use case's result MUST carry. Required for a `read`.
    *
@@ -141,28 +152,38 @@ export function projectBundleLabels(state: DemoState): string[] {
 
 export const READ_USE_CASES: readonly ReadUseCase[] = [
   {
-    name: 'loadProjectBundle',
+    name: 'getProjectHeader',
     kind: 'read',
     why:
-      'The Project bundle behind every page: 15 selects across 15 of the 17 tables, FOUR of ' +
-      'them with no WHERE clause at all (baseline_wp, rate_entry, tracker_snapshot, ' +
-      'actuals_ledger_entry), so row-level security is their only filter. Two of those ' +
-      'four are then re-filtered in memory, which is why table-level isolation is ' +
-      'asserted separately — see cross-tenant.test.ts.',
-    invoke: (handle, target) =>
-      readSurface.loadProjectBundle(handle, target.tenantId, target.projectId),
+      'The Project bundle behind the project frame (apps/web p/[projectId]/layout.tsx): ' +
+      'repo.ts loadProjectBundle, 15 selects across 15 of the 17 tables, FOUR of them with ' +
+      'no WHERE clause at all (baseline_wp, rate_entry, tracker_snapshot, ' +
+      'actuals_ledger_entry), so row-level security is their only filter. Two of those four ' +
+      'are then re-filtered in memory, which is why table-level isolation is asserted ' +
+      'separately — see tests/cross-tenant.test.ts.',
+    invoke: (deps, target) =>
+      readSurface.getProjectHeader(
+        deps,
+        { tenantId: target.tenantId },
+        { projectId: target.projectId },
+      ),
     mustSurface: projectBundleLabels,
   },
   {
-    name: 'loadReview',
+    name: 'getProjectReview',
     kind: 'read',
     why:
-      'The Reconciliation Review: the same bundle plus computeReview over it. Driven ' +
-      'separately because its result graph is much larger — EVM per Work Package, ' +
-      'attribution Maps keyed by Work Package and Ticket id, the unmapped groups — and a ' +
-      'leak reaching only the computed half would be invisible in the bundle.',
-    invoke: (handle, target) =>
-      readSurface.loadReview(handle, target.tenantId, target.projectId),
+      'The Reconciliation Review behind the six project pages: the same bundle plus ' +
+      'computeReview over it (repo.ts loadReview). Driven separately because its result ' +
+      'graph is much larger — EVM per Work Package, attribution Maps keyed by Work Package ' +
+      'and Ticket id, the unmapped groups — and a leak reaching only the computed half would ' +
+      'be invisible in the bundle.',
+    invoke: (deps, target) =>
+      readSurface.getProjectReview(
+        deps,
+        { tenantId: target.tenantId },
+        { projectId: target.projectId },
+      ),
     mustSurface: projectBundleLabels,
   },
 ] as const;
@@ -170,17 +191,16 @@ export const READ_USE_CASES: readonly ReadUseCase[] = [
 /**
  * The INVOCABLE exports of the read surface, read off the module namespace.
  *
- * This is the mechanical half. `repo.ts` also exports constants (`DEMO_PROJECT_ID`,
- * `DEMO_TENANT_ID`) and types; types are erased and constants are not invocable, so what
+ * This is the mechanical half. Types are erased and constants are not invocable, so what
  * remains is what the harness can and must drive.
  *
  * "Invocable" is deliberately wider than `typeof value === 'function'`. That test alone
  * sees a bare exported function and a class (which is a function), but NOT a surface
- * exported as an object of methods — `export const projectReads = { loadBundle, … }` — and
- * the stated plan moves this surface into `packages/app`, where an object is the likely
- * shape. Such an export would be silently invisible to the coverage gate, which is the one
- * failure mode a coverage gate must not have, so an object carrying any function value is
- * named here too and has to be accounted for in the registry.
+ * exported as an object of methods — `export const projectReads = { getBundle, … }` — which
+ * is a likely shape for a use-case module to grow into. Such an export would be silently
+ * invisible to the coverage gate, which is the one failure mode a coverage gate must not
+ * have, so an object carrying any function value is named here too and has to be accounted
+ * for in the registry.
  */
 export function readSurfaceFunctionNames(): string[] {
   return Object.entries(readSurface)

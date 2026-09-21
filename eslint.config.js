@@ -42,8 +42,13 @@ const moduleExtensions = ['ts', 'tsx', 'mts', 'cts', 'js', 'jsx', 'mjs', 'cjs'];
  * The application source trees the fence applies to. Tooling is deliberately outside it:
  * `scripts/`, `vitest.config.ts` and `drizzle.config.ts` legitimately read the
  * environment and construct dates, and they are not what the determinism rule is about.
+ *
+ * `tests/` is inside it (story 1.2 slice 3): it holds the cross-tenant harness and its
+ * registry, which drive the application's own use cases and have no more business reading
+ * the clock or issuing a query on the bare handle than the code they test. Its `*.test.ts`
+ * files keep the test group's environment exemption below, like every other test.
  */
-const applicationSources = ['apps', 'packages'].flatMap((tree) =>
+const applicationSources = ['apps', 'packages', 'tests'].flatMap((tree) =>
   moduleExtensions.map((ext) => `${tree}/**/*.${ext}`),
 );
 

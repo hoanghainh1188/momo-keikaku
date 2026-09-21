@@ -19,7 +19,7 @@ import * as schema from './schema';
  * `packages/app` declares), and it must not read `process.env` itself. So the connection
  * string arrives as an argument, from each composition root:
  *
- *   * `apps/web/src/server/db.ts`   — `config.APP_DATABASE_URL`
+ *   * `apps/web/src/server/composition.ts` — `config.APP_DATABASE_URL`
  *   * `apps/worker/src/index.ts`    — `config.APP_DATABASE_URL` (through pg-boss)
  *   * `packages/db/src/seed.ts`     — `DATABASE_URL`, the owner, because it TRUNCATEs
  *   * the tests and `scripts/`      — whichever role the assertion is about

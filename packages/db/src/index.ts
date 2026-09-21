@@ -7,9 +7,9 @@
 // by importing a barrel.
 //
 // `probe-tenants.ts` is in that same category — it writes and deletes whole Tenants for the
-// cross-tenant harness — and `read-use-cases.ts` is left out for a different reason: nothing
-// an application does involves enumerating its own read surface. Both are imported by
-// `cross-tenant.test.ts` by path, and by nothing else.
+// cross-tenant harness, and is imported by `tests/cross-tenant.test.ts` by path and by
+// nothing else. (The harness and its registry lived in this package until story 1.2 slice 3
+// moved them to the root `tests/` directory, beside the use cases they now enumerate.)
 export * from './client';
 export * from './schema';
 export * from './repo';

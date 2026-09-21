@@ -2,12 +2,21 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { sql } from 'drizzle-orm';
 import { hours, present } from '@momo/domain';
-import { closeAllPools, getDb, getPool, schema, type Db } from './client';
-import { buildDemoState } from './fixtures';
-import { DEMO_PROJECT_ID, DEMO_TENANT_ID, loadReview } from './repo';
+import type { ProjectReadDeps } from '../packages/app/src/ports/project-read';
+import type { AppError } from '../packages/app/src/result';
+import { getProjectReview } from '../packages/app/src/use-cases';
+import { closeAllPools, getDb, getPool, schema, type Db } from '../packages/db/src/client';
+import { buildDemoState } from '../packages/db/src/fixtures';
+import {
+  DEMO_PROJECT_ID,
+  DEMO_TENANT_ID,
+  loadProjectBundle,
+  loadReview,
+} from '../packages/db/src/repo';
 import {
   READ_SURFACE_MODULE,
   READ_USE_CASES,
+  REGISTRY_MODULE,
   UNREACHED_TENANT_OWNED_TABLES,
   readSurfaceFunctionNames,
   type ReadUseCase,
@@ -20,9 +29,9 @@ import {
   demoMarkers,
   removeProbeTenant,
   type ProbeTenant,
-} from './probe-tenants';
-import { REGISTERED_TABLES, TENANT_OWNED } from './table-classes';
-import { withTenant } from './with-tenant';
+} from '../packages/db/src/probe-tenants';
+import { REGISTERED_TABLES, TENANT_OWNED } from '../packages/db/src/table-classes';
+import { withTenant } from '../packages/db/src/with-tenant';
 
 /**
  * THE CROSS-TENANT HARNESS. This is the automated test NFR-S1 asks for.
@@ -35,10 +44,11 @@ import { withTenant } from './with-tenant';
  *
  * FIVE CLAIMS LIVE HERE, each failing for its own reason:
  *
- *   1. THE ENUMERATION IS MECHANICAL. The covered set is read off the read surface's
- *      module namespace, not written by hand, so an exported read with no registry entry
- *      fails NAMING IT — with no database, which is the point: the gap is caught on a
- *      laptop with nothing running.
+ *   1. THE ENUMERATION IS MECHANICAL. The covered set is read off the read surface's module
+ *      namespace — `packages/app`'s use cases since story 1.2 slice 3, when the harness
+ *      moved here from `packages/db` — not written by hand, so an exported read with no
+ *      registry entry fails NAMING IT — with no database, which is the point: the gap is
+ *      caught on a laptop with nothing running.
  *   2. THE RELABELLING IS FAITHFUL. A probe Tenant is a bijectively relabelled copy of the
  *      demo dataset, and the Review computed over it reproduces the pinned golden figures
  *      (2936.0 / 1661.5 / 0.91). Without this, every isolation assertion below could agree
@@ -72,6 +82,15 @@ import { withTenant } from './with-tenant';
  * And it says what it does not reach: `read-use-cases.ts` declares the tenant-owned tables
  * no use case touches, and the declaration is compared against what a Drizzle query logger
  * MEASURES rather than against what anybody believes.
+ *
+ * WHY THE USE CASES AND NOT THE REPOSITORY. The pages call `packages/app`'s use cases, so
+ * those are what a user invokes, and driving them proves one thing the repository-level
+ * enumeration could not: that no use case WIDENED what the repository returns. A use case
+ * that swallowed the repository's failure and answered with a default fails the completeness
+ * assertions here; one that let a foreign Project id throw, or answered it with anything but
+ * `not_found`, fails the cross-Tenant probe. This file is therefore a composition root of its
+ * own — it wires `packages/db`'s repository into `packages/app`'s port, on the restricted
+ * role's handle — which is why it lives in `tests/`, outside every layer.
  *
  * Requires a database prepared by `drizzle-kit push`, `pnpm pgboss:migrate` and
  * `pnpm db:policies`, and seeded. Set REQUIRE_DB=1 (CI does) to turn an unreachable
@@ -143,8 +162,8 @@ describe('the read surface is enumerated mechanically, not listed by hand', () =
     expect(
       uncovered,
       `these functions are exported from ${READ_SURFACE_MODULE} and have no entry in ` +
-        `packages/db/src/read-use-cases.ts: ${uncovered.join(', ')}. Every read is driven ` +
-        'against two probe Tenants by packages/db/src/cross-tenant.test.ts; an export with ' +
+        `${REGISTRY_MODULE}: ${uncovered.join(', ')}. Every read is driven ` +
+        'against two probe Tenants by tests/cross-tenant.test.ts; an export with ' +
         'no entry is a read with no isolation cover.',
     ).toEqual([]);
   });
@@ -392,9 +411,12 @@ function foreignStringsIn(graph: unknown, token: string): string[] {
 // --- the probe matrix ----------------------------------------------------------------------
 
 interface Outcome {
-  /** Resolved value, or `undefined` when the call rejected. */
+  /** The use case's `ok` value, or `undefined` when it rejected or answered an error arm. */
   readonly value?: unknown;
+  /** What the use case THREW. A use case's own failures are an error arm, not a throw. */
   readonly error?: unknown;
+  /** The use case's error arm, when it answered one. */
+  readonly refused?: AppError;
   /** The registered tables named in the SQL this invocation issued. */
   readonly tables: ReadonlySet<string>;
 }
@@ -412,6 +434,38 @@ let restricted: Db | null = null;
 
 function owner(): Db {
   return getDb(OWNER_DATABASE_URL!);
+}
+
+/**
+ * The port, wired: `packages/db`'s repository functions as `packages/app` declares them, on
+ * the RESTRICTED role's logging handle. The `satisfies` is the same structural check the web
+ * app's composition root makes — this file is a composition root too.
+ */
+function restrictedDeps() {
+  return {
+    handle: restricted!,
+    projectRead: { loadProjectBundle, loadReview },
+  } satisfies ProjectReadDeps<Db>;
+}
+
+/**
+ * Splits a use case's `Result` into the Outcome's arms. Anything that is not a `Result` is
+ * itself a failure: the registry's contract is that `invoke` hands back what the use case
+ * returned, and a raw value would mean an entry had stepped around the use case.
+ */
+function settle(returned: unknown, tables: Set<string>, name: string): Outcome {
+  if (returned !== null && typeof returned === 'object' && 'ok' in returned) {
+    const result = returned as { ok: boolean; value?: unknown; error?: AppError };
+    if (result.ok === true) return { value: result.value, tables };
+    if (result.ok === false && result.error) return { refused: result.error, tables };
+  }
+  return {
+    error: new Error(
+      `${name} did not return a Result — its registry entry is bypassing the use case, or the ` +
+        'use case no longer answers in packages/app\'s Result<T, AppError> shape.',
+    ),
+    tables,
+  };
 }
 
 /**
@@ -449,8 +503,7 @@ async function invokeMeasured(entry: ReadUseCase, target: UseCaseTarget): Promis
   }
   sink = tables;
   try {
-    const value = await entry.invoke!(restricted!, target);
-    return { value, tables };
+    return settle(await entry.invoke!(restrictedDeps(), target), tables, entry.name);
   } catch (error) {
     return { error, tables };
   } finally {
@@ -460,6 +513,14 @@ async function invokeMeasured(entry: ReadUseCase, target: UseCaseTarget): Promis
 
 /** Rethrows with the use case named, so a broken own-Tenant read is not a bare stack. */
 function required(entry: ReadUseCase, label: string, outcome: Outcome): unknown {
+  if (outcome.refused) {
+    // An own-Tenant read answering an error arm is as broken as one that threw: the Project
+    // is the caller's own, so `not_found` here means the use case lost it.
+    throw new Error(
+      `${entry.name} answered ${outcome.refused.code} against ${label}, for a Project that ` +
+        'Tenant owns, so nothing below it can be asserted.',
+    );
+  }
   if (outcome.error) {
     throw new Error(
       `${entry.name} failed against ${label}, so nothing below it can be asserted: ` +
@@ -555,14 +616,21 @@ describe.skipIf(!reachable)('the cross-tenant harness, driven against two probe 
 
   describe('the relabelled probe Tenant is the same dataset', () => {
     it('reproduces the pinned golden figures from a probe Tenant', async () => {
-      // Imported directly rather than driven through the registry, because this assertion is
-      // about typed FIGURES rather than about an opaque result graph. The numbers are the
-      // same ones `db-round-trip.test.ts` pins against the demo Tenant: if the relabelling
-      // rewrote one entry of the vocabulary the domain interprets — `opening_balance`, say,
-      // or a Mapping source — the computation would quietly mean something else and these
-      // would move. Every isolation assertion in this file would still pass, about the wrong
-      // data, which is why this one comes first.
-      const { review } = await loadReview(restricted!, PROBE_A.tenantId, PROBE_A.projectId);
+      // Called directly rather than driven through the registry, because this assertion is
+      // about typed FIGURES rather than about an opaque result graph. It goes through the
+      // same use case the Review page calls, so the pages' figures are the ones pinned. The
+      // numbers are the same ones `db-round-trip.test.ts` pins against the demo Tenant: if
+      // the relabelling rewrote one entry of the vocabulary the domain interprets —
+      // `opening_balance`, say, or a Mapping source — the computation would quietly mean
+      // something else and these would move. Every isolation assertion in this file would
+      // still pass, about the wrong data, which is why this one comes first.
+      const result = await getProjectReview(
+        restrictedDeps(),
+        { tenantId: PROBE_A.tenantId },
+        { projectId: PROBE_A.projectId },
+      );
+      if (!result.ok) throw new Error(`getProjectReview answered ${result.error.code}`);
+      const { review } = result.value;
       expect(hours(review.evm.bacMh), 'BAC over the relabelled copy').toBe('2936.0');
       expect(hours(review.evm.acMh), 'AC over the relabelled copy').toBe('1661.5');
       expect(present(review.evm.spi).text, 'SPI over the relabelled copy').toBe('0.91');
@@ -587,7 +655,13 @@ describe.skipIf(!reachable)('the cross-tenant harness, driven against two probe 
       // The probes are additions, not replacements. If creating them had disturbed the demo
       // Tenant — a collided primary key, a truncate, a reused Baseline sequence — the
       // figures the rest of the suite pins would move, and it would look like a domain bug.
-      const { review } = await loadReview(restricted!, DEMO_TENANT_ID, DEMO_PROJECT_ID);
+      const result = await getProjectReview(
+        restrictedDeps(),
+        { tenantId: DEMO_TENANT_ID },
+        { projectId: DEMO_PROJECT_ID },
+      );
+      if (!result.ok) throw new Error(`getProjectReview answered ${result.error.code}`);
+      const { review } = result.value;
       expect(hours(review.evm.bacMh)).toBe('2936.0');
       expect(hours(review.evm.acMh)).toBe('1661.5');
     });
@@ -700,7 +774,7 @@ describe.skipIf(!reachable)('the cross-tenant harness, driven against two probe 
           expect(
             absent.slice(0, 20),
             `${entry.name} under ${probe.tenantId} did not return ${absent.length} of the ` +
-              `${requiredLabels.length} fixture values packages/db/src/read-use-cases.ts says ` +
+              `${requiredLabels.length} fixture values ${REGISTRY_MODULE} says ` +
               'it must surface. Either the read lost them, or the declaration is wrong — and ' +
               'which one it is has to be decided, not assumed.',
           ).toEqual([]);
@@ -740,29 +814,30 @@ describe.skipIf(!reachable)('the cross-tenant harness, driven against two probe 
           }
         });
 
-      it('returns nothing of probe Tenant A when probe Tenant B asks for A\'s Project id', () => {
+      it('answers not_found, and nothing of A, when probe Tenant B asks for A\'s Project id', () => {
         // The leak that actually happens: an id that arrived in a URL, used under the wrong
-        // Tenant. Either shape is acceptable — a throw or an empty result — because the
-        // requirement is that nothing of A comes back, not that a particular error is raised.
-        //
-        // Only a RESOLVED value is scanned. A rejection's message carries the projectId the
-        // CALLER supplied, which discloses nothing it did not already know.
+        // Tenant. At repository level either a throw or an empty result was acceptable. At
+        // use-case level the contract is exact: the error arm, with `not_found` — never a
+        // throw, which the page would render as a crash, and never an `ok` carrying a default,
+        // which would render as a Project with no data. `not_found` rather than any code that
+        // says "it exists, but not for you", so existence is not disclosed.
         const { cross } = got();
-        if (cross.error) {
-          // A throw is an acceptable shape, but not ANY throw: a connection failure, a
-          // type error in the mapping code or a syntax error in a new query would all
-          // reject, and this assertion would then pass having proved nothing. The only
-          // rejection that means "the Project was not visible" is the one the read surface
-          // raises for exactly that, so it is named rather than accepted on sight.
-          expect(
-            String((cross.error as Error | undefined)?.message ?? cross.error),
-            `${entry.name} rejected when probe Tenant B asked for A's Project id, but not ` +
-              'because the Project was invisible — some other failure is being read as ' +
-              'isolation working.',
-          ).toMatch(/not found/);
-          return;
-        }
-        const leaked = foreignStringsIn(cross.value, PROBE_A.token);
+        expect(
+          cross.error,
+          `${entry.name} THREW when probe Tenant B asked for A's Project id, instead of ` +
+            `answering not_found: ${String((cross.error as Error | undefined)?.message ?? cross.error)}`,
+        ).toBeUndefined();
+        expect(
+          cross.refused?.code,
+          `${entry.name} did not answer not_found when probe Tenant B asked for A's Project id` +
+            (cross.refused
+              ? ` — it answered ${cross.refused.code}`
+              : ' — it answered ok, so it turned an invisible Project into a value'),
+        ).toBe('not_found');
+
+        // And the refusal itself carries nothing of A. The whole outcome is walked, error arm
+        // included, so a use case that put the foreign row into `details` fails here.
+        const leaked = foreignStringsIn({ value: cross.value, refused: cross.refused }, PROBE_A.token);
         expect(
           leaked,
           `${entry.name} handed probe Tenant B data belonging to probe Tenant A when asked ` +
@@ -853,7 +928,7 @@ describe.skipIf(!reachable)('the cross-tenant harness, driven against two probe 
         'the tenant-owned tables no read use case reaches have changed.\n' +
           `now unreached and undeclared: ${newlyUnreached.join(', ') || '(none)'} — this ` +
           'harness no longer covers them, so say so in ' +
-          'packages/db/src/read-use-cases.ts with a reason.\n' +
+          `${REGISTRY_MODULE} with a reason.\n` +
           `declared unreached but now read: ${newlyReached.join(', ') || '(none)'} — remove ` +
           'the entry; the harness covers them now.',
       ).toEqual({ newlyUnreached: [], newlyReached: [] });

@@ -22,13 +22,15 @@
 #     trigger refuses the maintenance role with MOMO1 until `app.maintenance` is set.
 #
 # STORY 1.2 SLICE 2 ADDS THE CROSS-TENANT HARNESS (AD-3), AND NFR-S1 IS DISCHARGED.
-# `packages/db/src/cross-tenant.test.ts` seeds two probe Tenants — each a bijectively
-# relabelled copy of the demo dataset — and drives EVERY read use case against both as the
-# restricted role. Five gates come with it:
+# `tests/cross-tenant.test.ts` (moved from `packages/db/src/` by story 1.2 slice 3, when the
+# read surface became `packages/app`'s use cases) seeds two probe Tenants — each a
+# bijectively relabelled copy of the demo dataset — and drives EVERY read use case against
+# both as the restricted role. Five gates come with it:
 #
 #   * the mechanical coverage gate — the covered set is read off the read surface's module
-#     namespace (packages/db/src/read-use-cases.ts), so an exported read with no registry
-#     entry fails NAMING IT. This half needs no database and runs on every machine;
+#     namespace (packages/app/src/use-cases, registry in tests/read-use-cases.ts), so an
+#     exported read use case with no registry entry fails NAMING IT. This half needs no
+#     database and runs on every machine;
 #   * the generic isolation scan — the whole result graph, `Map` keys and values included,
 #     is walked for the other Tenant's token and for the demo Tenant's markers. No
 #     per-field allow-list, so a new use case's new fields are covered the day they are
@@ -48,18 +50,26 @@
 #     differs per Tenant. The rows had crossed the boundary even though the result looked
 #     clean, and the acceptance criterion is about this file, not about rls.test.ts.
 #
-# Still absent: dependency-cruiser (it waits on the next slice rewiring the eight apps/web
-# files onto use cases), the golden Published Snapshot recompute per formulaVersion, the
-# compaction-then-recompute test, the ComputationInputs closure test, the concurrency test
-# and the six scheduler gates. Adding a gate before its code exists would make CI red on
-# day one for a reason nobody could fix that day — which is the failure epics.md warns
-# about for the dependency-cruiser gate specifically.
+# STORY 1.2 SLICE 3 moved the seven read call sites in apps/web onto `packages/app` use
+# cases, wired in one named composition root (apps/web/src/server/composition.ts). The
+# harness now drives the use cases rather than the repository, so a use case that answers a
+# foreign Project id with anything but `not_found`, or swallows the repository's failure and
+# returns a default, fails it. `packages/app/src/use-cases/project-reads.test.ts` pins the
+# `Result` contract with no database.
+#
+# Still absent: dependency-cruiser (it waits on the next slice moving actions.ts's five
+# write actions onto use cases — actions.ts still imports drizzle-orm and @momo/db), the
+# golden Published Snapshot recompute per formulaVersion, the compaction-then-recompute
+# test, the ComputationInputs closure test, the concurrency test and the six scheduler
+# gates. Adding a gate before its code exists would make CI red on day one for a reason
+# nobody could fix that day — which is the failure epics.md warns about for the
+# dependency-cruiser gate specifically.
 #
 # So this file gates on what is real: lint, all three typechecks and the test suite.
-# Measured on 2026-09-21 — `pnpm lint` exits 0, all three typechecks exit 0, and
-# `pnpm test` passes 146 tests across 12 files against the prepared Postgres service below
-# (123 across 11 before story 1.2 slice 2, 72 across 7 before slice 1, 53 across 4 before
-# story 1.1 slice B2).
+# Measured on 2026-09-21 — `pnpm lint` exits 0, all three typechecks exit 0, and `pnpm test`
+# passes 165 tests across 14 files against the prepared Postgres service below (146 across
+# 12 before story 1.2 slice 3, 123 across 11 before story 1.2 slice 2, 72 across 7 before
+# slice 1, 53 across 4 before story 1.1 slice B2).
 #
 # Every gate here has been watched to fail, because a gate nobody has seen fail is
 # indistinguishable from a green light:
@@ -98,6 +108,12 @@
 #     a table dropped from the declared unreached set, a writer that stamps the wrong active
 #     Baseline sequence on a second Tenant's ledger, and two probe Tenants sharing an id
 #     prefix or a `seq` band. The full tables are in spec-1-2-cross-tenant-harness.md.
+#   * tests (the use-case move, story 1.2 slice 3) — an exported use case with no registry
+#     entry (caught with NO database), a use case letting the repository's not-found throw,
+#     one swallowing it into a default (caught by the not_found probe, and — with the
+#     repository failing for the caller's own Tenant — by the completeness floor), and one
+#     ignoring the context's Tenant (15 failures). A drifted port is caught by the typecheck
+#     at the composition root, TS2322. The full table is in spec-1-2-web-read-use-cases.md.
 
 # THESE GATES REPORT; THEY DO NOT BLOCK. The repository is private on a free plan, so
 # GitHub refuses branch protection ("Upgrade to GitHub Pro or make this repository

@@ -1,5 +1,5 @@
-import { loadReview } from '@momo/db';
-import { webDb, WEB_TENANT_ID } from '@/server/db';
+import { getProjectReview } from '@/server/composition';
+import { valueOrNotFound } from '@/server/result';
 import { hours, mappingHead, share } from '@momo/domain';
 import { Internal, Section, UnplannedChip } from '@/components/ui';
 import { ScopeLedgerBar } from '@/components/scope-ledger-bar';
@@ -14,7 +14,7 @@ export default async function MappingPage({
   params: Promise<{ projectId: string }>;
 }) {
   const { projectId } = await params;
-  const { bundle, review: r } = await loadReview(webDb(), WEB_TENANT_ID, projectId);
+  const { bundle, review: r } = valueOrNotFound(await getProjectReview({ projectId }));
   const head = mappingHead(bundle.input.mappingEvents);
   const leafWps = bundle.wps
     .filter((w) => w.isLeaf && !w.isMilestone)
