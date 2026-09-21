@@ -555,3 +555,19 @@ work started and was deliberately deferred, with the evidence for the split.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-3-organisation-hierarchy.md`
   summary: `epic-1-context.md` and story 1.3's AC state `audit.record(ctx, action, target, payload)`; the code's signature is `record(scope, stamp, action, target, payload)`.
   evidence: Code review of story 1.3. Slice 1's spec records the extra `scope` and the `{ actor, at }` stamp as deliberate (the transaction must be explicit); the planning wording should follow when AD-14 is next touched, and the compiled epic context regenerates from it.
+
+- source_spec: none
+  summary: Story 1.4 slice 2 — revocation and membership changes (including PM assignment into `tenant_membership.project_ids`) as audited `app` use cases, refused on the revoked user's next request.
+  evidence: Split from story 1.4 at Build's multi-goal gate (founder, 2026-09-21); independently shippable once slice 1's session and `RequestContext` exist.
+
+- source_spec: none
+  summary: Story 1.4 slice 3 — Google sign-in.
+  evidence: Split from story 1.4 at Build's multi-goal gate (founder, 2026-09-21); needs a decision on Google OAuth credentials for local and CI (test double or real client ids).
+
+- source_spec: none
+  summary: Story 1.4 slice 4 — password reset through `MailerPort` (`mailer-console` in development, `mailer-ses` in production; AWS account and sender domain are Epic 8's).
+  evidence: Split from story 1.4 at Build's multi-goal gate (founder, 2026-09-21); independently shippable once slice 1's email + password sign-in exists.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-identity-and-request-context.md`
+  summary: The email + password sign-in server action has no rate limit; Better Auth's limiter runs only in its HTTP router, which the action bypasses.
+  evidence: Spec review of story 1.4 slice 1 (finding 6); deferred on purpose by the founder 2026-09-21 because slice 1 runs locally only. Needs a per-email + per-IP throttle before any deployment (Epic 8) — or route sign-in through the HTTP endpoint.
