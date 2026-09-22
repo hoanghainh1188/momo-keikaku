@@ -1,4 +1,4 @@
-# Handoff — 2026-09-22 (updated after the slice-4 spine amendment)
+﻿# Handoff — 2026-09-22 (updated after the slice-4 spine amendment)
 
 State at `main` = the merge of PR #34 (story 1.4 slice 4 and the whole-story review of 1.4),
 `dcd7da9`, plus the docs PR that follows it (the slice-4 spine amendment, the regenerated
@@ -35,16 +35,11 @@ expects mail. Removing `.toLowerCase()` from the `forgot-password` action change
 system behaviour; only `.trim()` matters, and the one test that fails on its removal
 (`forgot-password/actions.test.ts`) is pinning the call shape, not a real security boundary. See
 the spec's own Spec Change Log and Review Triage Log for the full accounting; do not read the
-sabotage table above as six independently-verified guarantees. Manual browser verification of
-`/forgot-password` and `/reset-password`
-under `next dev` was **not** performed in this session (no browser available); `next build`
-succeeds and both routes compile and render as dynamic routes — the actual click-through is still
-owed. **Story 1.4 is now complete across all four slices; the next session should run
-`bmad-code-review` over the whole story**, as was done for 1.3, then mark 1.4 `done`. What this
-slice left in `deferred-work.md`: `mailer-ses` (Epic 8), the sign-in/reset-request rate limit
-(already deferred, extended to cover the new endpoint), and the spine amendment recording
-`identity_event` and this session's decisions (needs its own adversarial review before
-`epic-1-context.md` is regenerated, as slice 3's AD-1 amendment was).
+sabotage table above as six independently-verified guarantees. `next build` succeeds and both
+routes compile and render as dynamic routes. Manual browser verification of `/forgot-password`
+and `/reset-password` under `next dev` was completed 2026-09-22: sign-in → forgot link → submit →
+console mail → reset with token → sign-in with the new password landed on `/p/prj-ec2/review`.
+Re-seed after that check to restore the demo password.
 
 **Earlier (2026-09-22): story 1.4 slice 3 (Google sign-in) is merged (PR #32)**
 (`spec-1-4-google-sign-in.md`, `done`: two adversarial spec rounds, one code review), and the
@@ -296,11 +291,9 @@ fixture modes outside `local`; a reset keeps provider links (unlink before Epic 
 `email_verified` has a written meaning and a named writer list.
 
 **Small code debt the amendment recorded** (`deferred-work.md`, "Deferred from: spine amendment for
-story 1.4 slice 4"), best done as one small slice before or alongside 1.5: `appendOnlyGuard` on
-`identity_event` (plus three stale code comments and `removeExtras`'s maintenance setting); one `try`
-per post-reset step and `hasCredentialAccount` inside `sendResetPassword`'s `try`. The `DEPLOYMENT`
-key must land before Epic 8's first staging deploy; mail logging through `pino` goes with
-`mailer-ses`.
+story 1.4 slice 4"): `appendOnlyGuard` on `identity_event` and the per-step `try` in the reset hooks
+landed 2026-09-22 (see that file's `resolved` lines). Still open: the `DEPLOYMENT` key (before
+Epic 8's first staging deploy); mail logging through `pino` goes with `mailer-ses`.
 
 ### 1b. Story 1.5 — roles decide what each person can reach
 

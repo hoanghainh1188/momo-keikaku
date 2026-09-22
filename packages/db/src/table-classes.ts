@@ -28,7 +28,7 @@
  * before any tenant is resolved. Story 1.4 slice 1 put the four Better Auth tables and the
  * tenant-membership bridge in that class beside it; slice 4 adds `identity_event`.
  *
- * TWO PER-ENTRY EXCEPTIONS, each stated where it applies rather than by a new class:
+ * THREE PER-ENTRY PROPERTIES, each stated where it applies rather than by a new class:
  *
  *   * `appPrivileges` overrides the class's grant. The four Better Auth tables are `global`
  *     (no tenant policy) but Better Auth writes them on the application role's connection, so
@@ -36,12 +36,16 @@
  *     slice 2): its audited use cases revoke a membership, change its role and its Projects, and
  *     adding a user to a Tenant is invitation work, later. `identity_event` gets SELECT and INSERT
  *     and neither UPDATE nor DELETE (story 1.4 slice 4): its one writer only ever inserts, and the
- *     missing grant is what makes a row that landed there permanent. `tenant` keeps the class's
- *     SELECT.
+ *     missing grant is half of what makes a row that landed there permanent. `tenant` keeps the
+ *     class's SELECT.
  *   * `tenantBridge` marks the ONE table that carries `tenant_id` without row-level security:
  *     `tenant_membership`, read to decide which Tenant a request acts in, and so read before any
  *     Tenant is known. `rls.test.ts` otherwise fails a `tenant_id` column with a null
  *     `tenantColumn`, and `registry.test.ts` fails the flag on any second table.
+ *   * `appendOnlyGuard` puts the BEFORE UPDATE OR DELETE and TRUNCATE triggers, and the
+ *     append-only class's maintenance grant (`SELECT, UPDATE, DELETE`), on a table whose class
+ *     is not `append-only`. Every `append-only` entry implies it; `identity_event` is `global`
+ *     with it (AD-5 / AD-21). Read through `appendOnlyGuardOf`, never directly.
  */
 
 /** AD-21's five classes. A table has exactly one. */
@@ -93,6 +97,12 @@ export interface TableEntry {
    * tenant policy, because it is what the Tenant is resolved from. Exactly one table may carry it.
    */
   readonly tenantBridge?: true;
+  /**
+   * True when the table carries the append-only trigger pair and the append-only maintenance
+   * grant, even if its class is not `append-only`. Every `append-only` entry implies it
+   * (`appendOnlyGuardOf`); set it explicitly for `identity_event`.
+   */
+  readonly appendOnlyGuard?: true;
 }
 
 /**
@@ -151,8 +161,9 @@ export const TABLE_REGISTRY: readonly TableEntry[] = [
     table: 'identity_event',
     class: 'global',
     tenantColumn: null,
-    why: 'Identity events (a password reset today; a link, an unlink or an invitation acceptance later) that happen before any Tenant exists (story 1.4 slice 4). Insert-only comes from the missing UPDATE/DELETE grant, the same mechanism as tenant\'s SELECT-only.',
+    why: 'Identity events: a change to a user\'s credentials or identity links (a password reset today; a link or unlink later), which carries no Tenant (story 1.4 slice 4, AD-14). A membership change — invitation acceptance included — is a tenant-scoped audited use case and writes audit_log, not here. Insert-only by grant plus appendOnlyGuard (trigger + maintenance hatch).',
     appPrivileges: ['SELECT', 'INSERT'],
+    appendOnlyGuard: true,
   },
   {
     table: 'department',
@@ -269,9 +280,10 @@ export const APP_PRIVILEGES: Readonly<Record<TableClass, readonly string[]>> = {
 } as const;
 
 /**
- * The privileges the `maintenance` role holds. It exists for exactly one purpose: the
- * sanctioned escape hatch on append-only tables, and only with `app.maintenance = 'on'`
- * set, which the trigger checks. On every other class it holds nothing.
+ * The privileges the `maintenance` role holds *by class*. The append-only hatch grant is
+ * also applied to any entry with `appendOnlyGuard` — read through `maintenancePrivilegesOf`,
+ * never this map alone — and only with `app.maintenance = 'on'` set, which the trigger checks.
+ * On every other class (and every entry without the guard) it holds nothing.
  */
 export const MAINTENANCE_PRIVILEGES: Readonly<Record<TableClass, readonly string[]>> = {
   'append-only': ['SELECT', 'UPDATE', 'DELETE'],
@@ -280,6 +292,10 @@ export const MAINTENANCE_PRIVILEGES: Readonly<Record<TableClass, readonly string
   'global': [],
   'operational': [],
 } as const;
+
+/** The maintenance grant every guarded table receives — the append-only class's grant. */
+export const APPEND_ONLY_MAINTENANCE_PRIVILEGES: readonly string[] =
+  MAINTENANCE_PRIVILEGES['append-only'];
 
 /** The canonical role names. `scripts/db-policies.ts` takes the application role's name
  *  from APP_DATABASE_URL instead, so the role the web app connects as and the role the
@@ -303,10 +319,21 @@ export const TENANT_OWNED: readonly TableEntry[] = TABLE_REGISTRY.filter(
   (e) => e.tenantColumn !== null,
 );
 
-/** The append-only tables: the ones that get the BEFORE UPDATE OR DELETE trigger. */
+/** The tables whose class is `append-only` (tenant-owned insert-only product tables). */
 export const APPEND_ONLY: readonly TableEntry[] = TABLE_REGISTRY.filter(
   (e) => e.class === 'append-only',
 );
+
+/**
+ * True when the entry carries the append-only trigger pair and maintenance grant.
+ * Every `append-only` class implies it; `identity_event` sets the flag explicitly.
+ */
+export function appendOnlyGuardOf(entry: TableEntry): boolean {
+  return entry.class === 'append-only' || entry.appendOnlyGuard === true;
+}
+
+/** Every table that gets the BEFORE UPDATE OR DELETE / TRUNCATE triggers. */
+export const APPEND_ONLY_GUARDED: readonly TableEntry[] = TABLE_REGISTRY.filter(appendOnlyGuardOf);
 
 /** The append-only tables whose `seq` the caller allocates, and which therefore need the
  *  SECURITY DEFINER allocator: `MAX(seq)` under RLS is the caller's Tenant's maximum. */
@@ -317,6 +344,13 @@ export const CLIENT_ALLOCATED_SEQ: readonly TableEntry[] = TABLE_REGISTRY.filter
 /** What the application role holds on one table: its entry's override, or its class's grant. */
 export function appPrivilegesOf(entry: TableEntry): readonly string[] {
   return entry.appPrivileges ?? APP_PRIVILEGES[entry.class];
+}
+
+/** What the maintenance role holds on one table: the hatch grant when guarded, else the class. */
+export function maintenancePrivilegesOf(entry: TableEntry): readonly string[] {
+  return appendOnlyGuardOf(entry)
+    ? APPEND_ONLY_MAINTENANCE_PRIVILEGES
+    : MAINTENANCE_PRIVILEGES[entry.class];
 }
 
 /** The tables that carry `tenant_id` without row-level security. Exactly one: the bridge. */

@@ -15,6 +15,7 @@ import { DEMO_USERS } from '../packages/db/src/demo-identities';
 import { buildProbeTenant, createProbeTenant, removeProbeTenant, type ProbeTenant } from '../packages/db/src/probe-tenants';
 import { identityEventWriterOn } from '../packages/db/src/repo-identity-event';
 import { account, authUser, identityEvent, session, verification } from '../packages/db/src/schema';
+import { MAINTENANCE_SETTING } from '../packages/db/src/table-classes';
 import { connectWriteHarness, owner } from './write-harness';
 
 /**
@@ -189,6 +190,9 @@ async function identityEventsOf(userId: string) {
 async function removeExtras(): Promise<void> {
   const ids = [RESETTER.id, GOOGLE_ONLY.id];
   await owner().transaction(async (tx) => {
+    // `identity_event` carries appendOnlyGuard: DELETE is refused to the owner until the
+    // maintenance hatch is open (same path the seed and rls probe cleanup use).
+    await tx.execute(sql`SELECT set_config(${MAINTENANCE_SETTING}, 'on', true)`);
     // Both ids, like every other table below. Only RESETTER completes a reset today, but nothing
     // stops a later case recording an event for GOOGLE_ONLY, and the asymmetry would leave it
     // behind silently — the application role holds no DELETE on `identity_event` to correct it
@@ -307,7 +311,7 @@ describe.skipIf(!reachable)('password reset through MailerPort (story 1.4 slice 
       expect(await requestPasswordReset(auth, headers(), ADMIN.email)).toBe(true);
       expect(mailer.hits()).toBe(0);
       const logged = warn.mock.calls.map((call) => call.join(' ')).join('\n');
-      expect(logged).toMatch(/password-reset mail failed to send/);
+      expect(logged).toMatch(/sendResetPassword failed \(credential probe or mail\)/);
       expect(logged).not.toContain(ADMIN.email);
     } finally {
       warn.mockRestore();
@@ -421,7 +425,7 @@ describe.skipIf(!reachable)('password reset through MailerPort (story 1.4 slice 
      * survive. Deleting the try/catch in `auth.ts` passes every other test in this file; it fails
      * this one.
      */
-    it('still revokes every session, and still answers true, when the identity-event write fails', async () => {
+    it('still revokes every session, verifies the email, and refuses an earlier outstanding link when the identity-event write fails', async () => {
       const failing = createAuth({
         db: appDb(),
         secret: 'password-reset-test-secret-0123456789abcdef',
@@ -441,17 +445,35 @@ describe.skipIf(!reachable)('password reset through MailerPort (story 1.4 slice 
       await signIn(RESETTER.email, 'sixth-new-password-1');
       expect((await sessionsOf(RESETTER.id)).length).toBeGreaterThan(0);
 
+      // Two outstanding links: the first must be refused after the second is consumed, which
+      // is what proves `invalidateOtherResetTokens` still ran when the event write failed
+      // (one try per step — a shared try would skip it).
       mailer.reset();
       expect(await requestPasswordReset(failing, headers(), RESETTER.email)).toBe(true);
-      const token = tokenFromMail(mailer.last());
+      const firstToken = tokenFromMail(mailer.last());
+      mailer.reset();
+      expect(await requestPasswordReset(failing, headers(), RESETTER.email)).toBe(true);
+      const secondToken = tokenFromMail(mailer.last());
 
       expect(
-        await resetPassword(failing, headers(), { token, password: 'eighth-new-password-1' }),
+        await resetPassword(failing, headers(), { token: secondToken, password: 'eighth-new-password-1' }),
       ).toBe(true);
       expect(await sessionsOf(RESETTER.id)).toEqual([]);
       expect(
         await signInWithPassword(auth, headers(), { email: RESETTER.email, password: 'eighth-new-password-1' }),
       ).toBe(true);
+      const [user] = await owner().transaction((tx) =>
+        tx
+          .select({ emailVerified: authUser.emailVerified })
+          .from(authUser)
+          .where(eq(authUser.id, RESETTER.id)),
+      );
+      expect(user?.emailVerified, 'markEmailVerified must still run when the event write fails').toBe(
+        true,
+      );
+      expect(
+        await resetPassword(failing, headers(), { token: firstToken, password: 'ninth-new-password-1' }),
+      ).toBe(false);
     });
   });
 

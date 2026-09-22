@@ -17,11 +17,11 @@
  * growing.
  */
 import {
-  APPEND_ONLY,
+  APPEND_ONLY_GUARDED,
   appPrivilegesOf,
   CLIENT_ALLOCATED_SEQ,
-  MAINTENANCE_PRIVILEGES,
   MAINTENANCE_SETTING,
+  maintenancePrivilegesOf,
   TABLE_REGISTRY,
   TENANT_OWNED,
   TENANT_SETTING,
@@ -169,7 +169,7 @@ export function generateGrantsSql(appRole: string, maintenanceRole: string): str
   for (const entry of TABLE_REGISTRY) {
     const table = `public.${ident(entry.table)}`;
     const appPrivileges = appPrivilegesOf(entry);
-    const maintenancePrivileges = MAINTENANCE_PRIVILEGES[entry.class];
+    const maintenancePrivileges = maintenancePrivilegesOf(entry);
     lines.push(`-- ${entry.table} (${entry.class})`);
     if (appPrivileges.length > 0) {
       lines.push(`GRANT ${appPrivileges.join(', ')} ON ${table} TO ${app};`);
@@ -269,7 +269,7 @@ export function generateTriggersSql(maintenanceRole: string): string {
     '',
   ];
 
-  for (const entry of APPEND_ONLY) {
+  for (const entry of APPEND_ONLY_GUARDED) {
     const table = `public.${ident(entry.table)}`;
     lines.push(
       `-- ${entry.table}: ${entry.why}`,

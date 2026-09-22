@@ -34,6 +34,16 @@ BEGIN
           HINT = 'Append a compensating row. The only exception is the momo_maintenance role with app.maintenance set to on.';
 END $$;
 
+-- identity_event: Identity events: a change to a user's credentials or identity links (a password reset today; a link or unlink later), which carries no Tenant (story 1.4 slice 4, AD-14). A membership change — invitation acceptance included — is a tenant-scoped audited use case and writes audit_log, not here. Insert-only by grant plus appendOnlyGuard (trigger + maintenance hatch).
+DROP TRIGGER IF EXISTS "append_only_guard" ON public."identity_event";
+CREATE TRIGGER "append_only_guard"
+  BEFORE UPDATE OR DELETE ON public."identity_event"
+  FOR EACH ROW EXECUTE FUNCTION public."momo_append_only_guard"();
+DROP TRIGGER IF EXISTS "append_only_truncate_guard" ON public."identity_event";
+CREATE TRIGGER "append_only_truncate_guard"
+  BEFORE TRUNCATE ON public."identity_event"
+  FOR EACH STATEMENT EXECUTE FUNCTION public."momo_append_only_truncate_guard"();
+
 -- rate_entry: Rates are bitemporal: a retroactive correction appends a row. Rewriting one would change an already-published figure.
 DROP TRIGGER IF EXISTS "append_only_guard" ON public."rate_entry";
 CREATE TRIGGER "append_only_guard"

@@ -203,13 +203,17 @@ export function authOptions(options: CreateAuthOptions) {
       // `name` is logged, never `message`: a real transport's rejection carries the address in its
       // message (SES "Invalid destination: …", SMTP 550), which is exactly what must not be logged.
       sendResetPassword: async ({ user, token }) => {
-        if (!(await hasCredentialAccount(options.db, user.id))) return;
-        const link = resetLinkOf(options.baseURL, token);
+        // Every step is best-effort and must not throw (AD-1): a credential-account probe that
+        // fails the database, or a mailer that rejects, must leave the request answering the
+        // same generic sentence as success (NFR-S5). The probe sits inside the try for that
+        // reason — it is not a privilege the caller is entitled to see fail.
         try {
+          if (!(await hasCredentialAccount(options.db, user.id))) return;
+          const link = resetLinkOf(options.baseURL, token);
           await options.mailer.send(resetPasswordMail({ to: user.email, link }));
         } catch (error) {
           console.warn(
-            `[auth] password-reset mail failed to send: ${error instanceof Error ? error.name : 'unknown error'}`,
+            `[auth] sendResetPassword failed (credential probe or mail): ${error instanceof Error ? error.name : 'unknown error'}`,
           );
         }
       },
@@ -218,27 +222,39 @@ export function authOptions(options: CreateAuthOptions) {
       // deletes the user's sessions). MUST NOT THROW: an uncaught rejection here is not an
       // `APIError`, so it escapes `bindings.ts`'s catch as an unhandled 500 AND skips session
       // revocation entirely, on a request that already replaced the password and spent the token.
-      // So every step below runs inside one try/catch that only logs.
       //
-      // The event is written FIRST, `email_verified` second: `identity_event` is insert-only and
-      // can never be corrected, so if only one of the two survives a mid-way failure it must be
-      // the one that explains what happened, not a flag with no record of why it changed.
+      // Each step is its own try (AD-14): a failed `identity_event` write must not skip verifying
+      // the email or invalidating the user's other reset tokens. The event is attempted FIRST —
+      // `identity_event` is insert-only and can never be corrected, so if only one of the three
+      // survives a mid-way failure it should still be the one that explains what happened.
       // `invalidateOtherResetTokens` runs last — a second outstanding link surviving one more
       // moment is far less harm than the two ahead of it not landing.
       onPasswordReset: async ({ user }) => {
+        const at = options.now();
         try {
-          const at = options.now();
           await options.identityEvents.record({
             id: options.generateId(),
             userId: user.id,
             action: 'password.reset',
             at,
           });
+        } catch (error) {
+          console.warn(
+            `[auth] onPasswordReset identity_event failed after a completed reset: ${error instanceof Error ? error.name : 'unknown error'}`,
+          );
+        }
+        try {
           await markEmailVerified(options.db, user.id, at);
+        } catch (error) {
+          console.warn(
+            `[auth] onPasswordReset markEmailVerified failed after a completed reset: ${error instanceof Error ? error.name : 'unknown error'}`,
+          );
+        }
+        try {
           await invalidateOtherResetTokens(options.db, user.id);
         } catch (error) {
           console.warn(
-            `[auth] onPasswordReset failed after a completed reset: ${error instanceof Error ? error.name : 'unknown error'}`,
+            `[auth] onPasswordReset invalidateOtherResetTokens failed after a completed reset: ${error instanceof Error ? error.name : 'unknown error'}`,
           );
         }
       },

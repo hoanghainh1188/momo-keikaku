@@ -29,6 +29,7 @@ GRANT SELECT, UPDATE, DELETE ON public."tenant_membership" TO "momo_app";
 
 -- identity_event (global)
 GRANT SELECT, INSERT ON public."identity_event" TO "momo_app";
+GRANT SELECT, UPDATE, DELETE ON public."identity_event" TO "momo_maintenance";
 
 -- department (mutable-audited)
 GRANT SELECT, INSERT, UPDATE, DELETE ON public."department" TO "momo_app";
