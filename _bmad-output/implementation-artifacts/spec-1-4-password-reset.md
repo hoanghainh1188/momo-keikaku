@@ -2,7 +2,7 @@
 title: 'Story 1.4 slice 4 — password reset, the first mail out, and where identity events land'
 type: 'feature'
 created: '2026-09-22'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '270db5d73139fc21ee91522d9e553a77986362b6'
