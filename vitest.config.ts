@@ -40,5 +40,10 @@ export default defineConfig({
       'tests/**/*.test.ts',
     ],
     environment: 'node',
+    // AD-17: vitest is one of the three local suppliers of DEPLOYMENT=local (alongside
+    // apps/web/.env.development and the worker's start:dev). Never set this in ci.yml's job env.
+    env: {
+      DEPLOYMENT: 'local',
+    },
   },
 });

@@ -110,7 +110,7 @@ import {
   type UnassignMemberProjectInput,
   type WriteDeps,
 } from '@momo/app';
-import { mailerConsoleOn, systemClock, uuidV7IdsOn } from '@momo/adapters';
+import { mailerConsoleOn, productClockOn, systemClock, uuidV7IdsOn } from '@momo/adapters';
 import {
   getDb,
   identityEventWriterOn,
@@ -142,6 +142,19 @@ function webDb(): Db {
   return getDb(config.APP_DATABASE_URL);
 }
 
+/**
+ * Product Clock (AD-15 / story 1.8). Shared factory `productClockOn` (adapters) so web and
+ * worker cannot drift. Built on first use like the mailer. Identity / Better Auth stay on
+ * `systemClock` below.
+ */
+let webClockInstance: ReturnType<typeof productClockOn> | undefined;
+function webClock() {
+  return (webClockInstance ??= productClockOn({
+    mode: config.CLOCK_MODE,
+    fixtureTimeAnchor: config.FIXTURE_TIME_ANCHOR,
+  }));
+}
+
 // --- identity: the auth instance and the request context (story 1.4 slice 1) ----------------
 
 /**
@@ -149,6 +162,7 @@ function webDb(): Db {
  * (ids minted in one Clock millisecond must still sort by creation), which a per-call generator
  * would reset. Building it reads no configuration, so importing this file still reads nothing.
  * The writes' new rows AND Better Auth's users and sessions take their ids from it.
+ * Wired to `systemClock` (AD-15): identity ids stay on wall time under fixture mode.
  */
 const webIds = uuidV7IdsOn(systemClock);
 
@@ -426,7 +440,7 @@ export async function currentUserIdentity(ctx?: RequestContext): Promise<Identit
 function writeDeps() {
   return {
     handle: webDb(),
-    clock: systemClock,
+    clock: webClock(),
     ids: webIds,
     transaction: inTenantTransaction,
   } satisfies WriteDeps<Db>;

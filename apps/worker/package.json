@@ -1,3 +1,12 @@
 { "name": "@momo/worker", "version": "0.0.0", "private": true, "type": "module", "main": "src/index.ts",
-  "scripts": { "start": "tsx src/index.ts", "typecheck": "tsc --noEmit -p tsconfig.json --pretty false" },
-  "dependencies": { "pg-boss": "12.33.2", "@momo/app": "workspace:*" } }
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "start:dev": "tsx --env-file=.env.development src/index.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json --pretty false"
+  },
+  "dependencies": {
+    "pg-boss": "12.33.2",
+    "@momo/app": "workspace:*",
+    "@momo/adapters": "workspace:*"
+  }
+}

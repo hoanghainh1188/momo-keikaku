@@ -53,6 +53,11 @@
 // names another transport. `ses` (Epic 8) is ACCEPTED here and fails only at the composition root,
 // naming the missing adapter — the key is not a lie about what ships today; it is the name of what
 // will, so a deployment can be configured for it ahead of the adapter landing.
+//
+// Story 1.8 adds `DEPLOYMENT` (AD-17), `CLOCK_MODE` / `FIXTURE_TIME_ANCHOR` (AD-15), and
+// `TRACKER_ADAPTER_OVERRIDE` (AD-6): outside `local`, console mail, the fixture clock and the
+// fixture tracker override are each refused at first read naming the key. `SEED_PROFILE` selects
+// the demo Tenant or the NFR-P1 load shape for `pnpm seed`.
 import { z } from 'zod';
 
 /** Hosts an `http:` issuer may name: this machine only (the fake OIDC provider). */
@@ -168,17 +173,91 @@ const configShape = z.object({
   // Password reset's mail transport (story 1.4 slice 4, AD-17's dev default). `console` writes
   // every message to the server log; `ses` is Epic 8's, and is accepted here so a deployment can
   // name it before the adapter exists — the composition root fails naming the missing adapter.
+  // Outside `DEPLOYMENT=local`, `console` is refused (AD-17).
   MAILER: z
     .enum(['console', 'ses'], { error: 'must be `console` or `ses` — which mail transport to use' })
     .default('console'),
+
+  // AD-17 profile (story 1.8). Required, no default: a process that forgot it fails naming the key
+  // rather than silently treating a staging box as local. Suppliers of `local`:
+  // `apps/web/.env.development`, the worker's `start:dev`, and `vitest.config.ts` `test.env`.
+  DEPLOYMENT: z.enum(['local', 'staging', 'production'], {
+    error: 'is required — must be `local`, `staging` or `production`',
+  }),
+
+  // AD-15 fixture-mode clock (story 1.8). `system` is the default so CI without a fixture env
+  // stays on wall time; local `.env.development` sets `fixture`.
+  CLOCK_MODE: z
+    .enum(['system', 'fixture'], {
+      error: 'must be `system` or `fixture` — which Clock composition roots wire',
+    })
+    .default('system'),
+
+  // Required when `CLOCK_MODE=fixture`. Absolute ISO instant; the Clock returns
+  // `max(latest fixture observedAt, this)`.
+  FIXTURE_TIME_ANCHOR: z
+    .string()
+    .refine(
+      (value) => !Number.isNaN(Date.parse(value)),
+      'must be an absolute ISO-8601 instant — e.g. 2026-09-16T09:00:00.000Z',
+    )
+    .optional(),
+
+  // AD-6: force fixture-replay regardless of `connector.adapter`. Refused outside `local`.
+  TRACKER_ADAPTER_OVERRIDE: z
+    .enum(['fixture'], {
+      error: 'must be `fixture` when set — forces fixture-replay for every Connector',
+    })
+    .optional(),
+
+  // `pnpm seed` profile (story 1.8): small `prj-ec2` demo, or the NFR-P1 5×500 load Tenant.
+  SEED_PROFILE: z
+    .enum(['demo', 'load'], { error: 'must be `demo` or `load` — which Tenant shape the seed writes' })
+    .default('demo'),
 });
 
-/** Whole-schema parsing adds the one cross-key rule: `AUTH_GOOGLE=on` needs all three Google keys. */
+/** Keys AD-17 refuses outside `DEPLOYMENT=local`, in the order a failure names them. */
+const LOCAL_ONLY_WHEN = {
+  MAILER: 'console',
+  CLOCK_MODE: 'fixture',
+  TRACKER_ADAPTER_OVERRIDE: 'fixture',
+} as const;
+
+function localOnlyIssue(
+  key: keyof typeof LOCAL_ONLY_WHEN,
+  deployment: 'local' | 'staging' | 'production' | undefined,
+): string {
+  return (
+    `is \`${LOCAL_ONLY_WHEN[key]}\`, which is only allowed when DEPLOYMENT=local` +
+    (deployment === undefined ? '' : ` (DEPLOYMENT=${deployment})`)
+  );
+}
+
+/** Whole-schema parsing: Google-on needs its three keys; AD-17 local-only refusals; fixture anchor. */
 const configSchema = configShape.superRefine((value, ctx) => {
-  if (value.AUTH_GOOGLE !== 'on') return;
-  for (const key of GOOGLE_KEYS) {
-    if (value[key] === undefined) {
-      ctx.addIssue({ code: 'custom', path: [key], message: 'is required when AUTH_GOOGLE=on' });
+  if (value.AUTH_GOOGLE === 'on') {
+    for (const key of GOOGLE_KEYS) {
+      if (value[key] === undefined) {
+        ctx.addIssue({ code: 'custom', path: [key], message: 'is required when AUTH_GOOGLE=on' });
+      }
+    }
+  }
+  if (value.CLOCK_MODE === 'fixture' && value.FIXTURE_TIME_ANCHOR === undefined) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['FIXTURE_TIME_ANCHOR'],
+      message: 'is required when CLOCK_MODE=fixture',
+    });
+  }
+  if (value.DEPLOYMENT !== 'local') {
+    for (const key of Object.keys(LOCAL_ONLY_WHEN) as (keyof typeof LOCAL_ONLY_WHEN)[]) {
+      if (value[key] === LOCAL_ONLY_WHEN[key]) {
+        ctx.addIssue({
+          code: 'custom',
+          path: [key],
+          message: localOnlyIssue(key, value.DEPLOYMENT),
+        });
+      }
     }
   }
 });
@@ -206,16 +285,38 @@ export function parseConfig(env: Record<string, string | undefined>): AppConfig 
  * Parses ONE key out of a raw environment, failing naming it.
  *
  * The per-key half of `parseConfig`. It reuses the same schema, so a key's rules are stated
- * once: `configShape.shape[key]` is the very validator `parseConfig` applies.
+ * once: `configShape.shape[key]` is the very validator `parseConfig` applies. Local-only
+ * refusals (AD-17) and the fixture-anchor rule also run here, so a process that only ever
+ * reads `config.MAILER` still fails naming the key outside `DEPLOYMENT=local`.
  */
 export function parseConfigKey<K extends keyof AppConfig>(
   env: Record<string, string | undefined>,
   key: K,
 ): AppConfig[K] {
   const result = configShape.shape[key].safeParse(env[key]);
-  if (result.success) return result.data as AppConfig[K];
-  const named = result.error.issues.map((issue) => issue.message).join('; ');
-  throw new Error(`Invalid configuration: ${key} ${named}`);
+  if (!result.success) {
+    const named = result.error.issues.map((issue) => issue.message).join('; ');
+    throw new Error(`Invalid configuration: ${key} ${named}`);
+  }
+  const value = result.data as AppConfig[K];
+
+  if (key === 'CLOCK_MODE' && value === 'fixture') {
+    const anchor = configShape.shape.FIXTURE_TIME_ANCHOR.safeParse(env.FIXTURE_TIME_ANCHOR);
+    if (!anchor.success || anchor.data === undefined) {
+      throw new Error('Invalid configuration: FIXTURE_TIME_ANCHOR is required when CLOCK_MODE=fixture');
+    }
+  }
+
+  if ((key as string) in LOCAL_ONLY_WHEN && value === LOCAL_ONLY_WHEN[key as keyof typeof LOCAL_ONLY_WHEN]) {
+    const deployment = parseConfigKey(env, 'DEPLOYMENT');
+    if (deployment !== 'local') {
+      throw new Error(
+        `Invalid configuration: ${key} ${localOnlyIssue(key as keyof typeof LOCAL_ONLY_WHEN, deployment)}`,
+      );
+    }
+  }
+
+  return value;
 }
 
 /**
@@ -262,6 +363,21 @@ export const config: AppConfig = {
   },
   get MAILER(): 'console' | 'ses' {
     return parseConfigKey(process.env, 'MAILER');
+  },
+  get DEPLOYMENT(): 'local' | 'staging' | 'production' {
+    return parseConfigKey(process.env, 'DEPLOYMENT');
+  },
+  get CLOCK_MODE(): 'system' | 'fixture' {
+    return parseConfigKey(process.env, 'CLOCK_MODE');
+  },
+  get FIXTURE_TIME_ANCHOR(): string | undefined {
+    return parseConfigKey(process.env, 'FIXTURE_TIME_ANCHOR');
+  },
+  get TRACKER_ADAPTER_OVERRIDE(): 'fixture' | undefined {
+    return parseConfigKey(process.env, 'TRACKER_ADAPTER_OVERRIDE');
+  },
+  get SEED_PROFILE(): 'demo' | 'load' {
+    return parseConfigKey(process.env, 'SEED_PROFILE');
   },
 };
 

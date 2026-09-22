@@ -80,6 +80,7 @@ work started and was deliberately deferred, with the evidence for the split.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-1-workspace-skeleton.md`
   summary: The `Clock` port has no consumer and no test. `systemClock` is exported and nothing calls it, so the port's shape is proven only by tsc.
+  resolved: YES, 2026-09-22 in `spec-1-8-a-load-fixture-worth-measuring-against.md` — `fixtureClockOn` + web/worker/seed consumers; `packages/adapters/src/clock.test.ts`.
   evidence: Verified by grep — no import of `@momo/adapters` exists anywhere. This is what a skeleton slice looks like and is not a defect, but it means the port's usefulness is unmeasured: the first real consumer (story 1.8's fixture-mode clock, which must return the later of the newest fixture timestamp and a configured anchor) may find the two-method interface wrong. Cheap to change while nothing depends on it; note that it stops being cheap once the scheduler does.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-1-workspace-skeleton.md`
@@ -108,6 +109,7 @@ work started and was deliberately deferred, with the evidence for the split.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-1-workspace-skeleton.md`
   summary: The Clock port exposes now() and nowMs(), two methods that must agree with nothing making them agree, and now() returns a mutable Date.
   evidence: Real design observation, speculative harm. No consumer exists yet, so the shape is proven only by tsc. Story 1.8's fixture clock is the first real implementation and the first chance to find out whether a single primitive with a derived helper would have been better. Cheap to change now, expensive once the scheduler depends on it.
+  resolved: YES, 2026-09-22 in `spec-1-8` — fixtureClockOn keeps now/nowMs agreeing on one max ms; shape unchanged and proven by tests.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-1-workspace-skeleton.md`
   summary: deferred-work.md gained a "resolved:" key that its own header does not define, on entries whose summary still describes the work as open.
@@ -256,6 +258,7 @@ work started and was deliberately deferred, with the evidence for the split.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-2-rls-and-withtenant.md`
   summary: `seed.ts` refuses to run against a database holding any other Tenant, rather than deleting only its own rows.
   evidence: Deliberate, and the reasoning is in the code. The seed TRUNCATEs, TRUNCATE is exempt from row-level security, so the alternative — leaving it able to empty every Tenant's tables — was the defect review round 1 raised. A tenant-scoped DELETE was rejected because the truncate carries `RESTART IDENTITY`, and those counters are what make a re-seed reproduce the same `baseline_version.seq` the fixture's ledger entries were recorded against; a DELETE would leave them advanced and the second seed would stamp a different active Baseline sequence, silently reclassifying the Actuals. The cost is that a database with two Tenants cannot be re-seeded at all, which `packages/db/src/rls.test.ts` works around by removing its probe Tenant in `afterAll` — so an interrupted test run leaves the seed refusing until that row is deleted. The real fix is a seed that writes fixture-relative sequence values rather than depending on identity restart, which is the load-fixture generator story 1.8 owns.
+  resolved: YES, 2026-09-22 in `spec-1-8-a-load-fixture-worth-measuring-against.md` — fixture-relative identity seqs via OVERRIDING SYSTEM VALUE; truncate no longer uses RESTART IDENTITY. Single-Tenant refuse guard remains.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-2-rls-and-withtenant.md`
   summary: The `maintenance_bypass` policy is `USING (true)` on every tenant-owned table, so a maintenance session sees all Tenants at once.
@@ -278,6 +281,7 @@ work started and was deliberately deferred, with the evidence for the split.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-2-cross-tenant-harness.md`
   summary: A probe Tenant left behind by an interrupted harness run makes `pnpm seed` refuse until it is deleted by hand.
   evidence: Same shape as the entry already recorded for `rls.test.ts`'s probe, and the same root cause: the seed refuses to run beside a second Tenant because it TRUNCATEs. The harness removes both probes in `afterAll` and then VERIFIES they are gone, throwing if they are not, so an ordinary failure — including a `beforeAll` that dies part-way through writing a probe — still cleans up; measured on 2026-09-21 across nine sabotage runs, two of which failed inside `beforeAll`. A hard kill (SIGKILL, a crashed container) still leaves rows. The ids are deterministic, so `createProbeTenant` deletes before it writes and a re-run recovers on its own; the residual cost is only that `pnpm seed` refuses in between. The real fix is the seed writing fixture-relative sequence values instead of depending on identity restart, which story 1.8's load-fixture generator owns.
+  resolved: PARTIAL, 2026-09-22 in `spec-1-8` — fixture-relative seqs land; seed still refuses beside a second Tenant (TRUNCATE is all-Tenant).
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-2-cross-tenant-harness.md`
   summary: The harness's symmetry comparison normalises `seq`, `activeBaselineSeq` and `activeBaselineVersionSeq` by KEY NAME, so a wrong value in a future field with one of those names would be normalised away.
@@ -307,6 +311,7 @@ work started and was deliberately deferred, with the evidence for the split.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-2-cross-tenant-harness.md`
   summary: The row writer re-points every non-null ledger `activeBaselineVersionSeq` at the single allocated Baseline sequence, which stops being correct the moment a fixture carries more than one Baseline version.
   evidence: `baseline_version.seq` is `generatedAlwaysAsIdentity`, so the writer reads back the value Postgres allocated and stamps it on every ledger row — correct while `buildDemoState()` yields exactly one version (verified: all 144 demo ledger rows carry `1` against `baselineVersions: [1]`), and silently wrong for any older reference once a re-baselining fixture exists, because `attribution.ts` looks the version up by seq and a miss reclassifies every mapped hour as Unplanned Work. This slice makes the mismatch LOUD (the writer throws naming the distinct values), which is the right guard but not the fix. The fix is a `fixtureSeq -> allocatedSeq` map built as the versions are inserted, and it wants doing with story 1.8's load-fixture generator, which is the first thing that will write more than one Baseline version.
+  resolved: YES, 2026-09-22 in `spec-1-8-a-load-fixture-worth-measuring-against.md` — `fixtureSeq → allocatedSeq` map in `writeTenantRows`.
 
 - source_spec: none
   summary: Story 1.2 slice — move `actions.ts`'s five write actions onto `packages/app` use cases, switch dependency-cruiser on, and register the writes in the cross-tenant harness.
@@ -514,7 +519,7 @@ work started and was deliberately deferred, with the evidence for the split.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-3-organisation-hierarchy.md`
   summary: A new Project's `default_rate_jpy` is 0 and its `demo_anchor` is the wall clock, both placeholders for later stories.
   evidence: Documented in `NEW_PROJECT_DEFAULTS` (`packages/app/src/use-cases/org-writes.ts`). Story 1.6 creates the Project default Rate (its own table, audited), which should replace the column's 0; the anchor comes from the composition root's `systemClock` until story 1.8's fixture-mode clock exists, so a Project created in the demo today is anchored at real time, not the fixture's.
-  resolved: 2026-09-22 in `spec-1-6-resources-and-the-dated-rates-behind-every-money-figure.md` — the Rate half: `createProject` dual-writes the first `project_default_rate_entry` at yen 0 and keeps `default_rate_jpy` as the live head cache; `appendProjectDefaultRate` updates both. The `demo_anchor` / fixture-clock half remains for story 1.8.
+  resolved: YES, 2026-09-22 — Rate half in `spec-1-6-resources-and-the-dated-rates-behind-every-money-figure.md` (`createProject` dual-writes the first `project_default_rate_entry` at yen 0; `appendProjectDefaultRate` updates both and keeps `default_rate_jpy` as the live head cache). Clock / `demo_anchor` half in `spec-1-8` — seed stamps `demo_anchor` from the injected Clock; org writes use the composition Clock (fixture under local).
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-3-organisation-hierarchy.md`
   summary: The write harness's own-Tenant row check compares only the tables a write is expected to touch (`landedRows`: mapping, disposition, audit, work package, department, program, project); a write that also changed another table passes it.
@@ -531,6 +536,7 @@ work started and was deliberately deferred, with the evidence for the split.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-3-organisation-hierarchy.md`
   summary: `audit_log.at` mixes two time bases in one Tenant: project writes stamp the Project's fixture `demoAnchor`, org writes stamp wall time from the Clock.
   evidence: Review round 1 (B8). Ordering or reading the log by `at` interleaves the two timelines; `seq` still gives true insertion order. Resolves when story 1.8's fixture-mode Clock drives both, or when project writes move off `demoAnchor`.
+  resolved: PARTIAL, 2026-09-22 in `spec-1-8` — org writes and seed use the product Clock; project writes still stamp `demoAnchor` (Epic 2).
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-3-organisation-hierarchy.md`
   summary: The web app now bundles `@momo/adapters` (and its `uuid`) through `transpilePackages`, verified by typecheck only.
@@ -539,10 +545,12 @@ work started and was deliberately deferred, with the evidence for the split.
 - source_spec: `_bmad-output/planning-artifacts/architecture/architecture-momo-keikaku-2026-09-20/ARCHITECTURE-SPINE.md`
   summary: `apps/worker` cannot reach the `Clock` (or any adapter): AD-15 needs the fixture clock in both roles, and the gate allows `packages/adapters` only from `apps/web`'s composition root.
   evidence: Found by the adversarial review of the AD-1 adapters amendment, 2026-09-21. AD-1 now says the worker gets its own named composition root the day it first needs an adapter; name it in the spine and in `apps-adapters-only-from-composition-root` together — likely with story 1.8's fixture clock or the pg-boss adapter move.
+  resolved: YES, 2026-09-22 in `spec-1-8` — `apps/worker/src/index.ts` is a named composition root; depcruise allows it; wires product Clock.
 
 - source_spec: `_bmad-output/planning-artifacts/architecture/architecture-momo-keikaku-2026-09-20/ARCHITECTURE-SPINE.md`
   summary: `db/seed` has no way to receive the `Clock` AD-15 says it creates records through: `packages/db` may not import `packages/adapters`.
   evidence: Found by the same review. The seed's operator entry point (`scripts/seed.ts`) is outside the graph and can inject a clock; wire it there when story 1.8 introduces the fixture-mode clock the seed must share.
+  resolved: YES, 2026-09-22 in `spec-1-8` — `scripts/seed.ts` injects the Clock; `packages/db` never imports adapters.
 
 ## Deferred from: code review of spec-1-3-organisation-hierarchy (2026-09-21)
 
@@ -834,6 +842,7 @@ fences and tooling that gate them. Seventeen findings were patched; these ten we
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-4-password-reset.md`
   summary: A required `DEPLOYMENT=local|staging|production` key (AD-17, founder 2026-09-22), read by both roles; outside `local`, `MAILER=console`, `CLOCK_MODE=fixture` and `TRACKER_ADAPTER_OVERRIDE=fixture` are refused at first read naming the key. Today `console` is the default everywhere and nothing tells a deployment from local dev.
   evidence: Spine amendment round 1 (rubric F1, adversarial F3) chose a loopback test on `BETTER_AUTH_URL`; round 2 (adversarial r2 F6) showed it blocks LAN/container dev and cannot reach the worker, and the founder switched to an explicit profile. A deployment that forgets `MAILER` otherwise boots, prints live reset tokens and recipient addresses to CloudWatch, and sends nothing. `local` has one supplier per runner (spine AD-17, round 3): `apps/web/.env.development` (covers `pnpm dev` and `pnpm demo`, which spawns `next dev` directly), the worker's dev start, and `vitest.config.ts`'s `test.env` — never a script prefix or `ci.yml`'s job env. `scripts/seed.ts` reads it too and applies the `CLOCK_MODE` refusal. Pin each refusal in `config.test.ts`. Must land before Epic 8's first staging deploy.
+  resolved: YES, 2026-09-22 in `spec-1-8-a-load-fixture-worth-measuring-against.md` — required DEPLOYMENT; refusals for console mail / fixture clock / fixture tracker; suppliers: `.env.development`, worker `--env-file`, vitest `test.env`.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-4-password-reset.md`
   summary: A completed password reset keeps the user's provider links, so a reset does not end access through a linked Google identity; there is no unlink path and the link itself is not recorded as an identity event.
@@ -896,3 +905,13 @@ fences and tooling that gate them. Seventeen findings were patched; these ten we
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-7-the-tenant-admin-can-read-the-audit-log.md`
   summary: `listAuditLog` / `repo-audit` returns every matching Tenant row with no limit or cursor.
   evidence: Review round 1 (blind + edge). R0 seed is small; a long-lived Tenant could make one Admin request and N `lookupUser` calls unbounded. Spec did not require pagination. Add a default page size + cursor when an Admin surface needs it.
+
+## Deferred from: review of spec-1-8-a-load-fixture-worth-measuring-against (2026-09-22)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-8-a-load-fixture-worth-measuring-against.md`
+  summary: Under an injected seed Clock, DB Rate rows use `isoDateUtc(stamp)` while in-memory `DemoState` / domain `rates[].effectiveFrom` stays the fixture literal `2026-01-01`.
+  evidence: Blind review of story 1.8. `writeTenantRows` stamps Rates from the Clock; `loadProjectAsDemoState` / demo fixture rates do not. Money paths that read DB Rates are coherent; pure domain replay of the in-memory state can disagree. Close when a consumer reads both, or align the in-memory rate dates with the Clock stamp in the load/demo builders.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-8-a-load-fixture-worth-measuring-against.md`
+  summary: Resolved deferred entries for the Clock port still carry pre-resolution `evidence:` text (e.g. "no import of `@momo/adapters` exists anywhere").
+  evidence: Docs-only. Updating or striking stale evidence on resolved rows is housekeeping, not a runtime defect.

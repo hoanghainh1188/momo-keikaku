@@ -17,7 +17,7 @@ import { describe, expect, it } from 'vitest';
 process.env.DATABASE_URL ??= 'postgres://owner:owner@localhost:55433/momo_keikaku';
 process.env.APP_DATABASE_URL ??= 'postgres://momo_app:momo_app@localhost:55433/momo_keikaku';
 
-const { parseConfig, parseGoogleProvider } = await import('./config');
+const { parseConfig, parseConfigKey, parseGoogleProvider } = await import('./config');
 
 const COMPLETE = {
   DATABASE_URL: 'postgres://momo:momo@localhost:55433/momo_keikaku',
@@ -25,6 +25,7 @@ const COMPLETE = {
   BETTER_AUTH_SECRET: 'a-test-secret-that-is-long-enough-000',
   BETTER_AUTH_URL: 'http://localhost:3101',
   SEED_DEMO_PASSWORD: 'demo-password',
+  DEPLOYMENT: 'local',
 } as const;
 
 describe('parseConfig', () => {
@@ -34,6 +35,8 @@ describe('parseConfig', () => {
       SESSION_IDLE_TIMEOUT_HOURS: 8,
       AUTH_GOOGLE: 'off',
       MAILER: 'console',
+      CLOCK_MODE: 'system',
+      SEED_PROFILE: 'demo',
     });
   });
 
@@ -175,4 +178,151 @@ describe('MAILER', () => {
       /Invalid configuration: MAILER must be `console` or `ses`/,
     );
   });
+});
+
+/** AD-17 profile + fixture clock (story 1.8). */
+describe('DEPLOYMENT and local-only refusals', () => {
+  it('requires DEPLOYMENT, naming the key when absent', () => {
+    const { DEPLOYMENT: _omitted, ...rest } = COMPLETE;
+    expect(() => parseConfig(rest)).toThrow(/Invalid configuration: .*DEPLOYMENT is required/);
+  });
+
+  it('accepts local with console mail and fixture clock when the anchor is set', () => {
+    expect(
+      parseConfig({
+        ...COMPLETE,
+        CLOCK_MODE: 'fixture',
+        FIXTURE_TIME_ANCHOR: '2026-09-16T09:00:00.000Z',
+        TRACKER_ADAPTER_OVERRIDE: 'fixture',
+      }),
+    ).toMatchObject({
+      DEPLOYMENT: 'local',
+      CLOCK_MODE: 'fixture',
+      FIXTURE_TIME_ANCHOR: '2026-09-16T09:00:00.000Z',
+      TRACKER_ADAPTER_OVERRIDE: 'fixture',
+      MAILER: 'console',
+    });
+  });
+
+  it('refuses CLOCK_MODE=fixture without FIXTURE_TIME_ANCHOR', () => {
+    expect(() => parseConfig({ ...COMPLETE, CLOCK_MODE: 'fixture' })).toThrow(
+      /Invalid configuration: FIXTURE_TIME_ANCHOR is required when CLOCK_MODE=fixture/,
+    );
+  });
+
+  for (const deployment of ['staging', 'production'] as const) {
+    it(`refuses MAILER=console under DEPLOYMENT=${deployment}, naming MAILER`, () => {
+      expect(() => parseConfig({ ...COMPLETE, DEPLOYMENT: deployment, MAILER: 'console' })).toThrow(
+        /Invalid configuration: MAILER is `console`, which is only allowed when DEPLOYMENT=local/,
+      );
+    });
+
+    it(`refuses CLOCK_MODE=fixture under DEPLOYMENT=${deployment}, naming CLOCK_MODE`, () => {
+      expect(() =>
+        parseConfig({
+          ...COMPLETE,
+          DEPLOYMENT: deployment,
+          MAILER: 'ses',
+          CLOCK_MODE: 'fixture',
+          FIXTURE_TIME_ANCHOR: '2026-09-16T09:00:00.000Z',
+        }),
+      ).toThrow(
+        /Invalid configuration: CLOCK_MODE is `fixture`, which is only allowed when DEPLOYMENT=local/,
+      );
+    });
+
+    it(`refuses TRACKER_ADAPTER_OVERRIDE=fixture under DEPLOYMENT=${deployment}`, () => {
+      expect(() =>
+        parseConfig({
+          ...COMPLETE,
+          DEPLOYMENT: deployment,
+          MAILER: 'ses',
+          TRACKER_ADAPTER_OVERRIDE: 'fixture',
+        }),
+      ).toThrow(
+        /Invalid configuration: TRACKER_ADAPTER_OVERRIDE is `fixture`, which is only allowed when DEPLOYMENT=local/,
+      );
+    });
+
+    it(`accepts DEPLOYMENT=${deployment} with MAILER=ses and CLOCK_MODE=system`, () => {
+      expect(parseConfig({ ...COMPLETE, DEPLOYMENT: deployment, MAILER: 'ses' })).toMatchObject({
+        DEPLOYMENT: deployment,
+        MAILER: 'ses',
+        CLOCK_MODE: 'system',
+      });
+    });
+  }
+
+  it('defaults SEED_PROFILE to demo and accepts load', () => {
+    expect(parseConfig({ ...COMPLETE }).SEED_PROFILE).toBe('demo');
+    expect(parseConfig({ ...COMPLETE, SEED_PROFILE: 'load' }).SEED_PROFILE).toBe('load');
+  });
+});
+
+/**
+ * Process getters use `parseConfigKey`, not `parseConfig`. The AD-17 / fixture-anchor
+ * refusals must fire on the per-key path too (story 1.8).
+ */
+describe('parseConfigKey AD-17 and fixture-anchor refusals', () => {
+  it('refuses CLOCK_MODE=fixture without FIXTURE_TIME_ANCHOR', () => {
+    expect(() => parseConfigKey({ ...COMPLETE, CLOCK_MODE: 'fixture' }, 'CLOCK_MODE')).toThrow(
+      /Invalid configuration: FIXTURE_TIME_ANCHOR is required when CLOCK_MODE=fixture/,
+    );
+  });
+
+  it('accepts CLOCK_MODE=fixture when FIXTURE_TIME_ANCHOR is set under local', () => {
+    expect(
+      parseConfigKey(
+        {
+          ...COMPLETE,
+          CLOCK_MODE: 'fixture',
+          FIXTURE_TIME_ANCHOR: '2026-09-16T09:00:00.000Z',
+        },
+        'CLOCK_MODE',
+      ),
+    ).toBe('fixture');
+  });
+
+  for (const deployment of ['staging', 'production'] as const) {
+    it(`refuses MAILER=console under DEPLOYMENT=${deployment} via parseConfigKey`, () => {
+      expect(() =>
+        parseConfigKey({ ...COMPLETE, DEPLOYMENT: deployment, MAILER: 'console' }, 'MAILER'),
+      ).toThrow(
+        /Invalid configuration: MAILER is `console`, which is only allowed when DEPLOYMENT=local/,
+      );
+    });
+
+    it(`refuses CLOCK_MODE=fixture under DEPLOYMENT=${deployment} via parseConfigKey`, () => {
+      expect(() =>
+        parseConfigKey(
+          {
+            ...COMPLETE,
+            DEPLOYMENT: deployment,
+            MAILER: 'ses',
+            CLOCK_MODE: 'fixture',
+            FIXTURE_TIME_ANCHOR: '2026-09-16T09:00:00.000Z',
+          },
+          'CLOCK_MODE',
+        ),
+      ).toThrow(
+        /Invalid configuration: CLOCK_MODE is `fixture`, which is only allowed when DEPLOYMENT=local/,
+      );
+    });
+
+    it(`refuses TRACKER_ADAPTER_OVERRIDE=fixture under DEPLOYMENT=${deployment} via parseConfigKey`, () => {
+      expect(() =>
+        parseConfigKey(
+          {
+            ...COMPLETE,
+            DEPLOYMENT: deployment,
+            MAILER: 'ses',
+            TRACKER_ADAPTER_OVERRIDE: 'fixture',
+          },
+          'TRACKER_ADAPTER_OVERRIDE',
+        ),
+      ).toThrow(
+        /Invalid configuration: TRACKER_ADAPTER_OVERRIDE is `fixture`, which is only allowed when DEPLOYMENT=local/,
+      );
+    });
+  }
 });

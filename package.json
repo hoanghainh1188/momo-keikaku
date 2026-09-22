@@ -5,7 +5,7 @@
   "scripts": {
     "demo": "tsx scripts/demo.ts",
     "db:up": "docker compose -f infra/docker-compose.yml up -d --wait",
-    "seed": "tsx scripts/seed.ts",
+    "seed": "tsx --env-file=apps/web/.env.development scripts/seed.ts",
     "fake-oidc": "tsx scripts/fake-oidc.ts",
     "pgboss:migrate": "tsx scripts/pgboss-migrate.ts",
     "dev": "pnpm --filter @momo/web dev",

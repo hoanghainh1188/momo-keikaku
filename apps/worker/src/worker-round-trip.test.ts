@@ -46,6 +46,12 @@ const MIGRATOR_ROLE = 'momo_migrator';
 /** `application_name` on the worker's pool, which is how its backend is found. */
 const WORKER_APPLICATION_NAME = 'momo-worker';
 
+/**
+ * Must match `DEMO_LATEST_OBSERVED_OFFSET_MS` in `@momo/adapters` — this test file cannot
+ * import adapters (depcruise: apps-adapters-only-from-composition-root).
+ */
+const DEMO_LATEST_OBSERVED_OFFSET_MS = -2 * 3_600_000;
+
 const POLL_INTERVAL_MS = 100;
 /** Ceiling on every wait below. */
 const JOB_TIMEOUT_MS = 20_000;
@@ -253,9 +259,15 @@ describe.skipIf(!reachable)('the worker runs pg-boss as the restricted applicati
       // The only assertion that covers `index.ts` itself. `tsx` is spawned directly rather
       // than through pnpm, because a package-manager wrapper takes the signal and orphans
       // the worker behind it.
+      const FIXTURE_ANCHOR = '2026-09-16T09:00:00.000Z';
       const worker = spawn('node_modules/.bin/tsx', ['apps/worker/src/index.ts'], {
         cwd: process.cwd(),
-        env: { ...process.env },
+        env: {
+          ...process.env,
+          DEPLOYMENT: 'local',
+          CLOCK_MODE: 'fixture',
+          FIXTURE_TIME_ANCHOR: FIXTURE_ANCHOR,
+        },
         stdio: ['ignore', 'pipe', 'pipe'],
       });
       let output = '';
@@ -271,6 +283,21 @@ describe.skipIf(!reachable)('the worker runs pg-boss as the restricted applicati
           // `[worker] started` console prefix is gone.
           pollUntil(() => output.includes('"msg":"started with migration disabled"')),
           `the worker never reported started. Output so far: ${output}`,
+        );
+
+        // Story 1.8: fixture Clock selected at boot — started JSON carries mode + now.
+        const startedLine = output
+          .split('\n')
+          .find((line) => line.includes('"msg":"started with migration disabled"'));
+        expect(startedLine, `started line missing. Output: ${output}`).toBeTruthy();
+        const started = JSON.parse(startedLine!) as {
+          clockMode: string;
+          clockNow: string;
+        };
+        expect(started.clockMode).toBe('fixture');
+        const anchorMs = Date.parse(FIXTURE_ANCHOR);
+        expect(started.clockNow).toBe(
+          new Date(Math.max(anchorMs + DEMO_LATEST_OBSERVED_OFFSET_MS, anchorMs)).toISOString(),
         );
 
         // Which role did it actually connect as? `usename` is readable for every backend, so

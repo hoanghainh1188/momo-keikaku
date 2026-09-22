@@ -7,10 +7,21 @@
 // arrive with the Connector in Epic 5; this slice proves the runner works, not what it
 // runs.
 //
+// Story 1.8: first real `@momo/adapters` import — the product Clock (AD-15), selected the
+// same way as the web composition root. Identity stays off this Clock.
+//
 // Importing this module starts a worker, which is why `createBoss` lives in `./boss.ts`:
 // the test builds the same runner without any of the below.
+import { productClockOn } from '@momo/adapters';
 import { config, createLogger } from '@momo/app';
 import { createBoss, PGBOSS_SCHEMA } from './boss';
+
+// Selected at boot so a misconfigured CLOCK_MODE / DEPLOYMENT fails before the runner starts.
+// Same factory as the web composition root — do not re-inline the −2h offset here.
+const workerClock = productClockOn({
+  mode: config.CLOCK_MODE,
+  fixtureTimeAnchor: config.FIXTURE_TIME_ANCHOR,
+});
 
 // Sync stdout so lifecycle lines survive process exit (SIGTERM round-trip + operators).
 const log = createLogger({ name: 'worker', syncStdout: true });
@@ -58,5 +69,12 @@ await boss.start();
 // `stop()` waits for an in-flight `start()`, so a signal that arrived during startup leaves
 // this resolving *after* shutdown began. Claiming a start then would be a lie in the log.
 if (!stopping) {
-  log.info({ schema: PGBOSS_SCHEMA }, 'started with migration disabled');
+  log.info(
+    {
+      schema: PGBOSS_SCHEMA,
+      clockMode: config.CLOCK_MODE,
+      clockNow: workerClock.now().toISOString(),
+    },
+    'started with migration disabled',
+  );
 }

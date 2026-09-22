@@ -227,6 +227,9 @@ vi.mock(nextHeadersPath, () => ({ headers: async () => spies.requestHeaders }));
 
 vi.mock('@momo/adapters', () => ({
   systemClock: { now: () => spies.now, nowMs: () => spies.now.getTime() },
+  fixtureClockOn: () => ({ now: () => spies.now, nowMs: () => spies.now.getTime() }),
+  productClockOn: () => ({ now: () => spies.now, nowMs: () => spies.now.getTime() }),
+  DEMO_LATEST_OBSERVED_OFFSET_MS: -2 * 3_600_000,
   uuidV7IdsOn: () => ({ next: () => spies.newId }),
   mailerConsoleOn: (sink: (line: string) => void) => ({
     send: async (message: { to: string; subject: string; text: string }) => {

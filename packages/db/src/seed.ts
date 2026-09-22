@@ -109,7 +109,9 @@ export interface TenantRowWriteOptions {
    * Added to every `seq` the CALLER allocates — `actuals_ledger_entry` and `mapping_event`,
    * the two tables `table-classes.ts` marks `clientAllocatedSeq`. Their `seq` is a global
    * primary key with no identity default, so two Tenants seeded from the same fixture both
-   * start at 1 and collide. The demo seed passes `0`.
+   * start at 1 and collide. The demo seed passes `0`. Also added to fixture-relative identity
+   * `seq` values (`baseline_version`, Rates, …) so a reseed no longer depends on
+   * `RESTART IDENTITY` (story 1.8).
    */
   readonly seqOffset: number;
   /**
@@ -119,10 +121,34 @@ export interface TenantRowWriteOptions {
    * `scripts/seed.ts` computes through `@momo/db-auth`: `packages/db` never sees the password.
    */
   readonly passwordHash?: string;
+  /**
+   * When set, stamps `demo_anchor`, Baseline `recordedAt`, Rate `effectiveFrom`, member
+   * timestamps and the seed audit `at` from this Clock (AD-15). Structural — `packages/db`
+   * never imports `@momo/adapters`. Probes omit it and keep the fixture anchor.
+   */
+  readonly clock?: { readonly now: () => Date };
+  /**
+   * When true, skip Tenant / Department / Program / members / Resources / Rates — used by the
+   * load seed after the first project has written the Tenant shell (story 1.8).
+   */
+  readonly projectOnly?: boolean;
+  /**
+   * 0-based load-project index. When set, `project_default_rate` / related audit seq bands are
+   * `1_000 + projectIndex` — stable and collision-free across the 5×500 shape (story 1.8).
+   */
+  readonly projectIndex?: number;
 }
 
 /** The demo seed's own options: no prefix, no offset — byte-for-byte what it wrote before. */
 export const DEMO_ROW_WRITE_OPTIONS: TenantRowWriteOptions = { idPrefix: '', seqOffset: 0 };
+
+/**
+ * Fixture-relative identity seq: fixture value + the Tenant's band offset.
+ * Exported so tests pin the formula (story 1.8); `writeTenantRows` is the sole writer.
+ */
+export function fixtureRelativeSeq(fixtureValue: number, offset: number): number {
+  return fixtureValue + offset;
+}
 
 export interface TenantRowWriteResult {
   readonly tenantId: string;
@@ -147,16 +173,11 @@ export interface TenantRowWriteResult {
  * only caller that owns the whole database. This function assumes `tx` is already inside
  * `withTenant(state.fixture.tenant.id)`.
  *
- * TWO TRAPS IT CLOSES, both of which are silent rather than loud:
- *
- *   1. `baseline_version.seq` is `generatedAlwaysAsIdentity`. A second Tenant's Baseline is
- *      therefore `seq = 2`, while the fixture's ledger rows carry the literal `1` they were
- *      built with. Left alone, every mapped hour in that Tenant would be attributed against
- *      a Baseline version it cannot find — `attribution.ts` looks the version up by seq —
- *      and would be silently reclassified as Unplanned Work. Every figure moves and nothing
- *      complains. So the writer reads the allocated `seq` back out of the INSERT and
- *      rewrites each ledger row's `active_baseline_version_seq` to it.
- *   2. The generated ids above. See `TenantRowWriteOptions.idPrefix`.
+ * SEQUENCE VALUES ARE FIXTURE-RELATIVE (story 1.8). Identity columns
+ * (`baseline_version`, Rates, snapshots, audit) are written with `OVERRIDING SYSTEM VALUE`
+ * at `fixtureSeq + seqOffset`, so a reseed after leftover probe rows does not depend on
+ * `RESTART IDENTITY`. A `fixtureSeq → allocatedSeq` map translates every ledger
+ * `activeBaselineVersionSeq` (multi-baseline ready).
  */
 export async function writeTenantRows(
   tx: Tx,
@@ -167,23 +188,54 @@ export async function writeTenantRows(
   const tenantId = f.tenant.id;
   /** Every id and literal this function invents, rather than reads out of `state`. */
   const own = (value: string) => `${options.idPrefix}${value}`;
+  const stamp = options.clock?.now() ?? new Date(state.anchor);
+  // Rate `effectiveFrom` must cover the whole fixture timeline (domain rates use
+  // `2026-01-01`). Stamping it from the Clock made seeded Rates start at the fixture
+  // "now" and broke Review numbers vs probes / the golden corpus (story 1.8 CI).
+  const rateFrom = '2026-01-01';
+  const projectOnly = options.projectOnly === true;
 
-  await tx.insert(s.tenant).values({ id: tenantId, name: f.tenant.name });
-  await tx
-    .insert(s.department)
-    .values({ id: f.department.id, tenantId, name: f.department.name });
-  // FR-1's middle tier (story 1.3 slice 2): one Program in the Department, holding the Project.
-  await tx.insert(s.program).values({
-    id: f.program.id,
-    tenantId,
-    departmentId: f.department.id,
-    name: f.program.name,
-  });
+  if (!projectOnly) {
+    await tx.insert(s.tenant).values({ id: tenantId, name: f.tenant.name });
+    await tx
+      .insert(s.department)
+      .values({ id: f.department.id, tenantId, name: f.department.name });
+    // FR-1's middle tier (story 1.3 slice 2): one Program in the Department, holding the Project.
+    await tx.insert(s.program).values({
+      id: f.program.id,
+      tenantId,
+      departmentId: f.department.id,
+      name: f.program.name,
+    });
 
-  // The Tenant's people (story 1.4 slice 1): users, their memberships and — for the demo seed
-  // only — credential accounts. Names are opaque for a probe Tenant: the demo PM's name is also a
-  // Resource name, and the harness scans probe results for the demo Tenant's strings.
-  await writeMembers(tx, tenantId, f.project.id, own, options.passwordHash, state.anchor);
+    // The Tenant's people (story 1.4 slice 1): users, their memberships and — for the demo seed
+    // only — credential accounts. Names are opaque for a probe Tenant: the demo PM's name is also a
+    // Resource name, and the harness scans probe results for the demo Tenant's strings.
+    await writeMembers(tx, tenantId, f.project.id, own, options.passwordHash, stamp.toISOString());
+
+    await tx.insert(s.resource).values(
+      f.resources.map((r) => ({
+        id: r.id,
+        tenantId,
+        departmentId: f.department.id,
+        name: r.name,
+        role: r.role,
+        trackerAccountIds: [r.accountId],
+      })),
+    );
+    await tx
+      .insert(s.rateEntry)
+      .overridingSystemValue()
+      .values(
+        f.resources.map((r, i) => ({
+          seq: fixtureRelativeSeq(i + 1, options.seqOffset),
+          tenantId,
+          resourceId: r.id,
+          effectiveFrom: rateFrom,
+          yenPerHour: r.yenPerHour,
+        })),
+      );
+  }
 
   await tx.insert(s.project).values({
     id: f.project.id,
@@ -199,34 +251,23 @@ export async function writeTenantRows(
     eacMethod: 'typical',
     calendarJp: f.project.calendar.jp,
     calendarVn: f.project.calendar.vn,
-    demoAnchor: new Date(state.anchor),
+    demoAnchor: stamp,
   });
 
-  await tx.insert(s.resource).values(
-    f.resources.map((r) => ({
-      id: r.id,
-      tenantId,
-      departmentId: f.department.id,
-      name: r.name,
-      role: r.role,
-      trackerAccountIds: [r.accountId],
-    })),
-  );
-  await tx.insert(s.rateEntry).values(
-    f.resources.map((r) => ({
-      tenantId,
-      resourceId: r.id,
-      effectiveFrom: '2026-01-01',
-      yenPerHour: r.yenPerHour,
-    })),
-  );
   // Story 1.6: the Project's default Rate history — head matches `project.default_rate_jpy`.
-  await tx.insert(s.projectDefaultRateEntry).values({
-    tenantId,
-    projectId: f.project.id,
-    effectiveFrom: '2026-01-01',
-    yenPerHour: f.project.defaultRateYenPerHour,
-  });
+  // Fixture-relative seq: demo uses 1; load projects use a stable per-project band (loop index).
+  const projectDefaultSeq =
+    options.projectIndex !== undefined ? 1_000 + options.projectIndex : 1;
+  await tx
+    .insert(s.projectDefaultRateEntry)
+    .overridingSystemValue()
+    .values({
+      seq: fixtureRelativeSeq(projectDefaultSeq, options.seqOffset),
+      tenantId,
+      projectId: f.project.id,
+      effectiveFrom: rateFrom,
+      yenPerHour: f.project.defaultRateYenPerHour,
+    });
 
   await tx.insert(s.workPackage).values(
     state.wps.map((w) => ({
@@ -249,30 +290,34 @@ export async function writeTenantRows(
     })),
   );
 
-  const [bv] = await tx
-    .insert(s.baselineVersion)
-    .values({
-      id: f.baseline.id,
-      tenantId,
-      projectId: f.project.id,
-      reason: f.baseline.reason,
-      recordedAt: new Date(f.baseline.recordedAt),
-      // `actorOf(own(id))`, never `own(actorOf(id))`: the prefix belongs to the USER ID, inside the
-      // `user:` stamp. The other order yields `<prefix>user:<uuid>`, which names no seeded user in
-      // a probe Tenant and matches nothing the audit gate builds.
-      actor: actorOf(own(DEMO_USERS.linh.id)),
-    })
-    .returning({ seq: s.baselineVersion.seq });
-  // Trap 1. This is the allocated value, not the fixture's — read back rather than assumed.
-  const activeBaselineSeq = Number(bv!.seq);
+  // Multi-baseline map: insert every version the state carries, in seq order, with
+  // fixture-relative identity values; translate ledger references through the map.
+  const baselineSeqMap = new Map<number, number>();
+  const versions = [...state.baselineVersions].sort((a, b) => a.seq - b.seq);
+  if (versions.length === 0) {
+    throw new Error('writeTenantRows requires at least one Baseline version in state');
+  }
+  for (const version of versions) {
+    const [bv] = await tx
+      .insert(s.baselineVersion)
+      .overridingSystemValue()
+      .values({
+        seq: fixtureRelativeSeq(version.seq, options.seqOffset),
+        id: version.id,
+        tenantId,
+        projectId: f.project.id,
+        reason: version.reason,
+        recordedAt: options.clock ? stamp : new Date(version.recordedAt),
+        actor: actorOf(own(DEMO_USERS.linh.id)),
+      })
+      .returning({ seq: s.baselineVersion.seq });
+    // Allocated value must equal the fixture-relative stamp (OVERRIDING SYSTEM VALUE).
+    baselineSeqMap.set(version.seq, Number(bv!.seq));
+  }
+  const activeBaselineSeq = baselineSeqMap.get(
+    Math.max(...versions.map((v) => v.seq)),
+  )!;
 
-  // The rewrite below maps EVERY non-null `activeBaselineVersionSeq` onto that one value,
-  // which is correct exactly while the state carries one Baseline version — true of the
-  // fixture today, and the reason the rewrite is a one-liner rather than a translation
-  // table. The day a fixture carries a re-baseline, the quiet outcome would be every older
-  // ledger row re-pointed at the ACTIVE Baseline, which reclassifies historical hours and
-  // moves published figures with nothing complaining. So the assumption is asserted, on
-  // the demo path as well as the probe one.
   const referenced = [
     ...new Set(
       state.ledger
@@ -280,66 +325,79 @@ export async function writeTenantRows(
         .filter((seq): seq is number => seq !== null),
     ),
   ].sort((a, b) => a - b);
-  if (referenced.length > 1) {
-    throw new Error(
-      `this state's ledger references ${referenced.length} distinct Baseline versions ` +
-        `(seq ${referenced.join(', ')}), and the writer only knows how to re-point rows at ` +
-        'the one Baseline it just inserted. Writing it anyway would silently re-attribute ' +
-        'every historical hour to the active Baseline. Write the versions in order and ' +
-        'translate each fixture seq to the seq Postgres allocated for it.',
-    );
+  for (const fixtureBaselineSeq of referenced) {
+    if (!baselineSeqMap.has(fixtureBaselineSeq)) {
+      throw new Error(
+        `ledger references Baseline fixture seq ${fixtureBaselineSeq}, which was not inserted. ` +
+          `Known fixture seqs: ${[...baselineSeqMap.keys()].join(', ') || '(none)'}.`,
+      );
+    }
   }
 
+  const activeFixtureSeq = Math.max(...versions.map((v) => v.seq));
+  const baselineWps = versions.find((v) => v.seq === activeFixtureSeq)!.wps;
+
   await tx.insert(s.baselineWp).values(
-    f.baseline.wps.map((b, i) => ({
-      id: own(`blwp-${i}`),
+    baselineWps.map((b, i) => ({
+      id: own(projectOnly ? `blwp-${f.project.id}-${i}` : `blwp-${i}`),
       tenantId,
       baselineVersionSeq: activeBaselineSeq,
       wpId: b.wpId,
       start: b.start,
       finish: b.finish,
-      baselineMh: mhFromJson(b.baselineMh),
+      baselineMh: typeof b.baselineMh === 'bigint' ? b.baselineMh : mhFromJson(b.baselineMh),
       isMilestone: b.isMilestone,
     })),
   );
 
-  const connectorId = own('con-fixture-ec2');
+  const connectorId = own(projectOnly ? `con-fixture-${f.project.id}` : 'con-fixture-ec2');
   await tx.insert(s.connector).values({
     id: connectorId,
     tenantId,
     projectId: f.project.id,
-    // `adapter` is vocabulary (backlog | fixture | jira), so it is NOT prefixed: prefixing
-    // it would write a value no adapter registry could resolve. `scope` and `spaceLabel`
-    // are free text describing this Tenant's own tracker space, so they are — which is
-    // what lets the harness's token scan see them at all.
     adapter: 'fixture',
-    scope: own('project key EC2 (all issue types)'),
-    spaceLabel: own('osaka-retail.backlog.jp (fixture replay)'),
+    scope: own(
+      projectOnly
+        ? `project key ${f.project.id} (all issue types)`
+        : 'project key EC2 (all issue types)',
+    ),
+    spaceLabel: own(
+      projectOnly
+        ? `${f.project.id}.backlog.jp (fixture replay)`
+        : 'osaka-retail.backlog.jp (fixture replay)',
+    ),
   });
 
-  await tx.insert(s.mappingRule).values(
-    f.mappingRules.map((r) => ({
-      id: r.id,
-      tenantId,
-      projectId: f.project.id,
-      priority: r.priority,
-      name: r.name,
-      wpId: r.wpId,
-      matchField: r.match.field,
-      matchValue: r.match.value,
-    })),
-  );
+  if (f.mappingRules.length > 0) {
+    await tx.insert(s.mappingRule).values(
+      f.mappingRules.map((r) => ({
+        id: r.id,
+        tenantId,
+        projectId: f.project.id,
+        priority: r.priority,
+        name: r.name,
+        wpId: r.wpId,
+        matchField: r.match.field,
+        matchValue: r.match.value,
+      })),
+    );
+  }
 
   // --- the replayed Connector
-  for (const snap of state.snapshots) {
-    await tx.insert(s.trackerSnapshot).values({
-      id: snap.snapshotId,
-      tenantId,
-      connectorId,
-      observedAt: new Date(snap.observedAt),
-      measurementBasis: snap.hoursFieldPresent ? 'hours' : 'count',
-      ticketCount: snap.tickets.length,
-    });
+  for (let i = 0; i < state.snapshots.length; i += 1) {
+    const snap = state.snapshots[i]!;
+    await tx
+      .insert(s.trackerSnapshot)
+      .overridingSystemValue()
+      .values({
+        seq: fixtureRelativeSeq(i + 1, options.seqOffset),
+        id: snap.snapshotId,
+        tenantId,
+        connectorId,
+        observedAt: new Date(snap.observedAt),
+        measurementBasis: snap.hoursFieldPresent ? 'hours' : 'count',
+        ticketCount: snap.tickets.length,
+      });
   }
   // FR-19: only the latest snapshot's observations are needed for the demo's
   // Percent Complete; older observations are stored for the two most recent
@@ -368,70 +426,91 @@ export async function writeTenantRows(
     );
   }
 
-  const snapshotOfEntry = (windowEnd: string) =>
-    state.snapshots.find((x) => x.observedAt === windowEnd)?.snapshotId ??
-    state.snapshots[state.snapshots.length - 1]!.snapshotId;
+  const snapshotOfEntry = (windowEnd: string): string => {
+    const id =
+      state.snapshots.find((x) => x.observedAt === windowEnd)?.snapshotId ??
+      state.snapshots.at(-1)?.snapshotId;
+    if (id === undefined) {
+      throw new Error(
+        'writeTenantRows: ledger has entries but state.snapshots is empty — cannot resolve snapshotId',
+      );
+    }
+    return id;
+  };
 
-  await chunked(state.ledger, 500, (batch) =>
-    tx.insert(s.actualsLedgerEntry).values(
-      batch.map((e) => ({
-        seq: e.seq + options.seqOffset,
-        id: own(`led-${e.seq}`),
-        tenantId,
-        connectorId,
-        ticketId: e.ticketId,
-        kind: e.kind,
-        deltaMh: e.deltaMh,
-        windowStart: e.windowStart ? new Date(e.windowStart) : null,
-        windowEnd: new Date(e.windowEnd),
-        assigneeAccountId: e.assigneeAccountId,
-        // Trap 1 again, on the other side of the join: the fixture's literal seq is
-        // replaced by the one this Tenant's Baseline actually got.
-        activeBaselineVersionSeq:
-          e.activeBaselineVersionSeq === null ? null : activeBaselineSeq,
-        snapshotId: snapshotOfEntry(e.windowEnd),
-      })),
-    ),
-  );
+  if (state.ledger.length > 0) {
+    await chunked(state.ledger, 500, (batch) =>
+      tx.insert(s.actualsLedgerEntry).values(
+        batch.map((e) => ({
+          seq: e.seq + options.seqOffset,
+          id: own(`led-${e.seq}`),
+          tenantId,
+          connectorId,
+          ticketId: e.ticketId,
+          kind: e.kind,
+          deltaMh: e.deltaMh,
+          windowStart: e.windowStart ? new Date(e.windowStart) : null,
+          windowEnd: new Date(e.windowEnd),
+          assigneeAccountId: e.assigneeAccountId,
+          activeBaselineVersionSeq:
+            e.activeBaselineVersionSeq === null
+              ? null
+              : baselineSeqMap.get(e.activeBaselineVersionSeq)!,
+          snapshotId: snapshotOfEntry(e.windowEnd),
+        })),
+      ),
+    );
+  }
 
-  await chunked(state.mappingEvents, 500, (batch) =>
-    tx.insert(s.mappingEvent).values(
-      batch.map((m) => ({
-        seq: m.seq + options.seqOffset,
-        id: own(`map-${m.seq}`),
-        tenantId,
-        projectId: f.project.id,
-        ticketId: m.ticketId,
-        wpId: m.wpId,
-        source: m.source,
-        ruleId: m.ruleId ?? null,
-        at: new Date(m.at),
-        actor: m.actor,
-      })),
-    ),
-  );
+  if (state.mappingEvents.length > 0) {
+    await chunked(state.mappingEvents, 500, (batch) =>
+      tx.insert(s.mappingEvent).values(
+        batch.map((m) => ({
+          seq: m.seq + options.seqOffset,
+          id: own(`map-${m.seq}`),
+          tenantId,
+          projectId: f.project.id,
+          ticketId: m.ticketId,
+          wpId: m.wpId,
+          source: m.source,
+          ruleId: m.ruleId ?? null,
+          at: new Date(m.at),
+          actor: m.actor,
+        })),
+      ),
+    );
+  }
 
-  await tx.insert(s.auditLog).values({
-    tenantId,
-    actor: own('system:seed'),
-    action: 'demo.seed',
-    target: f.project.id,
-    // AD-4: through the one codec, like every audit payload.
-    payload: encode({
-      snapshots: state.snapshots.length,
-      ledgerEntries: state.ledger.length,
-      mappingEvents: state.mappingEvents.length,
-      anchor: state.anchor,
-    }),
-    at: new Date(state.anchor),
-  });
+  const auditFixtureSeq = projectOnly ? 100 + projectDefaultSeq : 1;
+  await tx
+    .insert(s.auditLog)
+    .overridingSystemValue()
+    .values({
+      seq: fixtureRelativeSeq(auditFixtureSeq, options.seqOffset),
+      tenantId,
+      actor: own('system:seed'),
+      action: 'demo.seed',
+      target: f.project.id,
+      payload: encode({
+        snapshots: state.snapshots.length,
+        ledgerEntries: state.ledger.length,
+        mappingEvents: state.mappingEvents.length,
+        anchor: stamp.toISOString(),
+      }),
+      at: stamp,
+    });
+
+  // OVERRIDING SYSTEM VALUE does not advance the identity counter. Without this, the next
+  // product insert that uses the default (e.g. `appendResourceRate`, audit.record) collides
+  // with the fixture seqs the seed just wrote (CI: duplicate key on rate_entry / audit_log).
+  await syncIdentitySequences(tx);
 
   return {
     tenantId,
     activeBaselineSeq,
     counts: {
       wps: state.wps.length,
-      baselineWps: f.baseline.wps.length,
+      baselineWps: baselineWps.length,
       snapshots: state.snapshots.length,
       ledgerEntries: state.ledger.length,
       mappingEvents: state.mappingEvents.length,
@@ -495,10 +574,17 @@ async function writeMembers(
   );
 }
 
-/** What the demo seed needs from its composition root. */
+/** What the demo/load seed needs from its composition root. */
 export interface SeedOptions {
   /** The scrypt hash of `SEED_DEMO_PASSWORD`, computed by `scripts/seed.ts` via `@momo/db-auth`. */
   readonly demoPasswordHash: string;
+  /**
+   * Product Clock (AD-15). Stamps Baseline / Rates / `demo_anchor` / seed audit. Injected by
+   * `scripts/seed.ts` — `packages/db` never imports `@momo/adapters`.
+   */
+  readonly clock: { readonly now: () => Date };
+  /** `demo` keeps `prj-ec2`; `load` writes the NFR-P1 5×500 shape. */
+  readonly profile: 'demo' | 'load';
 }
 
 /**
@@ -509,54 +595,138 @@ export async function seed(db: Db, options: SeedOptions): Promise<void> {
   if (options.demoPasswordHash.trim() === '') {
     throw new Error('seed was given an empty demo password hash; hash SEED_DEMO_PASSWORD first.');
   }
+  if (options.profile === 'load') {
+    const { generateLoadFixture, loadProjectAsDemoState } = await import('./load-generator');
+    const shape = generateLoadFixture();
+    const first = loadProjectAsDemoState(shape, 0);
+    await withTenant(db, first.fixture.tenant.id, (tx) =>
+      seedLoadInTenant(tx, shape, options),
+    );
+    return;
+  }
   const state = buildDemoState();
   const tenantId = state.fixture.tenant.id;
-  // One transaction, one tenant: the truncate and every insert either land together or
-  // not at all, and every one of them is issued with `app.tenant_id` bound.
-  await withTenant(db, tenantId, (tx) => seedInTenant(tx, state, options.demoPasswordHash));
+  await withTenant(db, tenantId, (tx) => seedInTenant(tx, state, options));
 }
 
-async function seedInTenant(tx: Tx, state: DemoState, passwordHash: string): Promise<void> {
+async function seedInTenant(tx: Tx, state: DemoState, options: SeedOptions): Promise<void> {
   const tenantId = state.fixture.tenant.id;
+  await assertSingleTenantDatabase(tx, tenantId);
+  await truncateForReseed(tx);
 
-  // TRUNCATE is exempt from row-level security by design — it is a table-level operation, so
-  // no policy filters it — which means the truncate below would destroy EVERY Tenant's rows,
-  // not just this one's. Re-seeding one Tenant must never be able to empty another's ledger.
-  //
-  // Refusing is the guard rather than a tenant-scoped DELETE, on purpose: the truncate carries
-  // `RESTART IDENTITY`, and the identity counters are what make a re-seed reproduce the same
-  // `baseline_version.seq` the fixture's ledger entries were recorded against. A DELETE would
-  // leave those counters where they were, so the second seed would stamp a different active
-  // Baseline sequence and silently reclassify the Actuals — exactly the kind of wrong figure
-  // this story is upstream of. So: assert this is a single-Tenant database, and say whose
-  // rows are in the way when it is not.
-  const others = await tx.execute<{ id: string }>(
-    sql`SELECT id FROM tenant WHERE id <> ${tenantId} ORDER BY id`,
-  );
-  if (others.rows.length > 0) {
-    throw new Error(
-      `Refusing to seed: this database also holds ${others.rows.length} other Tenant(s) — ` +
-        `${others.rows.map((row) => row.id).join(', ')}. The seed TRUNCATEs, and TRUNCATE is ` +
-        'exempt from row-level security, so it would destroy their rows too. Drop the database, ' +
-        'or delete those Tenants deliberately, then seed again.',
-    );
-  }
-
-  // The append-only tables now carry a BEFORE TRUNCATE trigger as well as a BEFORE
-  // UPDATE OR DELETE one, and a trigger is a property of the table, so it refuses the owner
-  // too. Opening the maintenance hatch is the honest way through: re-seeding IS maintenance,
-  // and saying so in one transaction-scoped setting is better than a table that any statement
-  // can empty. The setting is reset at COMMIT, like the tenant.
-  await tx.execute(sql`SELECT set_config(${MAINTENANCE_SETTING}, 'on', true)`);
-  await tx.execute(
-    sql.raw(`TRUNCATE ${TRUNCATE_ORDER.map(quoteIdent).join(', ')} RESTART IDENTITY CASCADE`),
-  );
-
-  const written = await writeTenantRows(tx, state, { ...DEMO_ROW_WRITE_OPTIONS, passwordHash });
+  const written = await writeTenantRows(tx, state, {
+    ...DEMO_ROW_WRITE_OPTIONS,
+    passwordHash: options.demoPasswordHash,
+    clock: options.clock,
+  });
 
   console.log(
-    `seeded: ${written.counts.wps} WPs, ${written.counts.baselineWps} baseline WPs, ` +
+    `seeded (demo): ${written.counts.wps} WPs, ${written.counts.baselineWps} baseline WPs, ` +
       `${written.counts.snapshots} snapshots, ${written.counts.ledgerEntries} ledger entries, ` +
       `${written.counts.mappingEvents} mapping events`,
   );
+}
+
+async function seedLoadInTenant(
+  tx: Tx,
+  shape: import('./load-generator').LoadFixtureShape,
+  options: SeedOptions,
+): Promise<void> {
+  const { loadProjectAsDemoState, LOAD_PROJECT_COUNT, LOAD_WP_PER_PROJECT } = await import(
+    './load-generator'
+  );
+  const first = loadProjectAsDemoState(shape, 0);
+  const tenantId = first.fixture.tenant.id;
+  await assertSingleTenantDatabase(tx, tenantId);
+  await truncateForReseed(tx);
+
+  const allProjectIds = shape.projects.map((p) => p.id);
+  let totalWps = 0;
+  for (let i = 0; i < shape.projects.length; i += 1) {
+    const state = loadProjectAsDemoState(shape, i);
+    if (i === 0) {
+      const written = await writeTenantRows(tx, state, {
+        ...DEMO_ROW_WRITE_OPTIONS,
+        passwordHash: options.demoPasswordHash,
+        clock: options.clock,
+        projectIndex: i,
+      });
+      totalWps += written.counts.wps;
+      await tx
+        .update(tenantMembership)
+        .set({ projectIds: allProjectIds })
+        .where(
+          sql`${tenantMembership.tenantId} = ${tenantId} AND ${tenantMembership.role} = 'pm'`,
+        );
+    } else {
+      const written = await writeTenantRows(tx, state, {
+        ...DEMO_ROW_WRITE_OPTIONS,
+        clock: options.clock,
+        projectOnly: true,
+        projectIndex: i,
+      });
+      totalWps += written.counts.wps;
+    }
+  }
+
+  console.log(
+    `seeded (load): ${LOAD_PROJECT_COUNT} Projects × ${LOAD_WP_PER_PROJECT} WPs ` +
+      `(${totalWps} total), ${shape.resources.length} Resources`,
+  );
+}
+
+async function assertSingleTenantDatabase(tx: Tx, tenantId: string): Promise<void> {
+  // The seed TRUNCATEs every registered table. Refuse when MORE THAN ONE Tenant is present
+  // (e.g. leftover probes beside the demo) — that would destroy rows the operator did not name.
+  // A single Tenant is fine even when its id differs from the profile being seeded: switching
+  // `SEED_PROFILE=demo|load` replaces that one Tenant deliberately.
+  const existing = await tx.execute<{ id: string }>(sql`SELECT id FROM tenant ORDER BY id`);
+  if (existing.rows.length <= 1) return;
+  throw new Error(
+    `Refusing to seed: this database holds ${existing.rows.length} Tenants — ` +
+      `${existing.rows.map((row) => row.id).join(', ')} (target would be ${tenantId}). The seed ` +
+      'TRUNCATEs, and TRUNCATE is exempt from row-level security, so it would destroy every Tenant. ' +
+      'Drop the database, or delete the extra Tenants deliberately, then seed again.',
+  );
+}
+
+/**
+ * Empty every registered table. Does NOT `RESTART IDENTITY` — sequence values are
+ * fixture-relative via `OVERRIDING SYSTEM VALUE` (story 1.8), so leftover probe counters
+ * no longer silently reclassify Actuals on reseed. After writing those values,
+ * `writeTenantRows` calls `syncIdentitySequences` so the next identity default is past MAX.
+ */
+async function truncateForReseed(tx: Tx): Promise<void> {
+  await tx.execute(sql`SELECT set_config(${MAINTENANCE_SETTING}, 'on', true)`);
+  await tx.execute(sql.raw(`TRUNCATE ${TRUNCATE_ORDER.map(quoteIdent).join(', ')} CASCADE`));
+}
+
+/**
+ * Tables whose `seq` is `generatedAlwaysAsIdentity` and that `writeTenantRows` stamps with
+ * `OVERRIDING SYSTEM VALUE`. Keep this list aligned with those insert sites.
+ */
+const IDENTITY_SEQ_TABLES = [
+  'rate_entry',
+  'project_default_rate_entry',
+  'baseline_version',
+  'tracker_snapshot',
+  'disposition_event',
+  'audit_log',
+] as const;
+
+/**
+ * Advance each identity counter to `MAX(seq)` so a later default insert does not collide
+ * with fixture-relative values written via `OVERRIDING SYSTEM VALUE`.
+ */
+async function syncIdentitySequences(tx: Tx): Promise<void> {
+  for (const table of IDENTITY_SEQ_TABLES) {
+    const quoted = quoteIdent(table);
+    // pg_get_serial_sequence wants a text literal (single-quoted), not an identifier.
+    await tx.execute(
+      sql.raw(
+        `SELECT setval(pg_get_serial_sequence('${table}', 'seq'), ` +
+          `COALESCE((SELECT MAX(seq) FROM ${quoted}), 1), true)`,
+      ),
+    );
+  }
 }
