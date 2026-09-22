@@ -510,3 +510,57 @@ handoff calls for is not finished, and marking it done would claim four passes t
 - Probe removal deletes an `auth_user` who might hold a membership in another Tenant — `low`. Probe users are created per probe with prefixed ids, so this was not shown reachable.
 - `registry.test.ts` asserts the append-only class list rather than `appPrivilegesOf` — `maybe-false`. `rls.test.ts`'s catalog assertion reads `appPrivilegesOf`, so an override adding UPDATE or DELETE would still fail there; what would settle it is adding such an override and watching which gate catches it.
 - A Google-only user's reset request leaves a live, never-mailed `verification` row — `low` here, and folded into the decision above. Rejected on its own in the slice-4 review on the ground that the token is never disclosed to anyone.
+
+### Review Findings — second pass: `apps/web`
+
+The web edge, 2,025 lines across 30 files, same baseline. Four layers: blind hunter (15),
+edge-case hunter (11), verification gap (4 + 1), acceptance auditor (6). The acceptance auditor
+found the four slices' named web requirements implemented — no constant Tenant or actor survives,
+every binding is `(input, ctx?)`, the public-path set and the matcher agree, and each auth action
+gives one generic answer.
+
+**The most serious finding is not from any layer.** Running `next build` — which CI never does —
+showed it FAILS with no environment set: Next attempts to prerender `/_not-found`, that renders the
+root layout, which calls `signInState()` and reaches the composition root's configuration getters,
+and `APP_DATABASE_URL` throws before Next can bail out to dynamic. So the composition root's own
+promise, "importing it reads no configuration, so `next build` needs no database and no secret",
+was false in exactly the place it is meant to hold — and the layout becoming async in this story is
+what made it false. Every route is dynamic anyway; Next just had to render the layout to find out.
+Fixed by declaring `export const dynamic = 'force-dynamic'` on the root layout, verified by a clean
+`next build` from an empty `.next` with every one of the five env keys unset. Applied already,
+because applying it is what proved the diagnosis.
+
+- [x] [Review][Patch] `next build` failed without any environment, contradicting the composition root's stated invariant [apps/web/src/app/layout.tsx]
+
+- [ ] [Review][Patch] Add `pnpm --filter @momo/web build` to CI — the gate that would have caught the above, and which now passes with no secrets [.github/workflows/ci.yml]
+- [ ] [Review][Patch] `/reset-password` with no token renders a form that can never succeed, and submitting it returns to the same empty form [apps/web/src/app/reset-password/page.tsx:37]
+- [ ] [Review][Patch] The reset refusal blames the link when the password was merely too short, and nothing states the 8-character minimum [apps/web/src/app/reset-password/{page.tsx:33,reset-password-form.tsx}]
+- [ ] [Review][Patch] Neither auth action absorbs a non-`APIError`, so a failure is a 500 instead of the one generic answer — and on forgot-password that asymmetry is an account-existence oracle, since only the known-email branch reaches the failing query [apps/web/src/app/{forgot-password,reset-password}/actions.ts]
+- [ ] [Review][Patch] A rejected `signInState()` takes down every page including `/sign-in`, leaving no way back in [apps/web/src/app/layout.tsx:18]
+- [ ] [Review][Patch] The matcher's asset entries are unanchored and its dot unescaped, so `/faviconXico`, `/_next/staticfoo` and `/_next/imagefoo` skip the gate; the complement test hides it by omitting asset paths from its table [apps/web/src/middleware.ts:20, session-gate.test.ts]
+- [ ] [Review][Patch] `handleAuthRequest` and the `signOut` binding are exercised by no test, so either can be pointed at the wrong instance or dropped with the suite green [tests/web-composition.test.ts, apps/web/src/app/sign-in/actions.test.ts]
+- [ ] [Review][Patch] "It expires in 1 hour" is hardcoded on the page, the third restatement the slice-4 patch was supposed to end [apps/web/src/app/forgot-password/page.tsx:34]
+- [ ] [Review][Patch] `google-refusal.ts` carries two stacked block comments, the first documenting the function below the second — introduced by the slice-4 review's own patch [apps/web/src/app/sign-in/google-refusal.ts:1]
+- [ ] [Review][Patch] `forgot-password/actions.test.ts`'s header and case name claim a boundary stricter than the code has, which the action's own comment was already corrected to admit [apps/web/src/app/forgot-password/actions.test.ts:5]
+- [ ] [Review][Patch] `roleLabel` renders an empty chip for an empty `roles` array [apps/web/src/app/p/[projectId]/layout.tsx:44]
+- [ ] [Review][Patch] The route handler's comment names three served endpoints and omits `GET /callback/google` [apps/web/src/app/api/auth/[...all]/route.ts:3]
+- [ ] [Review][Patch] The sign-out control is the first focusable element on every signed-in page — a destructive action as the default tab target [apps/web/src/app/layout.tsx:31]
+- [ ] [Review][Patch] The deferred-throttle note names only sign-in, though slice 4 added two more unauthenticated actions calling the API directly [apps/web/src/app/sign-in/actions.ts:8]
+- [ ] [Review][Patch] The `onNoAccess` log appends "no tenant switcher yet", which is false for the `no_membership` reason [apps/web/src/server/composition.ts]
+- [ ] [Review][Patch] A signed-out non-GET request is redirected with 307, which re-POSTs the action body to `/sign-in` [apps/web/src/server/session-gate.ts:52]
+
+- [x] [Review][Defer] No test renders any of the four auth pages, so the generic-copy guarantee, the Google button's gating, the sign-out control's visibility and `roleLabel` are all unasserted — deferred: the repo has no component-render harness at all (no jsdom, no testing library, environment `node`), and introducing one belongs with the story that first needs it.
+- [x] [Review][Defer] Form errors are not associated with their fields (no `aria-describedby`, no `aria-invalid`) while all three forms carry `noValidate` — deferred: WCAG 2.1 AA is an epic-wide requirement and the aria wiring spans three forms; it belongs with the UX pass, not a password-reset slice.
+- [x] [Review][Defer] `--signout-gutter: 104px` hard-codes the rendered width of a fixed-position control, costing every viewport that width — deferred: a structural fix (flex spacer, or a non-fixed control) is layout work.
+- [x] [Review][Defer] Four mechanical repetitions the diff introduces: the `ctx ?? await requestContext()` line in ~20 bindings, `tokenOf` vs `isGoogleRefusal` both hand-rolling the searchParams read, three near-identical submit buttons, and the copy-pasted auth-sheet header — deferred: a refactor, and `tokenOf`/`isGoogleRefusal` also disagree on repeated keys (first value vs any value), which a shared helper must settle deliberately.
+- [x] [Review][Defer] `/` still redirects to the hard-coded demo project, so a signed-in member of another Tenant lands on `not_found` — deferred: already recorded from slice 1; carried, no second entry. Noted that slices 2–4 have since made non-demo members reachable, so the original deferral's premise is weaker.
+
+#### Rejected
+
+- Sign-in does not lowercase the email though forgot-password does — `false`. Better Auth lowercases twice on this path: `sign-in.mjs:315` calls `findUserByEmail(email.toLowerCase(), …)`, and `findUserByEmail` lowercases again at `internal-adapter.mjs:572`. `Hoang@…` signs in. The schema difference is cosmetic, and the same fact already stands recorded for forgot-password.
+- `googleEnabled()` awaits discovery with no timeout, so `/sign-in` may never render — `low` here, already deferred. The discovery timeout and retry is an Epic 8 item in the spine's Deferred section; carried rather than re-filed.
+- The hidden token field has no length bound — `maybe-false`, already recorded from the slice-4 review with what would settle it. Carried.
+- The signed-in user's identity is no longer shown anywhere — `medium` but already deferred from slice 1: `RequestContext` carries no name, and showing one needs the `IdentityPort` lookup AD-23 assigns to its first reader. Carried.
+- The five write actions parse the form before resolving the context, so an unauthorised caller with malformed input gets a parse 500 rather than `/no-access` — `low`. It needs both conditions at once, and reordering every action to guard a case never shown reachable is more than a direct correction.
+- `requestContext()` is not injectable, which slice 1's Tasks line promised — `low`, and rejected by rule: the fix is to correct spec text. The substance is met by the `ctx?` parameter every binding takes, which the same spec's Implementation Notes describe; the Tasks line is stale rather than the code wrong.
+- Registering `PUT`, `PATCH` and `DELETE` on the auth route widens the surface for no gain — `low`. `serveAllowlisted` answers 404 to all three; removing them converts that 404 into Next's 405, which is not an improvement worth a change.
