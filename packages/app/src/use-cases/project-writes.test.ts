@@ -28,7 +28,13 @@ import { mapTicketInputSchema, runProjectWrite } from './project-write-input';
 
 const HANDLE = { marker: 'handle' };
 /** The signed-in caller; the audit actor is derived from its user id (story 1.4 slice 1). */
-const CTX: RequestContext = { tenantId: 'ten-a', userId: 'test-actor', roles: ['pm'], projectIds: [], locale: 'en' };
+const CTX: RequestContext = {
+  tenantId: 'ten-a',
+  userId: 'test-actor',
+  roles: ['pm'],
+  projectIds: ['prj-1'],
+  locale: 'en',
+};
 const ACTOR = 'user:test-actor';
 /** The Project's anchor the fake answers: the event time every row and record carries. */
 const AT = new Date('2026-09-01T00:00:00Z');
@@ -278,6 +284,38 @@ describe.each(CASES)('$name', ({ run, member, valid, kind, invalid, record }) =>
     // No `details`: the refusal must carry nothing, so it cannot disclose anything.
     expect(result).toEqual({ ok: false, error: { code: 'not_found', messageKey: 'errors.not_found' } });
     expect({ calls, audits }).toEqual({ calls: [], audits: [] });
+  });
+
+  it('answers not_found for a viewer, opening no transaction', async () => {
+    const { deps, transactions } = fakeDeps();
+    const viewer = { ...CTX, roles: ['client_viewer'] as const };
+    expect(await run(deps, viewer, valid as never)).toMatchObject({ error: { code: 'not_found' } });
+    expect(transactions).toEqual([]);
+  });
+
+  it('answers not_found, not invalid_input, to a viewer sending malformed input', async () => {
+    // Pins role-before-parse: moving authorize after parse would answer invalid_input here.
+    const { deps, transactions } = fakeDeps();
+    const viewer = { ...CTX, roles: ['client_viewer'] as const };
+    expect(await run(deps, viewer, { ...valid, projectId: '' } as never)).toEqual({
+      ok: false,
+      error: { code: 'not_found', messageKey: 'errors.not_found' },
+    });
+    expect(transactions).toEqual([]);
+  });
+
+  it('answers not_found when a PM\'s projectIds does not contain the Project', async () => {
+    const { deps, transactions } = fakeDeps();
+    const unassigned = { ...CTX, projectIds: ['prj-other'] };
+    expect(await run(deps, unassigned, valid as never)).toMatchObject({ error: { code: 'not_found' } });
+    expect(transactions).toEqual([]);
+  });
+
+  it('lets a tenant_admin through with empty projectIds', async () => {
+    const { deps, transactions } = fakeDeps();
+    const admin = { ...CTX, roles: ['tenant_admin'] as const, projectIds: [] };
+    expect(await run(deps, admin, valid as never)).toMatchObject({ ok: true });
+    expect(transactions).toEqual([{ handle: HANDLE, tenantId: 'ten-a' }]);
   });
 
   it('rethrows any other failure rather than answering not_found or ok for it — and commits no record', async () => {

@@ -32,7 +32,7 @@ import {
 } from '../packages/db/src/probe-tenants';
 import { REGISTERED_TABLES, TENANT_OWNED } from '../packages/db/src/table-classes';
 import { withTenant } from '../packages/db/src/with-tenant';
-import { requestContextFor } from './request-context';
+import { pmContextFor } from './request-context';
 
 /**
  * THE CROSS-TENANT HARNESS. This is the automated test NFR-S1 asks for.
@@ -674,7 +674,7 @@ describe.skipIf(!reachable)('the cross-tenant harness, driven against two probe 
       // still pass, about the wrong data, which is why this one comes first.
       const result = await getProjectReview(
         restrictedDeps(),
-        requestContextFor(PROBE_A.tenantId),
+        pmContextFor(PROBE_A.tenantId, PROBE_A.projectId),
         { projectId: PROBE_A.projectId },
       );
       if (!result.ok) throw new Error(`getProjectReview answered ${result.error.code}`);
@@ -710,7 +710,7 @@ describe.skipIf(!reachable)('the cross-tenant harness, driven against two probe 
       // figures the rest of the suite pins would move, and it would look like a domain bug.
       const result = await getProjectReview(
         restrictedDeps(),
-        requestContextFor(DEMO_TENANT_ID),
+        pmContextFor(DEMO_TENANT_ID, DEMO_PROJECT_ID),
         { projectId: DEMO_PROJECT_ID },
       );
       if (!result.ok) throw new Error(`getProjectReview answered ${result.error.code}`);

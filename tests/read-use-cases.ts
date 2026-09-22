@@ -42,7 +42,7 @@ import type { WriteDeps } from '../packages/app/src/ports/write-deps';
 import * as readSurface from '../packages/app/src/use-cases';
 import type { Db } from '../packages/db/src/client';
 import type { DemoState } from '../packages/db/src/fixtures';
-import { adminContextFor, requestContextFor } from './request-context';
+import { adminContextFor, pmContextFor } from './request-context';
 
 /** Named in failure messages, so the reader is sent to the file rather than to a diff. */
 export const READ_SURFACE_MODULE = 'packages/app/src/use-cases/index.ts';
@@ -58,17 +58,21 @@ export interface UseCaseTarget {
   readonly userId?: string;
 }
 
-/** The RequestContext a registry entry calls its use case with. */
+/**
+ * The RequestContext a project-scoped registry entry calls with (story 1.5): a PM that reaches
+ * the target Project, so the role gate passes and a foreign id still reaches RLS rather than
+ * being refused as "unassigned".
+ */
 function contextOf(target: UseCaseTarget) {
-  return requestContextFor(target.tenantId, target.userId);
+  return pmContextFor(target.tenantId, target.projectId, target.userId);
 }
 
 /**
- * The context the membership writes are called with (story 1.4 slice 2): a Tenant Admin, because
- * they refuse anyone else with `not_found` before looking at anything — a PM context would make the
- * foreign-Tenant assertion pass without ever reaching the target lookup. The caller must also hold
- * a `tenant_admin` membership in the Tenant it acts in (the harnesses give it one), because the
- * writes re-check that against the bridge inside their transaction.
+ * The context membership and organisation writes are called with (story 1.5): a Tenant Admin,
+ * because they refuse anyone else with `not_found` before looking at anything — a PM context
+ * would make the foreign-Tenant assertion pass without ever reaching the target lookup. The
+ * caller must also hold a `tenant_admin` membership in the Tenant it acts in (the harnesses give
+ * it one), because membership writers re-check that against the bridge inside their transaction.
  */
 function adminContextOf(target: UseCaseTarget) {
   return adminContextFor(target.tenantId, target.userId);
@@ -433,13 +437,13 @@ export const READ_USE_CASES: readonly ReadUseCase[] = [
         ),
     ],
   },
-  // --- FR-1's organisation writes (story 1.3 slice 2) -------------------------------------------
+  // --- FR-1's organisation writes (story 1.3 slice 2; story 1.5: tenant_admin only) -------------
   {
     name: 'createDepartment',
     kind: 'write',
     why: 'FR-1: inserts a department (id from the id port) and an audit_log row, Clock-stamped.',
     invokeWrite: (deps, target) =>
-      readSurface.createDepartment(deps, contextOf(target), { name: 'Harness Department' }),
+      readSurface.createDepartment(deps, adminContextOf(target), { name: 'Harness Department' }),
     namesNoExistingRow:
       'It takes a name and nothing else, and creates in ctx.tenantId: there is no id a foreign ' +
       'Tenant could replay, so the probe asserts the row lands for the caller and nothing for the other.',
@@ -451,7 +455,7 @@ export const READ_USE_CASES: readonly ReadUseCase[] = [
     invokeWrite: (deps, target) =>
       readSurface.renameDepartment(
         deps,
-        contextOf(target),
+        adminContextOf(target),
         { departmentId: target.departmentId, name: 'Harness Department renamed' },
       ),
   },
@@ -462,7 +466,7 @@ export const READ_USE_CASES: readonly ReadUseCase[] = [
     invokeWrite: (deps, target) =>
       readSurface.createProgram(
         deps,
-        contextOf(target),
+        adminContextOf(target),
         { departmentId: target.departmentId, name: 'Harness Program' },
       ),
   },
@@ -473,7 +477,7 @@ export const READ_USE_CASES: readonly ReadUseCase[] = [
     invokeWrite: (deps, target) =>
       readSurface.renameProgram(
         deps,
-        contextOf(target),
+        adminContextOf(target),
         { programId: target.programId, name: 'Harness Program renamed' },
       ),
   },
@@ -486,7 +490,7 @@ export const READ_USE_CASES: readonly ReadUseCase[] = [
     invokeWrite: (deps, target) =>
       readSurface.createProject(
         deps,
-        contextOf(target),
+        adminContextOf(target),
         {
           name: 'Harness Project',
           departmentId: target.departmentId,
@@ -503,7 +507,7 @@ export const READ_USE_CASES: readonly ReadUseCase[] = [
     invokeWrite: (deps, target) =>
       readSurface.renameProject(
         deps,
-        contextOf(target),
+        adminContextOf(target),
         { projectId: target.projectId, name: 'Harness Project renamed' },
       ),
   },
@@ -516,7 +520,7 @@ export const READ_USE_CASES: readonly ReadUseCase[] = [
     invokeWrite: (deps, target) =>
       readSurface.reassignProjectProgram(
         deps,
-        contextOf(target),
+        adminContextOf(target),
         { projectId: target.projectId, programId: null },
       ),
     moreWrites: [
@@ -524,7 +528,7 @@ export const READ_USE_CASES: readonly ReadUseCase[] = [
       (deps, target) =>
         readSurface.reassignProjectProgram(
           deps,
-          contextOf(target),
+          adminContextOf(target),
           { projectId: target.projectId, programId: target.programId },
         ),
     ],
@@ -538,7 +542,7 @@ export const READ_USE_CASES: readonly ReadUseCase[] = [
     invokeWrite: (deps, target) =>
       readSurface.reassignProjectDepartment(
         deps,
-        contextOf(target),
+        adminContextOf(target),
         { projectId: target.projectId, departmentId: target.departmentId, programId: target.programId },
       ),
   },

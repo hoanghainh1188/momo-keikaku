@@ -34,8 +34,14 @@ import { NEW_PROJECT_DEFAULTS } from './org-writes';
  */
 
 const HANDLE = { marker: 'handle' };
-/** The signed-in caller; the audit actor is derived from its user id (story 1.4 slice 1). */
-const CTX: RequestContext = { tenantId: 'ten-a', userId: 'test-admin', roles: ['pm'], projectIds: [], locale: 'en' };
+/** The signed-in Tenant Admin; the audit actor is derived from its user id (story 1.5). */
+const CTX: RequestContext = {
+  tenantId: 'ten-a',
+  userId: 'test-admin',
+  roles: ['tenant_admin'],
+  projectIds: [],
+  locale: 'en',
+};
 const ACTOR = 'user:test-admin';
 const NOW = new Date('2026-09-21T09:30:00Z');
 
@@ -114,6 +120,27 @@ function fakeDeps(world: World = WORLD) {
 const OK = { ok: true, value: undefined };
 /** What a create answers: the id the (fake) id port minted. */
 const CREATED = (id: string) => ({ ok: true, value: { id } });
+
+describe('the role gate', () => {
+  it('answers not_found to a PM, opening no transaction', async () => {
+    const { deps, transactions } = fakeDeps();
+    const pm = { ...CTX, roles: ['pm'] as const };
+    expect(await createDepartment(deps, pm, { name: 'Research' })).toMatchObject({
+      error: { code: 'not_found' },
+    });
+    expect(transactions).toEqual([]);
+  });
+
+  it('answers not_found, not invalid_input, to a non-admin sending malformed input', async () => {
+    const { deps, transactions } = fakeDeps();
+    const pm = { ...CTX, roles: ['pm'] as const };
+    expect(await renameDepartment(deps, pm, { departmentId: '', name: '' })).toEqual({
+      ok: false,
+      error: { code: 'not_found', messageKey: 'errors.not_found' },
+    });
+    expect(transactions).toEqual([]);
+  });
+});
 
 describe('creating org units', () => {
   it('creates a Department with an id from the id port, audited at the Clock', async () => {

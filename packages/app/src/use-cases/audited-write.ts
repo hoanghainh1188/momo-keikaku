@@ -48,6 +48,11 @@ export interface WritePlan<Scope, Command> {
   readonly at: (scope: Scope, command: Command) => Promise<Date>;
   /** An adapter failure that means "not visible to this Tenant", answered `not_found`. */
   readonly isNotFound?: (error: unknown, command: Command) => boolean;
+  /**
+   * Optional check after a well-formed command is known and before the transaction opens
+   * (story 1.5 Project reach). Return `not_found` to refuse without writing.
+   */
+  readonly authorize?: (ctx: RequestContext, command: Command) => Result<void>;
 }
 
 /**
@@ -80,6 +85,11 @@ export async function runAuditedWrite<Handle, Scope extends AuditScope, Command,
   if (!parsed.success) return fail('invalid_input', invalidInputDetails(parsed.error));
 
   const command = parsed.data;
+  if (plan.authorize) {
+    const gate = plan.authorize(ctx, command);
+    if (!gate.ok) return gate;
+  }
+
   try {
     const value = await deps.transaction(deps.handle, ctx.tenantId, async (scope) => {
       const at = await plan.at(scope, command);

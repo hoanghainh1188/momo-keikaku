@@ -1,0 +1,202 @@
+---
+title: 'Story 1.5 — roles decide what each person can reach'
+type: 'feature'
+created: '2026-09-22'
+status: 'done'
+baseline_commit: 'e9940d13a70ddb8d5dc424d7dde1ce8474a395bf'
+route: 'dispatch'
+review_loop_iteration: 0
+context:
+  - '{project-root}/_bmad-output/implementation-artifacts/epic-1-context.md'
+  - '{project-root}/_bmad-output/implementation-artifacts/spec-1-4-revocation-and-membership.md'
+---
+
+<frozen-after-approval reason="human-owned intent — do not modify unless human renegotiates">
+
+## Intent
+
+**Problem:** Every signed-in member of a Tenant can call every use case today. Roles and
+`projectIds` sit on `RequestContext` unread (except four membership writes that hard-code
+`tenant_admin`), so a PM reaches every Project and every Organisation write, and there is no one
+place that declares who may call what.
+
+**Approach:** Add one declared-roles mechanism in `packages/app/authz` that every use case runs
+before its work: allowed roles plus, for project-scoped calls, a Project-reach check that never
+limits a `tenant_admin`. Replace the membership writes' local pre-parse `tenant_admin` check with
+that declaration; keep their in-transaction lock re-check. Refusal stays `not_found`. No invitation,
+no Rates/Resources (1.6), no audit-log reader (1.7), no Client Viewer product path (R1).
+
+Decided by the founder on 2026-09-22: no Users/members screen (use cases and gates only); Organisation
+writes are `tenant_admin` only; Project reads use the same rule as Plan/Mappings (`tenant_admin` |
+`pm` plus Project reach). Spec kept above the token target on purpose.
+
+## Boundaries & Constraints
+
+**Always:**
+- One helper (or thin family of helpers) in `packages/app/src/authz/` authorises a call against
+  `RequestContext`: the caller's roles must intersect the use case's declared set, and when the
+  call names a Project the caller must reach it. A `tenant_admin` always reaches every Project of
+  the Tenant; a non-admin reaches only ids in `ctx.projectIds` (empty ⇒ none). Failure is
+  `not_found` before parse or transaction where that already hides input shape (membership writes),
+  otherwise before the load/write work — never `forbidden`.
+- Every export of `packages/app/src/use-cases/index.ts` declares its roles through that helper.
+  The UI (`apps/web` pages, layouts, actions) never authorises; it only calls bindings.
+- Membership writes (`revokeMembership`, `changeMemberRole`, `assignMemberProject`,
+  `unassignMemberProject`) declare `tenant_admin` only. Their lock re-check against the caller's
+  locked bridge row stays permanent (AD-23). `ASSIGNABLE_ROLES` stays `tenant_admin` | `pm`.
+- Organisation writes (`create`/`rename`/`reassign` Department, Program, Project) declare
+  `tenant_admin` only — no Project check.
+- Project reads (`getProjectHeader`, `getProjectReview`, `getProjectMapping`, `getClientView`) and
+  Plan/Mapping writes (`planTicketsAsWorkPackage`, `mapTickets`, `mapTicket`, plus
+  `explainTickets`, `markChangeRequestCandidates`) declare `tenant_admin` | `pm` and require
+  Project reach.
+- Viewer roles stay in `ROLES` and stay unassignable. No R0 use case lists `client_viewer` or
+  `internal_viewer`; a caller holding only those gets `not_found` everywhere this story wires.
+- A mechanical gate fails CI when a use-case export has no role declaration (same spirit as the
+  audited-use-case and cross-tenant enumerations).
+- Harness contexts that drive role-gated writes carry a role and `projectIds` that pass the gate
+  (membership and org writes use admin; project reads/writes need the probe Project id on a PM
+  context, or an admin context). Foreign-Tenant assertions must not become vacuous at the role gate.
+
+**Never:**
+- Do not treat a Tenant Admin's `projectIds` as a limit.
+- Do not drop the membership writers' in-transaction caller re-check.
+- No Users/members screen, no invitation INSERT, no Rates/Resources, no audit-log UI, no `/c/...`
+  Client Viewer routes; no spine amendment in this slice (AD-12/AD-23 already describe the model —
+  only the "until 1.5" pre-parse sentence becomes false in code).
+- No `forbidden` code; no authorising in React.
+
+## I/O & Edge-Case Matrix
+
+| Scenario | Input / State | Expected Output / Behavior | Error Handling |
+|---|---|---|---|
+| Admin reads any Project | `tenant_admin`, any `projectIds` (incl. empty / stale) | Read succeeds for an own-Tenant Project | Foreign Project → `not_found` (RLS) |
+| PM reads assigned Project | `pm`, `projectIds` contains id | Read succeeds | — |
+| PM reads unassigned Project | `pm`, id absent from `projectIds` | — | `not_found`, no load |
+| PM edits Plan/Mapping on assigned | `pm`, id in `projectIds` | Write + audit as today | — |
+| PM edits unassigned | `pm`, id absent | — | `not_found`, nothing written |
+| Viewer calls any R0 use case | `client_viewer` or `internal_viewer` only | — | `not_found` |
+| Non-admin membership write | `pm` calls `revokeMembership` | — | `not_found` before parse (unchanged shape) |
+| Stale admin context | Context still has `tenant_admin`; lock finds caller demoted | — | `not_found` from lock re-check |
+| Empty `projectIds` PM | `pm`, `projectIds: []` | Reaches no Project | every project-scoped call `not_found` |
+| PM calls Organisation write | `pm` calls `createDepartment` (etc.) | — | `not_found` |
+
+</frozen-after-approval>
+
+## Code Map
+
+- `packages/app/src/authz/request-context.ts` -- `ROLES`, `RequestContext`; comment L11–15 says roles
+  unread except membership writes. Update when the helper lands.
+- `packages/app/src/authz/resolve-request-context.ts` -- unchanged; still the one reader of the bridge
+  for Tenant resolution.
+- `packages/app/src/use-cases/membership-writes.ts:71-79,85-95` -- pre-parse `tenant_admin` gate to
+  replace; `lockCallerAndTarget` re-check to keep. `membership-input.ts` `ASSIGNABLE_ROLES`.
+- `packages/app/src/use-cases/{audited-write,project-input,project-write-input,org-writes}.ts` --
+  family runners to call the helper (or accept a declaration) so each export does not re-implement.
+- `packages/app/src/use-cases/{project-writes,get-project-*,get-client-view,org-writes,membership-writes}.ts`
+  -- every surface export. `use-cases/index.ts` — enumeration surface for a new declaration gate.
+- `packages/app/src/use-cases/membership-writes.test.ts` -- admin-gate suite; retarget to the helper.
+- `tests/request-context.ts` -- harness contexts; project-write entries will need `projectIds`.
+- `tests/read-use-cases.ts`, `tests/cross-tenant*.ts`, `tests/write-harness.ts`,
+  `tests/membership.test.ts` -- role/project fixtures so foreign checks stay non-vacuous.
+- `apps/web/src/app/p/[projectId]/layout.tsx` -- `roleLabel` display only; do not authorise here.
+- `apps/web/src/server/composition.ts` -- bindings unchanged in shape; comments about local
+  `tenant_admin` check update.
+- Deferred anchors: `deferred-work.md` L618–620, L633–635; HANDOFF §1b; AD-12, AD-23
+  (`ARCHITECTURE-SPINE.md`).
+
+## Tasks & Acceptance
+
+**Execution:**
+- [x] `packages/app/src/authz/` -- add the declare-and-check helper(s); unit-test role miss, admin
+  ignore of `projectIds`, PM hit/miss, empty `projectIds`, viewer refusal -- AD-12 / AD-23
+- [x] `packages/app/src/use-cases/{membership-writes,project-write-input,project-input,org-writes}.ts`
+  -- wire declarations (membership+org: `tenant_admin`; project read/write: `tenant_admin`|`pm` +
+  reach); drop the local membership pre-check -- story AC
+- [x] `packages/app` gate test -- every `use-cases/index.ts` export has a declaration -- "one rule"
+- [x] `tests/{request-context,read-use-cases,cross-tenant*,membership,write-harness}.ts` + app unit
+  tests -- non-vacuous harness contexts; I/O matrix cases -- FR-2
+- [x] `apps/web` + comments/`HANDOFF.md`/`deferred-work.md` -- no UI authz; mark 1.5 deferreds
+  resolved where this story closes them
+
+**Acceptance Criteria:**
+- Given any use-case export, when it runs, then it has gone through the declared-roles helper and the
+  UI has not decided access.
+- Given a caller outside the allowed set or outside Project reach, when they invoke a use case, then
+  the answer is `not_found`.
+- Given `ASSIGNABLE_ROLES`, when a role is set through `changeMemberRole`, then only `tenant_admin`
+  and `pm` are accepted; viewers remain in the enum and unassignable.
+- Given a Project Plan or Mapping write, when the caller is not that Project's PM and not a Tenant
+  Admin, then `not_found`.
+- Given a membership write, when the caller's locked bridge row is no longer `tenant_admin`, then
+  `not_found` even if `ctx.roles` still says so.
+- Given a Tenant Admin whose membership carries `projectIds`, when they call a project-scoped use
+  case for another Project of the Tenant, then it is not refused for Project reach.
+
+## Implementation Notes
+
+- **Helper.** `packages/app/src/authz/authorize.ts`: `authorize(ctx, { roles, projectId? })` and
+  `reachesProject` — `tenant_admin` ignores `projectIds`; refusal is always `not_found`.
+- **Declarations.** `use-cases/role-declarations.ts` enumerates every export; gate in
+  `tests/role-declarations.test.ts`. Family runners call the helper (membership/org before parse;
+  project role before parse, reach after parse via `WritePlan.authorize`).
+- **Harness.** `pmContextFor(tenantId, projectId)` for project reads/writes; `adminContextFor` for
+  org and membership writes — foreign checks stay non-vacuous at the role gate.
+- **Deferred.** L618–620 and L633–635 in `deferred-work.md` marked resolved; HANDOFF §1b done.
+- **Role-before-parse pin.** Unit tests: a role-missed caller with malformed input answers
+  `not_found` (not `invalid_input`) for project reads and writes — moving authorize after parse
+  fails them.
+
+## Spec Change Log
+
+
+## Verification Results (2026-09-22)
+
+| Command | Result |
+| --- | --- |
+| `pnpm exec vitest run packages/app tests/audited-use-cases.test.ts tests/role-declarations.test.ts tests/web-composition.test.ts` | **359 passed** across 12 files |
+| `pnpm typecheck` | exit 0 |
+| Sabotage: reach check stubbed to always ok | 5 project-write reach tests failed; restored |
+| `REQUIRE_DB=1` Postgres: `tests/membership`, `cross-tenant*`, `org-writes` | **157 passed** when `DATABASE_URL` / `APP_DATABASE_URL` are set |
+
+
+## Review Triage Log
+
+| Finding | Verdict | Evidence / route |
+|---|---|---|
+| Blind: sprint-status `in-progress` vs spec `in-review` | false | Sprint stays `in-progress` until step-05 marks `review` (HANDOFF standing rule for multi-slice / Build sync). |
+| Blind: HANDOFF "Latest" still narrates 1.4 | low | Rejected — docs polish; unlikely to mislead implementers of 1.5; §1b already states 1.5 landed. |
+| Blind: HANDOFF still says "Stories 1.5 through 1.9" | false | Accurate until 1.5 is fully closed after presentation. |
+| Blind: `epic-1-context.md` still says membership checks `tenant_admin` until 1.5 | medium | Real stale compiled context; regenerating without a spine amendment would be overwritten. **defer** — amend AD-23 "until 1.5" then regenerate. |
+| Blind: spine AD-23 still says "Until story 1.5…" | medium | Intent/Never exclude a spine amendment this slice. **defer**. |
+| Blind: Code Map still future-tense | false | Rejected — fix would edit this build's spec; Code Map is planning artifact. |
+| Blind: Spec Change Log / Triage Log empty at land | false | Triage filled this pass; Change Log only on bad_spec loopback. |
+| Blind: Verification Results claimed Postgres unset | false | Suites ran green in step-03 with `apps/web/.env.local` (157); Results updated after patch. |
+| Blind: checklist claims `membership.test` / `write-harness` untouched | false | Harness contexts live in `tests/request-context.ts` + `read-use-cases.ts`; membership suite passes without further edits. |
+| Blind: deferred L477 still says reach is 1.5's | low | **patch** — appended `resolved:` for reach (done). |
+| Blind: role-declarations gate does not prove runners call `authorize` | low | Rejected — family unit tests + sabotage already fail if runners skip the helper; everyday miss only when inventing a new family. |
+| Blind: `PROJECT_SCOPED` duplicated vs `projectScoped` | low | Rejected — the 4th gate test pins the two together; duplication is the pin. |
+| Blind: `projection-reads` missing reach cases | false | Same `runProjectRead` covered by `project-reads.test.ts` reach/admin/viewer cases. |
+| Blind: Intent path `packages/app/authz` vs `src/authz` | false | Rejected — frozen Intent shorthand; fix would edit frozen block. |
+| Edge Case Hunter | — | No findings (`[]`). |
+| Verification Gap: project role-miss + malformed → may return `invalid_input` without a failing test | medium | Pre-verified. **patch** — added viewer+malformed → `not_found` in `project-reads.test.ts` and `project-writes.test.ts` (121 tests in those files green). |
+
+## Design Notes
+
+Authorisation sits in the use-case runners, not in repositories and not in pages. Membership writes
+keep a second check against the locked row because `RequestContext` is resolved once per server
+action; other families have no bridge lock today — stale demotion for them ends the session on the
+next request via the resolver, which is the standing AD-23 rule for revocation.
+
+`getClientView` in R0 is the PM/Admin live preview using `clientProjection`, not the R1
+`packages/app/client-view` surface over `outputs_client`. This story does not introduce Client
+Viewer reach.
+
+## Verification
+
+**Commands:**
+- `pnpm --filter @momo/app test` -- authz helper + use-case unit suites green
+- `pnpm test` (or the repo's usual vitest entry covering `tests/membership.test.ts` and cross-tenant
+  suites) -- harness non-vacuous; I/O matrix covered
+- Sabotage probe: temporarily allow a PM with empty `projectIds` through a project write, watch the
+  new gate fail; restore -- HANDOFF sabotage rule

@@ -6,9 +6,10 @@
  * there would be reported as a read use case with no registry entry — correctly.
  */
 import { z } from 'zod';
-import { fail, ok, type Result } from '../result';
-import { isProjectNotFound } from '../ports/project-read';
+import { authorize, PROJECT_REACH_ROLES } from '../authz/authorize';
 import type { RequestContext } from '../authz/request-context';
+import { isProjectNotFound } from '../ports/project-read';
+import { fail, ok, type Result } from '../result';
 
 /**
  * Every inbound boundary is validated by zod (ARCHITECTURE-SPINE.md).
@@ -28,19 +29,23 @@ const projectInputSchema = z.object({
 export type ProjectInput = Readonly<z.infer<typeof projectInputSchema>>;
 
 /**
- * Validates the input, runs `load` for the caller's Tenant, and maps an invisible Project to
- * `not_found`.
+ * Authorises the caller (`tenant_admin` | `pm` plus Project reach), validates the input, runs
+ * `load` for the caller's Tenant, and maps an invisible Project to `not_found`.
  *
- * NOTHING ELSE IS CAUGHT. A use case that swallowed the adapter's failure and returned a
- * default would look, to every caller, like a Project with no data — which is the shape of
- * isolation working, and exactly what the harness's completeness assertions exist to tell
- * apart from it.
+ * Role refusal is before parse, so a viewer learns nothing about input shape. Project reach is
+ * checked after a well-formed id is known, before the load. NOTHING ELSE IS CAUGHT. A use case
+ * that swallowed the adapter's failure and returned a default would look, to every caller, like
+ * a Project with no data — which is the shape of isolation working, and exactly what the
+ * harness's completeness assertions exist to tell apart from it.
  */
 export async function runProjectRead<T>(
   ctx: RequestContext,
   input: ProjectInput,
   load: (tenantId: string, projectId: string) => Promise<T>,
 ): Promise<Result<T>> {
+  const roles = authorize(ctx, { roles: PROJECT_REACH_ROLES });
+  if (!roles.ok) return roles;
+
   const parsed = projectInputSchema.safeParse(input);
   if (!parsed.success) {
     const details = parsed.error.issues.reduce<Readonly<Record<string, readonly string[]>>>(
@@ -54,6 +59,9 @@ export async function runProjectRead<T>(
   }
 
   const { projectId } = parsed.data;
+  const reach = authorize(ctx, { roles: PROJECT_REACH_ROLES, projectId });
+  if (!reach.ok) return reach;
+
   try {
     return ok(await load(ctx.tenantId, projectId));
   } catch (error) {

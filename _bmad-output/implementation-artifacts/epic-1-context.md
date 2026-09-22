@@ -1,4 +1,4 @@
-﻿# Epic 1 Context: A Tenant, its people, and nothing leaking between them
+# Epic 1 Context: A Tenant, its people, and nothing leaking between them
 
 <!-- Compiled from planning artifacts. Edit freely. Regenerate with compile-epic-context if planning docs change. -->
 

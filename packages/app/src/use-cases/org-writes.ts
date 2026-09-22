@@ -1,10 +1,11 @@
 import type { z } from 'zod';
 import { audit, type AuditDeclaration } from '../audit';
+import { authorize, TENANT_ADMIN_ROLES } from '../authz/authorize';
+import type { RequestContext } from '../authz/request-context';
 import type { NewProjectRow, OrgRepository, OrgWriteDeps, OrgWriteScope } from '../ports/org-write';
 import type { WriteStamp } from '../ports/audited-write';
 import type { Result } from '../result';
 import { refuse, runAuditedWrite } from './audited-write';
-import type { RequestContext } from '../authz/request-context';
 import {
   createDepartmentInputSchema,
   createProgramInputSchema,
@@ -48,7 +49,8 @@ import {
  * id port, so the id is known before the insert and the record names it as its target.
  *
  * Out of scope, by the slice's Never list: deleting or archiving an org unit, moving a Program
- * between Departments, a name-uniqueness rule, role checks (1.5) and PM assignment (1.4/1.5).
+ * between Departments, a name-uniqueness rule. Role checks (story 1.5): every write declares
+ * `tenant_admin` only — no Project check.
  */
 
 /**
@@ -86,7 +88,7 @@ export interface Created {
   readonly id: string;
 }
 
-/** Runs one org write: the Clock stamps it; `refuse` inside `work` answers a code, rolled back. */
+/** Runs one org write: `tenant_admin` first, then the Clock stamps it; `refuse` inside `work` answers a code, rolled back. */
 function runOrgWrite<Handle, Command, Value = void>(
   schema: z.ZodType<Command>,
   deps: OrgWriteDeps<Handle>,
@@ -94,6 +96,8 @@ function runOrgWrite<Handle, Command, Value = void>(
   input: unknown,
   work: (scope: OrgWriteScope, stamp: WriteStamp, command: Command) => Promise<Value>,
 ): Promise<Result<Value>> {
+  const gate = authorize(ctx, { roles: TENANT_ADMIN_ROLES });
+  if (!gate.ok) return Promise.resolve(gate);
   return runAuditedWrite(schema, deps, ctx, input, { at: async () => deps.clock.now() }, work);
 }
 

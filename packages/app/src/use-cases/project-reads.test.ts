@@ -3,9 +3,9 @@ import type { ProjectBundle, ProjectReadDeps, ProjectReview } from '../ports/pro
 import { getProjectHeader, getProjectReview } from '.';
 import type { RequestContext } from '../authz/request-context';
 
-/** A signed-in caller in `tenantId` (story 1.4 slice 1: the context is the whole RequestContext). */
+/** A signed-in caller in `tenantId` that reaches `prj-1` (story 1.5). */
 function ctxOf(tenantId: string): RequestContext {
-  return { tenantId, userId: 'test-reader', roles: ['pm'], projectIds: [], locale: 'en' };
+  return { tenantId, userId: 'test-reader', roles: ['pm'], projectIds: ['prj-1'], locale: 'en' };
 }
 
 /**
@@ -66,14 +66,54 @@ describe.each(CASES)('$name', ({ run, expected }) => {
   });
 
   it('answers not_found — never a throw — for a Project the Tenant cannot see', async () => {
-    const { deps } = fakeDeps((projectId) => notFoundError(projectId));
-    const result = await run(deps, ctxOf('ten-b'), { projectId: 'prj-of-a' });
+    const { deps, calls } = fakeDeps((projectId) => notFoundError(projectId));
+    // Reach must pass so the refusal comes from the port (RLS), not the role gate.
+    const ctx = { ...ctxOf('ten-b'), projectIds: ['prj-of-a'] };
+    const result = await run(deps, ctx, { projectId: 'prj-of-a' });
 
     // No `details`: the refusal must carry nothing, so it cannot disclose anything.
     expect(result).toEqual({
       ok: false,
       error: { code: 'not_found', messageKey: 'errors.not_found' },
     });
+    expect(calls).toEqual([{ handle: HANDLE, tenantId: 'ten-b', projectId: 'prj-of-a' }]);
+  });
+
+  it('answers not_found for a viewer, without calling the port', async () => {
+    const { deps, calls } = fakeDeps(() => 'ok');
+    const viewer = { ...ctxOf('ten-a'), roles: ['client_viewer'] as const };
+    expect(await run(deps, viewer, { projectId: 'prj-1' })).toEqual({
+      ok: false,
+      error: { code: 'not_found', messageKey: 'errors.not_found' },
+    });
+    expect(calls).toEqual([]);
+  });
+
+  it('answers not_found, not invalid_input, to a viewer sending malformed input', async () => {
+    // Pins role-before-parse: moving authorize after parse would answer invalid_input here.
+    const { deps, calls } = fakeDeps(() => 'ok');
+    const viewer = { ...ctxOf('ten-a'), roles: ['client_viewer'] as const };
+    expect(await run(deps, viewer, { projectId: '' })).toEqual({
+      ok: false,
+      error: { code: 'not_found', messageKey: 'errors.not_found' },
+    });
+    expect(calls).toEqual([]);
+  });
+
+  it('answers not_found when a PM\'s projectIds does not contain the Project', async () => {
+    const { deps, calls } = fakeDeps(() => 'ok');
+    const unassigned = { ...ctxOf('ten-a'), projectIds: ['prj-other'] };
+    expect(await run(deps, unassigned, { projectId: 'prj-1' })).toMatchObject({
+      error: { code: 'not_found' },
+    });
+    expect(calls).toEqual([]);
+  });
+
+  it('lets a tenant_admin through with empty projectIds', async () => {
+    const { deps, calls } = fakeDeps(() => 'ok');
+    const admin = { ...ctxOf('ten-a'), roles: ['tenant_admin'] as const, projectIds: [] };
+    expect(await run(deps, admin, { projectId: 'prj-1' })).toMatchObject({ ok: true });
+    expect(calls).toEqual([{ handle: HANDLE, tenantId: 'ten-a', projectId: 'prj-1' }]);
   });
 
   it('rethrows any other failure rather than answering not_found for it', async () => {

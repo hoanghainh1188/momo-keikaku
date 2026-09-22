@@ -1,8 +1,8 @@
-﻿# Handoff — 2026-09-22 (updated after the slice-4 spine amendment)
+# Handoff — 2026-09-22 (updated after the slice-4 spine amendment)
 
 State at `main` = the merge of PR #34 (story 1.4 slice 4 and the whole-story review of 1.4),
 `dcd7da9`, plus the docs PR that follows it (the slice-4 spine amendment, the regenerated
-`epic-1-context.md` and this handoff). **Story 1.4 is `done`; the next story is 1.5.**
+`epic-1-context.md` and this handoff). **Story 1.5 is `done` (sprint `review`); the next story is 1.6.**
 
 **Latest (2026-09-22): story 1.4 slice 4 (password reset) is implemented.** A new `MailerPort`
 (`packages/app/src/ports/mailer.ts`), satisfied by `mailerConsoleOn` (`packages/adapters`,
@@ -238,7 +238,8 @@ deletes the row; the resolver then ends the session on the next request (a
 session with no active Tenant yet answers `no_access` instead). The app role
 holds SELECT, UPDATE, DELETE on the bridge — no INSERT: adding someone is
 invitation work. No screen yet; four bindings wait in the composition root.
-These are the **only** role checks in the codebase — story 1.5 replaces them.
+Story 1.5 replaces the local `tenant_admin` pre-check with the declared-roles
+helper; the in-transaction lock re-check stays.
 
 ---
 
@@ -295,10 +296,12 @@ story 1.4 slice 4"): `appendOnlyGuard` on `identity_event` and the per-step `try
 landed 2026-09-22 (see that file's `resolved` lines). Still open: the `DEPLOYMENT` key (before
 Epic 8's first staging deploy); mail logging through `pino` goes with `mailer-ses`.
 
-### 1b. Story 1.5 — roles decide what each person can reach
+### 1b. Story 1.5 — roles decide what each person can reach — DONE
 
-The next story to build. It must not read a Tenant Admin's `projectIds` as a limit (AD-23), and it
-replaces the membership use cases' own `tenant_admin` check.
+Landed 2026-09-22. Declared-roles helper in `packages/app/src/authz/authorize.ts`; every
+use-case export declares roles; membership and org writes are `tenant_admin` only; project
+reads and Plan/Mapping writes are `tenant_admin` | `pm` plus Project reach (a Tenant Admin's
+`projectIds` are never a limit). Mechanical gate: `tests/role-declarations.test.ts`.
 
 Deferred from slice 1 still open: `/` redirects everyone to
 `/p/prj-ec2/review`; the middleware may answer an expired session's

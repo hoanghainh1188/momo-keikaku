@@ -13,13 +13,14 @@ import { LAST_TENANT_ADMIN } from './membership-writes';
  * The four membership writes against a fake tenant transaction over an in-memory bridge — no
  * database, no environment (story 1.4 slice 2).
  *
- * Pinned here, at the use-case level: the admin gate answers `not_found` before any parse or
- * transaction; the caller is re-checked against the LOCKED rows (a stale context is `not_found`);
- * the target must have a membership in this Tenant; the last `tenant_admin` cannot be revoked or
- * demoted; only `tenant_admin` and `pm` are assignable; a foreign Project is `not_found`, a stale
- * id may still be unassigned; no-ops record nothing; every change records the previous value, on
- * the member's user id, stamped by the Clock; and every write takes exactly one lock, first.
- * `tests/membership.test.ts` proves the same against Postgres, concurrency included.
+ * Pinned here, at the use-case level: the declared-roles gate (`authorize`) answers `not_found`
+ * before any parse or transaction; the caller is re-checked against the LOCKED rows (a stale
+ * context is `not_found`); the target must have a membership in this Tenant; the last
+ * `tenant_admin` cannot be revoked or demoted; only `tenant_admin` and `pm` are assignable; a
+ * foreign Project is `not_found`, a stale id may still be unassigned; no-ops record nothing; every
+ * change records the previous value, on the member's user id, stamped by the Clock; and every
+ * write takes exactly one lock, first. `tests/membership.test.ts` proves the same against
+ * Postgres, concurrency included.
  */
 
 const HANDLE = { marker: 'handle' };
