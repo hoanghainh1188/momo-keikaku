@@ -455,3 +455,45 @@ idempotent) and `pnpm seed`.
 same `createAuth` options the composition root builds are exercised end-to-end against Postgres
 by `tests/password-reset.test.ts`, but the actual Next.js request/response cycle and form
 submission were not driven by a browser. Recorded in `deferred-work.md`.
+
+### Review Findings
+
+Whole-story code review of story 1.4, first pass: the `packages/db` group (the Better Auth
+carve-out and the data layer), 2,545 lines across 28 files, from slice 1's baseline `7830e3b` to
+`e940c06`. Four layers ran — blind hunter (18), edge-case hunter (8), verification gap (2),
+acceptance auditor (3). The acceptance auditor found no acceptance-criteria violation and no spec
+contradiction in the data layer. Severities below are this triage's; each claim was checked at its
+cited location first. Groups C (`packages/app`), D (`apps/web`), E (`tests`) and F (fences and
+tooling) remain for later passes.
+
+- [ ] [Review][Decision] Nothing ever removes an expired `verification` row, and the reset's own sweep cannot use an index — Story 1.4 introduces three kinds of row in that table (OAuth state, reset tokens, and a never-mailed token for every Google-only user who requests a reset) and adds no cleanup anywhere. Verified: no `delete` against `expiresAt` exists in `packages/db`, `apps/worker` or `scripts`. Separately, `invalidateOtherResetTokens` filters on `value = <userId> AND identifier LIKE 'reset-password:%'`, but `verification` is indexed on `identifier` alone, so the sweep degrades as the table grows — which it does, unboundedly, for the same reason.
+
+- [ ] [Review][Patch] The new `global` tables are outside every probe-cleanup path [packages/db/src/probe-tenants.ts:437-443]
+- [ ] [Review][Patch] `rls.test.ts`'s no-row-level-security pin omits `identity_event` [packages/db/src/rls.test.ts:382]
+- [ ] [Review][Patch] `DISABLED_PATHS` and `SERVED_AUTH_ENDPOINTS` are not pinned exactly [packages/db/auth/src/auth.test.ts:141]
+- [ ] [Review][Patch] `signOutOf` reports every `APIError` as a successful sign-out [packages/db/auth/src/bindings.ts:175-183]
+- [ ] [Review][Patch] `next` is an undeclared dependency of `@momo/db-auth`, and its absence fails silently [packages/db/auth/package.json]
+- [ ] [Review][Patch] The token-lifetime constant is not exported, so the forgot-password page still hand-writes "1 hour" [packages/db/auth/src/index.ts:31]
+- [ ] [Review][Patch] The reset hook's failure containment is never exercised [tests/password-reset.test.ts]
+- [ ] [Review][Patch] No test carries a non-`en` locale from `auth_user` through to the resolved context [tests/identity.test.ts]
+- [ ] [Review][Patch] `IdentityEventWriter` drops the `payload` field its counterpart carries [packages/db/auth/src/reset.ts:32-39]
+- [ ] [Review][Patch] `GOOGLE_REFUSED_URL` is re-declared as a literal in the web app [apps/web/src/app/sign-in/actions.ts:14]
+- [ ] [Review][Patch] A probe Tenant's baseline actor prefixes in the wrong order, so it names no seeded user [packages/db/src/seed.ts:252]
+
+- [x] [Review][Defer] `bindings.ts`'s routing logic has no unit test, although all of it is pure [packages/db/auth/src/bindings.ts] — deferred: `endpointOf`'s trailing-slash normalisation, the method-and-path match, `notFound()`'s `cache-control`, and the re-throw branch in all five wrappers need no database; a suite for them is substantial new work and the `tests` group has not been reviewed yet.
+- [x] [Review][Defer] `minPasswordLength` is inherited while the file's stated rule is to pin what reset depends on [packages/db/auth/src/auth.ts:165] — deferred: `hashPassword` accepts any non-empty string, so `SEED_DEMO_PASSWORD` may be shorter than the minimum the reset flow enforces; choosing the password policy is a decision, not a correction.
+- [x] [Review][Defer] `identity_event.action` is a closed list in TypeScript only [packages/db/src/schema.ts:171] — deferred: already recorded from the slice-4 review; carried, no second entry added.
+- [x] [Review][Defer] Google discovery has no timeout and no retry [packages/db/auth/src/bindings.ts:40-43] — deferred: already in the spine's Deferred section as an Epic 8 item; carried, no second entry added.
+
+#### Rejected
+
+- `serveAllowlisted` answers 404 to `HEAD` — `low`. No caller sends `HEAD` to `/api/auth`, and mapping it onto the `GET` entry adds a branch to the one boundary that should stay literal.
+- The barrel exports `SERVED_AUTH_ENDPOINTS` but not `servedEndpoints()` or `GOOGLE_CALLBACK_ENDPOINT` — `low`. The only consumer is the composition root, which uses neither.
+- `seed.ts` infers probe mode from `own('') !== ''` — `low`. A smell with no named divergence; `idPrefix` is on the options object if it is ever worth passing.
+- Probe credential-account ids are double-prefixed — `low`. They stay unique and nothing reads their shape.
+- `authOptions` validates `idleHours` and not `secret` or `baseURL` — `low`. Both are required keys that `packages/app/src/config.ts` parses and rejects before the composition root can pass them.
+- `exactlyOne` puts a user id in its error message — `low`. A UUID is not the email, password or address the redaction rule names, and the message fires only on an impossible row count.
+- `sessionForMiddleware` has no catch, so a session-read failure 500s every protected page — `low`. `/sign-in` is public and the gate returns before the check, so the user can still recover; redirecting to sign-in during a database outage is not better behaviour.
+- Probe removal deletes an `auth_user` who might hold a membership in another Tenant — `low`. Probe users are created per probe with prefixed ids, so this was not shown reachable.
+- `registry.test.ts` asserts the append-only class list rather than `appPrivilegesOf` — `maybe-false`. `rls.test.ts`'s catalog assertion reads `appPrivilegesOf`, so an override adding UPDATE or DELETE would still fail there; what would settle it is adding such an override and watching which gate catches it.
+- A Google-only user's reset request leaves a live, never-mailed `verification` row — `low` here, and folded into the decision above. Rejected on its own in the slice-4 review on the ground that the token is never disclosed to anyone.

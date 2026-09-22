@@ -754,3 +754,15 @@ work started and was deliberately deferred, with the evidence for the split.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-4-password-reset.md`
   summary: An oversized hidden token field may break the refusal redirect rather than landing on the generic refusal.
   evidence: Edge-case layer, graded `low` and `maybe-false` at triage, then rejected per the rule for a `maybe-false` that would only be `low`. The claim is that an arbitrarily long token yields a `Location` header Next.js refuses to set; nothing in the diff or the surrounding code settles what happens at that size. What would settle it: posting the reset form with a multi-kilobyte token against `next dev` and watching whether the redirect lands or throws.
+
+## Deferred from: code review of spec-1-4-password-reset (2026-09-22)
+
+Whole-story review of story 1.4, `packages/db` group (Better Auth carve-out and data layer).
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-password-reset.md`
+  summary: `packages/db/auth/src/bindings.ts`'s routing logic has no unit test, although every part of it is pure and needs no database.
+  evidence: Blind layer, graded `low` at triage and deferred rather than patched. Untested and Postgres-free: `endpointOf`'s trailing-slash normalisation and its `null` for a path outside the base path, the method-and-path allowlist match, `notFound()`'s body and its `cache-control: no-store`, and the `if (!isAPIError(error)) throw error` re-throw branch in all five wrappers. `auth.test.ts` calls itself the gate that runs without Postgres, but it stops at `auth.ts`, `google.ts` and `reset.ts`. `identity.ts` (`textOrNull`, the `locale ?? 'en'` fallback, the session-vanished throw) and `password.ts`'s empty-password guard are in the same position. A suite for all of them is substantial new work, and the `tests` group of this story has not been reviewed yet — fold it into that pass.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-password-reset.md`
+  summary: `minPasswordLength` and `maxPasswordLength` are inherited from Better Auth while the same file pins every other reset-relevant setting, and `hashPassword` accepts any non-empty string.
+  evidence: Blind layer, graded `low` at triage. `auth.ts` pins `resetPasswordTokenExpiresIn` (which only restates a default) and `revokeSessionsOnPasswordReset` precisely so they read as decisions, yet the two length bounds the reset flow actually enforces are silent — and `bindings.ts`'s `resetPassword` comment names "a password Better Auth's `minPasswordLength` refuses" as a refusal it handles. Meanwhile `packages/db/auth/src/password.ts` rejects only the empty string, so `SEED_DEMO_PASSWORD` may be shorter than what reset will accept. Choosing the password policy is a product decision rather than a correction, which is why it is deferred rather than patched. Note that `auth.test.ts` now pins `emailAndPassword` with an exact `toEqual`, so adding the keys later is a deliberate, visible test change.
