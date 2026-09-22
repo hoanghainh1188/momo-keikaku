@@ -1,4 +1,4 @@
-﻿/**
+/**
  * THE DECLARED-ROLES MECHANISM (story 1.5, AD-12 / AD-23) — one place every use case runs before
  * its work: the caller's roles must intersect the use case's declared set, and when the call
  * names a Project the caller must reach it.

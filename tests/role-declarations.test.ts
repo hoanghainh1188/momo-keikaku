@@ -1,4 +1,4 @@
-﻿import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import type { RequestContext, Role } from '../packages/app/src/authz/request-context';
 import { ROLES } from '../packages/app/src/authz/request-context';
 import type { Result } from '../packages/app/src/result';
@@ -18,7 +18,9 @@ import { readSurfaceFunctionNames, READ_SURFACE_MODULE } from './read-use-cases'
  *   2. Enforcement — every export, called with a viewer-only context, a deps Proxy that
  *      throws on any access, and deliberately malformed input, answers `not_found` and never
  *      touches deps. That is what proves the runners call `authorize` BEFORE parse: a table
- *      entry alone would leave this green.
+ *      entry alone would leave this green. Every export whose declared roles exclude `pm` is
+ *      also called as a PM and must refuse the same way, which ties each declared role set to
+ *      the one its runner enforces.
  *
  * The declarations themselves are pinned by an inline snapshot of `USE_CASE_ROLES`, so story
  * 1.6 can add a third shape (e.g. `tenant_admin` | `pm` with no Project) by updating the
@@ -243,42 +245,54 @@ describe('every use case declares its roles', () => {
   });
 });
 
+/**
+ * Calls `name` with `ctx`, throwing deps and malformed input, and returns what is wrong with the
+ * answer: anything but `not_found`, or any touch of deps. Empty when the refusal was clean.
+ */
+async function refusalProblems(name: string, label: string, ctx: RequestContext): Promise<string[]> {
+  const fn = (useCases as Readonly<Record<string, UseCaseFn>>)[name];
+  if (typeof fn !== 'function') return [`${name}: not a function on ${READ_SURFACE_MODULE}`];
+
+  const { deps, touches } = throwingDeps();
+  let result: Result<unknown>;
+  try {
+    result = await fn(deps, ctx, {});
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    return [`${name} (${label}): threw before answering — ${reason}`];
+  }
+
+  const problems: string[] = [];
+  if (result.ok || result.error.code !== 'not_found') {
+    problems.push(`${name} (${label}): expected not_found, got ${JSON.stringify(result)}`);
+  }
+  if (touches.length > 0) {
+    problems.push(`${name} (${label}): touched deps before authorize — ${touches.join(', ')}`);
+  }
+  return problems;
+}
+
 describe('every use case authorises before parse', () => {
   it('answers not_found to a viewer, touching no deps, for every export', async () => {
-    const surface = useCases as Readonly<Record<string, UseCaseFn>>;
     const offenders: string[] = [];
-
     for (const name of readSurfaceFunctionNames()) {
-      const fn = surface[name];
-      if (typeof fn !== 'function') {
-        offenders.push(`${name}: not a function on ${READ_SURFACE_MODULE}`);
-        continue;
-      }
-
       for (const role of VIEWER_ROLES) {
-        const { deps, touches } = throwingDeps();
-        let result: Result<unknown>;
-        try {
-          result = await fn(deps, viewerContext(role), {});
-        } catch (error) {
-          const reason = error instanceof Error ? error.message : String(error);
-          offenders.push(`${name} (${role}): threw before answering — ${reason}`);
-          continue;
-        }
-
-        if (result.ok || result.error.code !== 'not_found') {
-          offenders.push(
-            `${name} (${role}): expected not_found, got ${JSON.stringify(result)}`,
-          );
-        }
-        if (touches.length > 0) {
-          offenders.push(
-            `${name} (${role}): touched deps before authorize — ${touches.join(', ')}`,
-          );
-        }
+        offenders.push(...(await refusalProblems(name, role, viewerContext(role))));
       }
     }
+    expect(offenders, offenders.join('\n') || undefined).toEqual([]);
+  });
 
+  // The viewer loop cannot tell WHICH role set a runner enforces — both sets refuse viewers. This
+  // ties each declaration to its runner: an export whose declared roles exclude `pm` must refuse
+  // a PM too, so an admin-only runner that passed `PROJECT_REACH_ROLES` would fail here, named.
+  it('answers not_found to a PM, touching no deps, for every export not declared for pm', async () => {
+    const pmContext: RequestContext = { ...viewerContext('client_viewer'), userId: 'usr-pm', roles: ['pm'] };
+    const offenders: string[] = [];
+    for (const [name, declaration] of Object.entries(USE_CASE_ROLES)) {
+      if (declaration.roles.includes('pm')) continue;
+      offenders.push(...(await refusalProblems(name, 'pm', pmContext)));
+    }
     expect(offenders, offenders.join('\n') || undefined).toEqual([]);
   });
 });

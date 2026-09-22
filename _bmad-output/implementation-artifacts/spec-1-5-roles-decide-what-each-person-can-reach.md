@@ -1,8 +1,8 @@
-﻿---
+---
 title: 'Story 1.5 — roles decide what each person can reach'
 type: 'feature'
 created: '2026-09-22'
-status: 'review'
+status: 'done'
 baseline_commit: 'e9940d13a70ddb8d5dc424d7dde1ce8474a395bf'
 route: 'dispatch'
 review_loop_iteration: 0
@@ -159,6 +159,16 @@ writes are `tenant_admin` only; Project reads use the same rule as Plan/Mappings
 | Sabotage: reach check stubbed to always ok | 5 project-write reach tests failed; restored |
 | `REQUIRE_DB=1` Postgres: `tests/membership`, `cross-tenant*`, `org-writes` | **157 passed** when `DATABASE_URL` / `APP_DATABASE_URL` are set |
 
+**After the review patches (2026-09-22, second pass):**
+
+| Command | Result |
+| --- | --- |
+| `pnpm lint`, `pnpm typecheck`, `pnpm --filter @momo/web typecheck`, `pnpm --filter @momo/worker typecheck`, `pnpm depcruise` | all exit 0 |
+| `pnpm exec vitest run packages/app tests/audited-use-cases.test.ts tests/role-declarations.test.ts tests/web-composition.test.ts` | **368 passed** across 12 files |
+| `REQUIRE_DB=1 pnpm test` against the local `postgres:18.6` (compose, port 55433) | **826 passed, 1 failed** of 827 across 45 files — the one failure is `tests/identity.test.ts` "finds the demo seed's members", which needs the `SEED_DEMO_PASSWORD` the local database was seeded with; environment, not code (CI seeds its own) |
+| Sabotage: the pre-parse `authorize` removed from `runOrgWrite` | both behavioural tests failed, naming every Organisation write (`invalid_input` instead of `not_found`); restored |
+| Sabotage: `runOrgWrite` enforcing `['tenant_admin', 'pm']` instead of `TENANT_ADMIN_ROLES` | only the new PM loop failed, naming every Organisation write — the viewer loop stayed green, which is the gap the PM loop closes; restored |
+
 
 ## Review Triage Log
 
@@ -223,3 +233,20 @@ Code review of `c43658c` against `e9940d1` (2026-09-22): four layers (blind, edg
 - A dual-role admin skipping reach for a non-admin gate (edge-case) — `false`: a context carries exactly one role (`resolve-request-context.ts:62`, `roles: [membership.role]`; AD-23, one row per user and Tenant).
 - A just-unassigned PM finishing a write on a stale context (edge-case) — `low`: the window is one server action; the next request's resolver refuses (AD-23). A re-read adds a lock path for no demonstrated harm.
 - Spec `status: 'done'` versus sprint `review` — rejected by rule (its fix edits the spec under review); step 6 of this review sets the status.
+
+### Review Findings — second pass
+
+Code review of `d20f800..3896176` (the three first-pass patches), 2026-09-22: four layers. All three first-pass patches landed; no acceptance criterion violated. Four new patches, none deferred.
+
+- [x] [Review][Patch] A UTF-8 byte-order mark was added to all seven files this pass touched — they are now the only files in the repo with one, and the spec's frontmatter and `sprint-status.yaml` no longer start with `---` / `#` at byte 0. Strip it (`sed -i '' '1s/^\xEF\xBB\xBF//' <file>`) [all 7 files:1]
+- [x] [Review][Patch] The behavioural gate refuses only viewers, so it cannot tell whether a runner enforces the role set its table entry declares: an admin-only export whose runner passes `PROJECT_REACH_ROLES` stays green and a PM reaches an admin-only write. Add a loop: for every `USE_CASE_ROLES` entry whose `roles` exclude `'pm'`, call the export with a PM context, `throwingDeps()` and `{}`, and expect `not_found` with no deps touched [tests/role-declarations.test.ts:245]
+- [x] [Review][Patch] `HANDOFF.md` still contradicts the new preamble below it: §1b is headed "— DONE" and says "Landed 2026-09-22"; §1b describes the gate as table-only; the future-tense "Story 1.5 replaces the local `tenant_admin` pre-check" (~:250) and "the membership use cases require `tenant_admin` now (a local check ahead of 1.5 …)" (~:397) describe deleted code; "Next, in order" §4 still lists 1.5. The open items from the first pass (AD-23 / `epic-1-context.md` stale sentence; project writes naming another Project's Tickets or WPs) belong beside the `/` → `prj-ec2` note [_bmad-output/implementation-artifacts/HANDOFF.md:308]
+- [x] [Review][Patch] No sabotage probe is recorded for the new gate (HANDOFF's "break the thing it guards" rule): remove the pre-parse `authorize` from one runner, and for the PM loop swap one admin-only runner to `PROJECT_REACH_ROLES`; watch each fail naming the exports, restore, and record both in "Verification Results" [spec: Verification Results]
+
+#### Rejected (second pass)
+
+- The gate never checks Project reach (blind, edge-case) — `low`: reach needs well-formed input per use case (`runProjectRead` parses before reach), and every project runner's reach is pinned by `project-reads.test.ts` / `project-writes.test.ts`; more than a correction.
+- The snapshot lost the old "projectScoped ⇔ reach roles" rule (blind) — `low`: with the PM loop, an entry's declared roles are enforced against its runner; a structural check adds little.
+- The result check sits outside the `try`, and the deps Proxy traps only `get` (blind, edge-case) — `low`: a non-`Result` answer still fails the test loudly (TypeError), and no use case inspects deps with `in`/`Object.keys` before authorising.
+- An empty-roles context is not exercised (edge-case) — `false` as a gap: `authorize` refuses unless some declared role is in `ctx.roles`, so `[]` is refused by construction; the viewer loop already proves the same path.
+- `review_loop_iteration: 0` (blind) — rejected by rule (its fix edits the spec's frontmatter).

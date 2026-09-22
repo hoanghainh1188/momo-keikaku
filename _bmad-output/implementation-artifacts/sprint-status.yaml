@@ -1,4 +1,4 @@
-﻿# STATUS DEFINITIONS:
+# STATUS DEFINITIONS:
 # ==================
 # Epic Status:
 #   - backlog: Epic not yet started
@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 09-20-2026 16:55
-last_updated: 09-22-2026 16:35
+last_updated: 09-22-2026 16:40
 project: momo-keikaku
 project_key: NOKEY
 tracking_system: file-system
@@ -40,7 +40,7 @@ development_status:
   1-2-nothing-crosses-a-tenant-and-the-data-layer-is-what-proves-i: in-progress
   1-3-the-organisation-and-the-record-of-who-changed-it: done
   1-4-sign-in-and-be-revoked: done
-  1-5-roles-decide-what-each-person-can-reach: review
+  1-5-roles-decide-what-each-person-can-reach: done
   1-6-resources-and-the-dated-rates-behind-every-money-figure: backlog
   1-7-the-tenant-admin-can-read-the-audit-log: backlog
   1-8-a-load-fixture-worth-measuring-against: backlog

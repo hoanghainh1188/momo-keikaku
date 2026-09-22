@@ -1,4 +1,4 @@
-﻿/**
+/**
  * EVERY use case's role declaration, in one table — what the role gate
  * (`role-declarations.test.ts`) enumerates and snapshots.
  *
