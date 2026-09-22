@@ -1,12 +1,11 @@
-# Handoff — 2026-09-22 (story 1.6 implemented)
+# Handoff — 2026-09-22 (story 1.6 merged)
 
-State at branch `story/1-6-resources-and-the-dated-rates-behind-every-money-figure`. **Story 1.6
-(Resources and the dated Rates behind every money figure) is implemented and code-reviewed;
-sprint is `done` (awaiting PR / merge).**
+State at `main` (PR #40, `795f8e9`). **Story 1.6 (Resources and the dated Rates behind every
+money figure) is `done` — implemented, code-reviewed, CI green, merged.** Next: story 1.7.
 
-**Latest (2026-09-22): story 1.6 landed.** `project_default_rate_entry` is registered append-only
-(24 tables / 17 tenant-owned); seed and `createProject` dual-write the first row at yen 0 with
-`project.default_rate_jpy` as the live cache; `appendProjectDefaultRate` updates both.
+**Latest (2026-09-22): story 1.6 merged via PR #40.** `project_default_rate_entry` is registered
+append-only (24 tables / 17 tenant-owned); seed and `createProject` dual-write the first row at
+yen 0 with `project.default_rate_jpy` as the live cache; `appendProjectDefaultRate` updates both.
 `createResource` (`tenant_admin` | `pm`), `appendResourceRate` and `appendProjectDefaultRate`
 (`tenant_admin` only) are audited use cases with role declarations (third shape: Admin|PM, no
 Project). Domain `rateOnDate` / attribution accept optional `rate_seq_max` /
@@ -320,10 +319,10 @@ story 1.4 slice 4"): `appendOnlyGuard` on `identity_event` and the per-step `try
 landed 2026-09-22 (see that file's `resolved` lines). Still open: the `DEPLOYMENT` key (before
 Epic 8's first staging deploy); mail logging through `pino` goes with `mailer-ses`.
 
-### 1b. Story 1.5 — roles decide what each person can reach — REVIEWED, AWAITING MERGE
+### 1b. Story 1.5 — roles decide what each person can reach — DONE
 
-Implemented 2026-09-22 on branch `story/1-5-roles-decide-what-each-person-can-reach`, reviewed twice,
-not yet merged; see "Latest" above for what it does and what the reviews left open.
+Merged 2026-09-22 (PR #37 helper/gate; PR #38 spine; PR #39 wpId + reach gate). See "Latest"
+history above for what it does.
 
 Deferred from slice 1 still open: `/` redirects everyone to
 `/p/prj-ec2/review`; the middleware may answer an expired session's
@@ -340,7 +339,7 @@ Advisory locks before `seq` allocation. Needs Epic 2 and Epic 5's writers.
 
 ### 4. Then the rest of Epic 1
 
-Stories 1.7 through 1.9 (1.6 implemented, awaiting review). Epic 1 is 156 h and is the calibration point for the
+Stories 1.7 through 1.9 (1.6 is `done` on `main`). Epic 1 is 156 h and is the calibration point for the
 whole estimate — its closing is the first date-slip checkpoint (above).
 
 What story 1.3 left, in `deferred-work.md` (**148 entries** now): the
