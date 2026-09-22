@@ -255,6 +255,9 @@ importers:
 
   apps/worker:
     dependencies:
+      '@momo/adapters':
+        specifier: workspace:*
+        version: link:../../packages/adapters
       '@momo/app':
         specifier: workspace:*
         version: link:../../packages/app

@@ -1,3 +1,13 @@
+# Handoff — 2026-09-22 (story 1.8 implemented)
+
+**Latest (2026-09-22): story 1.8 (A load fixture worth measuring against) is implemented —
+status `review`.** `SEED_PROFILE=demo|load` (default demo); in-process 5×500 load generator;
+`CLOCK_MODE=fixture` under required `DEPLOYMENT=local` with AD-17 refusals; fixture Clock in
+web + worker composition roots; seed Clock inject; fixture-relative seq + multi-baseline map.
+Verified locally: lint / typecheck / depcruise green; unit + fixture-clock composition tests;
+Postgres seed smoke for both profiles (load = 5 Projects × 500 WPs + 24 Resources; reseed seq
+stable; `demo_anchor` = fixture Clock). Next: code review / step-05, then story 1.9.
+
 # Handoff — 2026-09-22 (story 1.7 merged)
 
 State at `main` (PR #41, `0b3487b`). **Story 1.7 (The Tenant Admin can read the audit log) is
@@ -356,8 +366,8 @@ What story 1.3 left, in `deferred-work.md` (**148 entries** now): the
 Program-within-Department rule is held by use cases and row locks, with no
 foreign key and no concurrency test; `audit_log.at` mixes fixture and wall time;
 the audited-use-case gate trusts declarations rather than NFR-A1's list;
-`apps/worker` has no composition root yet (it needs one for story 1.8's fixture
-clock); CI never runs `next build` (it passed locally for story 1.4 slice 1).
+`apps/worker` now has a composition root (`src/index.ts`) wiring the product Clock
+(story 1.8); CI never runs `next build` (it passed locally for story 1.4 slice 1).
 
 ---
 

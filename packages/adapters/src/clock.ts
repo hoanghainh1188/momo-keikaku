@@ -26,3 +26,26 @@ export const systemClock: Clock = {
   now: () => new Date(),
   nowMs: () => Date.now(),
 };
+
+function asMs(value: Date | string | number): number {
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string') return new Date(value).getTime();
+  return value.getTime();
+}
+
+/**
+ * Fixture-mode clock (AD-15 / AR-27): `now()` is
+ * `max(latest fixture observedAt, FIXTURE_TIME_ANCHOR)`. Both roles and the seed share it
+ * under `CLOCK_MODE=fixture` so freshness and the current Reporting Period agree with the
+ * fixture timeline. Identity / Better Auth stay on `systemClock`.
+ */
+export function fixtureClockOn(args: {
+  readonly latestObservedAt: Date | string | number;
+  readonly anchor: Date | string | number;
+}): Clock {
+  const ms = Math.max(asMs(args.latestObservedAt), asMs(args.anchor));
+  return {
+    now: () => new Date(ms),
+    nowMs: () => ms,
+  };
+}

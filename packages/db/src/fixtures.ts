@@ -133,6 +133,21 @@ export function loadFixtureSnapshots(anchorIso: string): (SnapshotRead & { snaps
   });
 }
 
+/**
+ * Latest rebated fixture `observedAt` for the demo snapshots — the fixture Clock's first
+ * argument (story 1.8 / AD-15). Pure over the fixture files + anchor.
+ */
+export function latestFixtureObservedAt(anchorIso: string): Date {
+  const snapshots = loadFixtureSnapshots(anchorIso);
+  if (snapshots.length === 0) return new Date(anchorIso);
+  let max = 0;
+  for (const snap of snapshots) {
+    const t = Date.parse(snap.observedAt);
+    if (t > max) max = t;
+  }
+  return new Date(max);
+}
+
 export interface DemoState {
   anchor: string;
   fixture: FixtureProject;

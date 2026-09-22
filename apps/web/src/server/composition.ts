@@ -110,7 +110,7 @@ import {
   type UnassignMemberProjectInput,
   type WriteDeps,
 } from '@momo/app';
-import { mailerConsoleOn, systemClock, uuidV7IdsOn } from '@momo/adapters';
+import { mailerConsoleOn, fixtureClockOn, systemClock, uuidV7IdsOn } from '@momo/adapters';
 import {
   getDb,
   identityEventWriterOn,
@@ -142,6 +142,34 @@ function webDb(): Db {
   return getDb(config.APP_DATABASE_URL);
 }
 
+/**
+ * Product Clock (AD-15 / story 1.8). Fixture mode returns
+ * `max(latest fixture observedAt, FIXTURE_TIME_ANCHOR)`. The demo's last snapshot sits 2h
+ * before the anchor (`scripts/gen-fixtures.ts`); composition does not import `fixtures.ts`
+ * (filesystem) into the Next bundle — the offset keeps the formula honest for the shipped
+ * demo. Built on first use like the mailer, so importing this module still reads no config.
+ * Identity / Better Auth stay on `systemClock` below.
+ */
+const DEMO_LATEST_OBSERVED_OFFSET_MS = -2 * 3_600_000;
+
+let webClockInstance: ReturnType<typeof productClock> | undefined;
+function productClock() {
+  switch (config.CLOCK_MODE) {
+    case 'system':
+      return systemClock;
+    case 'fixture': {
+      const anchorMs = Date.parse(config.FIXTURE_TIME_ANCHOR!);
+      return fixtureClockOn({
+        latestObservedAt: anchorMs + DEMO_LATEST_OBSERVED_OFFSET_MS,
+        anchor: anchorMs,
+      });
+    }
+  }
+}
+function webClock() {
+  return (webClockInstance ??= productClock());
+}
+
 // --- identity: the auth instance and the request context (story 1.4 slice 1) ----------------
 
 /**
@@ -149,6 +177,7 @@ function webDb(): Db {
  * (ids minted in one Clock millisecond must still sort by creation), which a per-call generator
  * would reset. Building it reads no configuration, so importing this file still reads nothing.
  * The writes' new rows AND Better Auth's users and sessions take their ids from it.
+ * Wired to `systemClock` (AD-15): identity ids stay on wall time under fixture mode.
  */
 const webIds = uuidV7IdsOn(systemClock);
 
@@ -426,7 +455,7 @@ export async function currentUserIdentity(ctx?: RequestContext): Promise<Identit
 function writeDeps() {
   return {
     handle: webDb(),
-    clock: systemClock,
+    clock: webClock(),
     ids: webIds,
     transaction: inTenantTransaction,
   } satisfies WriteDeps<Db>;

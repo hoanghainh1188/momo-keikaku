@@ -93,14 +93,16 @@ module.exports = {
       name: 'apps-adapters-only-from-composition-root',
       severity: 'error',
       comment:
-        'AD-1 (amended for story 1.3 slice 2): packages/adapters implements the outbound ports ' +
-        'packages/app declares (the Clock, the id generator), and the one apps/* file allowed to ' +
-        'import it is apps/web/src/server/composition.ts, which wires them into the use cases. A ' +
-        'page reading the clock or minting ids itself is a use case\'s decision taken in an ' +
-        'inbound adapter; apps/worker has no composition root, so it imports none of it either.',
+        'AD-1 (amended for story 1.3 slice 2 / 1.8): packages/adapters implements the outbound ' +
+        'ports packages/app declares (the Clock, the id generator), and the apps/* files allowed ' +
+        'to import it are the named composition roots — apps/web/src/server/composition.ts and ' +
+        'apps/worker/src/index.ts — which wire them into use cases / the worker process. A page ' +
+        'or job handler reading the clock or minting ids itself is a use case\'s decision taken ' +
+        'in an inbound adapter.',
       from: {
         path: '^apps/',
-        pathNot: '^apps/web/src/server/composition[.]ts$',
+        pathNot:
+          '^apps/web/src/server/composition[.]ts$|^apps/worker/src/index[.]ts$',
       },
       to: { path: '^packages/adapters/' },
     },
