@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 09-20-2026 16:55
-last_updated: 09-22-2026 20:32
+last_updated: 09-22-2026 21:19
 project: momo-keikaku
 project_key: NOKEY
 tracking_system: file-system
@@ -42,7 +42,7 @@ development_status:
   1-4-sign-in-and-be-revoked: done
   1-5-roles-decide-what-each-person-can-reach: done
   1-6-resources-and-the-dated-rates-behind-every-money-figure: done
-  1-7-the-tenant-admin-can-read-the-audit-log: review
+  1-7-the-tenant-admin-can-read-the-audit-log: done
   1-8-a-load-fixture-worth-measuring-against: backlog
   1-9-every-string-is-externalised-and-the-currency-is-fixed: backlog
   epic-1-retrospective: optional

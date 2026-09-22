@@ -1,12 +1,14 @@
-# Handoff — 2026-09-22 (story 1.7 ready for review)
+# Handoff — 2026-09-22 (story 1.7 merged)
 
-**Latest (2026-09-22): story 1.7 (The Tenant Admin can read the audit log) is implemented
-on branch `story/1-7-the-tenant-admin-can-read-the-audit-log` — status `review`.** `listAuditLog`
-is the first Tenant-Admin-only read (`projectScoped: false`); refusal is `not_found`. Payload
-decode schemas live in `packages/app/src/audit/payloads.ts` (write harness imports them).
-`IdentityPort.lookupUser` resolves actors and the top-bar chip (name or email · role); user menu
-links Admins to `/admin/audit`. `audit_log` left `UNREACHED_TENANT_OWNED_TABLES`. Shared
-`createLogger` (pino 10.3.1, AD-16 redact paths) in `packages/app`; ESLint bans
+State at `main` (PR #41, `0b3487b`). **Story 1.7 (The Tenant Admin can read the audit log) is
+`done` — implemented, code-reviewed, CI green, merged.** Next: story 1.8.
+
+**Latest (2026-09-22): story 1.7 merged via PR #41.** `listAuditLog` is the first
+Tenant-Admin-only read (`projectScoped: false`); refusal is `not_found`. Payload decode schemas
+live in `packages/app/src/audit/payloads.ts` (write harness imports them). `IdentityPort.lookupUser`
+resolves actors and the top-bar chip (name or email · role); user menu links Admins to
+`/admin/audit`. `audit_log` left `UNREACHED_TENANT_OWNED_TABLES`. Shared `createLogger` (pino
+10.3.1, AD-16 redact paths, `syncStdout` for the worker) in `packages/app`; ESLint bans
 `dangerouslySetInnerHTML`. Probe suite `tests/audit-log.test.ts` (base ≥ 850_000_000). Deferred
 L268 (`audit_log` reach), L427–430 / L489–491 (payload schemas, map partial), L590 (identity
 lookup) recorded resolved / partial in `deferred-work.md`.
@@ -347,7 +349,7 @@ Advisory locks before `seq` allocation. Needs Epic 2 and Epic 5's writers.
 
 ### 4. Then the rest of Epic 1
 
-Stories 1.7 through 1.9 (1.6 is `done` on `main`). Epic 1 is 156 h and is the calibration point for the
+Stories 1.8 through 1.9 (1.7 is `done` on `main`). Epic 1 is 156 h and is the calibration point for the
 whole estimate — its closing is the first date-slip checkpoint (above).
 
 What story 1.3 left, in `deferred-work.md` (**148 entries** now): the
