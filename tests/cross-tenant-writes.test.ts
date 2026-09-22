@@ -160,9 +160,20 @@ describe.skipIf(!reachable)('the write use cases, against two probe Tenants as t
     'write use case %s',
     (_name, entry) => {
       it('answers not_found and lands nothing, for either Tenant, when WB replays WA\'s ids', async () => {
-        const before = { w: await rowCounts(PROBE_W.tenantId), v: await rowCounts(PROBE_V.tenantId) };
+        // EVERY ROW, NOT COUNTS — the rule this file states thirty lines below, applied here too.
+        // Three of the four membership writes are UPDATEs and `tenant_membership` has no row-level
+        // security, so a count cannot see one rewriting the other Tenant's row in place.
+        //
+        // HONEST SCOPE, because it was measured rather than argued: this is defence in depth, not
+        // a hole being closed. Dropping the `tenant_id` predicate from the writer fails this test
+        // either way — the `not_found` assertion above catches it, because a writer that can reach
+        // the other Tenant's row stops refusing. Counts would only hide a defect that refuses AND
+        // writes, which the rollback cases below already cover. The change is here so the file
+        // obeys the rule it states, and so a future write that fails more quietly has one fewer
+        // place to hide.
+        const before = { w: await allRows(PROBE_W.tenantId), v: await allRows(PROBE_V.tenantId) };
         const outcome = await drive(entry, targetOf(PROBE_W, PROBE_V.tenantId));
-        const after = { w: await rowCounts(PROBE_W.tenantId), v: await rowCounts(PROBE_V.tenantId) };
+        const after = { w: await allRows(PROBE_W.tenantId), v: await allRows(PROBE_V.tenantId) };
 
         expect(
           outcome.error,
@@ -180,8 +191,8 @@ describe.skipIf(!reachable)('the write use cases, against two probe Tenants as t
         ).toBe(false);
         expect(
           after,
-          `${entry.name} changed row counts when probe Tenant WB wrote to WA's rows — a ` +
-            'foreign write must land nothing in any tenant-owned table, for either Tenant',
+          `${entry.name} changed a row when probe Tenant WB wrote to WA's rows — a foreign ` +
+            'write must land nothing in any tenant-owned table or in the bridge, for either Tenant',
         ).toEqual(before);
       });
 

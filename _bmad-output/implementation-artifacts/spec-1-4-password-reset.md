@@ -581,3 +581,50 @@ Story 1.4 stays at `review`.
 - The five write actions parse the form before resolving the context, so an unauthorised caller with malformed input gets a parse 500 rather than `/no-access` — `low`. It needs both conditions at once, and reordering every action to guard a case never shown reachable is more than a direct correction.
 - `requestContext()` is not injectable, which slice 1's Tasks line promised — `low`, and rejected by rule: the fix is to correct spec text. The substance is met by the `ctx?` parameter every binding takes, which the same spec's Implementation Notes describe; the Tasks line is stale rather than the code wrong.
 - Registering `PUT`, `PATCH` and `DELETE` on the auth route widens the surface for no gain — `low`. `serveAllowlisted` answers 404 to all three; removing them converts that 404 into Next's 405, which is not an improvement worth a change.
+
+### Review Findings — third pass: the shared test infrastructure
+
+`tests/write-harness.ts`, `read-use-cases.ts`, `write-expectations.ts`, `request-context.ts`,
+`support/fake-oidc.ts`, the enumeration gate suites and `web-composition.test.ts` — 1,938 lines,
+same baseline. Four layers: blind hunter (13), edge-case hunter (4), verification gap (3 + 3),
+acceptance auditor (4). This is the machinery every other suite rides on, so the question put to
+the layers was narrower than usual: what here can silently stop checking while still reporting green.
+
+**The headline finding was refuted by measurement, and that matters more than the finding would
+have.** The acceptance auditor reported that the cross-tenant write harness measures the foreign
+replay with row COUNTS, so a cross-Tenant UPDATE of the bridge — three of the four membership
+writes are UPDATEs — passes it, violating slice 2's AC 3. The reasoning is sound and the file
+itself states the rule thirty lines below (*"Every row, not counts: a count cannot see an UPDATE"*).
+The demonstration is not. Dropping the `tenant_id` predicate from the membership writer fails that
+test either way, because it also asserts the outcome is `not_found`, and a writer that can reach
+the other Tenant's row stops refusing. Verified by running it: with the predicate dropped from both
+the row lookup and the lock query, the harness fails three foreign-replay cases and several
+rollback cases — with or without the fix. Counts would only hide a defect that refuses AND writes,
+which the rollback cases already cover.
+
+Recorded because the first sabotage attempt dropped only one of the two predicates, the harness
+stayed green, and that briefly looked like confirmation. It was not: the use case refused earlier,
+at the lock query whose filter was still in place. A partial sabotage proves nothing.
+
+- [x] [Review][Patch] The foreign replay now compares rows rather than counts [tests/cross-tenant-writes.test.ts:164] — kept as defence in depth with its scope stated honestly in the comment, not as a hole closed
+- [x] [Review][Patch] The `apps/web` literal scan could pass having read no file, and matched prose in comments [tests/web-composition.test.ts:801]
+- [x] [Review][Patch] The fake OIDC provider's "sign in as" override was not gated on `interactive`, so any POST carrying an email silently replaced a scripted failure with a verified identity [tests/support/fake-oidc.ts:248]
+- [x] [Review][Patch] `signInWithPassword` and `signOutOf` were stubbed in the module mock and asserted nowhere; dropping the return from `signInWithEmail` made every sign-in read as a refusal with the whole suite green [tests/web-composition.test.ts]
+
+- [x] [Review][Defer] `HARNESS_USER_ID` is staged unprefixed into `tenant_membership`, and `removeProbeTenant` now deletes that user's `identity_event`, `verification`, `session`, `account` and `auth_user` rows — none tenant-scoped — deferred: **this story's own first review pass widened that teardown**, which sharpened a pre-existing hazard. Prefixing was tried and reverted: the id is also the user of every registry context, so a prefixed membership stops matching the caller and every membership write refuses. The real fix threads a per-probe id through `request-context.ts`. Latent today because no `auth_user` row exists for it; documented in place at the staging site.
+- [x] [Review][Defer] `web-composition.test.ts` enumerates the composition root's bindings from four hand-written arrays while every sibling gate enumerates mechanically — deferred: this is exactly why the two bindings above were missing, and the fix is a `readSurfaceFunctionNames`-style assertion over the module namespace. Real, and larger than a patch.
+- [x] [Review][Defer] The tenant-membership bridge is outside the cross-tenant READ harness: its isolation loop and coverage count both filter to `TENANT_OWNED`, and the bridge cannot even be declared unreached because that registry refuses a non-tenant-owned entry — deferred: no read touches it today, and the right fix (assert `TENANT_BRIDGES` is never reached, so the day one does becomes a decision) belongs with story 1.5's role reads.
+- [x] [Review][Defer] Six tables left the cross-tenant coverage measurement when story 1.4 classed them `global`, and the `app_user` entry deleted from `UNREACHED_TENANT_OWNED_TABLES` took its hand-off note with it — deferred: no `UNREACHED_GLOBAL_TABLES` equivalent exists, so nothing records a decision about them any more.
+- [x] [Review][Defer] The auth route module's method exports are still asserted by nothing — deferred: the verification-gap layer is right that a CO-LOCATED test under `apps/web` avoids the root-tsconfig problem that made the second pass drop this, so the obstacle recorded there was wrong. It belongs with the `apps/web` group rather than here.
+- [x] [Review][Defer] The fake OIDC provider cannot script a wrong `iss`, its `/userinfo` answers from a different script than `idTokenOf` and hardcodes `email_verified: true`, issued codes never expire and `hits` cannot be reset — deferred: four related gaps in one file; `iss` is the notable one, since it is the only member of the spec's named id-token quartet with no producible failure input.
+- [x] [Review][Defer] `beforeEach` uses `vi.clearAllMocks()`, which leaves `mockResolvedValueOnce` queues primed, and `expect(spies.authBuilds).toHaveLength(1)` reads a never-cleared process-wide array while its neighbour uses a delta — deferred: both are order fragility rather than a missing check; they bite under `.only` or a shuffled run.
+- [x] [Review][Defer] The membership binding tests never assert `org.findProject`, the one cross-Tenant guard in `assignMemberProject`, nor drive its `not_found` branch — deferred: the guard is covered against Postgres in `membership.test.ts`; what is missing is the binding-level assertion.
+- [x] [Review][Defer] Nothing enumerates the runtime exports of `packages/app/src/index.ts`, only those of `./use-cases` — deferred: a callable use case exported from the barrel alone would be bindable by `apps/web` and covered by neither enumeration gate. No live gap; nothing keeps it that way.
+
+#### Rejected
+
+- The cross-tenant write harness does not enforce slice 2's AC 3 — `false` as filed. Measured above: the `not_found` assertion catches the sabotage the finding named, with and without the counts fix. The count-blindness is real in principle and was patched anyway; the AC is enforced.
+- `TEST_ACTOR` derived through `auditActorOf` makes every actor assertion tautological — `low`. The literal is still pinned: `audited-use-cases.test.ts:61` holds `user:${GATE_USER}` as a string, so a prefix change fails there. The DB harness deriving it is duplication, not a hole.
+- `orgAudit` is misnamed now that it builds membership expectations too; `lockMembers` calls `.slice()` on a fresh `.filter()`; three comment paragraphs were left unwrapped — `low`, cosmetic, and bundled here rather than spent as separate patches.
+- `decodeURIComponent` on a Basic credential can throw a `URIError`, answering 500 instead of 401 — `low`. No test sends a malformed credential and the fake is test-only infrastructure; the fix adds a try/catch guarding a state never shown reachable.
+- `moreWrites` is driven by the audit gate only, so `secondAdminUserId`'s real value is never exercised — `false`. `membership.test.ts` covers the demote/revoke-second-admin branches against Postgres; the registry entry is the gate's input, not a claim about the probes.

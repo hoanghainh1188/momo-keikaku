@@ -77,6 +77,12 @@ const spies = vi.hoisted(() => {
   const append = vi.fn(async (_entry: unknown) => {});
   type AuthBuild = { readonly generateId: () => string } & Record<string, unknown>;
   const authInstance = { marker: 'auth-instance' };
+  // Typed with their real parameters, so `mock.calls[0]![1]` is the `Headers` the assertions read
+  // rather than an empty tuple.
+  const signInWithPassword = vi.fn(
+    async (_auth: unknown, _headers: Headers, _credentials: { email: string; password: string }) => true,
+  );
+  const signOutOf = vi.fn(async (_auth: unknown, _headers: Headers) => {});
   const authBuilds: AuthBuild[] = [];
   /** The session the fake identity adapter answers: a user and the Tenant it last acted in. */
   const session = {
@@ -113,6 +119,8 @@ const spies = vi.hoisted(() => {
       { tenantId: 'ten-from-session', role: 'pm', projectIds: ['prj-ec2'] },
     ]),
     authInstance,
+    signInWithPassword,
+    signOutOf,
     /** The middleware's instance: built WITHOUT Google (story 1.4 slice 3). */
     sessionAuthInstance: { marker: 'session-auth-instance' },
     /** Every options object `createAuth` was built with — never cleared, the instances are per process. */
@@ -165,8 +173,8 @@ vi.mock('@momo/db-auth', () => ({
   resetPassword: spies.resetPassword,
   serveAllowlisted: vi.fn(),
   sessionForMiddleware: spies.sessionForMiddleware,
-  signInWithPassword: vi.fn(),
-  signOutOf: vi.fn(),
+  signInWithPassword: spies.signInWithPassword,
+  signOutOf: spies.signOutOf,
 }));
 
 /**
@@ -798,8 +806,19 @@ describe('apps/web states no Tenant and no actor of its own', () => {
       ['a constant actor', /\bactor\s*:/],
     ];
 
-    const offences = walk(root).flatMap((file) => {
-      const text = readFileSync(file, 'utf8');
+    const files = walk(root);
+    // A FLOOR, so the scan cannot pass having read nothing. `expect(offences).toEqual([])` is
+    // vacuously true for an empty file list, and this is the only gate on "no constant Tenant id
+    // or actor literal remains in apps/web" — a moved or renamed source root would retire it in
+    // silence. The number is a floor, not a count: it only has to notice the directory vanishing.
+    expect(files.length, 'the apps/web scan found no source file — has src/ moved?').toBeGreaterThan(20);
+
+    const offences = files.flatMap((file) => {
+      // Comments stripped first, as `packages/db/src/source-discipline.test.ts` does: a JSDoc
+      // example or a prose sentence naming `tenantId:` is not a constant in the code.
+      const text = readFileSync(file, 'utf8')
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/(^|[^:])\/\/.*$/gm, '$1');
       return banned.filter(([, pattern]) => pattern.test(text)).map(([what]) => `${file}: ${what}`);
     });
     expect(offences).toEqual([]);
@@ -864,5 +883,33 @@ describe('the reset link lifetime', () => {
       import('../packages/db/auth/src/reset'),
     ]);
     expect(RESET_LINK_HOURS * 3600).toBe(RESET_PASSWORD_TOKEN_EXPIRES_IN_SECONDS);
+  });
+});
+
+/**
+ * THE TWO BINDINGS THE PER-BINDING PASS MISSED. `signInWithPassword` and `signOutOf` were stubbed
+ * in the module mock and asserted nowhere, while every other identity binding added by this story
+ * got a block. Dropping the RETURN from `signInWithEmail` — `await` instead of `return` — makes
+ * every sign-in read as a refusal, and nothing failed: the action's own test mocks the binding
+ * away, and the DB suites call `signInWithPassword` on an instance they build themselves.
+ */
+describe('the password sign-in and sign-out bindings', () => {
+  it('signs in on the page instance, with the request\'s headers, answering what the binding answered', async () => {
+    spies.signInWithPassword.mockResolvedValueOnce(true);
+    expect(await composition.signInWithEmail({ email: 'hoang@momo-digital.example', password: 'pw' })).toBe(true);
+    expect(spies.signInWithPassword).toHaveBeenCalledWith(spies.authInstance, expect.any(Headers), {
+      email: 'hoang@momo-digital.example',
+      password: 'pw',
+    });
+    expect(spies.signInWithPassword.mock.calls[0]![1].get('cookie')).toBe('momo.session_token=signed');
+
+    spies.signInWithPassword.mockResolvedValueOnce(false);
+    expect(await composition.signInWithEmail({ email: 'nobody@momo-digital.example', password: 'pw' })).toBe(false);
+  });
+
+  it('signs out on the page instance, with the request\'s headers', async () => {
+    await composition.signOut();
+    expect(spies.signOutOf).toHaveBeenCalledWith(spies.authInstance, expect.any(Headers));
+    expect(spies.signOutOf.mock.calls[0]![1].get('cookie')).toBe('momo.session_token=signed');
   });
 });
