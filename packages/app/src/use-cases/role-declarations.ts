@@ -1,12 +1,13 @@
-/**
+﻿/**
  * EVERY use case's role declaration, in one table — what the role gate
- * (`role-declarations.test.ts`) reads.
+ * (`role-declarations.test.ts`) enumerates and snapshots.
  *
  * Internal to `use-cases/`, like `audit-declarations.ts`: not re-exported from
  * `use-cases/index.ts`, whose exports ARE the enumerated surface. A module that adds a use case
  * spreads its declaration in here; the gate fails, with no database, naming any export that has
- * none. The runners call `authorize` with the same role sets — this table is the mechanical
- * enumeration, not a second enforcement path.
+ * none. Enforcement is proved by the behavioural half of that gate: every export, called with a
+ * viewer-only context and deps that throw, must answer `not_found` without touching a port — so
+ * a table entry that never reaches `authorize` cannot pass CI.
  */
 import type { Role } from '../authz/request-context';
 import { PROJECT_REACH_ROLES, TENANT_ADMIN_ROLES } from '../authz/authorize';
