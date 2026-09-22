@@ -131,6 +131,13 @@ const spies = vi.hoisted(() => {
     ),
     sessionForMiddleware: vi.fn(async (_auth: unknown, _headers: Headers) => ({ signedIn: true, setCookies: [] })),
     requestHeaders: new Headers({ cookie: 'momo.session_token=signed' }),
+    /** Story 1.4 slice 4: the mail sink, the identity-event writer, and the two reset bindings. */
+    mailLines: [] as string[],
+    identityEventRecord: vi.fn(async (_entry: unknown) => {}),
+    requestPasswordReset: vi.fn(async (_auth: unknown, _headers: Headers, _email: string) => true),
+    resetPassword: vi.fn(
+      async (_auth: unknown, _headers: Headers, _input: { token: string; password: string }) => true,
+    ),
   };
 });
 
@@ -141,6 +148,10 @@ vi.mock('@momo/db', async (importOriginal) => ({
   loadProjectBundle: spies.loadProjectBundle,
   loadReview: spies.loadReview,
   membershipsOf: spies.membershipsOf,
+  identityEventWriterOn: (handle: unknown) => {
+    expect(handle).toBe(spies.handle);
+    return { record: spies.identityEventRecord };
+  },
 }));
 
 vi.mock('@momo/db-auth', () => ({
@@ -151,6 +162,8 @@ vi.mock('@momo/db-auth', () => ({
   },
   googleRegistered: spies.googleRegistered,
   googleSignIn: spies.googleSignIn,
+  requestPasswordReset: spies.requestPasswordReset,
+  resetPassword: spies.resetPassword,
   serveAllowlisted: vi.fn(),
   sessionForMiddleware: spies.sessionForMiddleware,
   signInWithPassword: vi.fn(),
@@ -170,6 +183,12 @@ vi.mock(nextHeadersPath, () => ({ headers: async () => spies.requestHeaders }));
 vi.mock('@momo/adapters', () => ({
   systemClock: { now: () => spies.now, nowMs: () => spies.now.getTime() },
   uuidV7IdsOn: () => ({ next: () => spies.newId }),
+  mailerConsoleOn: (sink: (line: string) => void) => ({
+    send: async (message: { to: string; subject: string; text: string }) => {
+      sink(`to: ${message.to}\nsubject: ${message.subject}\n\n${message.text}`);
+      spies.mailLines.push(message.to);
+    },
+  }),
 }));
 
 const APP_URL = 'postgres://momo_app:momo_app@localhost:55433/momo_keikaku';
@@ -668,6 +687,11 @@ describe('the request context the bindings run with', () => {
       google: null,
     });
     expect(spies.authBuilds[0]!.generateId()).toBe(spies.newId);
+    // Story 1.4 slice 4: the mailer, `now` and the identity-event writer, fed into the SAME
+    // options value both instances are built from (AD-1's no-drift rule).
+    expect(spies.authBuilds[0]!.mailer).toEqual({ send: expect.any(Function) });
+    expect((spies.authBuilds[0]!.now as () => Date)()).toBe(spies.now);
+    expect(spies.authBuilds[0]!.identityEvents).toEqual({ record: spies.identityEventRecord });
   });
 
   it('answers whether Google is offered from the page instance\'s registration (story 1.4 slice 3)', async () => {
@@ -705,6 +729,28 @@ describe('the request context the bindings run with', () => {
     expect(await composition.signInState()).toBe('signed_in');
     spies.identity.sessionFrom.mockResolvedValueOnce(null);
     expect(await composition.signInState()).toBe('signed_out');
+  });
+
+  it('requests a password reset on the page instance with the request\'s headers (story 1.4 slice 4)', async () => {
+    await composition.requestPasswordReset('hoang@momo-digital.example');
+    expect(spies.requestPasswordReset).toHaveBeenCalledWith(
+      spies.authInstance,
+      expect.any(Headers),
+      'hoang@momo-digital.example',
+    );
+    expect(spies.requestPasswordReset.mock.calls[0]![1].get('cookie')).toBe('momo.session_token=signed');
+  });
+
+  it('consumes a reset token on the page instance, answering the binding\'s boolean', async () => {
+    spies.resetPassword.mockResolvedValueOnce(true);
+    expect(await composition.resetPassword({ token: 'tok-1', password: 'new-password' })).toBe(true);
+    expect(spies.resetPassword).toHaveBeenCalledWith(spies.authInstance, expect.any(Headers), {
+      token: 'tok-1',
+      password: 'new-password',
+    });
+
+    spies.resetPassword.mockResolvedValueOnce(false);
+    expect(await composition.resetPassword({ token: 'tok-2', password: 'x' })).toBe(false);
   });
 });
 

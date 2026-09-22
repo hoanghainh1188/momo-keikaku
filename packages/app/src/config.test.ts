@@ -29,7 +29,12 @@ const COMPLETE = {
 
 describe('parseConfig', () => {
   it('returns every key when all are present, with the idle timeout defaulted to 8 hours', () => {
-    expect(parseConfig({ ...COMPLETE })).toEqual({ ...COMPLETE, SESSION_IDLE_TIMEOUT_HOURS: 8, AUTH_GOOGLE: 'off' });
+    expect(parseConfig({ ...COMPLETE })).toEqual({
+      ...COMPLETE,
+      SESSION_IDLE_TIMEOUT_HOURS: 8,
+      AUTH_GOOGLE: 'off',
+      MAILER: 'console',
+    });
   });
 
   it('reads SESSION_IDLE_TIMEOUT_HOURS as a whole number of hours', () => {
@@ -130,5 +135,22 @@ describe('googleProvider', () => {
         /GOOGLE_ISSUER_URL must be an absolute https: URL/,
       );
     }
+  });
+});
+
+/** The mail transport (story 1.4 slice 4, AD-17): `console` by default; `ses` is accepted too. */
+describe('MAILER', () => {
+  it('defaults to console', () => {
+    expect(parseConfig({ ...COMPLETE }).MAILER).toBe('console');
+  });
+
+  it('accepts ses, even though only console ships today', () => {
+    expect(parseConfig({ ...COMPLETE, MAILER: 'ses' }).MAILER).toBe('ses');
+  });
+
+  it('refuses anything else, naming the key', () => {
+    expect(() => parseConfig({ ...COMPLETE, MAILER: 'smtp' })).toThrow(
+      /Invalid configuration: MAILER must be `console` or `ses`/,
+    );
   });
 });

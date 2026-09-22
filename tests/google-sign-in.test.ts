@@ -82,6 +82,9 @@ function appDb() {
   return getDb(process.env.APP_DATABASE_URL!);
 }
 
+/** Story 1.4 slice 4 fields this file does not exercise: a no-op mailer and event writer. */
+const NOOP_RESET_DEPS = { mailer: { send: async () => {} }, now: systemClock.now, identityEvents: { record: async () => {} } };
+
 function buildAuth(google: { issuer: string } | null): Auth {
   return createAuth({
     db: appDb(),
@@ -90,6 +93,7 @@ function buildAuth(google: { issuer: string } | null): Auth {
     idleHours: 8,
     generateId: uuidV7IdsOn(systemClock).next,
     google: google === null ? null : { ...CLIENT, issuer: google.issuer },
+    ...NOOP_RESET_DEPS,
   });
 }
 

@@ -1,6 +1,7 @@
 'use client';
 
 import { useActionState } from 'react';
+import Link from 'next/link';
 import { signIn, type SignInState } from './actions';
 
 const INITIAL: SignInState = { refused: false };
@@ -27,6 +28,9 @@ export function SignInForm() {
       <button type="submit" className="btn primary auth-submit" disabled={pending}>
         {pending ? 'Signing in…' : 'Sign in'}
       </button>
+      <p className="auth-below auth-note">
+        <Link href="/forgot-password">Forgot your password?</Link>
+      </p>
     </form>
   );
 }

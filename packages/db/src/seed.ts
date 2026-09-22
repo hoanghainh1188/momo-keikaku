@@ -67,6 +67,8 @@ export const TRUNCATE_ORDER: readonly string[] = [
   'department',
   // Story 1.4 slice 1: the identity tables and the membership bridge. `global`, so TRUNCATE
   // empties them for every Tenant — which the single-Tenant guard below already requires.
+  // Slice 4 adds `identity_event`, also global, ahead of the users it names.
+  'identity_event',
   'tenant_membership',
   'session',
   'account',

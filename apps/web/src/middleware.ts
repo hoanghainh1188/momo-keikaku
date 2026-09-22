@@ -12,8 +12,11 @@ export const middleware = sessionGate(refreshSession);
 
 export const config = {
   runtime: 'nodejs',
-  // Static assets and EXACTLY the public paths (`/sign-in`, `/no-access`, `/api/auth` and
-  // `/api/auth/*`) never reach the gate — anchored, so `/sign-inx` or `/sign-in/x` still do, as
-  // `isPublicPath` says. `session-gate.test.ts` runs this regex against `isPublicPath`.
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|sign-in$|no-access$|api/auth(?:/|$)).*)'],
+  // Static assets and EXACTLY the public paths (`/sign-in`, `/no-access`, `/forgot-password`,
+  // `/reset-password` and `/api/auth` and `/api/auth/*`) never reach the gate — anchored, so
+  // `/sign-inx` or `/sign-in/x` still do, as `isPublicPath` says. `session-gate.test.ts` runs
+  // this regex against `isPublicPath`.
+  matcher: [
+    '/((?!_next/static|_next/image|favicon.ico|sign-in$|no-access$|forgot-password$|reset-password$|api/auth(?:/|$)).*)',
+  ],
 };

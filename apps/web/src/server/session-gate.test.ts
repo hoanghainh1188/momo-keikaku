@@ -45,7 +45,14 @@ describe('the session gate', () => {
   });
 
   it('never asks about a session on the public paths, so /sign-in cannot redirect to itself', async () => {
-    for (const path of ['/sign-in', '/no-access', '/api/auth/get-session', '/api/auth/sign-in/email']) {
+    for (const path of [
+      '/sign-in',
+      '/no-access',
+      '/forgot-password',
+      '/reset-password',
+      '/api/auth/get-session',
+      '/api/auth/sign-in/email',
+    ]) {
       const { gate, seen } = gateAnswering({ signedIn: false, setCookies: [] });
       const response = await gate(request(path));
       expect(response.headers.get('location'), path).toBeNull();
@@ -59,6 +66,13 @@ describe('the session gate', () => {
     expect(isPublicPath('/sign-inx')).toBe(false);
     expect(isPublicPath('/api/authx')).toBe(false);
     expect(isPublicPath('/p/sign-in')).toBe(false);
+    // Story 1.4 slice 4: /forgot-password and /reset-password join the exact-match set.
+    expect(isPublicPath('/forgot-password')).toBe(true);
+    expect(isPublicPath('/reset-password')).toBe(true);
+    expect(isPublicPath('/forgot-password/x')).toBe(false);
+    expect(isPublicPath('/forgot-passwordx')).toBe(false);
+    expect(isPublicPath('/reset-password/x')).toBe(false);
+    expect(isPublicPath('/reset-passwordx')).toBe(false);
   });
 });
 
@@ -90,9 +104,15 @@ describe('the middleware wiring', () => {
       ['/sign-inx', false],
       ['/sign-in/x', false],
       ['/no-access/x', false],
+      ['/forgot-password/x', false],
+      ['/forgot-passwordx', false],
+      ['/reset-password/x', false],
+      ['/reset-passwordx', false],
       ['/api/authx', false],
       ['/sign-in', true],
       ['/no-access', true],
+      ['/forgot-password', true],
+      ['/reset-password', true],
       ['/api/auth', true],
       ['/api/auth/get-session', true],
     ];

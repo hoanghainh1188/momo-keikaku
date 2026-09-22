@@ -242,6 +242,10 @@ describe.skipIf(!reachable)('membership writes and revocation, against Postgres 
       baseURL: BASE_URL,
       idleHours: 8,
       generateId: uuidV7IdsOn(systemClock).next,
+      // Story 1.4 slice 4 fields this file does not exercise.
+      mailer: { send: async () => {} },
+      now: systemClock.now,
+      identityEvents: { record: async () => {} },
     });
     passwordHash = await hashPassword(PASSWORD);
     await createProbeTenant(owner(), { ...P, writeOptions: { ...P.writeOptions, passwordHash } });

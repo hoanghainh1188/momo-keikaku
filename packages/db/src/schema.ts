@@ -151,6 +151,30 @@ export const authSchema = {
   verification,
 };
 
+/**
+ * IDENTITY EVENTS (story 1.4 slice 4): the sink for identity events that happen before any Tenant
+ * exists — `audit_log` cannot record them, because it needs a Tenant and these resolve none. A
+ * password reset is the first; a later link, unlink or invitation acceptance records here too,
+ * never in `audit_log` or `operator_audit` (the AD-1 adversarial review's F3).
+ *
+ * `global`, like the four Better Auth tables above, and — unlike them — insert-only: the
+ * application role holds `SELECT, INSERT` on it and nothing else (`table-classes.ts`), so there is
+ * no grant to correct or remove a row with. `userId` names an `auth_user` row with no foreign key,
+ * per this schema's demo deviation (see the module note); Better Auth deletes no user today, so
+ * there is nothing yet that would orphan the reference.
+ */
+export const identityEvent = pgTable(
+  'identity_event',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id').notNull(),
+    action: text('action').notNull(),
+    at: timestamp('at', { withTimezone: true }).notNull(),
+    payload: jsonb('payload'),
+  },
+  (t) => ({ byUser: index('identity_event_user_idx').on(t.userId) }),
+);
+
 export const project = pgTable(
   'project',
   {
@@ -363,6 +387,7 @@ export const schemaTables = {
   session,
   account,
   verification,
+  identityEvent,
   project,
   resource,
   rateEntry,

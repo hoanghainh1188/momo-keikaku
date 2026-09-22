@@ -672,3 +672,63 @@ work started and was deliberately deferred, with the evidence for the split.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-4-google-sign-in.md`
   summary: `googleSignIn`'s refusal paths on a REGISTERED instance (an `APIError` from `signInSocial`, or a response without a URL) are run by no test.
   evidence: Verification-gap review. Every `null` in the tests comes from the not-registered guard before the `try`; removing the `catch` would leave CI green and turn such a refusal into an error page. No clean way to make the real fake trigger it; revisit if the start path gains refusal conditions.
+
+## Deferred from: implementation of spec-1-4-password-reset (2026-09-22)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-password-reset.md`
+  summary: `mailer-ses` (the production mail transport) is Epic 8's — the AWS account and sender
+  domain that would let it be tested against don't exist yet. `MAILER=ses` is accepted by config
+  today (AD-17/AD-18) but the composition root's `webMailer()` throws naming the missing adapter.
+  evidence: By the spec's own decision, recorded 2026-09-22. When Epic 8 adds `mailer-ses`, wire it
+  into `webMailer()`'s `switch` beside `console` and drop the throw.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-password-reset.md`
+  summary: The sign-in rate limit stays deferred to Epic 8 (as already recorded from story 1.4
+  slice 1), and now covers a SECOND unauthenticated, enumerable endpoint: `requestPasswordReset`
+  calls `auth.api.requestPasswordReset` directly from a server action, bypassing Better Auth's own
+  HTTP-router rate limiter exactly as `signInWithEmail` and `googleSignIn` already do.
+  evidence: By the spec's own decision ("R0 runs locally"). Nothing here throttles repeated reset
+  requests for the same or different emails; only Better Auth's own generic-response shape and the
+  lack of any observable difference between outcomes limit what an unthrottled caller learns.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-password-reset.md`
+  summary: The spine (`ARCHITECTURE-SPINE.md`) and the compiled `epic-1-context.md` do not yet
+  describe `CreateAuthOptions`'s new `mailer`/`now`/`identityEvents` arguments, the `identity_event`
+  table's AD-21 entry, or the four founder decisions this slice made (identity events in one
+  global insert-only table, a completed reset sets `email_verified`, the sign-in throttle stays
+  deferred, `mailer-console` only for R0).
+  evidence: Deferred by the spec on purpose, mirroring how slice 3's AD-1 amendment for Google was
+  handled: an amended planning doc gets its own adversarial review (up to two rounds) before it
+  lands. Amend the spine, review, then regenerate `epic-1-context.md`.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-password-reset.md`
+  summary: The credential-account check in `sendResetPassword` (`packages/db/auth/src/auth.ts`'s
+  `hasCredentialAccount`) reads the `account` table directly through `options.db`, rather than
+  through a declared port. It is the one place this package queries a table beyond what
+  `authSchema`'s Drizzle adapter already touches for Better Auth's own bookkeeping.
+  evidence: Judgment call made during implementation, not reviewed. It stays inside the same
+  carve-out (`packages/db/auth` may read the four Better Auth tables directly; `account` is one of
+  them) and needs no new port, but a reviewer should confirm that reading and not just writing
+  those tables directly is intended, since every other read in this package goes through
+  `internalAdapter` or `auth.api` instead.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-password-reset.md`
+  summary: `identity_event` rows written for a probe Tenant's members during a test are not swept
+  by `removeProbeTenant` (it skips every table with a null `tenantColumn`, `identity_event`
+  included) — `tests/password-reset.test.ts` cleans up its own dedicated extra users' rows by hand,
+  but a probe Tenant's SEEDED members (created with a credential account) would leave any
+  `identity_event` rows they earned behind if a later test ever reset one of their passwords.
+  evidence: Not exercised today — no test resets a seeded probe member's password, only a
+  dedicated extra user's. Small rows in the dev/CI database either way, the same shape as B8's
+  `verification`-row growth from the Google slice.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-password-reset.md`
+  summary: The `/forgot-password` and `/reset-password` pages were not clicked through in a real
+  browser under `pnpm dev` in this implementation session (no browser available in the sandbox).
+  `next build` succeeds and both routes compile as dynamic routes; the full flow (request a reset,
+  copy the link from the console mailer's stdout line, set a new password, sign in with it) is
+  otherwise verified end-to-end against real Postgres in `tests/password-reset.test.ts`, which
+  drives the same `createAuth` options the composition root builds, but not through Next's own
+  request/response cycle or a browser's form submission.
+  evidence: CI never runs `next build`; the spec says the two pages are "confirmed here or not at
+  all" (the manual check). Owed before story 1.4's whole-story review closes it out.

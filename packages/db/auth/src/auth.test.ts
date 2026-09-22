@@ -1,18 +1,26 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { Db } from '@momo/db';
 import { SESSION_UPDATE_AGE_SECONDS, authOptions } from './auth';
 import { discoveryUrlOf, verifiedGoogleIdentity, withoutProviderTokens } from './google';
+import { resetLinkOf, resetPasswordMail } from './reset';
 
 /**
  * The auth configuration, pinned with no database (story 1.4 slice 1). `tests/identity.test.ts`
  * drives the same options against Postgres; this file is the gate that still runs without one.
  */
+const NOW = new Date('2026-09-22T08:00:00Z');
+const MAILER = { send: vi.fn(async () => {}) };
+const IDENTITY_EVENTS = { record: vi.fn(async () => {}) };
+
 const OPTIONS = authOptions({
   db: {} as Db,
   secret: 'auth-options-test-secret-0123456789abcd',
   baseURL: 'http://localhost:3101',
   idleHours: 8,
   generateId: () => '019b76da-a800-7000-8000-0f0000000000',
+  mailer: MAILER,
+  now: () => NOW,
+  identityEvents: IDENTITY_EVENTS,
 });
 
 describe('the Better Auth options', () => {
@@ -26,8 +34,15 @@ describe('the Better Auth options', () => {
     expect(SESSION_UPDATE_AGE_SECONDS).toBe(300);
   });
 
-  it('enables email + password with sign-up disabled', () => {
-    expect(OPTIONS.emailAndPassword).toEqual({ enabled: true, disableSignUp: true });
+  it('enables email + password with sign-up disabled, and pins the reset timing (story 1.4 slice 4)', () => {
+    expect(OPTIONS.emailAndPassword).toMatchObject({
+      enabled: true,
+      disableSignUp: true,
+      resetPasswordTokenExpiresIn: 3600,
+      revokeSessionsOnPasswordReset: true,
+    });
+    expect(OPTIONS.emailAndPassword.sendResetPassword).toEqual(expect.any(Function));
+    expect(OPTIONS.emailAndPassword.onPasswordReset).toEqual(expect.any(Function));
   });
 
   it('adds the two product fields, neither of them client-writable', () => {
@@ -57,6 +72,9 @@ const OPTIONS_INPUT = {
   baseURL: 'http://localhost:3101',
   idleHours: 8,
   generateId: () => 'id',
+  mailer: MAILER,
+  now: () => NOW,
+  identityEvents: IDENTITY_EVENTS,
 };
 
 /** An unsigned JWT carrying `claims` — `verifiedGoogleIdentity` only decodes (the plugin verified). */
@@ -183,5 +201,47 @@ describe('withoutProviderTokens — the account create hook', () => {
       },
     });
     expect(await withoutProviderTokens({ providerId: 'credential' })).toBeUndefined();
+  });
+});
+
+describe('password reset options (story 1.4 slice 4)', () => {
+  it('pins the timing explicitly rather than inheriting Better Auth\'s defaults', () => {
+    expect(OPTIONS.emailAndPassword.resetPasswordTokenExpiresIn).toBe(3600);
+    expect(OPTIONS.emailAndPassword.revokeSessionsOnPasswordReset).toBe(true);
+  });
+});
+
+describe('resetLinkOf — the product\'s own link', () => {
+  it('builds /reset-password?token=… under the given base URL, never Better Auth\'s own url', () => {
+    expect(resetLinkOf('http://localhost:3101', 'tok-abc')).toBe(
+      'http://localhost:3101/reset-password?token=tok-abc',
+    );
+  });
+
+  it('strips trailing slashes from the base URL, so the path is never doubled', () => {
+    for (const baseURL of ['http://localhost:3101', 'http://localhost:3101/', 'http://localhost:3101//']) {
+      expect(resetLinkOf(baseURL, 'tok-abc')).toBe('http://localhost:3101/reset-password?token=tok-abc');
+    }
+  });
+
+  it('encodes a token that needs it', () => {
+    expect(resetLinkOf('http://localhost:3101', 'a b/c')).toBe(
+      'http://localhost:3101/reset-password?token=a%20b%2Fc',
+    );
+  });
+});
+
+describe('resetPasswordMail — the one mail copy builder (hardcoded English)', () => {
+  it('carries the address, a fixed subject, and the link in the body', () => {
+    const mail = resetPasswordMail({ to: 'hoang@momo-digital.example', link: 'http://localhost:3101/reset-password?token=x' });
+    expect(mail.to).toBe('hoang@momo-digital.example');
+    expect(mail.subject).toBe('Reset your momo-keikaku password');
+    expect(mail.text).toContain('http://localhost:3101/reset-password?token=x');
+    expect(mail.text).toContain('expires in 1 hour');
+  });
+
+  it('is pure: the same input always answers the same mail', () => {
+    const input = { to: 'a@example.test', link: 'http://localhost:3101/reset-password?token=y' };
+    expect(resetPasswordMail(input)).toEqual(resetPasswordMail(input));
   });
 });

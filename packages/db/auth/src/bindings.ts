@@ -130,6 +130,47 @@ export async function signInWithPassword(
   }
 }
 
+/**
+ * Requests a password reset (story 1.4 slice 4): `auth.api.requestPasswordReset` — never served
+ * over HTTP (`/request-password-reset` stays in `DISABLED_PATHS`). Better Auth answers the same
+ * `{ status: true }` whether or not the email exists, and this binding answers the same `true`
+ * either way; it returns `false` only when Better Auth itself refuses the call (logged, status and
+ * code only — never the address), which the caller shows as the very same generic sentence.
+ */
+export async function requestPasswordReset(auth: Auth, headers: Headers, email: string): Promise<boolean> {
+  try {
+    await auth.api.requestPasswordReset({ body: { email }, headers });
+    return true;
+  } catch (error) {
+    if (!isAPIError(error)) throw error;
+    const code = (error as { body?: { code?: unknown } }).body?.code;
+    console.warn(`[auth] password-reset request refused by Better Auth: status ${String(error.status)}, code ${String(code)}`);
+    return false;
+  }
+}
+
+/**
+ * Consumes a reset token and sets a new password (story 1.4 slice 4): `auth.api.resetPassword` —
+ * never served over HTTP (`/reset-password` stays in `DISABLED_PATHS`). `false` for every
+ * refusal — a reused or expired token, a password Better Auth's `minPasswordLength` refuses —
+ * told apart by nothing (NFR-S5): the caller shows one generic sentence for all of them.
+ */
+export async function resetPassword(
+  auth: Auth,
+  headers: Headers,
+  input: { readonly token: string; readonly password: string },
+): Promise<boolean> {
+  try {
+    await auth.api.resetPassword({ body: { newPassword: input.password, token: input.token }, headers });
+    return true;
+  } catch (error) {
+    if (!isAPIError(error)) throw error;
+    const code = (error as { body?: { code?: unknown } }).body?.code;
+    console.warn(`[auth] password reset refused by Better Auth: status ${String(error.status)}, code ${String(code)}`);
+    return false;
+  }
+}
+
 /** Ends the request's session and clears its cookie (through `nextCookies()`). */
 export async function signOutOf(auth: Auth, headers: Headers): Promise<void> {
   try {

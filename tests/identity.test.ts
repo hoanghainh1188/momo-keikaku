@@ -72,6 +72,9 @@ function appDb() {
   return getDb(process.env.APP_DATABASE_URL!);
 }
 
+/** Story 1.4 slice 4 fields this file does not exercise: a no-op mailer and event writer. */
+const NOOP_RESET_DEPS = { mailer: { send: async () => {} }, now: systemClock.now, identityEvents: { record: async () => {} } };
+
 /** The `Cookie` header a browser would send back, from the `Set-Cookie`s a response carried. */
 function cookieFrom(setCookies: readonly string[]): string {
   return setCookies.map((cookie) => cookie.split(';')[0]!).join('; ');
@@ -130,6 +133,7 @@ describe.skipIf(!reachable)('sign-in and the request context, against Postgres (
       baseURL: BASE_URL,
       idleHours: IDLE_HOURS,
       generateId: uuidV7IdsOn(systemClock).next,
+      ...NOOP_RESET_DEPS,
     });
     const passwordHash = await hashPassword(PASSWORD);
     await removeExtras();
@@ -397,6 +401,7 @@ describe.skipIf(!reachable)('sign-in and the request context, against Postgres (
         baseURL: BASE_URL,
         idleHours: IDLE_HOURS,
         generateId: uuidV7IdsOn(systemClock).next,
+        ...NOOP_RESET_DEPS,
         google: { clientId: 'identity-google-client', clientSecret: 'identity-google-secret', issuer: fake.issuer },
       });
       const serve = serveAllowlisted(withGoogle);

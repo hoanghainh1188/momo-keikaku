@@ -153,30 +153,72 @@ exists. Two new public pages request a link and consume it, both through server 
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `packages/app/src/ports/mailer.ts`, `index.ts`, `config.ts` + `config.test.ts` -- the port and `MAILER` -- AD-17, AD-18
-- [ ] `packages/adapters/src/mailer-console.ts` + test, `index.ts` -- the dev adapter; the barrel's stale header
-- [ ] `packages/db/src/{schema,table-classes,repo-identity-event}.ts`, `registry.test.ts`, `source-discipline.test.ts`, `pnpm db:sql` -- the table, its one writer, its fences, regenerated SQL
-- [ ] `packages/db/auth/src/{reset,auth,bindings,index}.ts`, `auth.test.ts` -- the callbacks, pinned options, two bindings, the stale header note
-- [ ] `apps/web/src/server/composition.ts`, `tests/web-composition.test.ts` -- `webMailer()`, one options value, two bindings
-- [ ] `apps/web/src/app/{forgot-password,reset-password}/*` + co-located tests, `globals.css` -- the two pages
-- [ ] `apps/web/src/server/session-gate.ts`, `middleware.ts`, `session-gate.test.ts` -- both routes public, in all three places
-- [ ] `tests/password-reset.test.ts`, `tests/identity.test.ts` -- the matrix; reset still 404s over HTTP
-- [ ] `README-DEMO.md`, `deferred-work.md`, `HANDOFF.md` -- local instructions; mark slice 4; defer `mailer-ses`, the throttle, and the spine amendment recording `identity_event` and the four decisions above
+- [x] `packages/app/src/ports/mailer.ts`, `index.ts`, `config.ts` + `config.test.ts` -- the port and `MAILER` -- AD-17, AD-18
+- [x] `packages/adapters/src/mailer-console.ts` + test, `index.ts` -- the dev adapter; the barrel's stale header
+- [x] `packages/db/src/{schema,table-classes,repo-identity-event}.ts`, `registry.test.ts`, `source-discipline.test.ts`, `pnpm db:sql` -- the table, its one writer, its fences, regenerated SQL
+- [x] `packages/db/auth/src/{reset,auth,bindings,index}.ts`, `auth.test.ts` -- the callbacks, pinned options, two bindings, the stale header note
+- [x] `apps/web/src/server/composition.ts`, `tests/web-composition.test.ts` -- `webMailer()`, one options value, two bindings
+- [x] `apps/web/src/app/{forgot-password,reset-password}/*` + co-located tests, `globals.css` -- the two pages
+- [x] `apps/web/src/server/session-gate.ts`, `middleware.ts`, `session-gate.test.ts` -- both routes public, in all three places
+- [x] `tests/password-reset.test.ts`, `tests/identity.test.ts` -- the matrix; reset still 404s over HTTP
+- [x] `README-DEMO.md`, `deferred-work.md`, `HANDOFF.md` -- local instructions; mark slice 4; defer `mailer-ses`, the throttle, and the spine amendment recording `identity_event` and the four decisions above
 
 **Acceptance Criteria:**
 - Given `MAILER=console` and a seeded user, when a reset is requested and the link followed with a
   new password, then the user signs in with it and not with the old one.
 - Given each sabotage, when CI runs, then a test fails: `revokeSessionsOnPasswordReset` removed (a
-  session alive after reset); `resetPasswordTokenExpiresIn` removed (an hour-old token accepted);
-  the boundary's lowercasing removed (`Hoang@…` finds nobody); the generic sentence replaced by a
-  distinguishable one; `/reset-password` added to `SERVED_AUTH_ENDPOINTS` (it must stay 404);
-  `identity_event` granted UPDATE or DELETE (the registry assertion must catch it).
+  session alive after reset); `resetPasswordTokenExpiresIn` removed (`auth.test.ts`'s options pin,
+  which is the only thing that can catch it — Better Auth's own default is 3600 too, so removing
+  the line changes no behaviour); the boundary's lowercasing removed (`Hoang@…` finds nobody); the
+  generic sentence replaced by a distinguishable one; `/reset-password` removed from
+  `DISABLED_PATHS` **and** added to `SERVED_AUTH_ENDPOINTS` (both gates must be defeated before it
+  is served, so only changing both is a real sabotage); `identity_event` granted UPDATE or DELETE
+  (the registry assertion must catch it).
 - Given the mailer throws, when a reset is requested, then the page answers exactly as on success
   and the address appears in no log line.
 
 ## Implementation Notes
 
+- The Google-only "no mail" rule is enforced in `sendResetPassword` itself: a small
+  `hasCredentialAccount(options.db, user.id)` read (SELECT on `account` filtered to
+  `providerId: 'credential'`) gates whether `mailer.send` is ever called. Better Auth still
+  creates the `verification` row before calling `sendResetPassword` (it always does, once a user
+  is found by email), so a Google-only user's request still leaves an unused, expiring token row
+  behind — the same shape as the identity-event-cleanup gap recorded below, and harmless since the
+  mail (the only channel the token travels over) is never sent.
+- `identityEventWriterOn(db)` takes the bare handle and issues its insert on a `tx` via
+  `db.transaction(...)`, per the bare-handle rule (`source-discipline.test.ts`), the same shape as
+  `repo-membership.ts`'s reader — there is no tenant transaction to fold it into (`identity_event`
+  is global).
+- `packages/db/auth/src/auth.ts` reuses `CreateAuthOptions.generateId` (the same UUIDv7 port
+  already used for identity ids) to mint the `identity_event` row's id, rather than adding a
+  fourth id-generation argument.
+- `/forgot-password` and `/reset-password` follow `/sign-in?google=refused`'s REDIRECT shape
+  rather than `useActionState`: every outcome (sent, or refused) is a redirect to the same page
+  with a query flag (`?sent=1`, `?refused=1`), never a distinguishable value returned to
+  re-render — which is also what let a `redirectedTo()` test helper, copied from
+  `sign-in/actions.test.ts`, pin both actions' outcomes exactly.
+- A "Forgot your password?" link was added to `sign-in-form.tsx` (not in the spec's Code Map, but
+  the two pages would otherwise be reachable only by typing the URL).
+
 ## Spec Change Log
+
+- 2026-09-22 — two acceptance-criteria sabotages were written at planning time against a wrong
+  model of the code, and were corrected after the implementation diff was judged. (1)
+  "`resetPasswordTokenExpiresIn` removed (an hour-old token accepted)" is impossible: Better
+  Auth's own default is 3600 s (`@better-auth/core`'s `init-options`, applied at
+  `password.mjs:73`), so removing the line changes no behaviour and only `auth.test.ts`'s options
+  pin discriminates it. (2) "`/reset-password` added to `SERVED_AUTH_ENDPOINTS` (it must stay
+  404)" assumed the allowlist was the only gate; `DISABLED_PATHS` blocks the same path
+  independently at Better Auth's own router, so defeating one gate alone still yields 404. The
+  criterion now names both gates. KEEP: the remaining four sabotages are real pass→fail
+  transitions and were each watched to fail.
+- 2026-09-22 — `packages/db/auth/src/auth.ts`: the comment above the two pinned reset options
+  claimed "Better Auth's own defaults happen to match" for BOTH. That is true only of
+  `resetPasswordTokenExpiresIn`; `revokeSessionsOnPasswordReset` defaults to `false`
+  (`@better-auth/core`'s `init-options`; read at `password.mjs:171`), so the line is an override,
+  not a restatement. Rewritten to separate the two, because the comment as written invited a
+  future reader to delete a line that silently keeps an attacker's session alive through a reset.
 
 ## Review Triage Log
 
@@ -210,3 +252,36 @@ exists. Two new public pages request a link and consume it, both through server 
 - `pnpm dev` with `MAILER=console`: request a reset for the seeded user, copy the link out of the
   terminal, set a new password, sign in with it. CI never runs `next build`, so the two pages are
   confirmed here or not at all.
+
+## Verification Results (2026-09-22)
+
+Against a native Postgres 16 instance (Docker was unavailable in this session's sandbox; CI's
+`postgres:18.6-alpine` service should still be the one re-checked before merge), `REQUIRE_DB=1`,
+after `drizzle-kit push --force`, `pnpm pgboss:migrate`, `pnpm db:policies` (applied twice,
+idempotent) and `pnpm seed`.
+
+| Command | Result |
+| --- | --- |
+| `pnpm lint` | exit 0 |
+| `pnpm typecheck`, `pnpm --filter @momo/web typecheck`, `pnpm --filter @momo/worker typecheck` | exit 0 |
+| `pnpm depcruise` | exit 0 — 178 modules, 499 dependencies |
+| `pnpm db:sql` | regenerated; only `grants.sql` changed (the `identity_event` grant) |
+| `REQUIRE_DB=1 pnpm test` | **758 passed across 43 files** (528 across 42 without a database) |
+| `pnpm --filter @momo/web exec next build` | exit 0; `/forgot-password` and `/reset-password` compile as dynamic routes |
+
+**Sabotages — each watched to fail, then restored.**
+
+| Sabotage | What caught it |
+| --- | --- |
+| `revokeSessionsOnPasswordReset` removed | `auth.test.ts` (options pin); `tests/password-reset.test.ts` (a session survives the reset) |
+| `resetPasswordTokenExpiresIn` removed | `auth.test.ts` (options pin) — Better Auth's own default happens to equal 3600 too, so no behavioural test distinguishes it; the explicit pin is what a future Better Auth default change would need |
+| The boundary's lowercasing removed (`apps/web/src/app/forgot-password/actions.ts`) | `forgot-password/actions.test.ts` |
+| `identity_event` granted UPDATE | `registry.test.ts` (the override-set assertion) and its SQL-drift check (`grants.sql`) both fail |
+| `/reset-password` added to `SERVED_AUTH_ENDPOINTS` alone (`DISABLED_PATHS` untouched, per the spec) | Confirmed to still answer 404 (`tests/password-reset.test.ts`) — `DISABLED_PATHS` independently blocks it at Better Auth's own router, so this one change alone does not reach `auth.handler`; matches the acceptance criterion's own wording ("it must stay 404") rather than a pass→fail transition |
+| The mailer throws | `tests/password-reset.test.ts` — the request still answers `true`, and the console.warn line names no address |
+
+**Not run in this session:** a real-browser click-through of `/forgot-password` and
+`/reset-password` under `next dev` (no browser in the sandbox). `next build` succeeded and the
+same `createAuth` options the composition root builds are exercised end-to-end against Postgres
+by `tests/password-reset.test.ts`, but the actual Next.js request/response cycle and form
+submission were not driven by a browser. Recorded in `deferred-work.md`.

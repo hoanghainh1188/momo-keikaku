@@ -48,6 +48,11 @@
 // the accessor the web composition root reads (it fails naming every missing key at first read),
 // and `parseConfig`'s `superRefine`. The issuer must be `https:`, unless its host is loopback (the
 // in-repo fake OIDC provider, `tests/support/fake-oidc.ts`, in local dev and CI).
+//
+// Story 1.4 slice 4 added `MAILER` (AD-17's dev default, AD-18): `console` unless a deployment
+// names another transport. `ses` (Epic 8) is ACCEPTED here and fails only at the composition root,
+// naming the missing adapter — the key is not a lie about what ships today; it is the name of what
+// will, so a deployment can be configured for it ahead of the adapter landing.
 import { z } from 'zod';
 
 /** Hosts an `http:` issuer may name: this machine only (the fake OIDC provider). */
@@ -135,6 +140,13 @@ const configShape = z.object({
       'must be an absolute https: URL (http: only on a loopback host) — the OIDC issuer, e.g. https://accounts.google.com',
     )
     .optional(),
+
+  // Password reset's mail transport (story 1.4 slice 4, AD-17's dev default). `console` writes
+  // every message to the server log; `ses` is Epic 8's, and is accepted here so a deployment can
+  // name it before the adapter exists — the composition root fails naming the missing adapter.
+  MAILER: z
+    .enum(['console', 'ses'], { error: 'must be `console` or `ses` — which mail transport to use' })
+    .default('console'),
 });
 
 /** Whole-schema parsing adds the one cross-key rule: `AUTH_GOOGLE=on` needs all three Google keys. */
@@ -223,6 +235,9 @@ export const config: AppConfig = {
   },
   get GOOGLE_ISSUER_URL(): string | undefined {
     return parseConfigKey(process.env, 'GOOGLE_ISSUER_URL');
+  },
+  get MAILER(): 'console' | 'ses' {
+    return parseConfigKey(process.env, 'MAILER');
   },
 };
 

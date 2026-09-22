@@ -41,6 +41,7 @@ export type {
 export type { AuditedWriteDeps, WriteStamp } from './ports/audited-write';
 export type { Clock } from './ports/clock';
 export type { IdGenerator } from './ports/ids';
+export type { MailerPort, MailMessage } from './ports/mailer';
 export type {
   DepartmentRow,
   NewProjectRow,
