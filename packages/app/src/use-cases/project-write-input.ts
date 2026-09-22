@@ -6,11 +6,12 @@
  * schema or helper exported there would be reported as a use case with no registry entry.
  */
 import { z } from 'zod';
-import type { Result } from '../result';
+import { authorize, PROJECT_REACH_ROLES } from '../authz/authorize';
+import type { RequestContext } from '../authz/request-context';
 import { isProjectNotFound } from '../ports/project-read';
 import type { ProjectWriteDeps, ProjectWriteScope, WriteStamp } from '../ports/project-write';
+import type { Result } from '../result';
 import { runAuditedWrite } from './audited-write';
-import type { RequestContext } from '../authz/request-context';
 
 /**
  * A non-empty string Postgres will accept as a text parameter. NUL is refused for the reason
@@ -74,16 +75,18 @@ export type ChangeRequestCandidatesInput = Readonly<
 export type MapTicketInput = Readonly<z.infer<typeof mapTicketInputSchema>>;
 
 /**
- * Validates the input, opens ONE tenant transaction for the caller's Tenant, reads the Project's
+ * Authorises the caller (`tenant_admin` | `pm`, roles before parse), validates the input, checks
+ * Project reach, opens ONE tenant transaction for the caller's Tenant, reads the Project's
  * anchor inside it, and runs `work` on that transaction's scope with the stamp — then maps an
  * invisible Project to `not_found`.
  *
  * Since story 1.3 slice 2 this is `runAuditedWrite` (`./audited-write.ts`, the path every audited
- * write shares) with the project writes' two particulars: the event time is the Project's
- * `demoAnchor` (so the rows stay byte-identical — no Clock here), and an invisible Project is the
- * adapter's `project <id> not found` rejection (`isProjectNotFound`). The rest of the contract —
- * one transaction, `invalid_input` before it opens, the guarded audit sink, nothing else caught —
- * is that function's, unchanged.
+ * write shares) with the project writes' particulars: the event time is the Project's
+ * `demoAnchor` (so the rows stay byte-identical — no Clock here), an invisible Project is the
+ * adapter's `project <id> not found` rejection (`isProjectNotFound`), and story 1.5's Project
+ * reach sits on the plan after parse. The rest of the contract — one transaction,
+ * `invalid_input` before it opens, the guarded audit sink, nothing else caught — is that
+ * function's, unchanged.
  */
 export async function runProjectWrite<Handle, Command extends { readonly projectId: string }>(
   schema: z.ZodType<Command>,
@@ -92,6 +95,9 @@ export async function runProjectWrite<Handle, Command extends { readonly project
   input: unknown,
   work: (scope: ProjectWriteScope, stamp: WriteStamp, command: Command) => Promise<void>,
 ): Promise<Result<void>> {
+  const roles = authorize(ctx, { roles: PROJECT_REACH_ROLES });
+  if (!roles.ok) return roles;
+
   return runAuditedWrite(
     schema,
     deps,
@@ -100,6 +106,8 @@ export async function runProjectWrite<Handle, Command extends { readonly project
     {
       at: (scope, command) => scope.projectWrite.projectAnchor(command.projectId),
       isNotFound: (error, command) => isProjectNotFound(error, command.projectId),
+      authorize: (caller, command) =>
+        authorize(caller, { roles: PROJECT_REACH_ROLES, projectId: command.projectId }),
     },
     work,
   );

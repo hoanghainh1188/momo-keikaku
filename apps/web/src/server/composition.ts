@@ -425,8 +425,9 @@ export async function mapTicket(input: MapTicketInput, ctx?: RequestContext) {
 }
 
 // --- FR-1's organisation writes (story 1.3 slice 2). No page calls them yet: the Organisation
-// admin surface waits for sign-in and roles (1.4/1.5). Wired now so the bindings, the Clock and the
-// id port are pinned by `tests/web-composition.test.ts` before a page can reach them.
+// admin surface waits for a Users/Organisation screen. Each declares `tenant_admin` through
+// story 1.5's helper. Wired so the bindings, the Clock and the id port are pinned by
+// `tests/web-composition.test.ts` before a page can reach them.
 
 /** FR-1: a new Department. See `packages/app`'s `createDepartment`. */
 export async function createDepartment(input: CreateDepartmentInput, ctx?: RequestContext) {
@@ -476,10 +477,11 @@ export async function reassignProjectDepartment(input: ReassignProjectDepartment
   return reassignProjectDepartmentUseCase(writeDeps(), context, input);
 }
 
-// --- Membership changes (story 1.4 slice 2). No page calls them yet — there is no Users screen in
-// this slice. Wired now so a future server action reaches them with the context it resolved once,
-// and so `tests/web-composition.test.ts` pins each binding to its own use case. Each requires
-// `tenant_admin` in the context and re-checks it against the bridge inside its transaction.
+// --- Membership changes (story 1.4 slice 2). No page calls them yet — there is no Users screen.
+// Wired so a future server action reaches them with the context it resolved once, and so
+// `tests/web-composition.test.ts` pins each binding to its own use case. Each declares
+// `tenant_admin` through story 1.5's helper and re-checks it against the bridge inside its
+// transaction.
 
 /** FR-3: revokes a membership; the member's next request is signed out. See `revokeMembership`. */
 export async function revokeMembership(input: RevokeMembershipInput, ctx?: RequestContext) {

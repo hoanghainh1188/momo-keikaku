@@ -475,6 +475,7 @@ work started and was deliberately deferred, with the evidence for the split.
   summary: FR-1's "assign PMs to Projects" is not done in story 1.3; it belongs with `tenant_membership` (story 1.4's table, `project_ids`) and role reach (1.5).
   evidence: Decided by the founder on 2026-09-21: identity and membership do not exist before 1.4, and an interim `project_pm` table on the legacy `app_user` would be rewritten when 1.4 replaces it. The assignment is audited (NFR-A1 "role changes") when it lands.
   resolved: 2026-09-21 in `spec-1-4-revocation-and-membership.md` — `assignMemberProject` / `unassignMemberProject` write `tenant_membership.project_ids`, audited. What a PM can then REACH through those Projects is still story 1.5's.
+  resolved: YES, 2026-09-22 in `spec-1-5-roles-decide-what-each-person-can-reach.md` — Project reach for PM/`tenant_admin` via `authorize` / `reachesProject`.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-3-audit-mechanism.md`
   summary: The audit gate drives each audited use case with ONE input (its registry entry's `invokeWrite`), so an action chosen on a branch is covered by the gate only on that branch — `mapTicket`'s unmap (`mapping.unmap`) is proved by the unit test and the write harness's unmap case, not by the gate.
@@ -618,6 +619,7 @@ work started and was deliberately deferred, with the evidence for the split.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-4-revocation-and-membership.md`
   summary: The membership writes' `tenant_admin` check is local to them; no other use case checks a role, and a PM can still call every organisation write.
   evidence: Decided by the founder for this slice (a local check ahead of story 1.5). Story 1.5 replaces it with the declared-roles mechanism and must keep the in-transaction re-check against the bridge (a server action's context can be stale).
+  resolved: YES, 2026-09-22 in `spec-1-5-roles-decide-what-each-person-can-reach.md`. `authorize` in `packages/app/src/authz/authorize.ts`; every use-case export declares roles; membership lock re-check kept.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-4-revocation-and-membership.md`
   summary: `tests/cross-tenant-writes.test.ts`'s "ids that exist in neither Tenant" run is made as the OWN probe Tenant (where the same caller's writes succeed), not as the foreign one.
@@ -633,6 +635,7 @@ work started and was deliberately deferred, with the evidence for the split.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-4-revocation-and-membership.md`
   summary: A Tenant Admin's membership may carry `projectIds` (kept on promotion, assignable); story 1.5 must not read them as a limit on a Tenant Admin's reach.
   evidence: Code review (B6). Kept on purpose so a demotion restores the PM's Projects; only a schema comment says so today.
+  resolved: YES, 2026-09-22 in `spec-1-5-roles-decide-what-each-person-can-reach.md`. `reachesProject` returns true for any `tenant_admin` regardless of `projectIds`.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-4-revocation-and-membership.md`
   summary: A user revoked from their only Tenant keeps `auth_user` and credential rows and can still sign in, landing on `no_access`.
@@ -839,3 +842,23 @@ fences and tooling that gate them. Seventeen findings were patched; these ten we
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-4-password-reset.md`
   summary: Mail-send failures and hook failures are logged with `console.warn`, not through `pino` with the Logging convention's keys.
   evidence: Spine amendment round 1 (rubric F8). AD-19 now names it; fold into Epic 8's `mailer-ses` work together with the mail-failure metric, alarm and SES bounce/complaint handling.
+
+## Deferred from: review of spec-1-5-roles-decide-what-each-person-can-reach (2026-09-22)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-5-roles-decide-what-each-person-can-reach.md`
+  summary: AD-23 still says membership use cases check `tenant_admin` in the context "Until story 1.5's role model"; that pre-parse sentence is now false in code.
+  evidence: Spec Intent/Never excluded a spine amendment this slice. Amend AD-23 (drop or reword the "until 1.5" clause; keep the permanent lock re-check), adversarial-review, then regenerate `epic-1-context.md`.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-5-roles-decide-what-each-person-can-reach.md`
+  summary: Compiled `epic-1-context.md` Cross-Story Dependencies still says "until 1.5 lands, membership use cases check `tenant_admin` themselves".
+  evidence: Stale after the declared-roles helper landed; regenerate only after the AD-23 spine amendment above, so the next compile does not reintroduce the old sentence.
+
+## Deferred from: code review of spec-1-5-roles-decide-what-each-person-can-reach (2026-09-22)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-5-roles-decide-what-each-person-can-reach.md`
+  summary: Project writes authorise `command.projectId` but never check that `ticketIds` and `wpId` belong to that Project, so a PM who reaches Project A can append `mapping_event` / `disposition_event` rows in A that name Project B's Tickets or Work Packages.
+  evidence: Edge-case layer, verified at `packages/app/src/use-cases/project-write-input.ts:98-111` and `packages/db/src/repo-writes.ts` (`appendMappings`, `recordManualMapping`): `mapping_event` has no foreign key or check tying `ticket_id`/`wp_id` to `project_id`. B's figures are unaffected — `loadProjectBundle` reads mappings `WHERE project_id = …` and `mappingHead` keys by Ticket within that set — but the rows are append-only, so the junk in A is permanent, and the audit log shows the PM mapping another Project's Ticket. Pre-existing (before 1.5 any PM could write any Project). The `wpId` half is a `work_package.project_id = projectId` check inside the repository; the Ticket half needs a Ticket → Project ownership read (Connector scope, FR-42), which Epic 5's `ticket` table provides.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-5-roles-decide-what-each-person-can-reach.md`
+  summary: `/` still redirects every user to `/p/prj-ec2/review`; since story 1.5 a PM not assigned `prj-ec2` lands on `not_found` at the home route.
+  evidence: Edge-case layer, verified at `apps/web/src/app/page.tsx:4`. Already deferred from story 1.4 slice 1; 1.5's Project reach is what makes it bite. The seeded demo PM carries `prj-ec2`, so the demo is unaffected. Fix: redirect to the caller's first reachable Project (a Tenant Admin needs a Project list use case) or to a Project picker.

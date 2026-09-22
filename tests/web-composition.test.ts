@@ -409,6 +409,11 @@ const ORG_CASES: readonly {
 ];
 
 describe.each(ORG_CASES)('the $binding organisation binding', ({ call, writer, change, action, target }) => {
+  beforeEach(() => {
+    // Story 1.5: organisation writes declare `tenant_admin` only.
+    spies.membershipsOf.mockResolvedValue([{ tenantId: SESSION_TENANT, role: 'tenant_admin', projectIds: [] }]);
+  });
+
   it(`reaches org.${writer} and nothing else, for the session's Tenant as its user, stamped by the Clock, audited as ${action}`, async () => {
     // A create answers the id the id port minted — the one its record names; the rest nothing.
     const created = writer.startsWith('insert');
@@ -669,7 +674,7 @@ describe('the request context the bindings run with', () => {
       tenantId: 'ten-handed',
       userId: 'user-handed',
       roles: ['pm'] as const,
-      projectIds: [],
+      projectIds: ['prj-ec2'],
       locale: 'en' as const,
     };
     expect((await composition.getProjectReview({ projectId: 'prj-ec2' }, handed)).ok).toBe(true);

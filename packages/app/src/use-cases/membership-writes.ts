@@ -1,5 +1,6 @@
 import type { z } from 'zod';
 import { audit, type AuditDeclaration } from '../audit';
+import { authorize, TENANT_ADMIN, TENANT_ADMIN_ROLES } from '../authz/authorize';
 import type { RequestContext } from '../authz/request-context';
 import type { WriteStamp } from '../ports/audited-write';
 import type {
@@ -7,7 +8,7 @@ import type {
   MembershipWriteDeps,
   MembershipWriteScope,
 } from '../ports/membership-write';
-import { fail, type Result } from '../result';
+import type { Result } from '../result';
 import { refuse, runAuditedWrite } from './audited-write';
 import {
   assignMemberProjectInputSchema,
@@ -31,9 +32,9 @@ import {
  *
  * THE SHARED CONTRACT, in the order it is checked:
  *
- *   1. `tenant_admin` in `ctx.roles`, or `not_found` — BEFORE anything else: no parse, no
- *      transaction, so a non-admin learns nothing, not even that its input was malformed. A local
- *      check, ahead of story 1.5's role model; no other use case checks roles yet.
+ *   1. Declared roles (`tenant_admin` only) via `authorize` (story 1.5), or `not_found` — BEFORE
+ *      anything else: no parse, no transaction, so a non-admin learns nothing, not even that its
+ *      input was malformed.
  *   2. `invalid_input` for a malformed command — an empty or NUL-bearing id, a role that is not
  *      assignable (`client_viewer`, `internal_viewer`, any other string).
  *   3. Inside the transaction, ONE ordered lock statement (`lockMembers`: the Tenant's admin rows
@@ -49,14 +50,11 @@ import {
  *
  * Revocation deletes the row. The use cases never touch a session: `resolveRequestContext` ends
  * the revoked user's session on their next request, because its active Tenant no longer has a
- * membership. Out of scope: adding a user to a Tenant (invitation), creating users, role checks
- * on any other use case (1.5).
+ * membership. Out of scope: adding a user to a Tenant (invitation), creating users.
  */
 
 /** The rule code `invalid_input` names under `details.userId` when the last admin would go. */
 export const LAST_TENANT_ADMIN = 'last_tenant_admin';
-
-const TENANT_ADMIN = 'tenant_admin';
 
 /** What the lock found: the target's row, and how many `tenant_admin` rows the Tenant has. */
 interface Locked {
@@ -65,8 +63,8 @@ interface Locked {
 }
 
 /**
- * Runs one membership write: the admin gate first (no parse, no transaction), then the audited
- * write, Clock-stamped. `refuse` inside `work` answers a code, rolled back.
+ * Runs one membership write: the declared-roles gate first (no parse, no transaction), then the
+ * audited write, Clock-stamped. `refuse` inside `work` answers a code, rolled back.
  */
 function runMembershipWrite<Handle, Command>(
   schema: z.ZodType<Command>,
@@ -75,7 +73,8 @@ function runMembershipWrite<Handle, Command>(
   input: unknown,
   work: (scope: MembershipWriteScope, stamp: WriteStamp, command: Command) => Promise<void>,
 ): Promise<Result<void>> {
-  if (!ctx.roles.includes(TENANT_ADMIN)) return Promise.resolve(fail('not_found'));
+  const gate = authorize(ctx, { roles: TENANT_ADMIN_ROLES });
+  if (!gate.ok) return Promise.resolve(gate);
   return runAuditedWrite(schema, deps, ctx, input, { at: async () => deps.clock.now() }, work);
 }
 

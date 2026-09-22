@@ -8,11 +8,13 @@
  * composition root's constant Tenant and audit actor: an inbound adapter cannot name a Tenant or
  * an actor any more, only resolve them.
  *
- * `roles` and `projectIds` are carried and, with one exception, not yet read — the role checks are
- * story 1.5's. The exception is story 1.4 slice 2's membership writes, which require `tenant_admin`
- * as a local check (`use-cases/membership-writes.ts`) and re-check it against the bridge inside
- * their transaction, since a context resolved once per server action may be stale. A seeded Tenant
- * Admin's membership names no Projects (they reach every one); a PM's names theirs.
+ * `roles` and `projectIds` are read by the declared-roles helper (`./authorize.ts`, story 1.5):
+ * every use case declares its allowed roles, and a project-scoped call also checks Project reach.
+ * A `tenant_admin` always reaches every Project of the Tenant; a non-admin reaches only ids in
+ * `projectIds` (empty ⇒ none). Membership writers still re-check the caller's role against the
+ * locked bridge row inside their transaction, since a context resolved once per server action may
+ * be stale. A seeded Tenant Admin's membership names no Projects (they reach every one); a PM's
+ * names theirs.
  */
 export const ROLES = ['tenant_admin', 'pm', 'client_viewer', 'internal_viewer'] as const;
 export type Role = (typeof ROLES)[number];

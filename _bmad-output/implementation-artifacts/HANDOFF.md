@@ -1,10 +1,24 @@
-﻿# Handoff — 2026-09-22 (updated after the slice-4 spine amendment)
+# Handoff — 2026-09-22 (story 1.5 reviewed, awaiting merge)
 
-State at `main` = the merge of PR #34 (story 1.4 slice 4 and the whole-story review of 1.4),
-`dcd7da9`, plus the docs PR that follows it (the slice-4 spine amendment, the regenerated
-`epic-1-context.md` and this handoff). **Story 1.4 is `done`; the next story is 1.5.**
+State at `main` = `e9940d1`, the merge of PR #36 (appendOnlyGuard on `identity_event` and
+best-effort reset hooks). **Story 1.5 is on branch `story/1-5-roles-decide-what-each-person-can-reach`,
+sprint `done` after two code reviews, awaiting its PR and merge; the next story is 1.6.**
 
-**Latest (2026-09-22): story 1.4 slice 4 (password reset) is implemented.** A new `MailerPort`
+**Latest (2026-09-22): story 1.5 (roles decide what each person can reach) is implemented and
+reviewed.** Declared-roles helper in `packages/app/src/authz/authorize.ts` (`authorize` /
+`reachesProject`): every use-case export declares roles; membership and Organisation writes are
+`tenant_admin` only (role check before parse); Project reads and Plan/Mapping writes are
+`tenant_admin` | `pm` plus Project reach (a Tenant Admin's `projectIds` are never a limit). Refusal
+is always `not_found`. Mechanical gate: `tests/role-declarations.test.ts` — enumeration of
+`USE_CASE_ROLES` (pinned by an inline snapshot) plus a behavioural check that every export, called
+as a viewer with throwing deps and malformed input, answers `not_found` without touching a port, and
+that every export not declared for `pm` refuses a PM the same way. Two code reviews applied (spec
+"Review Findings" and "second pass"). Open from the review: project writes can name another
+Project's Tickets or WPs (`deferred-work.md`); `/` still redirects to `prj-ec2`, which a PM not
+assigned it now meets as `not_found`; AD-23's "until story 1.5 … check `tenant_admin` themselves" and
+the matching `epic-1-context.md` line are stale and need a spine amendment.
+
+**Earlier (2026-09-22): story 1.4 slice 4 (password reset) is implemented.** A new `MailerPort`
 (`packages/app/src/ports/mailer.ts`), satisfied by `mailerConsoleOn` (`packages/adapters`,
 `MAILER=console` by default; `ses` is accepted in config but fails at the composition root until
 Epic 8) and handed to `createAuth` as an argument, exactly as `google` is. `packages/db/auth`
@@ -238,7 +252,8 @@ deletes the row; the resolver then ends the session on the next request (a
 session with no active Tenant yet answers `no_access` instead). The app role
 holds SELECT, UPDATE, DELETE on the bridge — no INSERT: adding someone is
 invitation work. No screen yet; four bindings wait in the composition root.
-These are the **only** role checks in the codebase — story 1.5 replaces them.
+Story 1.5 replaced the local `tenant_admin` pre-check with the declared-roles
+helper; the in-transaction lock re-check stays.
 
 ---
 
@@ -295,10 +310,10 @@ story 1.4 slice 4"): `appendOnlyGuard` on `identity_event` and the per-step `try
 landed 2026-09-22 (see that file's `resolved` lines). Still open: the `DEPLOYMENT` key (before
 Epic 8's first staging deploy); mail logging through `pino` goes with `mailer-ses`.
 
-### 1b. Story 1.5 — roles decide what each person can reach
+### 1b. Story 1.5 — roles decide what each person can reach — REVIEWED, AWAITING MERGE
 
-The next story to build. It must not read a Tenant Admin's `projectIds` as a limit (AD-23), and it
-replaces the membership use cases' own `tenant_admin` check.
+Implemented 2026-09-22 on branch `story/1-5-roles-decide-what-each-person-can-reach`, reviewed twice,
+not yet merged; see "Latest" above for what it does and what the reviews left open.
 
 Deferred from slice 1 still open: `/` redirects everyone to
 `/p/prj-ec2/review`; the middleware may answer an expired session's
@@ -315,7 +330,7 @@ Advisory locks before `seq` allocation. Needs Epic 2 and Epic 5's writers.
 
 ### 4. Then the rest of Epic 1
 
-Stories 1.5 through 1.9. Epic 1 is 156 h and is the calibration point for the
+Stories 1.6 through 1.9 (1.5 awaits merge, §1b). Epic 1 is 156 h and is the calibration point for the
 whole estimate — its closing is the first date-slip checkpoint (above).
 
 What story 1.3 left, in `deferred-work.md` (**148 entries** now): the
@@ -382,8 +397,8 @@ clock); CI never runs `next build` (it passed locally for story 1.4 slice 1).
   root builds the one instance lazily; Better Auth's own `Date` is a named AD-15
   exception; the sign-in rate limit is deferred on purpose.
 - **Story 1.4 slice 2 decisions (founder, 2026-09-21)**: the membership use
-  cases require `tenant_admin` now (a local check ahead of 1.5, `not_found`
-  otherwise); the last Tenant Admin cannot be revoked or demoted; adding a user
+  cases require `tenant_admin` (a local check ahead of 1.5, `not_found`
+  otherwise — replaced by 1.5's declared-roles helper); the last Tenant Admin cannot be revoked or demoted; adding a user
   to a Tenant is invitation work, so no INSERT grant; no Users screen yet.
 - **Story 1.4 slice 4 decisions (founder, 2026-09-22)**: identity events that happen before any
   Tenant exists (a password reset today; later a link, an unlink, an invitation acceptance) land

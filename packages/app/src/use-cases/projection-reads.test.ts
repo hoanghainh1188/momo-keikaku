@@ -5,9 +5,9 @@ import { getClientView, getProjectMapping } from '.';
 import { MAPPING_TICKET_LIMIT } from './get-project-mapping';
 import type { RequestContext } from '../authz/request-context';
 
-/** A signed-in caller in `tenantId` (story 1.4 slice 1: the context is the whole RequestContext). */
+/** A signed-in caller in `tenantId` that reaches `prj-1` (story 1.5). */
 function ctxOf(tenantId: string): RequestContext {
-  return { tenantId, userId: 'test-reader', roles: ['pm'], projectIds: [], locale: 'en' };
+  return { tenantId, userId: 'test-reader', roles: ['pm'], projectIds: ['prj-1'], locale: 'en' };
 }
 
 /**
@@ -228,11 +228,20 @@ describe.each([
   { name: 'getProjectMapping', run: getProjectMapping },
 ] as const)('$name, the shared read contract', ({ run }) => {
   it('answers not_found — never a throw — for a Project the Tenant cannot see', async () => {
-    const { deps } = fakeDeps((projectId) => notFoundError(projectId));
-    expect(await run(deps, ctxOf('ten-b'), { projectId: 'prj-of-a' })).toEqual({
+    const { deps, calls } = fakeDeps((projectId) => notFoundError(projectId));
+    const ctx = { ...ctxOf('ten-b'), projectIds: ['prj-of-a'] };
+    expect(await run(deps, ctx, { projectId: 'prj-of-a' })).toEqual({
       ok: false,
       error: { code: 'not_found', messageKey: 'errors.not_found' },
     });
+    expect(calls).toEqual([{ handle: HANDLE, tenantId: 'ten-b', projectId: 'prj-of-a' }]);
+  });
+
+  it('answers not_found for a viewer, without calling the port', async () => {
+    const { deps, calls } = fakeDeps(() => REVIEW);
+    const viewer = { ...ctxOf('ten-a'), roles: ['client_viewer'] as const };
+    expect(await run(deps, viewer, { projectId: 'prj-1' })).toMatchObject({ error: { code: 'not_found' } });
+    expect(calls).toEqual([]);
   });
 
   it('rethrows any other failure rather than answering not_found for it', async () => {

@@ -11,20 +11,34 @@ import type { RequestContext, Role } from '../packages/app/src/authz/request-con
 export const HARNESS_USER_ID = 'xtprobe-writer';
 
 /**
- * A signed-in member of `tenantId` — a PM unless `roles` says otherwise. Roles and Projects are
- * carried and not yet read (story 1.5), except by story 1.4 slice 2's membership writes, which
- * require `tenant_admin`: their registry entries call with `['tenant_admin']`, because a PM context
- * would answer `not_found` at the role gate and make the foreign-Tenant assertion vacuous.
+ * A signed-in member of `tenantId` — a PM unless `roles` says otherwise. Story 1.5's declared-roles
+ * helper reads `roles` and `projectIds`: membership and organisation writes need `tenant_admin`
+ * (see `adminContextFor`); project reads and Plan/Mapping writes need the probe Project id on a
+ * PM context (or an admin context), or the role gate answers `not_found` and a foreign-Tenant
+ * assertion becomes vacuous.
  */
 export function requestContextFor(
   tenantId: string,
   userId: string = HARNESS_USER_ID,
   roles: readonly Role[] = ['pm'],
+  projectIds: readonly string[] = [],
 ): RequestContext {
-  return { tenantId, userId, roles, projectIds: [], locale: 'en' };
+  return { tenantId, userId, roles, projectIds, locale: 'en' };
 }
 
-/** A signed-in Tenant Admin of `tenantId` — what the membership writes require. */
+/** A signed-in Tenant Admin of `tenantId` — what membership and organisation writes require. */
 export function adminContextFor(tenantId: string, userId: string = HARNESS_USER_ID): RequestContext {
   return requestContextFor(tenantId, userId, ['tenant_admin']);
+}
+
+/**
+ * A signed-in PM of `tenantId` that reaches `projectId` — what project reads and Plan/Mapping
+ * writes need so the role gate passes and foreign-Tenant checks still hit RLS.
+ */
+export function pmContextFor(
+  tenantId: string,
+  projectId: string,
+  userId: string = HARNESS_USER_ID,
+): RequestContext {
+  return requestContextFor(tenantId, userId, ['pm'], [projectId]);
 }

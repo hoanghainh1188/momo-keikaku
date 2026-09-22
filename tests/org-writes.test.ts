@@ -23,7 +23,7 @@ import {
   restrictedWriteDeps,
   rowCounts,
 } from './write-harness';
-import { requestContextFor } from './request-context';
+import { adminContextFor } from './request-context';
 
 /**
  * THE ORGANISATION RULES AGAINST REAL ROWS (story 1.3 slice 2).
@@ -61,7 +61,7 @@ assertProbeTenantsDisjoint([PROBE_O, PROBE_F]);
 
 const IDS = idPort('xtorg-id');
 const deps = () => restrictedWriteDeps(IDS);
-const ctx = requestContextFor(PROBE_O.tenantId);
+const ctx = adminContextFor(PROBE_O.tenantId);
 const projectId = PROBE_O.projectId;
 const homeDepartment = PROBE_O.state.fixture.department.id;
 const homeProgram = PROBE_O.state.fixture.program.id;
