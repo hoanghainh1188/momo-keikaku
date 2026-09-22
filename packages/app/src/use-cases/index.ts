@@ -35,3 +35,8 @@ export {
   revokeMembership,
   unassignMemberProject,
 } from './membership-writes';
+export {
+  appendProjectDefaultRate,
+  appendResourceRate,
+  createResource,
+} from './resource-writes';

@@ -511,6 +511,7 @@ work started and was deliberately deferred, with the evidence for the split.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-3-organisation-hierarchy.md`
   summary: A new Project's `default_rate_jpy` is 0 and its `demo_anchor` is the wall clock, both placeholders for later stories.
   evidence: Documented in `NEW_PROJECT_DEFAULTS` (`packages/app/src/use-cases/org-writes.ts`). Story 1.6 creates the Project default Rate (its own table, audited), which should replace the column's 0; the anchor comes from the composition root's `systemClock` until story 1.8's fixture-mode clock exists, so a Project created in the demo today is anchored at real time, not the fixture's.
+  resolved: 2026-09-22 in `spec-1-6-resources-and-the-dated-rates-behind-every-money-figure.md` — the Rate half: `createProject` dual-writes the first `project_default_rate_entry` at yen 0 and keeps `default_rate_jpy` as the live head cache; `appendProjectDefaultRate` updates both. The `demo_anchor` / fixture-clock half remains for story 1.8.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-3-organisation-hierarchy.md`
   summary: The write harness's own-Tenant row check compares only the tables a write is expected to touch (`landedRows`: mapping, disposition, audit, work package, department, program, project); a write that also changed another table passes it.

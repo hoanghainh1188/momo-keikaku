@@ -1,13 +1,15 @@
 import { describe, expect, it } from 'vitest';
+import { projectDate } from '@momo/domain';
 import type { AuditEntry } from '../audit';
+import type { RequestContext } from '../authz/request-context';
 import type {
   DepartmentRow,
   OrgRepository,
-  OrgWriteDeps,
   ProgramRow,
   ProjectPlacementRow,
 } from '../ports/org-write';
-import type { RequestContext } from '../authz/request-context';
+import type { ResourceWriteRepository } from '../ports/resource-write';
+import type { WriteDeps } from '../ports/write-deps';
 import {
   createDepartment,
   createProgram,
@@ -65,30 +67,31 @@ const WORLD: World = {
 };
 
 interface Call {
-  readonly member: keyof OrgRepository;
+  readonly member: string;
   readonly arg: unknown;
 }
 
 /**
  * A tenant transaction that commits the calls its work made when the work resolves and discards
  * them when it throws — the contract `packages/db`'s `inTenantTransaction` keeps with Postgres.
+ * Hands both `org` and `resources` so `createProject`'s dual-write is exercised.
  */
-function fakeDeps(world: World = WORLD) {
+function fakeDeps(world: World = WORLD, clockNow: Date = NOW) {
   const transactions: string[] = [];
   const committed: Call[] = [];
   const audits: AuditEntry[] = [];
   let issued = 0;
 
-  const deps: OrgWriteDeps<typeof HANDLE> = {
+  const deps: WriteDeps<typeof HANDLE> = {
     handle: HANDLE,
-    clock: { now: () => NOW },
+    clock: { now: () => clockNow },
     ids: { next: () => `new-${(issued += 1)}` },
     transaction: async (_handle, tenantId, work) => {
       transactions.push(tenantId);
       const calls: Call[] = [];
       const pendingAudits: AuditEntry[] = [];
       const write =
-        <A>(member: keyof OrgRepository) =>
+        <A>(member: string) =>
         async (arg: A): Promise<void> => {
           calls.push({ member, arg });
         };
@@ -96,17 +99,28 @@ function fakeDeps(world: World = WORLD) {
         findDepartment: async (id) => world.departments.find((d) => d.id === id) ?? null,
         findProgram: async (id) => world.programs.find((p) => p.id === id) ?? null,
         findProject: async (id) => world.projects.find((p) => p.id === id) ?? null,
-        insertDepartment: write('insertDepartment'),
-        renameDepartment: write('renameDepartment'),
-        insertProgram: write('insertProgram'),
-        renameProgram: write('renameProgram'),
-        insertProject: write('insertProject'),
-        renameProject: write('renameProject'),
-        setProjectProgram: write('setProjectProgram'),
-        setProjectDepartment: write('setProjectDepartment'),
+        insertDepartment: write('org.insertDepartment'),
+        renameDepartment: write('org.renameDepartment'),
+        insertProgram: write('org.insertProgram'),
+        renameProgram: write('org.renameProgram'),
+        insertProject: write('org.insertProject'),
+        renameProject: write('org.renameProject'),
+        setProjectProgram: write('org.setProjectProgram'),
+        setProjectDepartment: write('org.setProjectDepartment'),
+      };
+      const resources: ResourceWriteRepository = {
+        findDepartment: async (id) => (world.departments.some((d) => d.id === id) ? { id } : null),
+        findResource: async () => null,
+        findProject: async (id) => (world.projects.some((p) => p.id === id) ? { id } : null),
+        insertResource: write('resources.insertResource'),
+        appendResourceRate: write('resources.appendResourceRate'),
+        appendProjectDefaultRate: write('resources.appendProjectDefaultRate'),
       };
       const result = await work({
+        projectWrite: {} as never,
         org,
+        resources,
+        membership: {} as never,
         audit: { append: async (entry) => void pendingAudits.push(entry) },
       });
       committed.push(...calls);
@@ -147,7 +161,7 @@ describe('creating org units', () => {
     const { deps, committed, audits, transactions } = fakeDeps();
     expect(await createDepartment(deps, CTX, { name: '  Research  ' })).toEqual(CREATED('new-1'));
     expect(transactions).toEqual(['ten-a']);
-    expect(committed).toEqual([{ member: 'insertDepartment', arg: { id: 'new-1', name: 'Research' } }]);
+    expect(committed).toEqual([{ member: 'org.insertDepartment', arg: { id: 'new-1', name: 'Research' } }]);
     expect(audits).toEqual([
       { actor: ACTOR, at: NOW, action: 'department.create', target: 'new-1', payload: { name: 'Research' } },
     ]);
@@ -157,7 +171,7 @@ describe('creating org units', () => {
     const { deps, committed, audits } = fakeDeps();
     expect(await createProgram(deps, CTX, { departmentId: 'dep-y', name: 'Retail' })).toEqual(CREATED('new-1'));
     expect(committed).toEqual([
-      { member: 'insertProgram', arg: { id: 'new-1', departmentId: 'dep-y', name: 'Retail' } },
+      { member: 'org.insertProgram', arg: { id: 'new-1', departmentId: 'dep-y', name: 'Retail' } },
     ]);
     expect(audits).toEqual([
       {
@@ -182,7 +196,7 @@ describe('creating org units', () => {
     expect(result).toEqual(CREATED('new-1'));
     expect(committed).toEqual([
       {
-        member: 'insertProject',
+        member: 'org.insertProject',
         arg: {
           id: 'new-1',
           name: 'EC phase 3',
@@ -192,6 +206,14 @@ describe('creating org units', () => {
           contractType: '請負',
           ...NEW_PROJECT_DEFAULTS,
           demoAnchor: NOW,
+        },
+      },
+      {
+        member: 'resources.appendProjectDefaultRate',
+        arg: {
+          projectId: 'new-1',
+          effectiveFrom: projectDate(NOW.toISOString(), NEW_PROJECT_DEFAULTS.tzOffsetMinutes),
+          yenPerHour: 0,
         },
       },
     ]);
@@ -225,6 +247,33 @@ describe('creating org units', () => {
       }),
     ).toEqual(CREATED('new-1'));
     expect(committed[0]?.arg).toMatchObject({ departmentId: 'dep-y', programId: null });
+    expect(committed[1]?.member).toBe('resources.appendProjectDefaultRate');
+  });
+
+  it("dates the first default Rate on the Project calendar day, not the UTC date of the Clock", async () => {
+    // 16:00 UTC on 20 Sep is already 01:00 JST on 21 Sep (tzOffsetMinutes 540).
+    const eveningUtc = new Date('2026-09-20T16:00:00.000Z');
+    expect(eveningUtc.toISOString().slice(0, 10)).toBe('2026-09-20');
+    expect(projectDate(eveningUtc.toISOString(), NEW_PROJECT_DEFAULTS.tzOffsetMinutes)).toBe(
+      '2026-09-21',
+    );
+    const { deps, committed } = fakeDeps(WORLD, eveningUtc);
+    expect(
+      await createProject(deps, CTX, {
+        name: 'Evening create',
+        departmentId: 'dep-x',
+        clientName: 'Osaka Retail',
+        contractType: '請負',
+      }),
+    ).toEqual(CREATED('new-1'));
+    expect(committed[1]).toEqual({
+      member: 'resources.appendProjectDefaultRate',
+      arg: {
+        projectId: 'new-1',
+        effectiveFrom: '2026-09-21',
+        yenPerHour: 0,
+      },
+    });
   });
 
   it('pins the defaults themselves', () => {
@@ -276,7 +325,7 @@ describe('a Program only within the Project\'s owning Department', () => {
     };
     const { deps, committed, audits } = fakeDeps(world);
     expect(await reassignProjectProgram(deps, CTX, { projectId: 'prj-1', programId: 'prg-x2' })).toEqual(OK);
-    expect(committed).toEqual([{ member: 'setProjectProgram', arg: { id: 'prj-1', programId: 'prg-x2' } }]);
+    expect(committed).toEqual([{ member: 'org.setProjectProgram', arg: { id: 'prj-1', programId: 'prg-x2' } }]);
     expect(audits.map((a) => [a.action, a.target, a.payload])).toEqual([
       ['project.reassign_program', 'prj-1', { before: 'prg-x', after: 'prg-x2' }],
     ]);
@@ -285,7 +334,7 @@ describe('a Program only within the Project\'s owning Department', () => {
   it('clears a Project\'s Program', async () => {
     const { deps, committed, audits } = fakeDeps();
     expect(await reassignProjectProgram(deps, CTX, { projectId: 'prj-1', programId: null })).toEqual(OK);
-    expect(committed).toEqual([{ member: 'setProjectProgram', arg: { id: 'prj-1', programId: null } }]);
+    expect(committed).toEqual([{ member: 'org.setProjectProgram', arg: { id: 'prj-1', programId: null } }]);
     expect(audits[0]?.payload).toEqual({ before: 'prg-x', after: null });
   });
 
@@ -307,7 +356,7 @@ describe('a Program only within the Project\'s owning Department', () => {
       await reassignProjectDepartment(deps, CTX, { projectId: 'prj-1', departmentId: 'dep-y', programId: 'prg-y' }),
     ).toEqual(OK);
     expect(committed).toEqual([
-      { member: 'setProjectDepartment', arg: { id: 'prj-1', departmentId: 'dep-y', programId: 'prg-y' } },
+      { member: 'org.setProjectDepartment', arg: { id: 'prj-1', departmentId: 'dep-y', programId: 'prg-y' } },
     ]);
     expect(audits[0]?.payload).toEqual({
       before: { departmentId: 'dep-x', programId: 'prg-x' },
@@ -343,7 +392,7 @@ describe('renames record the previous value', () => {
     const { deps, committed, audits } = fakeDeps();
     const run = useCase() as (d: typeof deps, c: RequestContext, i: typeof input) => Promise<unknown>;
     expect(await run(deps, CTX, input)).toEqual(OK);
-    expect(committed).toEqual([{ member: _name, arg: { id: target, name: input.name } }]);
+    expect(committed).toEqual([{ member: `org.${_name}`, arg: { id: target, name: input.name } }]);
     expect(audits).toEqual([
       { actor: ACTOR, at: NOW, action, target, payload: { before, after: input.name } },
     ]);
@@ -404,14 +453,14 @@ describe('a name is stored and audited trimmed', () => {
   it('trims a created name in the row and in the record', async () => {
     const { deps, committed, audits } = fakeDeps();
     expect(await createDepartment(deps, CTX, { name: '  Delivery  ' })).toEqual(CREATED('new-1'));
-    expect(committed).toEqual([{ member: 'insertDepartment', arg: { id: 'new-1', name: 'Delivery' } }]);
+    expect(committed).toEqual([{ member: 'org.insertDepartment', arg: { id: 'new-1', name: 'Delivery' } }]);
     expect(audits.map((a) => a.payload)).toEqual([{ name: 'Delivery' }]);
   });
 
   it('trims a new name in the rename and in the record\'s `after`', async () => {
     const { deps, committed, audits } = fakeDeps();
     expect(await renameDepartment(deps, CTX, { departmentId: 'dep-y', name: '  Delivery  ' })).toEqual(OK);
-    expect(committed).toEqual([{ member: 'renameDepartment', arg: { id: 'dep-y', name: 'Delivery' } }]);
+    expect(committed).toEqual([{ member: 'org.renameDepartment', arg: { id: 'dep-y', name: 'Delivery' } }]);
     expect(audits.map((a) => a.payload)).toEqual([{ before: 'Design', after: 'Delivery' }]);
   });
 });
@@ -450,7 +499,7 @@ describe('blank or NUL names are invalid_input, before any transaction opens', (
 describe('failures that are not a refusal propagate', () => {
   it('an adapter failure is thrown, never reported as not_found or ok', async () => {
     const { deps } = fakeDeps();
-    const failing: OrgWriteDeps<typeof HANDLE> = {
+    const failing: WriteDeps<typeof HANDLE> = {
       ...deps,
       transaction: (handle, tenantId, work) =>
         deps.transaction(handle, tenantId, (scope) =>

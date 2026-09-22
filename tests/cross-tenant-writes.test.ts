@@ -209,6 +209,7 @@ describe.skipIf(!reachable)('the write use cases, against two probe Tenants as t
           wpId: absent('wp'),
           departmentId: absent('department'),
           programId: absent('program'),
+          resourceId: absent('resource'),
           memberUserId: absent('member'),
           staleProjectId: absent('stale'),
           secondAdminUserId: absent('admin'),
@@ -380,6 +381,8 @@ describe.skipIf(!reachable)('the write use cases, against two probe Tenants as t
           mappingEvents: withoutSeq(landed.mappingEvents),
           dispositions: withoutSeq(landed.dispositions),
           audits: withoutSeq(landed.audits),
+          rateEntries: withoutSeq(landed.rateEntries),
+          projectDefaultRates: withoutSeq(landed.projectDefaultRates),
         },
         `${entry.name} did not land the rows it must`,
       ).toEqual(expected);

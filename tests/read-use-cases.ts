@@ -93,6 +93,8 @@ export interface WriteTarget extends UseCaseTarget {
   readonly departmentId: string;
   /** A Program of that Department — the one the Project sits in, in the fixture. */
   readonly programId: string;
+  /** A Resource of the Tenant (story 1.6) — what `appendResourceRate` names. */
+  readonly resourceId: string;
   /**
    * A member of the Project's Tenant for the membership writes to change (story 1.4 slice 2): the
    * probe's PM, a `pm` holding `staleProjectId` and not the Project — so promoting, assigning the
@@ -486,7 +488,8 @@ export const READ_USE_CASES: readonly ReadUseCase[] = [
     kind: 'write',
     why:
       'FR-1: reads the department and the program (which must be the department\'s), inserts a ' +
-      'project with the documented defaults and the Clock as demo_anchor, audits the placement.',
+      'project with the documented defaults and the Clock as demo_anchor, dual-writes the first ' +
+      'project_default_rate_entry at yen 0 (story 1.6), audits the placement.',
     invokeWrite: (deps, target) =>
       readSurface.createProject(
         deps,
@@ -609,6 +612,45 @@ export const READ_USE_CASES: readonly ReadUseCase[] = [
         readSurface.revokeMembership(deps, adminContextOf(target), { userId: target.secondAdminUserId }),
     ],
   },
+  {
+    name: 'createResource',
+    kind: 'write',
+    why:
+      'FR-12: reads the department, inserts a Resource with empty Tracker links and no Rate row, ' +
+      'audits { departmentId, name, role }. Callable by tenant_admin or pm (story 1.6).',
+    invokeWrite: (deps, target) =>
+      readSurface.createResource(deps, adminContextOf(target), {
+        departmentId: target.departmentId,
+        name: 'Harness Resource',
+        role: 'Engineer',
+      }),
+  },
+  {
+    name: 'appendResourceRate',
+    kind: 'write',
+    why:
+      'FR-12: reads the Resource, appends a rate_entry (ledger untouched), audits ' +
+      '{ effectiveFrom, yenPerHour }. tenant_admin only.',
+    invokeWrite: (deps, target) =>
+      readSurface.appendResourceRate(deps, adminContextOf(target), {
+        resourceId: target.resourceId,
+        effectiveFrom: '2026-06-01',
+        yenPerHour: 5500,
+      }),
+  },
+  {
+    name: 'appendProjectDefaultRate',
+    kind: 'write',
+    why:
+      'FR-12: reads the Project (locked), appends project_default_rate_entry and dual-writes ' +
+      'project.default_rate_jpy, audits { effectiveFrom, yenPerHour }. tenant_admin only.',
+    invokeWrite: (deps, target) =>
+      readSurface.appendProjectDefaultRate(deps, adminContextOf(target), {
+        projectId: target.projectId,
+        effectiveFrom: '2026-06-01',
+        yenPerHour: 4200,
+      }),
+  },
 ] as const;
 
 /**
@@ -660,6 +702,14 @@ export const UNREACHED_TENANT_OWNED_TABLES: readonly UnreachedTable[] = [
       'cases: the Project bundle carries the Department\'s name but no Program, and there is no ' +
       'read use case for the org in 1.3 (no Organisation UI). The first read of it — the admin ' +
       'surface or a Program roll-up — brings it into this harness and must remove this entry.',
+  },
+  {
+    table: 'project_default_rate_entry',
+    why:
+      'Written by createProject and appendProjectDefaultRate (story 1.6); live valuation still ' +
+      'reads project.default_rate_jpy. History is loaded only for a pinned lookup (Epic 5\'s ' +
+      'Published Snapshot). No dedicated Rate read this story — the day one lands, this entry ' +
+      'comes out or the reach assertion fails.',
   },
   {
     table: 'audit_log',

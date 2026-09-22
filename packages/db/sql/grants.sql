@@ -47,6 +47,10 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON public."resource" TO "momo_app";
 GRANT SELECT, INSERT ON public."rate_entry" TO "momo_app";
 GRANT SELECT, UPDATE, DELETE ON public."rate_entry" TO "momo_maintenance";
 
+-- project_default_rate_entry (append-only)
+GRANT SELECT, INSERT ON public."project_default_rate_entry" TO "momo_app";
+GRANT SELECT, UPDATE, DELETE ON public."project_default_rate_entry" TO "momo_maintenance";
+
 -- work_package (mutable-audited)
 GRANT SELECT, INSERT, UPDATE, DELETE ON public."work_package" TO "momo_app";
 

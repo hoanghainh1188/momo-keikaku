@@ -1,6 +1,14 @@
 import { periodContains, projectDate, type ReportingPeriod } from './calendar';
 import type { MappingHeadEntry } from './mapping';
-import type { BaselineVersion, LedgerEntry, ProjectConfig, Resource, WorkPackage } from './types';
+import type {
+  BaselineVersion,
+  LedgerEntry,
+  ProjectConfig,
+  RateEntry,
+  RatePins,
+  Resource,
+  WorkPackage,
+} from './types';
 import { costOf, minBigint, type Jpy, type Mh } from './units';
 
 /**
@@ -46,6 +54,17 @@ export interface AttributionInput {
   resources: Resource[];
   project: ProjectConfig;
   period: ReportingPeriod;
+  /**
+   * Optional seq pins (story 1.6). Omit for the live view. With a pin, only Rates at or below
+   * it count — a Published Snapshot will supply these (Epic 5).
+   */
+  pins?: RatePins;
+  /**
+   * Project default Rate history for a pinned lookup. Live unpinned valuation still uses
+   * `project.defaultRateYenPerHour` (the column cache); history is needed only when
+   * `pins.projectDefaultRateSeqMax` is set.
+   */
+  projectDefaultRates?: RateEntry[];
 }
 
 export interface AttributionResult {
@@ -59,25 +78,68 @@ export interface AttributionResult {
   hoursByTicket: Map<string, Mh>;
 }
 
+/**
+ * Latest applicable Rate by `effective_from ≤ onDate` among rows with `seq ≤ seqMax` (omit
+ * `seqMax` = no ceiling). Shared by Resource Rates and Project default Rate history (FR-12).
+ */
+export function rateOnDate(
+  rates: readonly RateEntry[],
+  onDate: string,
+  seqMax?: number,
+): Jpy | undefined {
+  const applicable = rates
+    .filter((x) => x.effectiveFrom <= onDate && (seqMax === undefined || x.seq <= seqMax))
+    // Latest effective_from; on a tie, higher seq wins (FR-12 / AD-10 retroactive head).
+    .sort((a, b) =>
+      a.effectiveFrom !== b.effectiveFrom
+        ? a.effectiveFrom < b.effectiveFrom
+          ? 1
+          : -1
+        : b.seq - a.seq,
+    )[0];
+  return applicable?.yenPerHour;
+}
+
+function projectDefaultOnDate(
+  project: ProjectConfig,
+  onDate: string,
+  history: readonly RateEntry[] | undefined,
+  seqMax: number | undefined,
+): Jpy {
+  if (seqMax === undefined) return project.defaultRateYenPerHour;
+  return rateOnDate(history ?? [], onDate, seqMax) ?? 0n;
+}
+
 function rateFor(
   resources: Resource[],
   accountId: string | null,
   onDate: string,
   project: ProjectConfig,
+  pins: RatePins | undefined,
+  projectDefaultRates: readonly RateEntry[] | undefined,
 ): Jpy {
-  if (!accountId) return project.defaultRateYenPerHour;
+  const fallback = () =>
+    projectDefaultOnDate(project, onDate, projectDefaultRates, pins?.projectDefaultRateSeqMax);
+  if (!accountId) return fallback();
   const r = resources.find((x) => x.trackerAccountIds.includes(accountId));
   // FR-13: hours from an unlinked Tracker Account are Unattributed, at the
   // Project default Rate.
-  if (!r) return project.defaultRateYenPerHour;
-  const applicable = r.rates
-    .filter((x) => x.effectiveFrom <= onDate)
-    .sort((a, b) => (a.effectiveFrom < b.effectiveFrom ? 1 : -1))[0];
-  return applicable?.yenPerHour ?? project.defaultRateYenPerHour;
+  if (!r) return fallback();
+  return rateOnDate(r.rates, onDate, pins?.rateSeqMax) ?? fallback();
 }
 
 export function attribute(input: AttributionInput): AttributionResult {
-  const { entries, head, wps, baselineVersions, resources, project, period } = input;
+  const {
+    entries,
+    head,
+    wps,
+    baselineVersions,
+    resources,
+    project,
+    period,
+    pins,
+    projectDefaultRates,
+  } = input;
 
   const wpById = new Map(wps.map((w) => [w.id, w]));
   const baselineByVersion = new Map<number, Map<string, Mh>>();
@@ -97,7 +159,7 @@ export function attribute(input: AttributionInput): AttributionResult {
 
   for (const e of ordered) {
     const onDate = projectDate(e.windowEnd, project.tzOffsetMinutes);
-    const yen = rateFor(resources, e.assigneeAccountId, onDate, project);
+    const yen = rateFor(resources, e.assigneeAccountId, onDate, project, pins, projectDefaultRates);
     const money = costOf(e.deltaMh, yen);
 
     hoursByTicket.set(e.ticketId, (hoursByTicket.get(e.ticketId) ?? 0n) + e.deltaMh);

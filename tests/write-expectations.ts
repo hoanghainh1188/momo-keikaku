@@ -36,6 +36,9 @@ export interface ExpectedRows {
   readonly departments: readonly Record<string, unknown>[];
   readonly programs: readonly Record<string, unknown>[];
   readonly projects: readonly Record<string, unknown>[];
+  readonly resources: readonly Record<string, unknown>[];
+  readonly rateEntries: readonly Record<string, unknown>[];
+  readonly projectDefaultRates: readonly Record<string, unknown>[];
   /** Bridge rows new or changed, by `(user_id, tenant_id)` (story 1.4 slice 2). */
   readonly memberships: readonly Record<string, unknown>[];
   /** Bridge rows gone — a revocation. */
@@ -52,6 +55,9 @@ export const NO_ROWS: ExpectedRows = {
   departments: [],
   programs: [],
   projects: [],
+  resources: [],
+  rateEntries: [],
+  projectDefaultRates: [],
   memberships: [],
   membershipsRemoved: [],
 };
@@ -264,6 +270,15 @@ export const EXPECTED: Readonly<Record<string, Expect>> = {
           demoAnchor: ctx.now,
         },
       ],
+      // Story 1.6: first project_default_rate_entry at yen 0, effective on the Project date.
+      projectDefaultRates: [
+        {
+          tenantId,
+          projectId: id,
+          effectiveFrom: '2026-09-20', // TEST_NOW (2026-09-20T01:02:03Z) in JST (tz 540)
+          yenPerHour: 0,
+        },
+      ],
       audits: orgAudit(ctx, 'project.create', id!, {
         name: 'Harness Project',
         departmentId,
@@ -351,6 +366,66 @@ export const EXPECTED: Readonly<Record<string, Expect>> = {
       membershipsRemoved: [was],
       audits: orgAudit(ctx, 'membership.revoke', was.userId, {
         before: { role: was.role, projectIds: was.projectIds },
+      }),
+    };
+  },
+  createResource: (ctx) => {
+    const [id] = ctx.newIds;
+    const { tenantId, departmentId } = ctx.target;
+    return {
+      ...NO_ROWS,
+      resources: [
+        {
+          id,
+          tenantId,
+          departmentId,
+          name: 'Harness Resource',
+          role: 'Engineer',
+          trackerAccountIds: [],
+        },
+      ],
+      audits: orgAudit(ctx, 'resource.create', id!, {
+        departmentId,
+        name: 'Harness Resource',
+        role: 'Engineer',
+      }),
+    };
+  },
+  appendResourceRate: (ctx) => {
+    const { tenantId, resourceId } = ctx.target;
+    return {
+      ...NO_ROWS,
+      rateEntries: [
+        {
+          tenantId,
+          resourceId,
+          effectiveFrom: '2026-06-01',
+          yenPerHour: 5500,
+        },
+      ],
+      audits: orgAudit(ctx, 'rate.append', resourceId, {
+        effectiveFrom: '2026-06-01',
+        yenPerHour: 5500,
+      }),
+    };
+  },
+  appendProjectDefaultRate: (ctx) => {
+    const was = rowBefore(ctx.before.projects, ctx.target.projectId, 'project');
+    const { tenantId, projectId } = ctx.target;
+    return {
+      ...NO_ROWS,
+      projects: [{ ...was, defaultRateJpy: 4200 }],
+      projectDefaultRates: [
+        {
+          tenantId,
+          projectId,
+          effectiveFrom: '2026-06-01',
+          yenPerHour: 4200,
+        },
+      ],
+      audits: orgAudit(ctx, 'project_default_rate.append', projectId, {
+        effectiveFrom: '2026-06-01',
+        yenPerHour: 4200,
       }),
     };
   },

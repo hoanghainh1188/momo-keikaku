@@ -64,6 +64,19 @@ const spies = vi.hoisted(() => {
     setProjectProgram: vi.fn(async () => {}),
     setProjectDepartment: vi.fn(async () => {}),
   };
+  const resources = {
+    findDepartment: vi.fn(async (id: string) => ({ id })),
+    findResource: vi.fn(async (id: string) => ({
+      id,
+      departmentId: 'dep-delivery',
+      name: 'Linh',
+      role: 'PM',
+    })),
+    findProject: vi.fn(async (id: string) => ({ id })),
+    insertResource: vi.fn(async () => {}),
+    appendResourceRate: vi.fn(async () => {}),
+    appendProjectDefaultRate: vi.fn(async () => {}),
+  };
   /** The session's user (below) is a Tenant Admin here, so the membership writes get past the lock. */
   const sessionUserId = '019b76da-a800-7000-8000-0c3333333333';
   const membership = {
@@ -106,11 +119,12 @@ const spies = vi.hoisted(() => {
     getDb: vi.fn(),
     repository,
     org,
+    resources,
     membership,
     append,
     inTenantTransaction: vi.fn(
       async (_handle: unknown, _tenantId: string, work: (scope: unknown) => Promise<unknown>) =>
-        work({ projectWrite: repository, org, membership, audit: { append } }),
+        work({ projectWrite: repository, org, resources, membership, audit: { append } }),
     ),
     loadProjectBundle: vi.fn(),
     loadReview: vi.fn(),
@@ -428,6 +442,18 @@ describe.each(ORG_CASES)('the $binding organisation binding', ({ call, writer, c
     for (const other of ORG_WRITERS.filter((name) => name !== writer)) {
       expect(spies.org[other], `org.${other} must not be called`).not.toHaveBeenCalled();
     }
+    // Story 1.6: createProject dual-writes the first project_default_rate_entry; other org writes
+    // must not touch the Resource/Rate repository.
+    if (writer === 'insertProject') {
+      expect(spies.resources.appendProjectDefaultRate).toHaveBeenCalledTimes(1);
+      expect(spies.resources.appendProjectDefaultRate).toHaveBeenCalledWith(
+        expect.objectContaining({ projectId: spies.newId, yenPerHour: 0 }),
+      );
+    } else {
+      expect(spies.resources.appendProjectDefaultRate).not.toHaveBeenCalled();
+    }
+    expect(spies.resources.insertResource).not.toHaveBeenCalled();
+    expect(spies.resources.appendResourceRate).not.toHaveBeenCalled();
     for (const recorder of RECORDERS) {
       expect(spies.repository[recorder], `an org write must not reach ${recorder}`).not.toHaveBeenCalled();
     }
@@ -435,6 +461,87 @@ describe.each(ORG_CASES)('the $binding organisation binding', ({ call, writer, c
     expect(spies.append).toHaveBeenCalledWith(
       expect.objectContaining({ actor: SESSION_ACTOR, at: spies.now, action, target }),
     );
+  });
+});
+
+const RESOURCE_WRITERS = ['insertResource', 'appendResourceRate', 'appendProjectDefaultRate'] as const;
+type ResourceWriter = (typeof RESOURCE_WRITERS)[number];
+
+const RESOURCE_CASES: readonly {
+  readonly binding: string;
+  readonly call: () => Promise<unknown>;
+  readonly writer: ResourceWriter;
+  readonly change: Record<string, unknown>;
+  readonly action: string;
+  readonly target: string;
+}[] = [
+  {
+    binding: 'createResource',
+    call: () =>
+      composition.createResource({ departmentId: 'dep-delivery', name: 'Minh', role: 'Engineer' }),
+    writer: 'insertResource',
+    change: { id: spies.newId, departmentId: 'dep-delivery', name: 'Minh', role: 'Engineer' },
+    action: 'resource.create',
+    target: spies.newId,
+  },
+  {
+    binding: 'appendResourceRate',
+    call: () =>
+      composition.appendResourceRate({
+        resourceId: 'res-linh',
+        effectiveFrom: '2026-06-01',
+        yenPerHour: 6500,
+      }),
+    writer: 'appendResourceRate',
+    change: { resourceId: 'res-linh', effectiveFrom: '2026-06-01', yenPerHour: 6500 },
+    action: 'rate.append',
+    target: 'res-linh',
+  },
+  {
+    binding: 'appendProjectDefaultRate',
+    call: () =>
+      composition.appendProjectDefaultRate({
+        projectId: 'prj-ec2',
+        effectiveFrom: '2026-06-01',
+        yenPerHour: 4200,
+      }),
+    writer: 'appendProjectDefaultRate',
+    change: { projectId: 'prj-ec2', effectiveFrom: '2026-06-01', yenPerHour: 4200 },
+    action: 'project_default_rate.append',
+    target: 'prj-ec2',
+  },
+];
+
+describe.each(RESOURCE_CASES)('the $binding resource binding', ({ call, writer, change, action, target }) => {
+  beforeEach(() => {
+    spies.membershipsOf.mockResolvedValue([{ tenantId: SESSION_TENANT, role: 'tenant_admin', projectIds: [] }]);
+  });
+
+  it(`reaches resources.${writer}, for the session's Tenant as its user, stamped by the Clock, audited as ${action}`, async () => {
+    const created = writer === 'insertResource';
+    expect(await call()).toEqual({ ok: true, value: created ? { id: spies.newId } : undefined });
+
+    expect(spies.inTenantTransaction).toHaveBeenCalledTimes(1);
+    expect(spies.resources[writer]).toHaveBeenCalledTimes(1);
+    expect(spies.resources[writer]).toHaveBeenCalledWith(expect.objectContaining(change));
+    for (const other of RESOURCE_WRITERS.filter((name) => name !== writer)) {
+      expect(spies.resources[other], `resources.${other} must not be called`).not.toHaveBeenCalled();
+    }
+    for (const orgWriter of ORG_WRITERS) {
+      expect(spies.org[orgWriter], `a resource write must not reach org.${orgWriter}`).not.toHaveBeenCalled();
+    }
+    expect(spies.append).toHaveBeenCalledTimes(1);
+    expect(spies.append).toHaveBeenCalledWith(
+      expect.objectContaining({ actor: SESSION_ACTOR, at: spies.now, action, target }),
+    );
+  });
+
+  it('answers not_found to a session whose role is PM for Rate writes, opening no transaction', async () => {
+    if (writer === 'insertResource') return; // PM may create Resources
+    // Override the beforeEach admin membership — Rate writes are tenant_admin only.
+    spies.membershipsOf.mockResolvedValue([{ tenantId: SESSION_TENANT, role: 'pm', projectIds: ['prj-ec2'] }]);
+    expect(await call()).toMatchObject({ ok: false, error: { code: 'not_found' } });
+    expect(spies.inTenantTransaction).not.toHaveBeenCalled();
   });
 });
 
