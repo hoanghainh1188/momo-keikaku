@@ -223,6 +223,18 @@ describe('appendResourceRate', () => {
     ).toMatchObject({ error: { code: 'invalid_input' } });
     expect(transactions).toEqual([]);
   });
+
+  it('answers invalid_input for a non-YYYY-MM-DD effectiveFrom, opening no transaction', async () => {
+    const { deps, transactions } = fakeDeps();
+    expect(
+      await appendResourceRate(deps, ADMIN, {
+        resourceId: 'res-1',
+        effectiveFrom: '03/01/2026',
+        yenPerHour: 5000,
+      }),
+    ).toMatchObject({ error: { code: 'invalid_input' } });
+    expect(transactions).toEqual([]);
+  });
 });
 
 describe('appendProjectDefaultRate', () => {
@@ -262,5 +274,17 @@ describe('appendProjectDefaultRate', () => {
       }),
     ).toMatchObject({ error: { code: 'not_found' } });
     expect(committed).toEqual([]);
+  });
+
+  it('answers invalid_input for a non-YYYY-MM-DD effectiveFrom, opening no transaction', async () => {
+    const { deps, transactions } = fakeDeps();
+    expect(
+      await appendProjectDefaultRate(deps, ADMIN, {
+        projectId: 'prj-1',
+        effectiveFrom: 'not-a-date',
+        yenPerHour: 4000,
+      }),
+    ).toMatchObject({ error: { code: 'invalid_input' } });
+    expect(transactions).toEqual([]);
   });
 });

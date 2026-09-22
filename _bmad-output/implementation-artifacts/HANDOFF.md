@@ -1,8 +1,8 @@
 # Handoff — 2026-09-22 (story 1.6 implemented)
 
 State at branch `story/1-6-resources-and-the-dated-rates-behind-every-money-figure`. **Story 1.6
-(Resources and the dated Rates behind every money figure) is implemented; sprint stays
-`in-progress` until review.**
+(Resources and the dated Rates behind every money figure) is implemented and code-reviewed;
+sprint is `done` (awaiting PR / merge).**
 
 **Latest (2026-09-22): story 1.6 landed.** `project_default_rate_entry` is registered append-only
 (24 tables / 17 tenant-owned); seed and `createProject` dual-write the first row at yen 0 with

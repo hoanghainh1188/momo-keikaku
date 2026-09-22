@@ -212,3 +212,29 @@ people; only a Tenant Admin prices them.
   `not_found`
 - Sabotage: strip pre-parse `authorize` from one new runner — watch the role gate fail naming it;
   restore
+
+### Review Findings
+
+- [x] [Review][Patch] `createProject` first default Rate `effectiveFrom` is not pinned to Project TZ in tests — fixtures use Clock instants where UTC date equals JST; replace `projectDate` with UTC `slice(0,10)` and CI stays green [`packages/app/src/use-cases/org-writes.ts:250`]
+- [x] [Review][Patch] Rate append `effectiveFrom` YYYY-MM-DD refusal has no observing test — drop the regex and every suite still passes [`packages/app/src/use-cases/resource-input.ts:17`]
+- [x] [Review][Patch] Empty Resource Rate history → Project-default fallback has no observing test — Intent Always says empty history is valid [`packages/domain/src/attribution.ts` `rateOnDate(...) ?? fallback()`]
+- [x] [Review][Patch] HANDOFF Latest still says sprint stays `in-progress` until review, but sprint-status is already `review` [`_bmad-output/implementation-artifacts/HANDOFF.md:5`]
+
+#### Rejected
+
+- Blind: spec `done` vs sprint `review` — false: step-05 marks the spec `done` and sprint `review` by design.
+- Blind / Edge / claim: live Project-default ignores `effective_from` (column head) — false: founder OQ-2 dual-write; live unpinned reads the column; history/pins use `rateOnDate`.
+- Blind: `epic-1-context.md` lost detail — false: recompiled under compile-epic-context scope; not a 1.6 code defect.
+- Blind: seed `effective_from` fixed vs `createProject` `projectDate` — low, rejected: demo fixture vs product path; unlikely everyday harm.
+- Blind: Rate audit payloads lack previous head — low, rejected: Intent does not require before/after on append-only Rate rows; history is the previous.
+- Blind: Postgres lacks foreign-Tenant Resource for `appendResourceRate` — false: unit covers missing Resource; cross-tenant write harness enumerates the three writes.
+- Blind / Edge: pin + empty history → silent `0n` — low, rejected: no production pin caller this story.
+- Blind: Code Map still future-tense — false: fix would edit the spec under review.
+- Blind: blank/NUL `role` untested — low, rejected: same `label` schema as blank name already pinned.
+- Blind: `ResourceWriteDeps` not barrel-exported — low, rejected: no named everyday caller harm.
+- Blind: `createProject` split from `runOrgWrite` — false: intentional to take `WriteDeps` for dual-write; vague design preference.
+- Blind: no test that future-dated Project-default changes past hours via the column — false: that is the dual-write head behaviour Intent chose.
+- Blind: FR-13 vs column cache documentation — false: Intent dual-write; Epic 5 pins reconcile the product wording.
+- Edge: non-calendar `isoDate` / `yenPerHour` > int32 — low, rejected: unlikely everyday; DB refuses; calendar refine is more than a trivial patch.
+- Gap other: NUL-bearing name/role/id untested — low, rejected: same as blank-role; org suite already sets the pattern.
+- Acceptance: (only the empty-history case above kept as patch)

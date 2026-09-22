@@ -274,6 +274,20 @@ describe('attribution (FR-20, FR-21, FR-24)', () => {
     expect(unattributed.cumulative.totalJpy).toBe(10n * project.defaultRateYenPerHour);
   });
 
+  it('falls back to the Project default when the linked Resource has an empty Rate history', () => {
+    const emptyHistory: Resource[] = [{ ...resources[0]!, rates: [] }];
+    const r = attribute({
+      entries: [entry(1, 'tb', 10, IN)],
+      head: mappingHead(events),
+      wps,
+      baselineVersions,
+      resources: emptyHistory,
+      project,
+      period,
+    });
+    expect(r.cumulative.totalJpy).toBe(10n * project.defaultRateYenPerHour);
+  });
+
   it('honours an optional rate_seq_max pin and leaves a retroactive head unused under the pin', () => {
     const withHistory: Resource[] = [
       {

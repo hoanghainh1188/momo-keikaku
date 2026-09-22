@@ -76,7 +76,7 @@ interface Call {
  * them when it throws — the contract `packages/db`'s `inTenantTransaction` keeps with Postgres.
  * Hands both `org` and `resources` so `createProject`'s dual-write is exercised.
  */
-function fakeDeps(world: World = WORLD) {
+function fakeDeps(world: World = WORLD, clockNow: Date = NOW) {
   const transactions: string[] = [];
   const committed: Call[] = [];
   const audits: AuditEntry[] = [];
@@ -84,7 +84,7 @@ function fakeDeps(world: World = WORLD) {
 
   const deps: WriteDeps<typeof HANDLE> = {
     handle: HANDLE,
-    clock: { now: () => NOW },
+    clock: { now: () => clockNow },
     ids: { next: () => `new-${(issued += 1)}` },
     transaction: async (_handle, tenantId, work) => {
       transactions.push(tenantId);
@@ -248,6 +248,32 @@ describe('creating org units', () => {
     ).toEqual(CREATED('new-1'));
     expect(committed[0]?.arg).toMatchObject({ departmentId: 'dep-y', programId: null });
     expect(committed[1]?.member).toBe('resources.appendProjectDefaultRate');
+  });
+
+  it("dates the first default Rate on the Project calendar day, not the UTC date of the Clock", async () => {
+    // 16:00 UTC on 20 Sep is already 01:00 JST on 21 Sep (tzOffsetMinutes 540).
+    const eveningUtc = new Date('2026-09-20T16:00:00.000Z');
+    expect(eveningUtc.toISOString().slice(0, 10)).toBe('2026-09-20');
+    expect(projectDate(eveningUtc.toISOString(), NEW_PROJECT_DEFAULTS.tzOffsetMinutes)).toBe(
+      '2026-09-21',
+    );
+    const { deps, committed } = fakeDeps(WORLD, eveningUtc);
+    expect(
+      await createProject(deps, CTX, {
+        name: 'Evening create',
+        departmentId: 'dep-x',
+        clientName: 'Osaka Retail',
+        contractType: '請負',
+      }),
+    ).toEqual(CREATED('new-1'));
+    expect(committed[1]).toEqual({
+      member: 'resources.appendProjectDefaultRate',
+      arg: {
+        projectId: 'new-1',
+        effectiveFrom: '2026-09-21',
+        yenPerHour: 0,
+      },
+    });
   });
 
   it('pins the defaults themselves', () => {
