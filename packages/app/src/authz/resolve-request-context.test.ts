@@ -40,6 +40,7 @@ function fake({ session, memberships }: Fake) {
       endSession: async (token: string) => {
         ended.push(token);
       },
+      lookupUser: async () => null,
     },
     memberships: {
       membershipsOf: async (handle: typeof HANDLE, userId: string) => {

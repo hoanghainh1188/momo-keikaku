@@ -15,8 +15,8 @@
  */
 import { isDeepStrictEqual } from 'node:util';
 import { and, eq, sql } from 'drizzle-orm';
-import { z } from 'zod';
 import { decode } from '@momo/domain';
+import { auditPayloadSchema } from '../packages/app/src/audit/payloads';
 import { auditActorOf } from '../packages/app/src/authz/request-context';
 import type { WriteDeps } from '../packages/app/src/ports/write-deps';
 import type { AppError } from '../packages/app/src/result';
@@ -273,54 +273,6 @@ export async function allRows(tenantId: string): Promise<Record<string, readonly
   });
 }
 
-/**
- * The audit payload shapes a probe Tenant carries: the seed's, the project writes' and the
- * organisation writes'. `audit_log.payload` is written through the domain's codec (AD-4), so it is
- * read back through it too, in the shape the reader states — never compared as raw `jsonb` column
- * text, which reorders keys.
- */
-const placement = z.object({ departmentId: z.string(), programId: z.string().nullable() }).strict();
-const auditPayloadJson = z.union([
-  z.object({ ticketIds: z.array(z.string()), wpId: z.string().nullable(), note: z.string().nullable() }).strict(),
-  z.object({ wpId: z.string() }).strict(),
-  z
-    .object({
-      snapshots: z.number().int(),
-      ledgerEntries: z.number().int(),
-      mappingEvents: z.number().int(),
-      anchor: z.string(),
-    })
-    .strict(),
-  // Organisation writes (story 1.3 slice 2).
-  z.object({ name: z.string() }).strict(),
-  z.object({ departmentId: z.string(), name: z.string() }).strict(),
-  z
-    .object({
-      name: z.string(),
-      departmentId: z.string(),
-      programId: z.string().nullable(),
-      clientName: z.string(),
-      contractType: z.string(),
-      tzOffsetMinutes: z.number().int(),
-      teireiWeekday: z.number().int(),
-      defaultRateJpy: z.number().int(),
-      eacMethod: z.string(),
-      calendarJp: z.boolean(),
-      calendarVn: z.boolean(),
-      demoAnchor: z.string(),
-    })
-    .strict(),
-  z.object({ before: z.string().nullable(), after: z.string().nullable() }).strict(),
-  z.object({ before: placement, after: placement }).strict(),
-  // Membership writes (story 1.4 slice 2): a revocation keeps the role and Projects it removed; a
-  // role change is `{ before, after }` of strings (the shape above); a Project change is the list.
-  z.object({ before: z.object({ role: z.string(), projectIds: z.array(z.string()) }).strict() }).strict(),
-  z.object({ before: z.array(z.string()), after: z.array(z.string()) }).strict(),
-  // Resource / Rate writes (story 1.6).
-  z.object({ departmentId: z.string(), name: z.string(), role: z.string() }).strict(),
-  z.object({ effectiveFrom: z.string(), yenPerHour: z.number().int() }).strict(),
-]);
-
 /** The rows a write may land, for one Tenant, keyed so a later read can be diffed. */
 export async function landedRows(tenantId: string) {
   return withTenant(owner(), tenantId, async (tx) => ({
@@ -334,7 +286,7 @@ export async function landedRows(tenantId: string) {
       .where(eq(schema.dispositionEvent.tenantId, tenantId)),
     audits: (
       await tx.select().from(schema.auditLog).where(eq(schema.auditLog.tenantId, tenantId))
-    ).map((row) => ({ ...row, payload: decode(row.payload, auditPayloadJson) })),
+    ).map((row) => ({ ...row, payload: decode(row.payload, auditPayloadSchema) })),
     workPackages: await tx
       .select()
       .from(schema.workPackage)

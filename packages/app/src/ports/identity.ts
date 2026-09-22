@@ -3,7 +3,7 @@
  * from the session store, and nothing more.
  *
  * DECLARED HERE, SATISFIED STRUCTURALLY. `packages/db/auth` implements it on Better Auth
- * (`identityOn(auth)`) and may not import `@momo/app`; the composition root's `satisfies` checks
+ * (`identityOn(auth, db)`) and may not import `@momo/app`; the composition root's `satisfies` checks
  * the match. The request's headers are a type parameter, so this layer never names a web type.
  *
  * Sign-in and sign-out are NOT here: they are the composition root's auth bindings, called by the
@@ -22,6 +22,17 @@ export interface SessionIdentity {
   readonly locale: string;
 }
 
+/**
+ * A user row for display (story 1.7 / AD-23): the audit-log reader and the top-bar chip.
+ * `name` is always present on `auth_user` (NOT NULL); callers may still prefer email when empty.
+ */
+export interface IdentityUser {
+  readonly userId: string;
+  readonly email: string;
+  readonly locale: string;
+  readonly name: string;
+}
+
 export interface IdentityPort<Headers> {
   /**
    * The session the headers carry, or `null` when there is none or it has expired. Read WITHOUT
@@ -33,4 +44,9 @@ export interface IdentityPort<Headers> {
   readonly setActiveTenant: (token: string, tenantId: string) => Promise<void>;
   /** Deletes the session: its active Tenant did not validate against a membership. */
   readonly endSession: (token: string) => Promise<void>;
+  /**
+   * Looks up an `auth_user` by id for display (AD-23 first reader). `null` when no row —
+   * the audit log then shows the raw `actor` string.
+   */
+  readonly lookupUser: (userId: string) => Promise<IdentityUser | null>;
 }

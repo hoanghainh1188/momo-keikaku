@@ -268,6 +268,7 @@ work started and was deliberately deferred, with the evidence for the split.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-2-cross-tenant-harness.md`
   summary: The harness reaches 14 of the 16 tenant-owned tables; `app_user` and `audit_log` have no read use case at all, so nothing in the product proves their isolation at use-case level.
   evidence: Measured with a Drizzle query logger over every registry entry, and asserted both ways in `packages/db/src/read-use-cases.ts` so a change is a decision. `rls.test.ts` still covers both at TABLE level (FORCE, the policy predicate, the grants, the append-only triggers), so they are not unprotected — they are unexercised by a use case. Both close on their own schedule: story 1.4 replaces `app_user` with the identity tables plus the membership bridge and gives `resolveRequestContext` the one read of it, and story 1.7 gives the Tenant Admin the audit-log viewer. When either lands, the entry must come out of `UNREACHED_TENANT_OWNED_TABLES` or the reach assertion fails — which is the point.
+  resolved: PARTIAL — `app_user` closed with story 1.4 (identity tables + membership bridge). `audit_log` closed 2026-09-22 in `spec-1-7-the-tenant-admin-can-read-the-audit-log.md`: `listAuditLog` registered as `kind: 'read'`, `audit_log` removed from `UNREACHED_TENANT_OWNED_TABLES`.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-2-cross-tenant-harness.md`
   summary: The harness proves isolation for READS only. No write use case is enumerated, so a cross-Tenant write is covered by the policy's WITH CHECK and by one hand-written probe in `rls.test.ts`, not by an enumeration.
@@ -428,6 +429,7 @@ work started and was deliberately deferred, with the evidence for the split.
   summary: `audit_log.payload` is decoded through the codec only by the write harness; no product code reads it yet, so its decode schema lives in `tests/cross-tenant-writes.test.ts`.
   evidence: Slice 5. The payload shapes (the two write payloads and the seed's) are restated there as zod schemas; story 1.7's audit-log reader should own them, next to the audited-action enum, and the harness should import them from there.
   note: 2026-09-21 — the audited-action enum now exists (`packages/app/src/audit/index.ts`, `AUDIT_ACTIONS`), and the payloads are built by the use cases (`project-writes.ts`), so that module is where 1.7 should put the decode schemas. Still restated in the harness.
+  resolved: YES, 2026-09-22 in `spec-1-7-the-tenant-admin-can-read-the-audit-log.md`. Schemas + `AUDIT_PAYLOAD_BY_ACTION` + `decodeAuditPayload` live in `packages/app/src/audit/payloads.ts`; `tests/write-harness.ts` imports `auditPayloadSchema` from there.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-2-arithmetic-and-codec.md`
   summary: AD-4's rounding fence covers `packages/domain` only; `Math.round`/`.toFixed` can come back into `apps/web` pages.
@@ -489,6 +491,7 @@ work started and was deliberately deferred, with the evidence for the split.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-3-audit-mechanism.md`
   summary: `audit.record`'s payload is `unknown`: nothing ties an action to its payload shape.
   evidence: Review round 1 (B2). A `mapping.map` record could carry a Disposition payload and typecheck. A type map from `AuditAction` to its payload schema, used by `record` and by story 1.7's reader, would give both one source of truth; the schemas live only in `tests/cross-tenant-writes.test.ts` today.
+  resolved: PARTIAL, 2026-09-22 in `spec-1-7-the-tenant-admin-can-read-the-audit-log.md`. `AUDIT_PAYLOAD_BY_ACTION` + union schema land beside the enum; the reader decodes through them. Typed `record` overloads (forcing the map at write time) still wait.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-3-audit-mechanism.md`
   summary: The transaction port and the audited-use-case gate are built around the project write scope; story 1.3 slice 2's organisation writes need a different scope and a matching fake.
@@ -590,6 +593,7 @@ work started and was deliberately deferred, with the evidence for the split.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-4-identity-and-request-context.md`
   summary: The top bar shows only the signed-in user's role; `RequestContext` carries no name, and the `{ userId, email, locale }` identity lookup is deferred to story 1.7.
   evidence: The hard-coded "Linh · PM" chip was replaced by the role from the context (it was wrong for `hoang`). Showing the name needs the IdentityPort lookup AD-23 now assigns to its first reader.
+  resolved: YES, 2026-09-22 in `spec-1-7-the-tenant-admin-can-read-the-audit-log.md`. `IdentityPort.lookupUser` / `lookupUserOn` return `{ userId, email, locale, name }`; top-bar chip shows name (or email) · role; audit-log actors resolve the same way.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-4-identity-and-request-context.md`
   summary: The idle timeout has up to five minutes of slack, and a fixture-mode Clock does not move it.
@@ -886,3 +890,9 @@ fences and tooling that gate them. Seventeen findings were patched; these ten we
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-5-followup-scoped-ids-and-reach-gate.md`
   summary: The ownership rule lives in the two use cases only; nothing in the database backs it, and other writers of `mapping_event` (rule-driven mappings, the seed) do not apply it.
   evidence: Blind layer, verified: `mapping_event` / `disposition_event` have no composite `(project_id, wp_id)` reference to `work_package`, and `appendMappings`'s future rule-driven callers and `packages/db/src/seed.ts` write without the check. Rows are append-only, so one missed writer leaves permanent bad data. A composite foreign key needs `work_package(project_id, id)` unique and a migration (AD-30's single scheduling migration is the natural place); rule evaluation (Epic 5, FR-22) must apply the same rule when it lands.
+
+## Deferred from: spec-1-7-the-tenant-admin-can-read-the-audit-log (2026-09-22)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-7-the-tenant-admin-can-read-the-audit-log.md`
+  summary: `listAuditLog` / `repo-audit` returns every matching Tenant row with no limit or cursor.
+  evidence: Review round 1 (blind + edge). R0 seed is small; a long-lived Tenant could make one Admin request and N `lookupUser` calls unbounded. Spec did not require pagination. Add a default page size + cursor when an Admin surface needs it.

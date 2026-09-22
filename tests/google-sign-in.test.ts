@@ -167,7 +167,7 @@ function expectLandedHome(landing: Landing): void {
 
 function resolve(headers: Headers): Promise<RequestContextResolution> {
   return resolveRequestContext(
-    { identity: identityOn(auth), handle: appDb(), memberships: { membershipsOf }, onNoAccess: () => {} },
+    { identity: identityOn(auth, appDb()), handle: appDb(), memberships: { membershipsOf }, onNoAccess: () => {} },
     headers,
   );
 }

@@ -1,9 +1,17 @@
-# Handoff — 2026-09-22 (story 1.6 merged)
+# Handoff — 2026-09-22 (story 1.7 ready for review)
 
-State at `main` (PR #40, `795f8e9`). **Story 1.6 (Resources and the dated Rates behind every
-money figure) is `done` — implemented, code-reviewed, CI green, merged.** Next: story 1.7.
+**Latest (2026-09-22): story 1.7 (The Tenant Admin can read the audit log) is implemented
+on branch `story/1-7-the-tenant-admin-can-read-the-audit-log` — status `review`.** `listAuditLog`
+is the first Tenant-Admin-only read (`projectScoped: false`); refusal is `not_found`. Payload
+decode schemas live in `packages/app/src/audit/payloads.ts` (write harness imports them).
+`IdentityPort.lookupUser` resolves actors and the top-bar chip (name or email · role); user menu
+links Admins to `/admin/audit`. `audit_log` left `UNREACHED_TENANT_OWNED_TABLES`. Shared
+`createLogger` (pino 10.3.1, AD-16 redact paths) in `packages/app`; ESLint bans
+`dangerouslySetInnerHTML`. Probe suite `tests/audit-log.test.ts` (base ≥ 850_000_000). Deferred
+L268 (`audit_log` reach), L427–430 / L489–491 (payload schemas, map partial), L590 (identity
+lookup) recorded resolved / partial in `deferred-work.md`.
 
-**Latest (2026-09-22): story 1.6 merged via PR #40.** `project_default_rate_entry` is registered
+**Earlier (2026-09-22): story 1.6 merged via PR #40.** `project_default_rate_entry` is registered
 append-only (24 tables / 17 tenant-owned); seed and `createProject` dual-write the first row at
 yen 0 with `project.default_rate_jpy` as the live cache; `appendProjectDefaultRate` updates both.
 `createResource` (`tenant_admin` | `pm`), `appendResourceRate` and `appendProjectDefaultRate`

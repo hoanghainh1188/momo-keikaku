@@ -21,6 +21,7 @@
 // `fail`, `isProjectNotFound`, the message-key table — are how a use case builds its answer,
 // and an inbound adapter that could call them could fabricate one.
 export * from './config';
+export { createLogger, PINO_REDACT_PATHS, type Logger } from './logger';
 export type { AppError, AppErrorCode, AppErrorMessageKey, Result } from './result';
 export type {
   ProjectBundle,
@@ -60,9 +61,11 @@ export type {
 export type { WriteDeps, WriteScope } from './ports/write-deps';
 export type { Created } from './use-cases/org-writes';
 export type { TenantTransaction } from './ports/tenant-transaction';
-// Audit crosses as TYPES only, like the result and the ports: `audit.record` is a use case's to
-// call inside its own transaction, never an inbound adapter's.
+// Audit crosses as TYPES plus the closed action enum and payload decode helpers the Admin
+// filter UI and the write harness need. `audit.record` stays a use case's to call inside its
+// own transaction — never an inbound adapter's.
 export type { AuditAction, AuditEntry, AuditSink } from './audit';
+export { AUDIT_ACTIONS, AUDIT_PAYLOAD_BY_ACTION, auditPayloadSchema, decodeAuditPayload, isAuditAction } from './audit';
 export * from './use-cases';
 export type { Locale, RequestContext, Role } from './authz/request-context';
 // The resolver is a runtime value, like the use cases: the composition root calls it once per
@@ -74,7 +77,18 @@ export {
   type RequestContextResolution,
   type ResolveRequestContextDeps,
 } from './authz/resolve-request-context';
-export type { IdentityPort, SessionIdentity } from './ports/identity';
+export type { IdentityPort, IdentityUser, SessionIdentity } from './ports/identity';
+export type {
+  AuditLogEntry,
+  AuditLogPage,
+  ListAuditLogInput,
+} from './use-cases/list-audit-log';
+export type {
+  AuditLogFilters,
+  AuditLogReadDeps,
+  AuditLogReadPort,
+  AuditLogRow,
+} from './ports/audit-log-read';
 export type { MembershipReader, MembershipRecord } from './ports/membership';
 export type { ClientView } from './use-cases/get-client-view';
 export type {

@@ -75,9 +75,15 @@ export const RESOURCE_USE_CASE_ROLES = {
   appendProjectDefaultRate: adminOnly,
 } as const satisfies Readonly<Record<string, RoleDeclaration>>;
 
+/** Audit-log read (story 1.7) — Tenant Admin only; no Project. */
+export const AUDIT_USE_CASE_ROLES = {
+  listAuditLog: adminOnly,
+} as const satisfies Readonly<Record<string, RoleDeclaration>>;
+
 export const USE_CASE_ROLES: Readonly<Record<string, RoleDeclaration>> = {
   ...PROJECT_USE_CASE_ROLES,
   ...ORG_USE_CASE_ROLES,
   ...MEMBERSHIP_USE_CASE_ROLES,
   ...RESOURCE_USE_CASE_ROLES,
+  ...AUDIT_USE_CASE_ROLES,
 };

@@ -109,6 +109,12 @@ const spies = vi.hoisted(() => {
     sessionFrom: vi.fn(async (_headers: Headers) => session as typeof session | null),
     setActiveTenant: vi.fn(async (_token: string, _tenantId: string) => {}),
     endSession: vi.fn(async (_token: string) => {}),
+    lookupUser: vi.fn(async (userId: string) => ({
+      userId,
+      email: 'admin@example.test',
+      locale: 'en',
+      name: 'Session Admin',
+    })),
   };
   return {
     anchor,
@@ -128,6 +134,7 @@ const spies = vi.hoisted(() => {
     ),
     loadProjectBundle: vi.fn(),
     loadReview: vi.fn(),
+    listAuditLog: vi.fn(async () => []),
     session,
     identity,
     membershipsOf: vi.fn(async (_handle: unknown, _userId: string) => [
@@ -169,6 +176,7 @@ vi.mock('@momo/db', async (importOriginal) => ({
   inTenantTransaction: spies.inTenantTransaction,
   loadProjectBundle: spies.loadProjectBundle,
   loadReview: spies.loadReview,
+  listAuditLog: spies.listAuditLog,
   membershipsOf: spies.membershipsOf,
   identityEventWriterOn: (handle: unknown) => {
     expect(handle).toBe(spies.handle);
@@ -178,7 +186,7 @@ vi.mock('@momo/db', async (importOriginal) => ({
 
 vi.mock('@momo/db-auth', () => ({
   createAuth: spies.createAuth,
-  identityOn: (auth: unknown) => {
+  identityOn: (auth: unknown, _db: unknown) => {
     expect(auth).toBe(spies.authInstance);
     return spies.identity;
   },

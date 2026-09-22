@@ -21,6 +21,13 @@ async function restricted(code: string, filePath: string): Promise<string[]> {
     .map((m) => m.message.split(' is restricted')[0]!);
 }
 
+async function restrictedSyntax(code: string, filePath: string): Promise<string[]> {
+  const [result] = await eslint.lintText(code, { filePath: `${ROOT}${filePath}` });
+  return (result?.messages ?? [])
+    .filter((m) => m.ruleId === 'no-restricted-syntax')
+    .map((m) => m.message);
+}
+
 describe('the AD-4 rounding fence', () => {
   it.each(['packages/domain/src/evm.ts', 'packages/domain/src/evm.test.ts'])(
     'flags Math.round and .toFixed in %s',
@@ -48,5 +55,14 @@ describe('the AD-4 JSON.stringify fence', () => {
     'tests/cross-tenant.test.ts',
   ])('allows it in %s', async (path) => {
     expect(await restricted(STRINGIFY, path)).toEqual([]);
+  });
+});
+
+describe('the NFR-S8 dangerouslySetInnerHTML ban (story 1.7)', () => {
+  const planted = 'export const x = <div dangerouslySetInnerHTML={{ __html: "x" }} />;\n';
+
+  it('flags dangerouslySetInnerHTML in application TSX', async () => {
+    const messages = await restrictedSyntax(planted, 'apps/web/src/components/shell.tsx');
+    expect(messages.some((m) => m.includes('dangerouslySetInnerHTML'))).toBe(true);
   });
 });

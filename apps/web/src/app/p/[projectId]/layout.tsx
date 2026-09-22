@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react';
 import type { Role } from '@momo/app';
-import { getProjectHeader, requestContext } from '@/server/composition';
+import { currentUserIdentity, getProjectHeader, requestContext } from '@/server/composition';
 import { valueOrNotFound } from '@/server/result';
 import { Shell } from '@/components/shell';
+import { userLabelFromIdentity } from '@/lib/user-chip';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,7 +19,9 @@ export default async function ProjectLayout({
   // to /sign-in or /no-access before anything under /p/ renders.
   const ctx = await requestContext();
   const bundle = valueOrNotFound(await getProjectHeader({ projectId }, ctx));
+  const identity = await currentUserIdentity(ctx);
   const observed = new Date(bundle.input.pinnedSnapshot.observedAt);
+  const userLabel = userLabelFromIdentity(identity);
 
   return (
     <Shell
@@ -28,6 +31,8 @@ export default async function ProjectLayout({
       snapshotLabel={formatJst(observed)}
       snapshotAgeMinutes={bundle.meta.snapshotAgeMinutes}
       roleLabel={roleLabel(ctx.roles)}
+      userLabel={userLabel}
+      showAuditLog={ctx.roles.includes('tenant_admin')}
     >
       {children}
     </Shell>

@@ -103,7 +103,7 @@ const logged: NoAccessEvent[] = [];
 function resolve(headers: Headers): Promise<RequestContextResolution> {
   return resolveRequestContext(
     {
-      identity: identityOn(auth),
+      identity: identityOn(auth, appDb()),
       handle: appDb(),
       memberships: { membershipsOf },
       onNoAccess: (event) => logged.push(event),
