@@ -1,9 +1,10 @@
 /**
  * Top-bar user chip with an optional Admin menu (Audit log) — story 1.7.
  * Plain `.ts` (createElement) so the unit gate can import it without JSX transform.
+ * Uses a plain `<a>` for the menu link: `createElement(Link, …)` rejects `data-testid` under
+ * Next's typed Link props, and a full navigation to `/admin/audit` does not need client routing.
  */
 import { createElement } from 'react';
-import Link from 'next/link';
 
 export function UserChip({
   label,
@@ -24,7 +25,7 @@ export function UserChip({
       'div',
       { className: 'userchip-dropdown', role: 'menu' },
       createElement(
-        Link,
+        'a',
         { href: '/admin/audit', role: 'menuitem', 'data-testid': 'audit-log-link' },
         'Audit log',
       ),

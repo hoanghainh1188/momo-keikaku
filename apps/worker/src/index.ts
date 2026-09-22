@@ -10,12 +10,10 @@
 // Importing this module starts a worker, which is why `createBoss` lives in `./boss.ts`:
 // the test builds the same runner without any of the below.
 import { config, createLogger } from '@momo/app';
-import pino from 'pino';
 import { createBoss, PGBOSS_SCHEMA } from './boss';
 
-// Sync destination so lifecycle lines survive process exit (the SIGTERM round-trip test
-// and an operator watching stdout both need the final "stopped" line).
-const log = createLogger({ name: 'worker' }, pino.destination({ sync: true }));
+// Sync stdout so lifecycle lines survive process exit (SIGTERM round-trip + operators).
+const log = createLogger({ name: 'worker', syncStdout: true });
 const boss = createBoss(config.APP_DATABASE_URL);
 
 // pg-boss reports background failures through events rather than a rejected promise, so an

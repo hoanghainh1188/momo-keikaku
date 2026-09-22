@@ -49,12 +49,20 @@ function mergeRedact(redact: LoggerOptions['redact']): LoggerOptions['redact'] {
 
 /** Builds a pino logger with the AD-16 redact list. Optional stream for tests. */
 export function createLogger(
-  options: LoggerOptions = {},
+  options: LoggerOptions & {
+    /**
+     * Write synchronously to stdout. The worker uses this so lifecycle lines
+     * (`started` / `stopped`) survive process exit for operators and the SIGTERM test.
+     */
+    readonly syncStdout?: boolean;
+  } = {},
   destination?: DestinationStream,
 ): Logger {
-  const { redact: callerRedact, ...rest } = options;
+  const { syncStdout, redact: callerRedact, ...rest } = options;
   const opts: LoggerOptions = { ...rest, redact: mergeRedact(callerRedact) };
-  return destination === undefined ? pino(opts) : pino(opts, destination);
+  if (destination !== undefined) return pino(opts, destination);
+  if (syncStdout === true) return pino(opts, pino.destination({ sync: true, dest: 1 }));
+  return pino(opts);
 }
 
 export type { Logger };

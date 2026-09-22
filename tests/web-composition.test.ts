@@ -134,7 +134,18 @@ const spies = vi.hoisted(() => {
     ),
     loadProjectBundle: vi.fn(),
     loadReview: vi.fn(),
-    listAuditLog: vi.fn(async () => []),
+    listAuditLog: vi.fn(
+      async (): Promise<
+        readonly {
+          seq: number;
+          actor: string;
+          action: string;
+          target: string;
+          payload: unknown;
+          at: Date;
+        }[]
+      > => [],
+    ),
     session,
     identity,
     membershipsOf: vi.fn(async (_handle: unknown, _userId: string) => [
