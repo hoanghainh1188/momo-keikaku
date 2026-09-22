@@ -91,6 +91,12 @@ type WriteMember<Command, Landed = void> = (stamp: WriteStamp, command: Command)
 export interface ProjectWriteRepository {
   /** The Project's event time; rejects with the not-found wording for an invisible Project. */
   readonly projectAnchor: (projectId: string) => Promise<Date>;
+  /**
+   * Whether `wpId` is a Work Package of `projectId` (AD-12: a project-scoped call's other ids belong
+   * to its Project). A read on the scope's transaction, so row-level security still applies: another
+   * Tenant's Work Package answers `false` like another Project's.
+   */
+  readonly workPackageInProject: (projectId: string, wpId: string) => Promise<boolean>;
   readonly recordMapDisposition: WriteMember<MapDispositionCommand>;
   /** Returns the id of the Work Package it created, which the audit payload records. */
   readonly recordPlanDisposition: WriteMember<PlanDispositionCommand, { readonly wpId: string }>;

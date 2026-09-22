@@ -39,6 +39,7 @@ const spies = vi.hoisted(() => {
   const anchor = new Date('2026-09-01T00:00:00Z');
   const repository = {
     projectAnchor: vi.fn(async (_projectId: string) => anchor),
+    workPackageInProject: vi.fn(async (_projectId: string, _wpId: string) => true),
     recordMapDisposition: vi.fn(async () => {}),
     recordPlanDisposition: vi.fn(async () => ({ wpId: 'wp-new-spy' })),
     recordExplainDisposition: vi.fn(async () => {}),

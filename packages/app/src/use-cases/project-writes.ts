@@ -1,6 +1,6 @@
 import { audit, type AuditDeclaration } from '../audit';
 import type { Result } from '../result';
-import type { ProjectWriteDeps } from '../ports/project-write';
+import type { ProjectWriteDeps, ProjectWriteScope } from '../ports/project-write';
 import type { RequestContext } from '../authz/request-context';
 import {
   changeRequestCandidatesInputSchema,
@@ -15,6 +15,7 @@ import {
   type MapTicketsInput,
   type PlanTicketsInput,
 } from './project-write-input';
+import { refuse } from './audited-write';
 
 /**
  * The five project writes: FR-29's four Dispositions and FR-21's manual Mapping. All five are on
@@ -34,13 +35,26 @@ import {
  * The Tenant comes from `ctx` and nowhere else; the actor from `deps`, where the composition
  * root put it beside the Tenant.
  *
- * Not checked here, as it never was: that the Tickets or the Work Package belong to the
- * Project. That is a later story's rule, not a rewiring's.
+ * The Work Package a Mapping names must be a Work Package of the command's Project (AD-12, a
+ * project-scoped call's other ids belong to its Project): `mapTickets` and `mapTicket` ask the
+ * repository before they write and refuse `not_found` otherwise, so nothing lands and nothing is
+ * audited. An unmap (`mapTicket` with an empty `wpId`) names no Work Package and is exempt. That
+ * the TICKETS belong to the Project is not checked yet: it needs Ticket → Project ownership, which
+ * Epic 5 provides (deferred-work).
  *
  * THE AUDIT PAYLOADS are exactly what `packages/db` recorded before this slice moved the insert
  * here: `{ ticketIds, wpId, note }` against the Project for a Disposition, `{ wpId }` against the
  * Ticket for a manual Mapping — the raw `wpId`, so an unmap records the empty string.
  */
+
+/** Refuses `not_found` unless `wpId` is a Work Package of `projectId` — before anything is written. */
+async function requireWorkPackageOf(
+  scope: ProjectWriteScope,
+  projectId: string,
+  wpId: string,
+): Promise<void> {
+  if (!(await scope.projectWrite.workPackageInProject(projectId, wpId))) refuse('not_found');
+}
 
 /** FR-29 *Map*: the hours leave Unplanned Work immediately (FR-21 attribution). */
 export async function mapTickets<Handle>(
@@ -50,6 +64,7 @@ export async function mapTickets<Handle>(
 ): Promise<Result<void>> {
   return runProjectWrite(mapTicketsInputSchema, deps, ctx, input, async (scope, stamp, command) => {
     const { projectId, wpId, ticketIds } = command;
+    await requireWorkPackageOf(scope, projectId, wpId);
     await scope.projectWrite.recordMapDisposition(stamp, { ...command, kind: 'map' });
     await audit.record(scope, stamp, 'disposition.map', projectId, {
       ticketIds: [...ticketIds],
@@ -132,7 +147,8 @@ export async function mapTicket<Handle>(
   input: MapTicketInput,
 ): Promise<Result<void>> {
   return runProjectWrite(mapTicketInputSchema, deps, ctx, input, async (scope, stamp, command) => {
-    const { ticketId, wpId } = command;
+    const { projectId, ticketId, wpId } = command;
+    if (wpId !== '') await requireWorkPackageOf(scope, projectId, wpId);
     await scope.projectWrite.recordManualMapping(stamp, command);
     await audit.record(scope, stamp, wpId === '' ? 'mapping.unmap' : 'mapping.map', ticketId, {
       wpId,

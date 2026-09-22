@@ -20,7 +20,9 @@ import { readSurfaceFunctionNames, READ_SURFACE_MODULE } from './read-use-cases'
  *      touches deps. That is what proves the runners call `authorize` BEFORE parse: a table
  *      entry alone would leave this green. Every export whose declared roles exclude `pm` is
  *      also called as a PM and must refuse the same way, which ties each declared role set to
- *      the one its runner enforces.
+ *      the one its runner enforces. And every `projectScoped` export is called as a PM whose
+ *      `projectIds` omit the Project, with input it accepts (`WELL_FORMED_INPUT`), and must refuse
+ *      the same way — the reach half, checked after parse (AD-12).
  *
  * The declarations themselves are pinned by an inline snapshot of `USE_CASE_ROLES`, so story
  * 1.6 can add a third shape (e.g. `tenant_admin` | `pm` with no Project) by updating the
@@ -63,6 +65,26 @@ function throwingDeps(): { readonly deps: object; readonly touches: string[] } {
   );
   return { deps, touches };
 }
+
+/** The Project the reach loop's inputs name — never one in the unassigned PM's projectIds. */
+const UNREACHED_PROJECT = 'prj-unreached';
+
+/**
+ * Input each project-scoped use case ACCEPTS, naming `UNREACHED_PROJECT` — so the reach check,
+ * which runs after parse, is what refuses it. The reach loop fails, naming the export, when a
+ * project-scoped entry has no input here: a new one (story 1.6's, say) adds its own.
+ */
+const WELL_FORMED_INPUT: Readonly<Record<string, unknown>> = {
+  getProjectHeader: { projectId: UNREACHED_PROJECT },
+  getProjectReview: { projectId: UNREACHED_PROJECT },
+  getProjectMapping: { projectId: UNREACHED_PROJECT },
+  getClientView: { projectId: UNREACHED_PROJECT },
+  mapTickets: { projectId: UNREACHED_PROJECT, wpId: 'wp-1', ticketIds: ['tkt-1'] },
+  planTicketsAsWorkPackage: { projectId: UNREACHED_PROJECT, name: 'New work', ticketIds: ['tkt-1'] },
+  explainTickets: { projectId: UNREACHED_PROJECT, note: 'Client asked for it.', ticketIds: ['tkt-1'] },
+  markChangeRequestCandidates: { projectId: UNREACHED_PROJECT, ticketIds: ['tkt-1'] },
+  mapTicket: { projectId: UNREACHED_PROJECT, ticketId: 'tkt-1', wpId: 'wp-1' },
+};
 
 type UseCaseFn = (
   deps: unknown,
@@ -249,14 +271,19 @@ describe('every use case declares its roles', () => {
  * Calls `name` with `ctx`, throwing deps and malformed input, and returns what is wrong with the
  * answer: anything but `not_found`, or any touch of deps. Empty when the refusal was clean.
  */
-async function refusalProblems(name: string, label: string, ctx: RequestContext): Promise<string[]> {
+async function refusalProblems(
+  name: string,
+  label: string,
+  ctx: RequestContext,
+  input: unknown = {},
+): Promise<string[]> {
   const fn = (useCases as Readonly<Record<string, UseCaseFn>>)[name];
   if (typeof fn !== 'function') return [`${name}: not a function on ${READ_SURFACE_MODULE}`];
 
   const { deps, touches } = throwingDeps();
   let result: Result<unknown>;
   try {
-    result = await fn(deps, ctx, {});
+    result = await fn(deps, ctx, input);
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
     return [`${name} (${label}): threw before answering — ${reason}`];
@@ -281,6 +308,63 @@ describe('every use case authorises before parse', () => {
       }
     }
     expect(offenders, offenders.join('\n') || undefined).toEqual([]);
+  });
+
+  // The reach half (AD-12). Role refusal is before parse, so the two loops around this one can use
+  // malformed input; reach is checked AFTER parse, so this loop needs input each use case accepts.
+  // A PM whose projectIds omit the Project the input names must be refused before any load or
+  // transaction — a project-scoped runner that forgot its reach check would answer ok here, or
+  // touch the throwing deps.
+  it('answers not_found to an unassigned PM, touching no deps, for every project-scoped export', async () => {
+    const unassigned: RequestContext = {
+      ...viewerContext('client_viewer'),
+      userId: 'usr-pm',
+      roles: ['pm'],
+      projectIds: ['prj-assigned'],
+    };
+    const scoped = Object.entries(USE_CASE_ROLES)
+      .filter(([, declaration]) => declaration.projectScoped)
+      .map(([name]) => name);
+    const missing = scoped.filter((name) => !Object.hasOwn(WELL_FORMED_INPUT, name));
+    expect(
+      missing,
+      `add a well-formed input naming ${UNREACHED_PROJECT} to WELL_FORMED_INPUT for: ${missing.join(', ')}`,
+    ).toEqual([]);
+    const stale = Object.keys(WELL_FORMED_INPUT).filter((name) => !scoped.includes(name));
+    expect(stale, `WELL_FORMED_INPUT names what is not a project-scoped export: ${stale.join(', ')}`).toEqual([]);
+
+    const offenders: string[] = [];
+    for (const name of scoped) {
+      offenders.push(
+        ...(await refusalProblems(name, 'unassigned pm', unassigned, WELL_FORMED_INPUT[name])),
+      );
+    }
+    expect(offenders, offenders.join('\n') || undefined).toEqual([]);
+  });
+
+  // The other side of the same check: a runner that refused EVERY PM (reach compared against the
+  // wrong field, say) would pass the loop above. A PM whose projectIds DO include the Project must
+  // get past authorisation — which, with these deps, shows as a touch of deps.
+  it('lets an assigned PM past authorisation for every project-scoped export', async () => {
+    const assigned: RequestContext = {
+      ...viewerContext('client_viewer'),
+      userId: 'usr-pm',
+      roles: ['pm'],
+      projectIds: [UNREACHED_PROJECT],
+    };
+    const blocked: string[] = [];
+    for (const [name, declaration] of Object.entries(USE_CASE_ROLES)) {
+      if (!declaration.projectScoped) continue;
+      const fn = (useCases as Readonly<Record<string, UseCaseFn>>)[name]!;
+      const { deps, touches } = throwingDeps();
+      try {
+        const result = await fn(deps, assigned, WELL_FORMED_INPUT[name]);
+        if (touches.length === 0) blocked.push(`${name}: answered ${JSON.stringify(result)} without reaching its deps`);
+      } catch {
+        if (touches.length === 0) blocked.push(`${name}: threw without reaching its deps`);
+      }
+    }
+    expect(blocked, blocked.join('\n') || undefined).toEqual([]);
   });
 
   // The viewer loop cannot tell WHICH role set a runner enforces — both sets refuse viewers. This

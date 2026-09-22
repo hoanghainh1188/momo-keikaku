@@ -40,7 +40,7 @@ const ACTOR = 'user:test-actor';
 const AT = new Date('2026-09-01T00:00:00Z');
 const PLANNED_WP = 'wp-new-fake';
 
-type Member = Exclude<keyof ProjectWriteRepository, 'projectAnchor'>;
+type Member = Exclude<keyof ProjectWriteRepository, 'projectAnchor' | 'workPackageInProject'>;
 
 interface Call {
   readonly member: Member;
@@ -51,6 +51,8 @@ interface Call {
 interface Behaviour {
   /** What `projectAnchor` does for a Project id. */
   readonly anchor?: (projectId: string) => Date | Error;
+  /** Whether a Work Package is one of a Project's (AD-12). Every Work Package is, by default. */
+  readonly wpInProject?: (projectId: string, wpId: string) => boolean;
   /** What a repository member does, once its call is recorded. */
   readonly member?: () => 'ok' | Error;
   /** What the audit sink does, once its call is recorded. */
@@ -65,6 +67,7 @@ function fakeDeps(behave: Behaviour = {}) {
   const transactions: { readonly handle: unknown; readonly tenantId: string }[] = [];
   const calls: Call[] = [];
   const audits: AuditEntry[] = [];
+  const asked: { readonly projectId: string; readonly wpId: string }[] = [];
 
   const deps: ProjectWriteDeps<typeof HANDLE> = {
     handle: HANDLE,
@@ -87,6 +90,10 @@ function fakeDeps(behave: Behaviour = {}) {
             if (outcome instanceof Error) throw outcome;
             return outcome;
           },
+          workPackageInProject: async (projectId, wpId) => {
+            asked.push({ projectId, wpId });
+            return behave.wpInProject?.(projectId, wpId) ?? true;
+          },
           recordMapDisposition: member('recordMapDisposition', undefined),
           recordPlanDisposition: member('recordPlanDisposition', { wpId: PLANNED_WP }),
           recordExplainDisposition: member('recordExplainDisposition', undefined),
@@ -107,7 +114,7 @@ function fakeDeps(behave: Behaviour = {}) {
       return result;
     },
   };
-  return { deps, transactions, calls, audits };
+  return { deps, transactions, calls, audits, asked };
 }
 
 /** packages/db's wording for an invisible Project, verbatim (repo-writes.ts, repo.ts). */
@@ -352,7 +359,7 @@ describe.each(CASES)('$name', ({ run, member, valid, kind, invalid, record }) =>
 
 describe('mapTicket', () => {
   it('accepts an empty wpId — the unmap — passes it through, and records mapping.unmap with the empty string', async () => {
-    const { deps, calls, audits } = fakeDeps();
+    const { deps, calls, audits, asked } = fakeDeps();
     const result = await mapTicket(deps, CTX, { ...SINGLE, wpId: '' });
 
     expect(result.ok).toBe(true);
@@ -360,6 +367,32 @@ describe('mapTicket', () => {
     expect(audits).toEqual([
       { actor: ACTOR, at: AT, action: 'mapping.unmap', target: 'tkt-1', payload: { wpId: '' } },
     ]);
+    // An unmap names no Work Package, so there is nothing to check it belongs to.
+    expect(asked).toEqual([]);
+  });
+});
+
+// AD-12: a project-scoped call's other ids belong to its Project. The two writes that name a Work
+// Package ask the repository first; a Work Package of another Project (or another Tenant, which
+// row-level security makes the same answer) is refused before anything is written.
+describe.each([
+  { name: 'mapTickets', run: mapTickets as Run, valid: MAP },
+  { name: 'mapTicket', run: mapTicket as Run, valid: SINGLE },
+])('$name, naming a Work Package of another Project', ({ run, valid }) => {
+  it('answers not_found and records nothing', async () => {
+    const { deps, calls, audits, asked } = fakeDeps({ wpInProject: () => false });
+    const result = await run(deps, CTX, valid as never);
+
+    expect(result).toEqual({ ok: false, error: { code: 'not_found', messageKey: 'errors.not_found' } });
+    expect(asked).toEqual([{ projectId: 'prj-1', wpId: 'wp-1' }]);
+    expect({ calls, audits }).toEqual({ calls: [], audits: [] });
+  });
+
+  it('asks about the command\'s own Project and Work Package, and writes when they match', async () => {
+    const { deps, calls, asked } = fakeDeps();
+    expect(await run(deps, CTX, valid as never)).toMatchObject({ ok: true });
+    expect(asked).toEqual([{ projectId: 'prj-1', wpId: 'wp-1' }]);
+    expect(calls).toHaveLength(1);
   });
 });
 
