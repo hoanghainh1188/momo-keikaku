@@ -2,7 +2,7 @@
 title: 'Story 1.5 — roles decide what each person can reach'
 type: 'feature'
 created: '2026-09-22'
-status: 'done'
+status: 'in-progress'
 baseline_commit: 'e9940d13a70ddb8d5dc424d7dde1ce8474a395bf'
 route: 'dispatch'
 review_loop_iteration: 0
@@ -200,3 +200,26 @@ Viewer reach.
   suites) -- harness non-vacuous; I/O matrix covered
 - Sabotage probe: temporarily allow a PM with empty `projectIds` through a project write, watch the
   new gate fail; restore -- HANDOFF sabotage rule
+
+### Review Findings
+
+Code review of `c43658c` against `e9940d1` (2026-09-22): four layers (blind, edge-case, verification-gap, acceptance auditor). No acceptance criterion violated. D1 resolved by the founder as a patch (behavioural gate).
+
+- [ ] [Review][Patch] The role gate proves a table, not enforcement — `tests/role-declarations.test.ts` checks `USE_CASE_ROLES` against its own copy (`PROJECT_SCOPED`), and no runner reads the table, so a new export with a correct entry that never calls `authorize` passes CI. Add a behavioural gate: every export of `use-cases/index.ts`, called with a viewer-only context and deps that throw, answers `not_found` with no port call; replace the copied expectation with a snapshot of `USE_CASE_ROLES` [tests/role-declarations.test.ts]
+- [ ] [Review][Patch] `HANDOFF.md` title and "State at `main`" preamble still describe PR #34 / story 1.4, and "Story 1.5 is `done` (sprint `review`)" contradicts itself [_bmad-output/implementation-artifacts/HANDOFF.md:1]
+- [ ] [Review][Patch] `membership-writes.ts` restates `'tenant_admin'` as a local constant beside the helper's `TENANT_ADMIN_ROLES` [packages/app/src/use-cases/membership-writes.ts:59]
+- [x] [Review][Defer] Project writes check `command.projectId` but not that `ticketIds`/`wpId` belong to it [packages/app/src/use-cases/project-write-input.ts:98] — deferred: pre-existing. A PM reaching A can append `mapping_event`/`disposition_event` rows in A naming B's Tickets or WPs; B's figures are unaffected (mappings are read per `project_id`), but A carries permanent append-only junk and a misleading audit row. The `wpId` half is a `work_package.project_id` check; the Ticket half needs Ticket → Project ownership (Connector scope, FR-42, Epic 5).
+- [x] [Review][Defer] `/` redirects everyone to `/p/prj-ec2/review`, so since 1.5 a PM not assigned `prj-ec2` lands on `not_found` [apps/web/src/app/page.tsx:4] — deferred: pre-existing (already in deferred-work); 1.5's reach check makes it bite for non-seed PMs. The seeded demo PM carries `prj-ec2`.
+- [x] [Review][Defer] AD-23's "Until story 1.5's role model, these use cases also check `tenant_admin` … themselves" and the matching `epic-1-context.md` line are now untrue [ARCHITECTURE-SPINE.md AD-23] — deferred: needs a spine amendment (agent-context file), already tracked in deferred-work.
+
+#### Rejected
+
+- No Postgres test of a real PM refused an unassigned Project (blind, auditor) — `low`: the path is covered by parts (`resolve-request-context.test.ts` pins `projectIds`, unit suites pin refusal); a new suite is more than a correction.
+- Composition tests only exercise the allowed case for org writes and project reads (blind) — `low`: every binding takes its context from the same resolver, and membership bindings already pin the refusal through it.
+- `internal_viewer` never tested at use-case level (blind, auditor) — `low`: refused because it is in no role set; adding it would be a deliberate edit the new behavioural gate also catches.
+- Tenant Admin with non-empty `projectIds` untested at use-case level (auditor) — `low`: runners call `reachesProject`, whose stale-ids case `authorize.test.ts` pins.
+- Double role check / three runner wiring styles (blind) — `low`: a refactor with no demonstrated defect; the behavioural gate covers ordering drift.
+- BOM removals in docs and the conditional verification record (blind) — `low` noise; the record's fix edits this spec.
+- A dual-role admin skipping reach for a non-admin gate (edge-case) — `false`: a context carries exactly one role (`resolve-request-context.ts:62`, `roles: [membership.role]`; AD-23, one row per user and Tenant).
+- A just-unassigned PM finishing a write on a stale context (edge-case) — `low`: the window is one server action; the next request's resolver refuses (AD-23). A re-read adds a lock path for no demonstrated harm.
+- Spec `status: 'done'` versus sprint `review` — rejected by rule (its fix edits the spec under review); step 6 of this review sets the status.

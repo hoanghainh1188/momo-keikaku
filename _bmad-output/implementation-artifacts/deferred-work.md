@@ -852,3 +852,13 @@ fences and tooling that gate them. Seventeen findings were patched; these ten we
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-5-roles-decide-what-each-person-can-reach.md`
   summary: Compiled `epic-1-context.md` Cross-Story Dependencies still says "until 1.5 lands, membership use cases check `tenant_admin` themselves".
   evidence: Stale after the declared-roles helper landed; regenerate only after the AD-23 spine amendment above, so the next compile does not reintroduce the old sentence.
+
+## Deferred from: code review of spec-1-5-roles-decide-what-each-person-can-reach (2026-09-22)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-5-roles-decide-what-each-person-can-reach.md`
+  summary: Project writes authorise `command.projectId` but never check that `ticketIds` and `wpId` belong to that Project, so a PM who reaches Project A can append `mapping_event` / `disposition_event` rows in A that name Project B's Tickets or Work Packages.
+  evidence: Edge-case layer, verified at `packages/app/src/use-cases/project-write-input.ts:98-111` and `packages/db/src/repo-writes.ts` (`appendMappings`, `recordManualMapping`): `mapping_event` has no foreign key or check tying `ticket_id`/`wp_id` to `project_id`. B's figures are unaffected — `loadProjectBundle` reads mappings `WHERE project_id = …` and `mappingHead` keys by Ticket within that set — but the rows are append-only, so the junk in A is permanent, and the audit log shows the PM mapping another Project's Ticket. Pre-existing (before 1.5 any PM could write any Project). The `wpId` half is a `work_package.project_id = projectId` check inside the repository; the Ticket half needs a Ticket → Project ownership read (Connector scope, FR-42), which Epic 5's `ticket` table provides.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-5-roles-decide-what-each-person-can-reach.md`
+  summary: `/` still redirects every user to `/p/prj-ec2/review`; since story 1.5 a PM not assigned `prj-ec2` lands on `not_found` at the home route.
+  evidence: Edge-case layer, verified at `apps/web/src/app/page.tsx:4`. Already deferred from story 1.4 slice 1; 1.5's Project reach is what makes it bite. The seeded demo PM carries `prj-ec2`, so the demo is unaffected. Fix: redirect to the caller's first reachable Project (a Tenant Admin needs a Project list use case) or to a Project picker.
