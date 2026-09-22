@@ -1,6 +1,6 @@
-import type { z } from 'zod';
+﻿import type { z } from 'zod';
 import { audit, type AuditDeclaration } from '../audit';
-import { authorize, TENANT_ADMIN_ROLES } from '../authz/authorize';
+import { authorize, TENANT_ADMIN, TENANT_ADMIN_ROLES } from '../authz/authorize';
 import type { RequestContext } from '../authz/request-context';
 import type { WriteStamp } from '../ports/audited-write';
 import type {
@@ -55,8 +55,6 @@ import {
 
 /** The rule code `invalid_input` names under `details.userId` when the last admin would go. */
 export const LAST_TENANT_ADMIN = 'last_tenant_admin';
-
-const TENANT_ADMIN = 'tenant_admin';
 
 /** What the lock found: the target's row, and how many `tenant_admin` rows the Tenant has. */
 interface Locked {

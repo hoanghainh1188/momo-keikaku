@@ -1,4 +1,4 @@
-/**
+﻿/**
  * THE DECLARED-ROLES MECHANISM (story 1.5, AD-12 / AD-23) — one place every use case runs before
  * its work: the caller's roles must intersect the use case's declared set, and when the call
  * names a Project the caller must reach it.
@@ -25,11 +25,14 @@ export interface RoleGate {
   readonly projectId?: string;
 }
 
+/** The Tenant Admin role name — one spelling for role sets and the membership lock re-check. */
+export const TENANT_ADMIN = 'tenant_admin' as const satisfies Role;
+
 /** Roles that may call Organisation and membership writes. */
-export const TENANT_ADMIN_ROLES = ['tenant_admin'] as const satisfies readonly Role[];
+export const TENANT_ADMIN_ROLES = [TENANT_ADMIN] as const satisfies readonly Role[];
 
 /** Roles that may call Project reads and Plan/Mapping writes — plus Project reach. */
-export const PROJECT_REACH_ROLES = ['tenant_admin', 'pm'] as const satisfies readonly Role[];
+export const PROJECT_REACH_ROLES = [TENANT_ADMIN, 'pm'] as const satisfies readonly Role[];
 
 /**
  * Authorises a call against `RequestContext`. Returns `not_found` when the caller is outside
@@ -48,6 +51,6 @@ export function authorize(ctx: RequestContext, gate: RoleGate): Result<void> {
  * when the id is in `ctx.projectIds`.
  */
 export function reachesProject(ctx: RequestContext, projectId: string): boolean {
-  if (ctx.roles.includes('tenant_admin')) return true;
+  if (ctx.roles.includes(TENANT_ADMIN)) return true;
   return ctx.projectIds.includes(projectId);
 }
