@@ -1,8 +1,8 @@
-# Handoff — 2026-09-22 (updated at the end of the 2026-09-22 session)
+# Handoff — 2026-09-22 (updated after the slice-4 spine amendment)
 
-State at `main` = the merge of PR #32 (story 1.4 slice 3, Google sign-in), `b8ef2f6`, plus the
-docs PR that follows it (the AD-1/AD-15/AD-16/AD-17/AD-23 spine amendment and this handoff), plus
-story 1.4 slice 4 (password reset), implemented in this session.
+State at `main` = the merge of PR #34 (story 1.4 slice 4 and the whole-story review of 1.4),
+`dcd7da9`, plus the docs PR that follows it (the slice-4 spine amendment, the regenerated
+`epic-1-context.md` and this handoff). **Story 1.4 is `done`; the next story is 1.5.**
 
 **Latest (2026-09-22): story 1.4 slice 4 (password reset) is implemented.** A new `MailerPort`
 (`packages/app/src/ports/mailer.ts`), satisfied by `mailerConsoleOn` (`packages/adapters`,
@@ -154,7 +154,8 @@ to their share. Track upgrade-style work separately from feature work.
 | #31 | AD-21/AD-23 — the membership bridge's one writer (spine) |
 | #32 | Story 1.4 slice 3 — Google sign-in: one `genericOAuth` provider from an issuer URL, off unless `AUTH_GOOGLE=on`, link-never-create by verified email, provider-aware allowlist, two auth instances, the in-repo fake OIDC provider (`pnpm fake-oidc`) |
 | #33 | AD-1/AD-15/AD-16/AD-17/AD-23 spine amendment for Google sign-in; `epic-1-context.md` regenerated; handoff |
-| (next) | Story 1.4 slice 4 — password reset: `MailerPort`/`mailer-console`, global insert-only `identity_event`, `sendResetPassword`/`onPasswordReset`, `/forgot-password` + `/reset-password`; this handoff |
+| #34 | Story 1.4 slice 4 — password reset: `MailerPort`/`mailer-console`, global insert-only `identity_event`, `sendResetPassword`/`onPasswordReset`, `/forgot-password` + `/reset-password`; whole-story review of 1.4 (five passes); 1.4 `done` |
+| (next) | AD-1/5/14/15/16/17/18/19/21/23 spine amendment for password reset and `identity_event`; `epic-1-context.md` regenerated; this handoff |
 
 **CI has ten steps**, all watched to fail before being trusted: lint (the
 clock/env fence, the tenant bans, and AD-4's arithmetic fences — rounding only
@@ -278,42 +279,33 @@ reading.
 
 ## Next, in order
 
-### 1. Story 1.4's whole-story code review
+### 1. Story 1.4 is `done`; its spine amendment has landed
 
-All four slices are now implemented (identity/context, revocation/membership, Google, password
-reset). Run `bmad-code-review` over the whole story, as was done for 1.3, then mark 1.4 `done` in
-`sprint-status.yaml`. Points to look at first: the credential-account check in
-`packages/db/auth/src/auth.ts`'s `sendResetPassword` (a direct read on `account`, not through any
-port — is that the right shape, or does it want its own small port?); whether the two new public
-pages (`/forgot-password`, `/reset-password`) need a rate limit sooner than Epic 8, since a reset
-request is now the SECOND unauthenticated, enumerable, unthrottled endpoint beside sign-in; and
-the deferred spine amendment (below) before `epic-1-context.md` is regenerated.
+PR #34 carried slice 4 and the whole-story review (five passes, ~53 patches); `sprint-status.yaml`
+has 1.4 `done`. The deferred spine amendment then landed (docs PR `docs/spine-identity-event-reset`):
+AD-1/5/14/15/16/17/18/19/21/23 and the i18n convention now describe `MailerPort`, `createAuth`'s
+`mailer`/`now`/`identityEvents`, password reset, and the global insert-only `identity_event`, after a
+rubric, a tech-currency and three adversarial rounds (`reviews/review-*-identity-reset*.md`).
+`epic-1-context.md` was regenerated from it. Founder decisions taken in that update (memlog):
+`identity_event` gets AD-5's guard through a new per-entry `appendOnlyGuard`; its event is a named
+best-effort exception to AD-14 (`onPasswordReset` only); identity events are defined by subject, and a
+membership change (invitation acceptance included) is an audited use case writing `audit_log`;
+`packages/db/auth` owns Better Auth's hooks, English mail until 1.9 moves rendering to `renderMail`
+in `packages/i18n`; a required `DEPLOYMENT=local|staging|production` refuses console mail and
+fixture modes outside `local`; a reset keeps provider links (unlink before Epic 8's real users);
+`email_verified` has a written meaning and a named writer list.
 
-What slice 4 left, in `deferred-work.md`: `mailer-ses` (Epic 8, the AWS account and sender domain
-exist there to test it against); the sign-in/reset-request rate limit (already deferred from
-slice 1, now covering a second endpoint); the AD-1 spine amendment for `mailer`/`now`/the
-identity-event writer on `CreateAuthOptions`, the `identity_event` table's own AD-21 entry, and
-the four founder decisions this slice made (identity events in one global table, a completed
-reset sets `email_verified`, the sign-in throttle stays deferred, `mailer-console` only for R0) —
-needs its own adversarial review before the spine and the compiled context are amended, as slice
-3's AD-1 amendment was.
+**Small code debt the amendment recorded** (`deferred-work.md`, "Deferred from: spine amendment for
+story 1.4 slice 4"), best done as one small slice before or alongside 1.5: `appendOnlyGuard` on
+`identity_event` (plus three stale code comments and `removeExtras`'s maintenance setting); one `try`
+per post-reset step and `hasCredentialAccount` inside `sendResetPassword`'s `try`. The `DEPLOYMENT`
+key must land before Epic 8's first staging deploy; mail logging through `pino` goes with
+`mailer-ses`.
 
-Also still open from slice 3: Epic 8's checks against real Google (exact `iss`, a discovery
-timeout and retry — a HUNG discovery today blocks the whole page instance, password sign-in
-included), `verification` row growth with the sign-in rate limit, unaudited Google account links,
-no page-render test for `/sign-in`, and whether the `error` code Better Auth appends to
-`/sign-in?google=refused` may disclose that an email has an account (NFR-S5).
+### 1b. Story 1.5 — roles decide what each person can reach
 
-Continuity: all four slices' specs (`spec-1-4-identity-and-request-context.md`,
-`spec-1-4-revocation-and-membership.md`, `spec-1-4-google-sign-in.md`, `spec-1-4-password-reset.md`).
-
-What slice 2 left, in `deferred-work.md`:
-- Story 1.5 must not read a Tenant Admin's `projectIds` as a limit (kept on
-  promotion so a demotion restores them).
-- A user revoked from their only Tenant keeps their account and can sign in to
-  `no_access` — an account-lifecycle decision for the invitation work.
-- Revocation ends only the session that makes the next request; the user's
-  other sessions end on their own next requests.
+The next story to build. It must not read a Tenant Admin's `projectIds` as a limit (AD-23), and it
+replaces the membership use cases' own `tenant_admin` check.
 
 Deferred from slice 1 still open: `/` redirects everyone to
 `/p/prj-ec2/review`; the middleware may answer an expired session's
