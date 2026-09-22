@@ -30,8 +30,8 @@
  *     constant actor in this file any more, and `tests/web-composition.test.ts` pins that.
  *   * GOOGLE SIGN-IN (story 1.4 slice 3), when `AUTH_GOOGLE=on`: `googleProvider()` is passed to
  *     that instance, which then fetches the issuer's discovery document on first use. The
- *     middleware's session refresh gets an instance of its own built WITHOUT Google, so a page
- *     request never waits on discovery. Whether the button shows is the instance's REGISTRATION
+ *     middleware's session refresh gets an instance of its own built WITHOUT Google, so the
+ *     middleware never waits on discovery (a hung fetch still blocks this instance: Epic 8). Whether the button shows is the instance's REGISTRATION
  *     (configured and discovered), never the configuration alone.
  *
  * WHAT IT EXPORTS: use-case bindings, the auth bindings (the route handler, the middleware's
