@@ -108,6 +108,32 @@ describe.skipIf(!reachable)('listAuditLog against Postgres', () => {
     expect(filtered.value.rows.every((r) => r.action === 'department.create')).toBe(true);
   });
 
+  it('filter by actor keeps only that stored stamp', async () => {
+    const result = await listAuditLog(readDeps(), admin, { actor: 'system:test' });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.rows.length).toBeGreaterThan(0);
+    expect(result.value.rows.every((r) => r.actor === 'system:test')).toBe(true);
+  });
+
+  it('filter by from/to inclusive window excludes out-of-range rows', async () => {
+    const result = await listAuditLog(readDeps(), admin, {
+      from: '2026-09-10T00:00:00.000Z',
+      to: '2026-09-10T23:59:59.000Z',
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.rows.length).toBeGreaterThan(0);
+    expect(
+      result.value.rows.every(
+        (r) =>
+          r.at.getTime() >= Date.parse('2026-09-10T00:00:00.000Z') &&
+          r.at.getTime() <= Date.parse('2026-09-10T23:59:59.000Z'),
+      ),
+    ).toBe(true);
+    expect(result.value.rows.some((r) => r.target === 'res-extra-aud')).toBe(false);
+  });
+
   it('lookupUserOn returns the probe Admin email; actorDisplay uses it', async () => {
     const handle = getDb(process.env.APP_DATABASE_URL!);
     const user = await lookupUserOn(handle, probeAdminId);

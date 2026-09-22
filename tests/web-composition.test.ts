@@ -190,6 +190,10 @@ vi.mock('@momo/db-auth', () => ({
     expect(auth).toBe(spies.authInstance);
     return spies.identity;
   },
+  lookupUserOn: (handle: unknown, userId: string) => {
+    expect(handle).toBe(spies.handle);
+    return spies.identity.lookupUser(userId);
+  },
   googleRegistered: spies.googleRegistered,
   googleSignIn: spies.googleSignIn,
   requestPasswordReset: spies.requestPasswordReset,
@@ -735,6 +739,38 @@ describe.each(READ_CASES)('the $binding read binding', ({ call, port, check }) =
     for (const writer of ORG_WRITERS) {
       expect(spies.org[writer], `a read must not reach org.${writer}`).not.toHaveBeenCalled();
     }
+  });
+});
+
+describe('the listAuditLog read binding (story 1.7)', () => {
+  it('reaches repo listAuditLog for the session Tenant and resolves actor email', async () => {
+    spies.membershipsOf.mockResolvedValue([
+      { tenantId: SESSION_TENANT, role: 'tenant_admin', projectIds: [] },
+    ]);
+    spies.listAuditLog.mockResolvedValue([
+      {
+        seq: 9,
+        actor: `user:${spies.session.userId}`,
+        action: 'department.create',
+        target: 'dep-1',
+        payload: { name: 'Delivery' },
+        at: new Date('2026-09-10T00:00:00Z'),
+      },
+    ]);
+
+    const result = await composition.listAuditLog({});
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.rows).toHaveLength(1);
+    expect(result.value.rows[0]).toMatchObject({
+      action: 'department.create',
+      target: 'dep-1',
+      actorDisplay: 'admin@example.test',
+    });
+    expect(spies.listAuditLog).toHaveBeenCalledWith(spies.handle, SESSION_TENANT, {});
+    expect(spies.identity.lookupUser).toHaveBeenCalledWith(spies.session.userId);
+    expect(spies.loadReview, 'audit read must not load a Project').not.toHaveBeenCalled();
+    expect(spies.inTenantTransaction, 'a read must not open a write transaction').not.toHaveBeenCalled();
   });
 });
 

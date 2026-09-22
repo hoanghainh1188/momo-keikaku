@@ -178,6 +178,11 @@ name (closes deferred L590). Rows show target + decoded payload. Non-enum action
   the form on `invalid_input` (404 only for `not_found`). Postgres suite asserts newest-first
   seq, action filter shrinks, and `lookupUserOn` / `actorDisplay` email on a `user:<id>` row.
   `UserChip` test covers `audit-log-link` present/absent.
+- **Review patches round 2 (2026-09-22).** `tests/web-composition.test.ts` wires `lookupUserOn` on
+  the `@momo/db-auth` mock and asserts `composition.listAuditLog` reaches repo list + identity
+  lookup. Postgres suite asserts actor exact-match and inclusive `from`/`to` windows. Deferred
+  L268 marked YES (both halves closed). HANDOFF Latest aligned to `in-review` / sprint
+  `in-progress` until step-05.
 
 ## Spec Change Log
 
@@ -185,28 +190,24 @@ name (closes deferred L590). Rows show target + decoded payload. Non-enum action
 
 | Finding | Verdict | Evidence / route |
 |---|---|---|
-| Blind: unbounded list / no limit | medium | Real — repo returns all matching rows. Spec never required a page size; R0 seed is small. **defer** |
-| Blind / Edge: datetime-local parsed in server local TZ while When is Asia/Tokyo | medium | Real at `toIsoInstant` / `toLocalInput` (no zone) vs `formatWhen` `Asia/Tokyo`. **patch** |
-| Blind / Edge: `from > to` accepted → empty with no error | low | Real — no refine. Trivial zod refine. **patch** |
-| Blind: `invalid_input` filter → `valueOrNotFound` → 404 | medium | Real — `result.ts` maps both codes to `notFound()`; audit filter errors should keep the form. **patch** |
-| Blind: actor filter is stamp not email | false | Frozen Always: exact match on stored `actor` string; UI placeholder says so. |
-| Blind: `AUDIT_PAYLOAD_BY_ACTION` unused by decode | false | Intentional document map; decode uses the union; typed `record` deferred (L489). |
-| Blind: HANDOFF L489 partial vs deferred-work | low | Reject — docs drift; unlikely everyday harm; fix would be prose only. |
-| Blind: duplicate Implementation Notes in spec | false | Reject — fix is edit this build's spec. |
-| Blind: AC omits clientSecret/idToken vs Boundaries | false | Logger exceeds the epic AC wording; AD-16 list is the floor. |
-| Gap: `createLogger` redaction test never calls `createLogger` | medium | Pre-verified — test builds bare `pino({redact})`. **patch** |
-| Edge: `createLogger` array `redact` drops AD-16 paths | medium | Real — `Array.isArray` branch assigns `options.redact` wholesale. **patch** (same root as logger) |
-| Blind: web-composition never calls `listAuditLog` / `currentUserIdentity` | low | Reject — compile-time `satisfies` + use-case/Postgres suites cover the binding; no everyday miss. |
-| Gap: Postgres lacks filter/order/email assertions | medium | Pre-verified — probe only seed/`not_found`/cross-target. **patch** |
-| Blind: `minimumLabels: 0` weakens harness | false | Comment: floor 0 still requires `toBeGreaterThan(0)` when labels exist; seed surfaces Project id. |
-| Blind: UserChip a11y (Escape / ARIA) | low | Reject — unlikely everyday; first-pass menu. |
-| Blind: Admin chrome for PM before use-case 404 | false | Spec: no page-level authz; refusal is use-case `not_found`. |
-| Blind: noop `isAuditAction ? x : x` | low | Real cosmetic — delete branch. **patch** |
-| Blind: empty-state doesn't distinguish filters | low | Reject — unlikely everyday. |
-| Blind: lint fence plant only under apps/web | low | Reject — `htmlSyntax` already on every `fence()`. |
-| Gap: date-range unit test doesn't observe `from`/`to` | medium | Pre-verified. **patch** |
-| Gap: `lookupUserOn` never asserted on real `auth_user` | medium | Pre-verified — seed actor is `system:seed`. **patch** |
-| Gap: `showAuditLog` / `audit-log-link` untested | medium | Pre-verified. **patch** |
+| Blind: unbounded list / no limit | medium | Real — repo returns all matching rows. Spec never required a page size; R0 seed is small. **defer** (entry already in deferred-work) |
+| Blind / Edge: datetime-local TZ vs Asia/Tokyo When | false | carried — `toIsoInstant` / `toLocalInput` treat wall time as Asia/Tokyo (UTC+9). |
+| Blind / Edge: `from > to` → empty | low | carried — zod refine + unit refuse `invalid_input`. |
+| Blind: `invalid_input` → 404 | false | carried — page keeps form + filter error; only `not_found` → `notFound()`. |
+| Blind: actor filter is stamp not email | false | Frozen Always: exact match on stored `actor` string. |
+| Blind: `AUDIT_PAYLOAD_BY_ACTION` unused by decode | false | Document map; typed `record` deferred (L489). |
+| Blind: HANDOFF / sprint status inconsistency | false | carried — HANDOFF `in-review`; sprint `in-progress` until step-05. |
+| Blind: edit this build's spec / AC vs AD-16 list | false | Reject / logger exceeds epic AC wording intentionally. |
+| Gap: `createLogger` test never calls factory | medium | carried — drive `createLogger` + array-redact merge case. |
+| Edge: array `redact` drops AD-16 paths | medium | carried — `mergeRedact` unions paths. |
+| Gap: composition `listAuditLog` never invoked | medium | **patch** round 2 — describe asserts repo list + `lookupUserOn`. |
+| Gap: Postgres lacks actor / from–to filters | medium | **patch** round 2 — actor stamp + inclusive window cases. |
+| Blind: UserChip a11y / empty-state / ROLE_LABELS dup / Admin chrome | low/false | Reject or false — unlikely everyday / spec says use-case authz. |
+| Blind: noop `isAuditAction` ternary | low | carried — `action: row.action` only. |
+| Gap: unit from/to, lookupUserOn, showAuditLog | medium | carried — unit Dates, Postgres email, UserChip link tests. |
+| Blind: formatPayload no credential redact | false | Credentials never land in `audit_log` payloads. |
+| Blind: deferred L268 still PARTIAL | low | **patch** round 2 — marked YES. |
+| Edge: lookupUser throw / unparseable → 404 | low/false | Reject / false — null on miss; invalid dates → form error. |
 
 ## Design Notes
 
