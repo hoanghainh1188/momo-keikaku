@@ -1,19 +1,23 @@
-# Handoff — 2026-09-22 (story 1.8 implemented)
+# Handoff — 2026-09-22 (story 1.8 merged)
 
-**Latest (2026-09-22): story 1.8 (A load fixture worth measuring against) is implemented —
-status `review`.** `SEED_PROFILE=demo|load` (default demo); in-process 5×500 load generator;
-`CLOCK_MODE=fixture` under required `DEPLOYMENT=local` with AD-17 refusals; fixture Clock in
-web + worker composition roots; seed Clock inject; fixture-relative seq + multi-baseline map.
-Verified locally: lint / typecheck / depcruise green; unit + fixture-clock composition tests;
-Postgres seed smoke for both profiles (load = 5 Projects × 500 WPs + 24 Resources; reseed seq
-stable; `demo_anchor` = fixture Clock). Next: code review / step-05, then story 1.9.
+State at `main` (PR #42, `57ada6a`). **Story 1.8 (A load fixture worth measuring against) is
+`done` — implemented, code-reviewed, CI green, merged.** Next: story 1.9.
 
-# Handoff — 2026-09-22 (story 1.7 merged)
+**Latest (2026-09-22): story 1.8 merged via PR #42.** `SEED_PROFILE=demo|load` (default demo);
+in-process deterministic 5×500 load generator (no committed load JSON); required
+`DEPLOYMENT=local|staging|production` with AD-17 refusals of `CLOCK_MODE=fixture`,
+`MAILER=console`, and `TRACKER_ADAPTER_OVERRIDE=fixture` outside `local`; shared
+`productClockOn` / `DEMO_LATEST_OBSERVED_OFFSET_MS` in `@momo/adapters` for web + worker;
+`scripts/seed.ts` injects the product Clock (Better Auth / `identity_event` stay on
+`systemClock`); fixture-relative identity seqs via `OVERRIDING SYSTEM VALUE` +
+`syncIdentitySequences` after write (truncate no longer uses `RESTART IDENTITY`); Rate
+`effectiveFrom` stays `2026-01-01` so the fixture timeline stays covered. CI fixed two
+regressions on the way in (seq collisions after OVERRIDE; Rate dates must not follow Clock
+"now"). Deferred L82/108, L257/280/307, L516–517 Clock half, L539–545, L835–836 recorded
+resolved / partial in `deferred-work.md`. Still open from 1.8 review: stale `evidence:` text
+on some resolved Clock deferred rows (docs-only).
 
-State at `main` (PR #41, `0b3487b`). **Story 1.7 (The Tenant Admin can read the audit log) is
-`done` — implemented, code-reviewed, CI green, merged.** Next: story 1.8.
-
-**Latest (2026-09-22): story 1.7 merged via PR #41.** `listAuditLog` is the first
+**Earlier (2026-09-22): story 1.7 merged via PR #41.** `listAuditLog` is the first
 Tenant-Admin-only read (`projectScoped: false`); refusal is `not_found`. Payload decode schemas
 live in `packages/app/src/audit/payloads.ts` (write harness imports them). `IdentityPort.lookupUser`
 resolves actors and the top-bar chip (name or email · role); user menu links Admins to
@@ -31,7 +35,7 @@ yen 0 with `project.default_rate_jpy` as the live cache; `appendProjectDefaultRa
 Project). Domain `rateOnDate` / attribution accept optional `rate_seq_max` /
 `project_default_rate_seq_max` pins; live unpinned default still reads the column. No Resources &
 Rates UI. Probe suite `tests/resources-rates.test.ts` (base ≥ 830_000_000). Deferred L512–513 Rate
-half resolved; `demo_anchor` remains for 1.8.
+half resolved; Clock / `demo_anchor` half closed in story 1.8.
 
 **Earlier (2026-09-22): story 1.5 (roles decide what each person can reach) is implemented and
 reviewed.** Declared-roles helper in `packages/app/src/authz/authorize.ts` (`authorize` /
@@ -336,8 +340,8 @@ fixture modes outside `local`; a reset keeps provider links (unlink before Epic 
 
 **Small code debt the amendment recorded** (`deferred-work.md`, "Deferred from: spine amendment for
 story 1.4 slice 4"): `appendOnlyGuard` on `identity_event` and the per-step `try` in the reset hooks
-landed 2026-09-22 (see that file's `resolved` lines). Still open: the `DEPLOYMENT` key (before
-Epic 8's first staging deploy); mail logging through `pino` goes with `mailer-ses`.
+landed 2026-09-22 (see that file's `resolved` lines). **`DEPLOYMENT` landed in story 1.8** (AD-17
+refusals pinned in `config.test.ts`). Still open: mail logging through `pino` goes with `mailer-ses`.
 
 ### 1b. Story 1.5 — roles decide what each person can reach — DONE
 
@@ -347,7 +351,13 @@ history above for what it does.
 Deferred from slice 1 still open: `/` redirects everyone to
 `/p/prj-ec2/review`; the middleware may answer an expired session's
 server-action POST with a 307 (unverified); the sign-in action has no rate
-limit; the top bar shows the role, not the user's name (1.7).
+limit.
+
+### 1c. Stories 1.6–1.8 — DONE on `main`
+
+- 1.6 Resources & Rates — PR #40
+- 1.7 Audit log — PR #41
+- 1.8 Load fixture + fixture Clock + `DEPLOYMENT` — PR #42 (`57ada6a`)
 
 ### 2. Story 1.2's watermark slice — blocked
 
@@ -359,15 +369,14 @@ Advisory locks before `seq` allocation. Needs Epic 2 and Epic 5's writers.
 
 ### 4. Then the rest of Epic 1
 
-Stories 1.8 through 1.9 (1.7 is `done` on `main`). Epic 1 is 156 h and is the calibration point for the
-whole estimate — its closing is the first date-slip checkpoint (above).
+**Next story: 1.9** (every string externalised; currency fixed). Epic 1 is 156 h and is the
+calibration point for the whole estimate — its closing is the first date-slip checkpoint (above).
 
-What story 1.3 left, in `deferred-work.md` (**148 entries** now): the
-Program-within-Department rule is held by use cases and row locks, with no
-foreign key and no concurrency test; `audit_log.at` mixes fixture and wall time;
-the audited-use-case gate trusts declarations rather than NFR-A1's list;
-`apps/worker` now has a composition root (`src/index.ts`) wiring the product Clock
-(story 1.8); CI never runs `next build` (it passed locally for story 1.4 slice 1).
+What story 1.3 left, in `deferred-work.md`: the Program-within-Department rule is held by use
+cases and row locks, with no foreign key and no concurrency test; `audit_log.at` for project
+writes still mixes `demoAnchor` (Epic 2); the audited-use-case gate trusts declarations rather
+than NFR-A1's list; `apps/worker` has a composition root wiring the product Clock (1.8); CI never
+runs `next build` (it passed locally for story 1.4 slice 1).
 
 ---
 

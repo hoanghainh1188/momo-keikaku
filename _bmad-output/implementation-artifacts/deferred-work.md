@@ -909,8 +909,9 @@ fences and tooling that gate them. Seventeen findings were patched; these ten we
 ## Deferred from: review of spec-1-8-a-load-fixture-worth-measuring-against (2026-09-22)
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-8-a-load-fixture-worth-measuring-against.md`
-  summary: Under an injected seed Clock, DB Rate rows use `isoDateUtc(stamp)` while in-memory `DemoState` / domain `rates[].effectiveFrom` stays the fixture literal `2026-01-01`.
-  evidence: Blind review of story 1.8. `writeTenantRows` stamps Rates from the Clock; `loadProjectAsDemoState` / demo fixture rates do not. Money paths that read DB Rates are coherent; pure domain replay of the in-memory state can disagree. Close when a consumer reads both, or align the in-memory rate dates with the Clock stamp in the load/demo builders.
+  summary: Under an injected seed Clock, DB Rate rows briefly used `isoDateUtc(stamp)` while in-memory `DemoState` / domain `rates[].effectiveFrom` stayed `2026-01-01`.
+  evidence: Blind review of story 1.8. CI then showed Rate dates must stay on the fixture timeline start or Review numbers diverge from probes.
+  resolved: YES, 2026-09-22 (PR #42 follow-up) — `writeTenantRows` keeps Rate `effectiveFrom` at `2026-01-01`; Clock stamps `demo_anchor` / Baseline `recordedAt` / audit `at` only.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-8-a-load-fixture-worth-measuring-against.md`
   summary: Resolved deferred entries for the Clock port still carry pre-resolution `evidence:` text (e.g. "no import of `@momo/adapters` exists anywhere").
