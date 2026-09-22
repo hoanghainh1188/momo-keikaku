@@ -1,17 +1,22 @@
-# Handoff — 2026-09-23 (story 1.9 in progress)
+# Handoff — 2026-09-23 (story 1.9 merged)
 
-State on branch (story 1.9). **Story 1.9 (every string externalised; currency fixed) is
-`in-progress`.** Landed so far: `@momo/i18n` catalogs + key-parity / shell +30% gate; `next-intl`
-on web (R0 UI `en`); reset mail via `renderMail` injected in composition; `messageKey` mapping in
-web; `compareNfkc` + locale-aware `yen`; `tenant.currency` (default JPY) + `changeTenantCurrency`
-use case with Rate lock, role declaration, and web composition binding; SQL grants regenerated via
-`pnpm db:sql`. Remaining before close: full acceptance review, optional `auth_user.locale` cookie,
-live DB column apply on environments, and incremental externalisation of long Review/Client report
-prose (documented in spec Implementation Notes).
+State at `main` (PR #43, `acbefa6`). **Story 1.9 (every string externalised; currency fixed) is
+`done` — implemented, code-reviewed, CI green, merged.** Epic 1's shippable story line
+**1.3–1.9 is complete.** Next: optional Epic 1 retrospective, then **Epic 2 story 2.1**.
 
-**Previous:** Story 1.8 (PR #42, `57ada6a`) is `done`.
+**Latest (2026-09-23): story 1.9 merged via PR #43.** `@momo/i18n` with identically keyed
+`en`/`ja` catalogs (ja = English mirror), `t` / `renderMail` / `buildResetPasswordMail`; next-intl
+on web with R0 UI forced to English; password-reset mail rendered from catalog in
+`auth_user.locale`; use-case `messageKey` mapped at the web edge; `domain/text.compareNfkc` (+
+numeric WBS segments); locale-aware `yen` / report dates; `tenant.currency` default JPY with
+`changeTenantCurrency` (Admin only) refusing once any Rate exists — registered in the isolation /
+audit harness as a Rate-locked refusal (probe Tenants already have Rates). Shell +30% layout gate
+covers auth/admin/chrome only; Project/Client layout gate deferred to Epic 2.2. CI follow-up
+`c34736d` fixed harness registration, fixture-clock auth mock hours export, and bare-`db` naming
+in `repo-tenant-currency`. Deferred from 1.9: Project/Client +30% layout gate; currency TOCTOU
+between `hasAnyRate` and `setCurrency` (see `deferred-work.md`).
 
-**Latest (2026-09-22): story 1.8 merged via PR #42.** `SEED_PROFILE=demo|load` (default demo);
+**Previous (2026-09-22): story 1.8 merged via PR #42.** `SEED_PROFILE=demo|load` (default demo);
 in-process deterministic 5×500 load generator (no committed load JSON); required
 `DEPLOYMENT=local|staging|production` with AD-17 refusals of `CLOCK_MODE=fixture`,
 `MAILER=console`, and `TRACKER_ADAPTER_OVERRIDE=fixture` outside `local`; shared
@@ -330,61 +335,45 @@ reading.
 
 ## Next, in order
 
-### 1. Story 1.4 is `done`; its spine amendment has landed
+### 1. Epic 1 shippable line 1.3–1.9 — DONE on `main`
 
-PR #34 carried slice 4 and the whole-story review (five passes, ~53 patches); `sprint-status.yaml`
-has 1.4 `done`. The deferred spine amendment then landed (docs PR `docs/spine-identity-event-reset`):
-AD-1/5/14/15/16/17/18/19/21/23 and the i18n convention now describe `MailerPort`, `createAuth`'s
-`mailer`/`now`/`identityEvents`, password reset, and the global insert-only `identity_event`, after a
-rubric, a tech-currency and three adversarial rounds (`reviews/review-*-identity-reset*.md`).
-`epic-1-context.md` was regenerated from it. Founder decisions taken in that update (memlog):
-`identity_event` gets AD-5's guard through a new per-entry `appendOnlyGuard`; its event is a named
-best-effort exception to AD-14 (`onPasswordReset` only); identity events are defined by subject, and a
-membership change (invitation acceptance included) is an audited use case writing `audit_log`;
-`packages/db/auth` owns Better Auth's hooks, English mail until 1.9 moves rendering to `renderMail`
-in `packages/i18n`; a required `DEPLOYMENT=local|staging|production` refuses console mail and
-fixture modes outside `local`; a reset keeps provider links (unlink before Epic 8's real users);
-`email_verified` has a written meaning and a named writer list.
-
-**Small code debt the amendment recorded** (`deferred-work.md`, "Deferred from: spine amendment for
-story 1.4 slice 4"): `appendOnlyGuard` on `identity_event` and the per-step `try` in the reset hooks
-landed 2026-09-22 (see that file's `resolved` lines). **`DEPLOYMENT` landed in story 1.8** (AD-17
-refusals pinned in `config.test.ts`). Still open: mail logging through `pino` goes with `mailer-ses`.
-
-### 1b. Story 1.5 — roles decide what each person can reach — DONE
-
-Merged 2026-09-22 (PR #37 helper/gate; PR #38 spine; PR #39 wpId + reach gate). See "Latest"
-history above for what it does.
-
-Deferred from slice 1 still open: `/` redirects everyone to
-`/p/prj-ec2/review`; the middleware may answer an expired session's
-server-action POST with a 307 (unverified); the sign-in action has no rate
-limit.
-
-### 1c. Stories 1.6–1.8 — DONE on `main`
-
+- 1.3 Organisation + audit — done earlier
+- 1.4 Sign-in / revoke — PR #34 (+ spine docs)
+- 1.5 Roles — PR #37–#39
 - 1.6 Resources & Rates — PR #40
 - 1.7 Audit log — PR #41
 - 1.8 Load fixture + fixture Clock + `DEPLOYMENT` — PR #42 (`57ada6a`)
+- 1.9 i18n + currency lock — PR #43 (`acbefa6`)
 
-### 2. Story 1.2's watermark slice — blocked
+`sprint-status.yaml` still shows **1.1** and **1.2** as `in-progress` for unfinished slices
+that are blocked below — do not treat those as the next build target.
+
+### 2. Optional — Epic 1 retrospective (`bmad-retrospective` / `[ER]`)
+
+Optional but useful before Epic 2: capture lessons, open action items, and whether any
+Correct Course is needed. Status key: `epic-1-retrospective: optional`.
+
+### 3. Story 1.2's watermark slice — blocked
 
 Advisory locks before `seq` allocation. Needs Epic 2 and Epic 5's writers.
 
-### 3. Story 1.1 slice B3
+### 4. Story 1.1 slice B3 — blocked
 
 `pnpm dev` in one command. Blocked on **story 2.1's migration**.
 
-### 4. Then the rest of Epic 1
+### 5. Next build story: **2.1** — the scheduling schema lands in one migration
 
-**Next story: 1.9** (every string externalised; currency fixed). Epic 1 is 156 h and is the
-calibration point for the whole estimate — its closing is the first date-slip checkpoint (above).
+Start with `bmad-build` for story 2.1 (fresh context). That unblocks 1.1 B3 and begins Epic 2
+(plan that re-dates itself). Story 2.2 will dispose the demo spike file-by-file and is where the
+deferred Project/Client +30% layout gate should re-run.
+
+Operator note after pulling `main`: run `drizzle-kit push` (or the usual local prepare) so
+`tenant.currency` exists before exercising currency paths.
 
 What story 1.3 left, in `deferred-work.md`: the Program-within-Department rule is held by use
 cases and row locks, with no foreign key and no concurrency test; `audit_log.at` for project
 writes still mixes `demoAnchor` (Epic 2); the audited-use-case gate trusts declarations rather
-than NFR-A1's list; `apps/worker` has a composition root wiring the product Clock (1.8); CI never
-runs `next build` (it passed locally for story 1.4 slice 1).
+than NFR-A1's list; CI never runs `next build` (it passed locally for story 1.4 slice 1).
 
 ---
 
