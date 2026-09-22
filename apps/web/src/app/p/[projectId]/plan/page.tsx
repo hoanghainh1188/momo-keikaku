@@ -1,3 +1,4 @@
+import { getTranslations } from 'next-intl/server';
 import { getProjectReview } from '@/server/composition';
 import { valueOrNotFound } from '@/server/result';
 import { earnedProgress, hours, type Mh } from '@momo/domain/present';
@@ -12,6 +13,8 @@ export default async function PlanPage({
 }: {
   params: Promise<{ projectId: string }>;
 }) {
+  const t = await getTranslations();
+  const em = t('common.em_dash');
   const { projectId } = await params;
   const { bundle, review: r } = valueOrNotFound(await getProjectReview({ projectId }));
 
@@ -62,32 +65,32 @@ export default async function PlanPage({
 
   return (
     <div className="sheet">
-      <h1 className="report-title">Plan — Work Breakdown Structure</h1>
-      <div className="report-sub">
-        Current Plan (solid indigo) against the active Baseline (hollow outline). The Baseline is
-        never edited: plan changes go to the Current Plan, and the Baseline moves only through an
-        explicit, reasoned Re-baseline.
-      </div>
+      <h1 className="report-title">{t('plan.plan_work_breakdown_structure')}</h1>
+      <div className="report-sub">{t('plan.current_plan_solid_indigo_against_the_active_bas')}</div>
       <div className="report-sub" style={{ marginTop: 8 }}>
-        Active Baseline <strong>{bundle.baseline.id}</strong> recorded{' '}
-        {bundle.meta.baselineRecordedAt.slice(0, 10)} — “{bundle.meta.baselineReason}” · BAC{' '}
-        {hours(r.evm.bacMh)}h over {bundle.baseline.wps.filter((b) => b.baselineMh > 0n).length}{' '}
-        baselined leaf Work Packages.
+        {t('plan.active_baseline')}
+        <strong>{bundle.baseline.id}</strong>{' '}
+        {t('plan.baseline_recorded', {
+          date: bundle.meta.baselineRecordedAt.slice(0, 10),
+          reason: bundle.meta.baselineReason,
+          bac: hours(r.evm.bacMh),
+          leafCount: bundle.baseline.wps.filter((b) => b.baselineMh > 0n).length,
+        })}
       </div>
 
-      <Section title="Tree &amp; schedule" id="wbs">
+      <Section title={t('plan.tree_schedule')} id="wbs">
         <table className="ledger" data-testid="plan-tree">
           <thead>
             <tr>
-              <th>WBS</th>
-              <th>Work Package</th>
-              <th className="num">Baseline h</th>
-              <th className="num">Current plan h</th>
-              <th className="num">Actual h</th>
-              <th>Baseline dates</th>
-              <th>Current dates</th>
+              <th>{t('clientView.wbs')}</th>
+              <th>{t('clientView.work_package')}</th>
+              <th className="num">{t('plan.baseline_h')}</th>
+              <th className="num">{t('plan.current_plan_h')}</th>
+              <th className="num">{t('plan.actual_h')}</th>
+              <th>{t('plan.baseline_dates')}</th>
+              <th>{t('plan.current_dates')}</th>
               <th style={{ width: '32%' }}>
-                Baseline vs Current {scale.from} → {scale.to}
+                {t('plan.gantt_column_header', { from: scale.from, to: scale.to })}
               </th>
             </tr>
           </thead>
@@ -116,18 +119,18 @@ export default async function PlanPage({
                       }}
                     >
                       {w.name}
-                      {w.isCatchAll ? <span className="tag">catch-all · LOE</span> : null}
-                      {w.isMilestone ? <span className="tag">milestone</span> : null}
-                      {!b && w.isLeaf ? <span className="tag unplanned">non-baselined</span> : null}
+                      {w.isCatchAll ? <span className="tag">{t('plan.catch_all_loe')}</span> : null}
+                      {w.isMilestone ? <span className="tag">{t('plan.milestone')}</span> : null}
+                      {!b && w.isLeaf ? <span className="tag unplanned">{t('plan.non_baselined')}</span> : null}
                     </td>
-                    <td className="num">{baselineMh !== 0n ? hours(baselineMh) : '—'}</td>
-                    <td className="num">{plannedMh !== 0n ? hours(plannedMh) : '—'}</td>
-                    <td className="num">{acMh !== 0n ? hours(acMh) : '—'}</td>
+                    <td className="num">{baselineMh !== 0n ? hours(baselineMh) : em}</td>
+                    <td className="num">{plannedMh !== 0n ? hours(plannedMh) : em}</td>
+                    <td className="num">{acMh !== 0n ? hours(acMh) : em}</td>
                     <td className="caption">
-                      {b ? `${b.start} → ${b.finish}` : '—'}
+                      {b ? `${b.start} → ${b.finish}` : em}
                     </td>
                     <td className="caption" style={slipped ? { color: 'var(--health-amber)' } : undefined}>
-                      {start && finish ? `${start} → ${finish}` : '—'}
+                      {start && finish ? `${start} → ${finish}` : em}
                     </td>
                     <td>
                       <GanttRow
@@ -137,7 +140,9 @@ export default async function PlanPage({
                         earned={earnedProgress(ev?.pctComplete)}
                         isMilestone={w.isMilestone}
                         slipped={
-                          w.isMilestone && b ? !w.milestoneDoneAt && bundle.input.asOf > b.finish : false
+                          w.isMilestone && b
+                            ? !w.milestoneDoneAt && bundle.input.asOf > b.finish
+                            : slipped
                         }
                       />
                     </td>
@@ -147,11 +152,7 @@ export default async function PlanPage({
             })}
           </tbody>
         </table>
-        <p className="caption" style={{ marginTop: 12 }}>
-          Summary rows roll up effort and dates from their children. Earned progress fills the
-          Current Plan bar in ink from the left. Milestones are diamonds; a slipped milestone is
-          drawn as a hollow red diamond.
-        </p>
+        <p className="caption" style={{ marginTop: 12 }}>{t('plan.summary_rows_roll_up_effort_and_dates_from_their')}</p>
       </Section>
     </div>
   );

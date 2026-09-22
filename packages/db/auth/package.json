@@ -1,5 +1,6 @@
 { "name": "@momo/db-auth", "version": "0.0.0", "private": true, "type": "module", "main": "src/index.ts",
   "dependencies": { "better-auth": "1.7.5", "drizzle-orm": "0.45.2", "@momo/db": "workspace:*" },
+  "devDependencies": { "@momo/i18n": "workspace:*" },
   "//peerDependencies": "`better-auth/next-js`'s nextCookies() dynamically imports `next/headers.js`, and better-auth SWALLOWS a 'Cannot find module' from it (dist/integrations/next-js.mjs) — the session cookie is then never set and sign-in silently leaves the user signed out. `next` resolves today only because pnpm dedupes it as better-auth's optional peer, driven by apps/web. Named here so the coupling is declared rather than inherited.",
   "peerDependencies": { "next": ">=15" },
   "peerDependenciesMeta": { "next": { "optional": true } } }

@@ -32,6 +32,7 @@ import { account, auditLog, authUser, session } from '../packages/db/src/schema'
 import { tenantMembership } from '../packages/db/src/schema-membership';
 import { withTenant } from '../packages/db/src/with-tenant';
 import { startFakeOidc } from './support/fake-oidc';
+import { testResetPasswordMailRenderer } from './support/reset-mail-renderer';
 import { connectWriteHarness, idPort, owner, restrictedWriteDeps } from './write-harness';
 
 /**
@@ -81,7 +82,12 @@ function appDb() {
 }
 
 /** Story 1.4 slice 4 fields this file does not exercise: a no-op mailer and event writer. */
-const NOOP_RESET_DEPS = { mailer: { send: async () => {} }, now: systemClock.now, identityEvents: { record: async () => {} } };
+const NOOP_RESET_DEPS = {
+  mailer: { send: async () => {} },
+  now: systemClock.now,
+  identityEvents: { record: async () => {} },
+  resetPasswordMail: testResetPasswordMailRenderer(),
+};
 
 /** The `Cookie` header a browser would send back, from the `Set-Cookie`s a response carried. */
 function cookieFrom(setCookies: readonly string[]): string {

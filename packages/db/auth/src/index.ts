@@ -31,7 +31,9 @@ export type { GoogleProviderOptions } from './google';
 export {
   RESET_PASSWORD_TOKEN_EXPIRES_IN_SECONDS,
   resetLinkOf,
+  resetPasswordExpiryHours,
   type IdentityEventWriter,
   type ResetMailer,
+  type ResetPasswordMailRenderer,
 } from './reset';
 export { hashPassword, verifyPassword } from './password';

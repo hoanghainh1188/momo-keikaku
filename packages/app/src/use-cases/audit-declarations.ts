@@ -12,10 +12,12 @@ import { MEMBERSHIP_WRITE_AUDIT } from './membership-writes';
 import { ORG_WRITE_AUDIT } from './org-writes';
 import { PROJECT_WRITE_AUDIT } from './project-writes';
 import { RESOURCE_WRITE_AUDIT } from './resource-writes';
+import { TENANT_CURRENCY_AUDIT } from './tenant-currency';
 
 export const USE_CASE_AUDIT: Readonly<Record<string, AuditDeclaration>> = {
   ...PROJECT_WRITE_AUDIT,
   ...ORG_WRITE_AUDIT,
   ...MEMBERSHIP_WRITE_AUDIT,
   ...RESOURCE_WRITE_AUDIT,
+  ...TENANT_CURRENCY_AUDIT,
 };

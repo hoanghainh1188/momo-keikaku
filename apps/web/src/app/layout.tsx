@@ -1,12 +1,14 @@
 import type { ReactNode } from 'react';
+import { NextIntlClientProvider } from 'next-intl';
+import { getMessages, getTranslations } from 'next-intl/server';
 import { SignOut } from '@/components/sign-out';
 import { signInState } from '@/server/composition';
 import './globals.css';
 
-export const metadata = {
-  title: 'momo-keikaku',
-  description: 'Plan, work done and the numbers, in agreement.',
-};
+export async function generateMetadata() {
+  const t = await getTranslations('meta');
+  return { title: t('title'), description: t('description') };
+}
 
 /**
  * EVERY PAGE IS RENDERED ON DEMAND, stated here rather than inferred. This layout wraps all of
@@ -31,7 +33,11 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   // rejection through would 500 the one page that could get the user back in — a session store
   // that blinks would lock everybody out rather than sign them out. The control simply does not
   // render; the middleware and `requestContext()` remain the authority on who is signed in.
-  const signedIn = await signInState().then((state) => state !== 'signed_out', () => false);
+  const [signedIn, messages, t] = await Promise.all([
+    signInState().then((state) => state !== 'signed_out', () => false),
+    getMessages(),
+    getTranslations(),
+  ]);
 
   return (
     <html lang="en">
@@ -44,11 +50,13 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
         />
       </head>
       <body>
-        {children}
+        <NextIntlClientProvider locale="en" messages={messages}>
+          {children}
+        </NextIntlClientProvider>
         {/* AFTER the content in DOM order, though `position: fixed` puts it top-right either way.
             Rendered first it was the first focusable element on every signed-in page, so a
             keyboard or screen-reader user met a destructive action before any content. */}
-        {signedIn ? <SignOut /> : null}
+        {signedIn ? <SignOut label={t('shell.signOut.button')} /> : null}
       </body>
     </html>
   );

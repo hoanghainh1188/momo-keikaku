@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState, type ReactNode } from 'react';
@@ -9,11 +11,11 @@ import { UserChip } from './user-chip-menu';
 export { UserChip } from './user-chip-menu';
 
 const SURFACES = [
-  { slug: 'review', label: 'Review', glyph: '≡', title: 'Reconciliation Review' },
-  { slug: 'plan', label: 'Plan', glyph: '⌷', title: 'Plan (WBS)' },
-  { slug: 'mapping', label: 'Mapping', glyph: '⇄', title: 'Work Package ↔ Ticket Mapping' },
-  { slug: 'baselines', label: 'Baselines', glyph: '▤', title: 'Baseline history' },
-  { slug: 'connectors', label: 'Connectors', glyph: '⟲', title: 'Tracker Connectors' },
+  { slug: 'review', glyph: '≡', messageKey: 'shell.surfaces.review' as const },
+  { slug: 'plan', glyph: '⌷', messageKey: 'shell.surfaces.plan' as const },
+  { slug: 'mapping', glyph: '⇄', messageKey: 'shell.surfaces.mapping' as const },
+  { slug: 'baselines', glyph: '▤', messageKey: 'shell.surfaces.baselines' as const },
+  { slug: 'connectors', glyph: '⟲', messageKey: 'shell.surfaces.connectors' as const },
 ];
 
 export interface ShellProps {
@@ -45,6 +47,7 @@ export function Shell({
   showAuditLog = false,
   children,
 }: ShellProps) {
+  const t = useTranslations();
   const [collapsed, setCollapsed] = useState(false);
   const pathname = usePathname();
   const stale = snapshotAgeMinutes > 24 * 60;
@@ -54,7 +57,7 @@ export function Shell({
     <div className="app">
       <header className="topbar">
         <Link className="brand" href="/" data-testid="brand">
-          momo-keikaku <span>／ 計画</span>
+          {t('auth.signIn.momo_keikaku')} <span>{t('shell.brandSuffix')}</span>
         </Link>
         <div className="project-switcher" data-testid="project-switcher">
           <strong>{projectName}</strong>
@@ -63,18 +66,16 @@ export function Shell({
         <div
           className={`snapshot-pin${stale ? ' stale' : ''}`}
           data-testid="snapshot-pin"
-          title="The Tracker Snapshot this view is pinned to"
+          title={t('shell.snapshotPinTitle')}
         >
           <span aria-hidden>{stale ? '▲' : '◉'}</span>
-          <span>
-            Snapshot {snapshotLabel} · {formatAge(snapshotAgeMinutes)}
-          </span>
+          <span>{t('shell.snapshotLabel', { label: snapshotLabel, age: formatAge(snapshotAgeMinutes, t) })}</span>
         </div>
         <UserChip label={chipText} showAuditLog={showAuditLog} />
       </header>
 
-      <nav className={`sidebar${collapsed ? ' collapsed' : ''}`} aria-label="Project surfaces">
-        <div className="sect">Project</div>
+      <nav className={`sidebar${collapsed ? ' collapsed' : ''}`} aria-label={t('shell.nav_aria_project_surfaces')}>
+        <div className="sect">{t('shell.projectSection')}</div>
         {SURFACES.map((s) => {
           const href = `/p/${projectId}/${s.slug}`;
           const active = pathname?.startsWith(href);
@@ -84,28 +85,28 @@ export function Shell({
               href={href}
               className="navitem"
               aria-current={active ? 'page' : undefined}
-              title={s.title}
+              title={t(`${s.messageKey}.title`)}
             >
               <span className="glyph" aria-hidden>
                 {s.glyph}
               </span>
-              <span className="navlabel">{s.label}</span>
+              <span className="navlabel">{t(`${s.messageKey}.label`)}</span>
             </Link>
           );
         })}
         <div className="sect" style={{ marginTop: 24 }}>
-          Client
+          {t('shell.clientSection')}
         </div>
         <Link
           href={`/c/${projectId}`}
           className="navitem"
           aria-current={pathname?.startsWith(`/c/${projectId}`) ? 'page' : undefined}
-          title="Client View preview"
+          title={t('shell.clientViewTitle')}
         >
           <span className="glyph" aria-hidden>
             ◻
           </span>
-          <span className="navlabel">Client View</span>
+          <span className="navlabel">{t('shell.clientView')}</span>
         </Link>
         <button
           type="button"
@@ -113,7 +114,7 @@ export function Shell({
           onClick={() => setCollapsed((c) => !c)}
           aria-expanded={!collapsed}
         >
-          {collapsed ? '»' : '« Collapse'}
+          {collapsed ? t('shell.expand') : t('shell.collapse')}
         </button>
       </nav>
 
@@ -122,9 +123,9 @@ export function Shell({
   );
 }
 
-function formatAge(minutes: number): string {
-  if (minutes < 60) return `${minutes} min ago`;
+function formatAge(minutes: number, t: ReturnType<typeof useTranslations>): string {
+  if (minutes < 60) return t('shell.ageMinutes', { minutes });
   const h = Math.round(minutes / 60);
-  if (h < 48) return `${h} h ago`;
-  return `${Math.round(h / 24)} d ago`;
+  if (h < 48) return t('shell.ageHours', { hours: h });
+  return t('shell.ageDays', { days: Math.round(h / 24) });
 }

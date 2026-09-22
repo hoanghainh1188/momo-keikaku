@@ -80,10 +80,16 @@ export const AUDIT_USE_CASE_ROLES = {
   listAuditLog: adminOnly,
 } as const satisfies Readonly<Record<string, RoleDeclaration>>;
 
+/** Tenant settings (story 1.9) — currency before any Rate exists. */
+export const TENANT_USE_CASE_ROLES = {
+  changeTenantCurrency: adminOnly,
+} as const satisfies Readonly<Record<string, RoleDeclaration>>;
+
 export const USE_CASE_ROLES: Readonly<Record<string, RoleDeclaration>> = {
   ...PROJECT_USE_CASE_ROLES,
   ...ORG_USE_CASE_ROLES,
   ...MEMBERSHIP_USE_CASE_ROLES,
   ...RESOURCE_USE_CASE_ROLES,
   ...AUDIT_USE_CASE_ROLES,
+  ...TENANT_USE_CASE_ROLES,
 };

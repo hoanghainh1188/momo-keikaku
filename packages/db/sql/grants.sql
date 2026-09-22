@@ -10,7 +10,7 @@ REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM "momo_app", "momo_maintenance"
 GRANT USAGE ON SCHEMA public TO "momo_app", "momo_maintenance";
 
 -- tenant (global)
-GRANT SELECT ON public."tenant" TO "momo_app";
+GRANT SELECT, UPDATE ON public."tenant" TO "momo_app";
 
 -- auth_user (global)
 GRANT SELECT, INSERT, UPDATE, DELETE ON public."auth_user" TO "momo_app";

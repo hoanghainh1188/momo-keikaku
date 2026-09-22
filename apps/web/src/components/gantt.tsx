@@ -1,3 +1,7 @@
+'use client';
+
+import { useTranslations } from 'next-intl';
+
 /**
  * Gantt-lite: the Baseline as a hollow outline bar above the Current Plan's solid
  * indigo bar, with earned progress filling the Current bar in ink from the left.
@@ -39,6 +43,7 @@ export function GanttRow({
   isMilestone: boolean;
   slipped: boolean;
 }) {
+  const t = useTranslations();
   if (isMilestone) {
     const at = baseline?.finish ?? current?.finish;
     if (!at) return <div className="gantt-track" />;
@@ -47,7 +52,11 @@ export function GanttRow({
         <span
           className={`gantt-milestone${slipped ? ' slipped' : ''}`}
           style={{ left: `calc(${pct(scale, at)}% - 4px)` }}
-          title={`Milestone ${at}${slipped ? ' — slipped' : ''}`}
+          title={
+            slipped
+              ? t('gantt.milestone_slipped', { date: at })
+              : t('gantt.milestone_title', { date: at })
+          }
         />
       </div>
     );
@@ -62,7 +71,7 @@ export function GanttRow({
             left: `${pct(scale, baseline.start)}%`,
             width: `${Math.max(pct(scale, baseline.finish) - pct(scale, baseline.start), 0.6)}%`,
           }}
-          title={`Baseline ${baseline.start} → ${baseline.finish}`}
+          title={t('gantt.baseline_bar_title', { start: baseline.start, finish: baseline.finish })}
         />
       ) : null}
       {current ? (
@@ -73,7 +82,7 @@ export function GanttRow({
               left: `${pct(scale, current.start)}%`,
               width: `${Math.max(pct(scale, current.finish) - pct(scale, current.start), 0.6)}%`,
             }}
-            title={`Current Plan ${current.start} → ${current.finish}`}
+            title={t('gantt.current_bar_title', { start: current.start, finish: current.finish })}
           />
           <span
             className="gantt-earned"
@@ -81,7 +90,7 @@ export function GanttRow({
               left: `${pct(scale, current.start)}%`,
               width: `${Math.max((pct(scale, current.finish) - pct(scale, current.start)) * earned.fraction, 0)}%`,
             }}
-            title={`Earned ${earned.label}%`}
+            title={t('gantt.earned_bar_title', { percent: earned.label })}
           />
         </>
       ) : null}

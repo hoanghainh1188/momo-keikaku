@@ -81,6 +81,9 @@ const PROBE_V = buildProbeTenant('xtprobe-wb', 730_000_000);
 assertProbeTenantsDisjoint([PROBE_W, PROBE_V]);
 
 const WRITES: readonly ReadUseCase[] = READ_USE_CASES.filter((entry) => entry.kind === 'write');
+/** Probe Tenants already have Rates, so these writes only refuse — they are not on the success or audit-rollback paths. */
+const RATE_LOCKED: readonly ReadUseCase[] = WRITES.filter((entry) => entry.refusesWhenAnyRate !== undefined);
+const AUDITED_WRITES: readonly ReadUseCase[] = WRITES.filter((entry) => entry.refusesWhenAnyRate === undefined);
 
 /** The id port for every write this file drives — one sequence for the run, never reused. */
 const IDS = idPort('xtwa-id');
@@ -153,8 +156,8 @@ describe.skipIf(!reachable)('the write use cases, against two probe Tenants as t
     }
   }, 120_000);
 
-  const FOREIGN = WRITES.filter((entry) => entry.namesNoExistingRow === undefined);
-  const NO_FOREIGN_ID = WRITES.filter((entry) => entry.namesNoExistingRow !== undefined);
+  const FOREIGN = AUDITED_WRITES.filter((entry) => entry.namesNoExistingRow === undefined);
+  const NO_FOREIGN_ID = AUDITED_WRITES.filter((entry) => entry.namesNoExistingRow !== undefined);
 
   describe.each(FOREIGN.map((entry) => [entry.name, entry] as const))(
     'write use case %s',
@@ -249,6 +252,22 @@ describe.skipIf(!reachable)('the write use cases, against two probe Tenants as t
     },
   );
 
+  describe.skipIf(RATE_LOCKED.length === 0).each(RATE_LOCKED.map((entry) => [entry.name, entry] as const))(
+    'write use case %s (refuses once any Rate exists)',
+    (_name, entry) => {
+      it('answers invalid_input and lands nothing, for the caller and the other Tenant', async () => {
+        const before = { w: await allRows(PROBE_W.tenantId), v: await allRows(PROBE_V.tenantId) };
+        const outcome = await drive(entry, ownTarget());
+        const after = { w: await allRows(PROBE_W.tenantId), v: await allRows(PROBE_V.tenantId) };
+
+        expect(outcome.error, `${entry.name} threw instead of refusing`).toBeUndefined();
+        expect(outcome.refused?.code).toBe('invalid_input');
+        expect(outcome.refused?.details).toEqual({ currency: ['tenant_currency_locked'] });
+        expect(after, `${entry.name} changed a row although Rates already exist`).toEqual(before);
+      });
+    },
+  );
+
   /**
    * AD-14 against Postgres: the change and its audit record are ONE transaction. Each write is
    * driven on its own Tenant's Project through `packages/db`'s real tenant transaction, with one
@@ -281,7 +300,7 @@ describe.skipIf(!reachable)('the write use cases, against two probe Tenants as t
       };
     }
 
-    it.each(WRITES.map((entry) => [entry.name, entry] as const))(
+    it.each(AUDITED_WRITES.map((entry) => [entry.name, entry] as const))(
       '%s: the work failing after audit.record lands neither the change nor the record',
       async (_name, entry) => {
         let appended = 0;
@@ -312,7 +331,7 @@ describe.skipIf(!reachable)('the write use cases, against two probe Tenants as t
       },
     );
 
-    it.each(WRITES.map((entry) => [entry.name, entry] as const))(
+    it.each(AUDITED_WRITES.map((entry) => [entry.name, entry] as const))(
       '%s: an audit_log insert refused by Postgres rolls the change back',
       async (_name, entry) => {
         let attempted = 0;
@@ -351,7 +370,7 @@ describe.skipIf(!reachable)('the write use cases, against two probe Tenants as t
       foreignBefore = await rowCounts(PROBE_V.tenantId);
     });
 
-    it.each(WRITES.map((entry) => [entry.name, entry] as const))('%s', async (_name, entry) => {
+    it.each(AUDITED_WRITES.map((entry) => [entry.name, entry] as const))('%s', async (_name, entry) => {
       const target = ownTarget();
       const rowsBefore = await allRows(PROBE_W.tenantId);
       const before = await landedRows(PROBE_W.tenantId);

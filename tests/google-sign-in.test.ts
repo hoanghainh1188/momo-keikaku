@@ -23,6 +23,7 @@ import { membershipsOf } from '../packages/db/src/repo-membership';
 import { account, authUser, session, verification } from '../packages/db/src/schema';
 import { tenantMembership } from '../packages/db/src/schema-membership';
 import { startFakeOidc, type FakeIdentity, type FakeOidc, type FakeScript } from './support/fake-oidc';
+import { testResetPasswordMailRenderer } from './support/reset-mail-renderer';
 import { connectWriteHarness, owner } from './write-harness';
 
 /**
@@ -83,7 +84,12 @@ function appDb() {
 }
 
 /** Story 1.4 slice 4 fields this file does not exercise: a no-op mailer and event writer. */
-const NOOP_RESET_DEPS = { mailer: { send: async () => {} }, now: systemClock.now, identityEvents: { record: async () => {} } };
+const NOOP_RESET_DEPS = {
+  mailer: { send: async () => {} },
+  now: systemClock.now,
+  identityEvents: { record: async () => {} },
+  resetPasswordMail: testResetPasswordMailRenderer(),
+};
 
 function buildAuth(google: { issuer: string } | null): Auth {
   return createAuth({

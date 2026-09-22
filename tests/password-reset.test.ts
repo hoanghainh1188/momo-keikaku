@@ -17,6 +17,7 @@ import { identityEventWriterOn } from '../packages/db/src/repo-identity-event';
 import { account, authUser, identityEvent, session, verification } from '../packages/db/src/schema';
 import { MAINTENANCE_SETTING } from '../packages/db/src/table-classes';
 import { connectWriteHarness, owner } from './write-harness';
+import { testResetPasswordMailRenderer } from './support/reset-mail-renderer';
 
 /**
  * STORY 1.4 SLICE 4's I/O MATRIX, against Postgres: a real Better Auth instance on the restricted
@@ -105,6 +106,7 @@ function buildAuth(): Auth {
     mailer,
     now: () => NOW,
     identityEvents: identityEventWriterOn(appDb()),
+    resetPasswordMail: testResetPasswordMailRenderer(),
   });
 }
 
@@ -434,6 +436,7 @@ describe.skipIf(!reachable)('password reset through MailerPort (story 1.4 slice 
         generateId: uuidV7IdsOn(systemClock).next,
         mailer,
         now: () => NOW,
+        resetPasswordMail: testResetPasswordMailRenderer(),
         identityEvents: {
           record: async () => {
             throw new Error('identity_event insert refused');

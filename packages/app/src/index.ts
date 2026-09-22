@@ -129,3 +129,4 @@ export type {
   AppendResourceRateInput,
   CreateResourceInput,
 } from './use-cases/resource-input';
+export type { ChangeTenantCurrencyInput, TenantCurrencyDeps } from './use-cases/tenant-currency';

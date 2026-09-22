@@ -1,0 +1,470 @@
+{
+  "errors": {
+    "not_found": "That item could not be found.",
+    "invalid_input": "Something in the request was not valid."
+  },
+  "mail": {
+    "resetPassword": {
+      "subject": "Reset your momo-keikaku password",
+      "body": {
+        "intro": "We received a request to reset your momo-keikaku password.",
+        "linkLine": "Reset it here: {link}",
+        "expiry": "This link expires in {hours, plural, one {# hour} other {# hours}} and can be used once. If you did not request this, you can ignore this email — your password will not change."
+      }
+    }
+  },
+  "admin": {
+    "audit": {
+      "stored_actor_stamp": "stored actor stamp",
+      "no_audit_rows_match": "No audit rows match.",
+      "audit_log": "Audit log",
+      "every_change_to_reported_numbers_or_to_who_can_s": "Every change to reported numbers or to who can see them, in this Tenant.",
+      "action": "Action",
+      "any": "Any",
+      "actor": "Actor",
+      "from": "From",
+      "to": "To",
+      "filter": "Filter",
+      "when": "When",
+      "target": "Target",
+      "payload": "Payload",
+      "filterError": "Those filters are not valid. Check the dates and action."
+    },
+    "momo_keikaku": "momo-keikaku",
+    "administration": "Administration"
+  },
+  "clientView": {
+    "slipped": "slipped",
+    "preview_not_published_this_is_exactly_what_a_cli": "Preview — not published · this is exactly what a Client Viewer would see",
+    "status": "Status",
+    "overall": "Overall",
+    "this_reporting_period": "This reporting period",
+    "from_your_project_manager": "From your project manager",
+    "no_explanatory_note_has_been_attached_for_this_p": "No explanatory note has been attached for this period yet.",
+    "the_unplanned_work_indicator_is_always_counted_i": "The Unplanned Work indicator is always counted in the Health Indicators above. The project manager controls the notes and the level of detail, not whether it counts.",
+    "milestones": "Milestones",
+    "milestone": "Milestone",
+    "planned_baseline": "Planned (baseline)",
+    "current": "Current",
+    "done": "Done",
+    "open": "open",
+    "schedule": "Schedule",
+    "wbs": "WBS",
+    "work_package": "Work Package",
+    "planned": "Planned",
+    "complete": "Complete",
+    "plan_vs_current": "Plan vs current",
+    "this_report_shows_effort_only_it_contains_no_cos": "This report shows effort only. It contains no cost, no rates, no named staffing and no ticket content. Views of a published report are recorded.",
+    "unplanned_work_title": "計画外作業 — Unplanned Work",
+    "report_sub": "{clientName} · Report as of {asOf} · Effort in 工数 (h)",
+    "back_to_review": "← Back to the PM's Reconciliation Review"
+  },
+  "auth": {
+    "forgotPassword": {
+      "email": "Email",
+      "forgot_password_momo_keikaku": "Forgot password · momo-keikaku",
+      "momo_keikaku": "momo-keikaku",
+      "reset_your_password": "Reset your password",
+      "enter_the_email_you_sign_in_with": "Enter the email you sign in with.",
+      "back_to_sign_in": "Back to sign in",
+      "sent": {
+        "oneHour": "If that email has an account, we've sent a link to reset the password. It expires in an hour.",
+        "manyHours": "If that email has an account, we've sent a link to reset the password. It expires in {hours} hours."
+      },
+      "sending": "Sending…",
+      "submit": "Send reset link"
+    },
+    "noAccess": {
+      "no_access_momo_keikaku": "No access · momo-keikaku",
+      "momo_keikaku": "momo-keikaku",
+      "no_access": "No access",
+      "you_are_not_signed_in": "You are not signed in.",
+      "sign_in": "Sign in",
+      "you_are_signed_in_but_no_workspace_can_be_opened": "You are signed in, but no workspace can be opened for this account yet. Ask your Tenant Admin."
+    },
+    "resetPassword": {
+      "reset_password_momo_keikaku": "Reset password · momo-keikaku",
+      "momo_keikaku": "momo-keikaku",
+      "choose_a_new_password": "Choose a new password",
+      "that_did_not_work_the_link_may_have_been_used_al": "That did not work. The link may have been used already or expired, or the password may have been too short.",
+      "request_a_new_link": "Request a new link",
+      "if_you_need_one": "if you need one.",
+      "request_one": "Request one",
+      "back_to_sign_in": "Back to sign in",
+      "new_password": "New password",
+      "updating": "Updating…",
+      "submit": "Update password",
+      "minPasswordHint": "At least {min} characters.",
+      "needsLink": "This page needs the link from your reset email."
+    },
+    "signIn": {
+      "sign_in_momo_keikaku": "Sign in · momo-keikaku",
+      "momo_keikaku": "momo-keikaku",
+      "sign_in": "Sign in",
+      "google_sign_in_did_not_go_through_try_again_or_s": "Google sign-in did not go through. Try again, or sign in with your email and password.",
+      "email": "Email",
+      "password": "Password",
+      "that_email_and_password_do_not_match_an_account_": "That email and password do not match an account. Check both and try again.",
+      "forgot_your_password": "Forgot your password?",
+      "signingIn": "Signing in…",
+      "submit": "Sign in",
+      "orDivider": "or",
+      "openingGoogle": "Opening Google…",
+      "signInWithGoogle": "Sign in with Google"
+    }
+  },
+  "meta": {
+    "title": "momo-keikaku",
+    "description": "Plan, work done and the numbers, in agreement."
+  },
+  "baselines": {
+    "history": "History",
+    "baselines": "Baselines",
+    "a_baseline_is_never_edited_every_version_is_kept": "A Baseline is never edited. Every version is kept with its author, time and reason.",
+    "seq": "Seq",
+    "version": "Version",
+    "recorded": "Recorded",
+    "reason": "Reason",
+    "baselined_leaf_wps": "Baselined leaf WPs",
+    "bac": "BAC",
+    "active": "Active",
+    "whether_an_hour_counts_as_baselined_is_judged_ag": "Whether an hour counts as baselined is judged against the Baseline version active when its ledger entry was recorded, so a Re-baseline never erases Unplanned history. The active Baseline is selected by sequence, never by comparing timestamps.",
+    "active_tag": "active",
+    "demo_not_wired": "Not in this demo: Set Baseline / Re-baseline actions and version comparison (FR-16). BAC today is {bac}h."
+  },
+  "connectors": {
+    "backlog_connector": "Backlog Connector",
+    "connectors": "Connectors",
+    "connectors_are_read_only_the_offshore_team_keeps": "Connectors are read-only. The offshore team keeps working in Backlog; nothing is asked of them and nothing is ever written back.",
+    "adapter": "Adapter",
+    "fixtures_backlog_ec_phase2": "fixtures/backlog/ec-phase2/",
+    "space": "Space",
+    "scope": "Scope",
+    "hours_detection": "Hours detection",
+    "detected_from_the_data_never_from_the_plan_name_": "Detected from the data, never from the plan name: measurement basis",
+    "pinned_snapshot": "Pinned snapshot",
+    "opening_balance": "Opening Balance",
+    "not_in_this_demo_credential_entry_and_rotation_t": "Not in this demo: credential entry and rotation, the scheduled snapshot job (pg-boss), on-demand refresh, and Tracker Account → Resource linking as a UI. The seed replays all six snapshots in one pass.",
+    "adapter_replays": " — replays recorded Backlog pages from ",
+    "snapshot_row": "{snapshotId} · {ticketCount} Tickets · {ageMinutes} min old",
+    "opening_balance_row": "{hours}h — hours the Tickets already carried before momo-keikaku could observe them"
+  },
+  "mapping": {
+    "coverage": "Coverage",
+    "mapping_rules": "Mapping Rules",
+    "tickets": "Tickets",
+    "rules_are_live_on_every_tracker_snapshot_each_ti": "Rules are live: on every Tracker Snapshot each Ticket without a manual Mapping is re-evaluated in priority order. A manual Mapping always wins.",
+    "the_60_tickets_carrying_the_most_hours_map_remap": "The 60 Tickets carrying the most hours. Map, remap or unmap; the Review updates in place.",
+    "mapping_work_packages_tickets": "Mapping — Work Packages ↔ Tickets",
+    "mappings_persist_across_tracker_snapshots_and_pl": "Mappings persist across Tracker Snapshots and Plan edits. Attribution follows the current Mapping, so a remap moves the hours immediately and the ledger itself is never rewritten.",
+    "priority": "Priority",
+    "rule": "Rule",
+    "condition": "Condition",
+    "target_work_package": "Target Work Package",
+    "tickets_mapped_now": "Tickets mapped now",
+    "a_rule_showing_0_tickets_is_not_broken_those_tic": "A rule showing 0 Tickets is not broken: those Tickets already carry a manual Mapping, which a rule never overrides.",
+    "ticket": "Ticket",
+    "title": "Title",
+    "category": "Category",
+    "status": "Status",
+    "hours": "Hours",
+    "mapped_to": "Mapped to",
+    "source": "Source",
+    "change": "Change",
+    "unmapped": "Unmapped",
+    "money_is_never_shown_on_client_surfaces_every_ma": "Money is never shown on client surfaces. Every Mapping change is recorded with its author and time in the audit log.",
+    "form": {
+      "save": "Save",
+      "unmapped_option": "— unmapped —",
+      "map_ticket_aria": "Map {ticketId}"
+    },
+    "ledger": {
+      "scope_ledger_every_hour_in_the_connector_apos_s_": "Scope ledger — every hour in the Connector's scope, in one of four buckets",
+      "buckets_footnote": "The four buckets are mutually exclusive and sum to {totalHours}h — nothing in scope is silently excluded. Opening Balances ({openingHours}h) sit outside the bar and are reported separately.",
+      "segment_aria": "{label} {hours} hours, {share}",
+      "segment_title": "{label}: {hours}h ({share})"
+    },
+    "coverage_summary": "{hourShare} of hours mapped · {ticketShare} of Tickets mapped · {unmappedTickets} Unmapped Tickets. The share of Tickets and the share of hours are reported separately on purpose."
+  },
+  "plan": {
+    "tree_schedule": "Tree & schedule",
+    "plan_work_breakdown_structure": "Plan — Work Breakdown Structure",
+    "current_plan_solid_indigo_against_the_active_bas": "Current Plan (solid indigo) against the active Baseline (hollow outline). The Baseline is never edited: plan changes go to the Current Plan, and the Baseline moves only through an explicit, reasoned Re-baseline.",
+    "active_baseline": "Active Baseline",
+    "wbs": "WBS",
+    "work_package": "Work Package",
+    "baseline_h": "Baseline h",
+    "current_plan_h": "Current plan h",
+    "actual_h": "Actual h",
+    "baseline_dates": "Baseline dates",
+    "current_dates": "Current dates",
+    "catch_all_loe": "catch-all · LOE",
+    "milestone": "milestone",
+    "non_baselined": "non-baselined",
+    "summary_rows_roll_up_effort_and_dates_from_their": "Summary rows roll up effort and dates from their children. Earned progress fills the Current Plan bar in ink from the left. Milestones are diamonds; a slipped milestone is drawn as a hollow red diamond.",
+    "baseline_recorded": "recorded {date} — \"{reason}\" · BAC {bac}h over {leafCount} baselined leaf Work Packages.",
+    "gantt_column_header": "Baseline vs Current {from} → {to}"
+  },
+  "review": {
+    "status": "Status",
+    "unplanned_work": "Unplanned Work",
+    "ahead_behind": "Ahead / Behind",
+    "effort_cost": "Effort & Cost",
+    "forecast": "Forecast",
+    "the_overall_status_is_the_worst_of_the_three_ind": "The overall status is the worst of the three indicators. Each shows the rule behind its colour.",
+    "hours_spent_outside_the_baselined_plan_they_carr": "Hours spent outside the baselined plan. They carry actual effort and no earned value — this is information about how accurate the plan is, not a judgement of people.",
+    "measured_in_effort_hours_the_money_column_is_der": "Measured in effort hours (工数). The money column is derived (hours × Rate) and is internal only.",
+    "spi": "SPI",
+    "cpi_all_in": "CPI (all-in)",
+    "cpi_planned_scope": "CPI (planned scope)",
+    "unplanned_work_period": "Unplanned Work (period)",
+    "sv_schedule_variance": "SV (schedule variance)",
+    "forecast_finish": "Forecast finish",
+    "slipped": "slipped",
+    "eac_typical": "EAC (Typical)",
+    "etc": "ETC",
+    "vac": "VAC",
+    "pinned_to_tracker_snapshot": "Pinned to Tracker Snapshot",
+    "mapping": "Mapping",
+    "plan": "Plan",
+    "preview_client_view": "Preview client view",
+    "overall": "Overall",
+    "the_three_components_of_unplanned_work_cumulativ": "The three components of Unplanned Work (cumulative)",
+    "component": "Component",
+    "hours": "Hours",
+    "share_of_unplanned": "Share of Unplanned",
+    "where_it_comes_from": "Where it comes from",
+    "total_unplanned_work": "Total Unplanned Work",
+    "unmapped_work_by_tracker_attribute_expand_to_tic": "Unmapped Work by Tracker attribute — expand to Tickets",
+    "group": "Group",
+    "attribute": "Attribute",
+    "tickets": "Tickets",
+    "health": {
+      "schedule": "Schedule",
+      "effort_cost": "Effort / Cost",
+      "unplanned": "Unplanned Work",
+      "unplanned_work": "Unplanned Work"
+    },
+    "componentSource": {
+      "unmapped": "Tickets in the Connector's scope with no Mapping to a Work Package.",
+      "non_baselined": "Work Packages that exist in the Current Plan but carry no Baseline hours — for example WPs created by the Plan disposition. Their hours stay Unplanned until a Re-baseline.",
+      "catch_all_overflow": "A Catch-all Work Package is measured as Level of Effort. Hours beyond its Baseline hours are Unplanned Work, and appear only here, so they are never counted twice."
+    },
+    "disposition": {
+      "dispositions": "Dispositions",
+      "explain_notes": "Explain notes",
+      "cr_candidate": "CR candidate",
+      "map_to_leaf_work_package": "Map to leaf Work Package",
+      "attribution_follows_the_current_mapping_so_these": "Attribution follows the current Mapping, so these hours leave Unplanned Work immediately.",
+      "new_work_package_name": "New Work Package name",
+      "create_wp_map": "Create WP & map",
+      "counts_as_unplanned_work_until_the_next_re_basel": "Counts as Unplanned Work until the next Re-baseline includes the new WP.",
+      "note": "Note",
+      "save_note": "Save note",
+      "clients_see_this_note_only_if_you_publish_it": "Clients see this note only if you publish it.",
+      "all_dispositioned": "All Unmapped Work has a Disposition.",
+      "queue_waiting": "{count, plural, one {# group waiting} other {# groups waiting}}. Unplanned Work is {hours}h.",
+      "unmapped_tickets": "{count, plural, one {# Unmapped Ticket} other {# Unmapped Tickets}}",
+      "disposition_line": " · disposition: {disposition}",
+      "explain_note_line": "“{note}” — {hours}h",
+      "map_tickets_submit": "Map {count, plural, one {# Ticket} other {# Tickets}}",
+      "column_header": "Disposition"
+    },
+    "total_unmapped_work": "Total Unmapped Work",
+    "milestones": "Milestones",
+    "wbs": "WBS",
+    "milestone": "Milestone",
+    "baseline_date": "Baseline date",
+    "current_date": "Current date",
+    "done": "Done",
+    "open": "open",
+    "divergence_by_work_package_baseline_vs_current_p": "Divergence by Work Package — Baseline vs Current Plan vs actual",
+    "work_package": "Work Package",
+    "baseline_finish": "Baseline finish",
+    "current_finish": "Current finish",
+    "baseline_h": "Baseline h",
+    "ev_h": "EV h",
+    "ac_h": "AC h",
+    "basis": "Basis",
+    "catch_all_loe": "catch-all · LOE",
+    "non_baselined": "non-baselined",
+    "low_evidence": "low evidence",
+    "metric": "Metric",
+    "money": "Money",
+    "formula": "Formula",
+    "reading": "Reading",
+    "the_effort_forecast_is_the_eac_from_the_project_": "The effort forecast is the EAC from the Project's EAC Method, so it includes Unplanned Work.",
+    "approximate_hours_are_derived_from_the_differenc": "Approximate — hours are derived from the difference between Tracker Snapshots, not from worklogs. Any breakdown by person or by day is approximate for that reason, and no view ranks or scores people by Unplanned Work.",
+    "ticket": "Ticket",
+    "title": "Title",
+    "not_dispositioned": "not dispositioned",
+    "report_title": "{projectName} — Reconciliation Review",
+    "percent_complete_total": "100.0%",
+    "meta": {
+      "report_sub_period": "Reporting Period {period} (weekly, teirei Thursday, {tz}) · Contract type {contractType} · Client {clientName}",
+      "tickets_in_scope": "{count, plural, one {# Ticket} other {# Tickets}} in scope",
+      "connector": "Connector",
+      "measurement_basis": "Measurement basis",
+      "formula": "Formula"
+    },
+    "metrics": {
+      "formula_spi": "SPI = EV ÷ PV",
+      "formula_cpi_all_in": "CPI = EV ÷ AC (all actual hours)",
+      "formula_cpi_planned": "CPI = EV ÷ AC of baselined WPs only",
+      "note_spi": "{ev}h ÷ {pv}h — {behind, select, true {behind plan} other {on or ahead of plan}}",
+      "note_cpi_all_in": "{ev}h ÷ {ac}h — includes Unplanned Work",
+      "note_cpi_gap": "The gap between the two CPIs is the Unplanned Work.",
+      "formula_unplanned_period": "{unplanned}h of {total}h this period",
+      "note_unplanned_cumulative": "Cumulative {share} ({hours}h)",
+      "formula_sv": "SV = EV − PV",
+      "note_sv": "{behind, select, true {Behind plan} other {Ahead of plan}}",
+      "formula_forecast_finish": "Baseline start + (Baseline working days ÷ SPI)",
+      "note_forecast_finish": "Baseline finish {baselineFinish} · {note}",
+      "formula_eac": "EAC = BAC ÷ CPI (all-in)",
+      "note_eac": "EAC Method: Typical — the only method in R0",
+      "formula_etc": "ETC = EAC − AC",
+      "formula_vac": "VAC = BAC − EAC",
+      "note_vac": "Negative means the forecast overruns the budget",
+      "formula_forecast_trend": "Trend heuristic, not a PMI formula",
+      "behind_plan": "behind plan",
+      "on_or_ahead_of_plan": "on or ahead of plan",
+      "behind_plan_cap": "Behind plan",
+      "ahead_of_plan": "Ahead of plan"
+    },
+    "unplanned": {
+      "total_row_rates": "{amount} at the Rates in effect when each hour was recorded",
+      "opening_balance_footnote": "Opening Balance {hours}h — hours the Tickets already carried before momo-keikaku could observe them. Counted in cumulative AC, excluded from period metrics, so a Project connected mid-flight shows no false spike.",
+      "mapping_coverage": "Mapping coverage: {hourShare} of hours and {ticketShare} of Tickets are mapped (FR-23 reports the two separately)."
+    },
+    "divergence": {
+      "footnote": "{leafCount} leaf Work Packages in the Current Plan; {baselineCount} carry Baseline hours or are Milestones. Percent Complete is never derived from burned effort."
+    },
+    "evm": {
+      "cpi_money_footnote": "CPI in money can differ from CPI in hours, because the people planned and the people who did the work can have different Rates. Money above uses the Project default Rate of {defaultRate}/h for PV and EV, and the per-Resource Rate in effect for AC.",
+      "pv": {
+        "name": "PV — Planned Value",
+        "formula": "Baseline hours spread over baseline working days, to the as-of date",
+        "reading": "What the Baseline said would be earned by now"
+      },
+      "ev": {
+        "name": "EV — Earned Value",
+        "formula": "Σ Baseline hours × Percent Complete",
+        "reading": "What has actually been earned"
+      },
+      "ac": {
+        "name": "AC — Actual Cost (all-in)",
+        "formula": "Actuals Ledger, attributed by the current Mapping",
+        "reading": "Includes the Unplanned line below"
+      },
+      "planned_scope": {
+        "name": "— of which planned scope",
+        "formula": "AC of baselined WPs (incl. Catch-all within its Baseline)",
+        "reading": ""
+      },
+      "unplanned_line": {
+        "name": "— of which Unplanned (PV = EV = 0)",
+        "formula": "Unmapped + non-baselined WPs + Catch-all overflow",
+        "reading": "Actual effort with no earned value"
+      },
+      "cv": {
+        "name": "CV — Cost Variance",
+        "formula": "CV = EV − AC",
+        "reading": "< 0 means over budget"
+      },
+      "sv": {
+        "name": "SV — Schedule Variance",
+        "formula": "SV = EV − PV",
+        "reading": "< 0 means behind"
+      },
+      "cpi_all_in": {
+        "name": "CPI (all-in)",
+        "formula": "CPI = EV ÷ AC",
+        "reading": "< 1 means over budget. This is the headline figure and the one every EAC uses."
+      },
+      "cpi_planned": {
+        "name": "CPI (planned scope)",
+        "formula": "CPI = EV ÷ AC of baselined WPs",
+        "reading": "Higher than all-in CPI: the planned work is close to plan; the overrun is Unplanned Work."
+      },
+      "tcpi": {
+        "name": "TCPI",
+        "formula": "TCPI = (BAC − EV) ÷ (BAC − AC)",
+        "reading": "> 1.1 means the remaining work must beat the planned efficiency — a red flag."
+      },
+      "bac": {
+        "name": "BAC — Budget at Completion",
+        "formula": "Σ Baseline hours over baselined leaf WPs",
+        "reading": ""
+      }
+    }
+  },
+  "shell": {
+    "the_tracker_snapshot_this_view_is_pinned_to": "The Tracker Snapshot this view is pinned to",
+    "client_view_preview": "Client View preview",
+    "project_surfaces": "Project surfaces",
+    "momo_keikaku": "momo-keikaku",
+    "project": "Project",
+    "client": "Client",
+    "client_view": "Client View",
+    "signOut": {
+      "button": "Sign out"
+    },
+    "brandSuffix": "／ 計画",
+    "snapshotPinTitle": "The Tracker Snapshot this view is pinned to",
+    "snapshotLabel": "Snapshot {label} · {age}",
+    "projectSection": "Project",
+    "clientSection": "Client",
+    "clientView": "Client View",
+    "clientViewTitle": "Client View preview",
+    "collapse": "« Collapse",
+    "expand": "»",
+    "surfaces": {
+      "review": {
+        "label": "Review",
+        "title": "Reconciliation Review"
+      },
+      "plan": {
+        "label": "Plan",
+        "title": "Plan (WBS)"
+      },
+      "mapping": {
+        "label": "Mapping",
+        "title": "Work Package ↔ Ticket Mapping"
+      },
+      "baselines": {
+        "label": "Baselines",
+        "title": "Baseline history"
+      },
+      "connectors": {
+        "label": "Connectors",
+        "title": "Tracker Connectors"
+      }
+    },
+    "roleLabels": {
+      "tenant_admin": "Tenant Admin",
+      "pm": "PM",
+      "client_viewer": "Client Viewer",
+      "internal_viewer": "Internal Viewer",
+      "none": "No role"
+    },
+    "ageMinutes": "{minutes} min ago",
+    "ageHours": "{hours} h ago",
+    "ageDays": "{days} d ago",
+    "nav_aria_project_surfaces": "Project surfaces"
+  },
+  "ui": {
+    "internal": "Internal"
+  },
+  "common": {
+    "em_dash": "—",
+    "unit_hours": "h",
+    "percent_symbol": "%"
+  },
+  "gantt": {
+    "milestone_title": "Milestone {date}",
+    "milestone_slipped": "Milestone {date} — slipped",
+    "baseline_bar_title": "Baseline {start} → {finish}",
+    "current_bar_title": "Current Plan {start} → {finish}",
+    "earned_bar_title": "Earned {percent}%"
+  }
+}

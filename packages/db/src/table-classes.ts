@@ -120,7 +120,10 @@ export const TABLE_REGISTRY: readonly TableEntry[] = [
     table: 'tenant',
     class: 'global',
     tenantColumn: null,
-    why: 'The Tenant row itself. It is what `tenant_id` points at, so it cannot be discriminated by one.',
+    why:
+      'The Tenant row itself. It is what `tenant_id` points at, so it cannot be discriminated by one. ' +
+      'Story 1.9: `currency` may be set to JPY before any Rate exists — UPDATE only, never INSERT/DELETE.',
+    appPrivileges: ['SELECT', 'UPDATE'],
   },
   {
     table: 'auth_user',

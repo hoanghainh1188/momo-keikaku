@@ -1,13 +1,15 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import { useFormStatus } from 'react-dom';
 import { signInWithGoogle } from './actions';
 
 function GoogleButton() {
+  const t = useTranslations();
   const { pending } = useFormStatus();
   return (
     <button type="submit" className="btn auth-google" disabled={pending}>
-      {pending ? 'Opening Google…' : 'Sign in with Google'}
+      {pending ? t('auth.signIn.openingGoogle') : t('auth.signIn.signInWithGoogle')}
     </button>
   );
 }
@@ -18,10 +20,11 @@ function GoogleButton() {
  * provider is registered (configured and discovered).
  */
 export function GoogleSignIn() {
+  const t = useTranslations();
   return (
     <form action={signInWithGoogle} className="auth-alt">
       <p className="auth-divider">
-        <span>or</span>
+        <span>{t('auth.signIn.orDivider')}</span>
       </p>
       <GoogleButton />
     </form>

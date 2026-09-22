@@ -1,4 +1,7 @@
+'use client';
+
 import type { ReactNode } from 'react';
+import { useTranslations } from 'next-intl';
 import { present, type Metric } from '@momo/domain/present';
 
 export function Section({
@@ -83,7 +86,8 @@ export function HealthBadge({ colour, label }: { colour: string; label?: string 
 }
 
 export function Internal() {
-  return <span className="tag internal">Internal</span>;
+  const t = useTranslations();
+  return <span className="tag internal">{t('ui.internal')}</span>;
 }
 
 export function UnplannedChip({ children }: { children: ReactNode }) {

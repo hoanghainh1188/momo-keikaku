@@ -51,6 +51,7 @@ import { redirect } from 'next/navigation';
 import {
   assignMemberProject as assignMemberProjectUseCase,
   changeMemberRole as changeMemberRoleUseCase,
+  changeTenantCurrency as changeTenantCurrencyUseCase,
   config,
   createDepartment as createDepartmentUseCase,
   createProgram as createProgramUseCase,
@@ -78,6 +79,8 @@ import {
   revokeMembership as revokeMembershipUseCase,
   unassignMemberProject as unassignMemberProjectUseCase,
   type AssignMemberProjectInput,
+  type ChangeTenantCurrencyInput,
+  type TenantCurrencyDeps,
   type AppendProjectDefaultRateInput,
   type AppendResourceRateInput,
   type ChangeMemberRoleInput,
@@ -110,12 +113,14 @@ import {
   type UnassignMemberProjectInput,
   type WriteDeps,
 } from '@momo/app';
+import { buildResetPasswordMail } from '@momo/i18n';
 import { mailerConsoleOn, productClockOn, systemClock, uuidV7IdsOn } from '@momo/adapters';
 import {
   getDb,
   identityEventWriterOn,
   inTenantTransaction,
   listAuditLog as listAuditLogRows,
+  tenantCurrencyOn,
   loadProjectBundle,
   loadReview,
   membershipsOf,
@@ -129,12 +134,14 @@ import {
   lookupUserOn,
   requestPasswordReset as startPasswordResetRequest,
   resetPassword as consumePasswordReset,
+  resetPasswordExpiryHours,
   serveAllowlisted,
   sessionForMiddleware,
   signInWithPassword,
   signOutOf,
   type Auth,
   type MiddlewareSession,
+  type ResetPasswordMailRenderer,
 } from '@momo/db-auth';
 
 /** The handle, on the restricted application role. Pools are memoised inside `getDb`. */
@@ -197,6 +204,16 @@ function webMailer(): MailerPort {
  * mailer, `now` and the identity-event writer (story 1.4 slice 4) are ONE value shared by both
  * instances (AD-1's no-drift rule), exactly as the id generator already is.
  */
+let resetMailRenderer: ResetPasswordMailRenderer | undefined;
+function webResetPasswordMail(): ResetPasswordMailRenderer {
+  if (resetMailRenderer) return resetMailRenderer;
+  const hours = resetPasswordExpiryHours();
+  resetMailRenderer = {
+    render: ({ locale, to, link }) => buildResetPasswordMail(locale, { to, link }, hours),
+  };
+  return resetMailRenderer;
+}
+
 function baseAuthOptions() {
   return {
     db: webDb(),
@@ -207,6 +224,7 @@ function baseAuthOptions() {
     mailer: webMailer(),
     now: systemClock.now,
     identityEvents: identityEventWriterOn(webDb()),
+    resetPasswordMail: webResetPasswordMail(),
   };
 }
 
@@ -420,6 +438,20 @@ function auditLogReadDeps() {
 export async function listAuditLog(input: ListAuditLogInput = {}, ctx?: RequestContext) {
   const context = ctx ?? (await requestContext());
   return listAuditLogUseCase(auditLogReadDeps(), context, input);
+}
+
+function tenantCurrencyDeps(): TenantCurrencyDeps {
+  const port = tenantCurrencyOn(webDb());
+  return {
+    hasAnyRate: (tenantId) => port.hasAnyRate(tenantId),
+    setCurrency: (tenantId, currency) => port.setCurrency(tenantId, currency),
+  };
+}
+
+/** FR-4 / AD-4: set Tenant currency before any Rate exists. See `changeTenantCurrency`. */
+export async function changeTenantCurrency(input: ChangeTenantCurrencyInput, ctx?: RequestContext) {
+  const context = ctx ?? (await requestContext());
+  return changeTenantCurrencyUseCase(tenantCurrencyDeps(), context, input);
 }
 
 /**

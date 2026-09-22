@@ -18,4 +18,6 @@ packages:
 # `db:*`/`seed`/`demo` scripts) and vitest's Vite chain shell out to it, so without the
 # binary neither runs. Three majors are present transitively; the key covers all of them.
 allowBuilds:
+  '@parcel/watcher': true
+  '@swc/core': true
   esbuild: true

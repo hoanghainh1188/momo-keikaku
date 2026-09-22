@@ -60,9 +60,9 @@ import {
 import {
   RESET_PASSWORD_TOKEN_EXPIRES_IN_SECONDS,
   resetLinkOf,
-  resetPasswordMail,
   type IdentityEventWriter,
   type ResetMailer,
+  type ResetPasswordMailRenderer,
 } from './reset';
 
 /** Where the route handler is mounted (`apps/web/src/app/api/auth/[...all]/route.ts`). */
@@ -130,6 +130,8 @@ export interface CreateAuthOptions {
   readonly now: () => Date;
   /** Where a completed reset is recorded (story 1.4 slice 4). `@momo/db`'s `identityEventWriterOn(db)`. */
   readonly identityEvents: IdentityEventWriter;
+  /** Reset mail copy from `@momo/i18n`, in the user's locale (story 1.9). */
+  readonly resetPasswordMail: ResetPasswordMailRenderer;
 }
 
 /** Whether `userId` already holds a credential (password) account — no DB read outside a `tx`. */
@@ -210,7 +212,13 @@ export function authOptions(options: CreateAuthOptions) {
         try {
           if (!(await hasCredentialAccount(options.db, user.id))) return;
           const link = resetLinkOf(options.baseURL, token);
-          await options.mailer.send(resetPasswordMail({ to: user.email, link }));
+          await options.mailer.send(
+            options.resetPasswordMail.render({
+              locale: (user as { locale?: string | null }).locale ?? 'en',
+              to: user.email,
+              link,
+            }),
+          );
         } catch (error) {
           console.warn(
             `[auth] sendResetPassword failed (credential probe or mail): ${error instanceof Error ? error.name : 'unknown error'}`,

@@ -43,6 +43,7 @@ import type { WriteDeps } from '../packages/app/src/ports/write-deps';
 import * as readSurface from '../packages/app/src/use-cases';
 import type { Db } from '../packages/db/src/client';
 import type { DemoState } from '../packages/db/src/fixtures';
+import { tenantCurrencyOn } from '../packages/db/src/repo-tenant-currency';
 import { adminContextFor, pmContextFor } from './request-context';
 
 /** What the harness wires for every read invoke — project reads plus story 1.7's audit port. */
@@ -201,6 +202,12 @@ export interface ReadUseCase {
    * nothing in the other. Every other write must answer `not_found` to a foreign id.
    */
   readonly namesNoExistingRow?: string;
+  /**
+   * Set, with the reason, on a write that refuses once any Rate exists. Probe Tenants already
+   * have Rates, so the harness asserts the refusal and that nothing lands — it cannot drive the
+   * success path, and the write is not on the audit-rollback pair.
+   */
+  readonly refusesWhenAnyRate?: string;
 }
 
 /**
@@ -686,6 +693,22 @@ export const READ_USE_CASES: readonly ReadUseCase[] = [
         effectiveFrom: '2026-06-01',
         yenPerHour: 4200,
       }),
+  },
+  {
+    name: 'changeTenantCurrency',
+    kind: 'write',
+    why:
+      'FR-4: sets tenant.currency to JPY only while the Tenant has no Rate; refuses once any ' +
+      'rate_entry or project_default_rate_entry exists. Unaudited — the refusal writes nothing.',
+    refusesWhenAnyRate:
+      'A probe Tenant is seeded with a Project, which always inserts a default Rate, so the ' +
+      'success path cannot run here. The harness asserts the lock refuses and lands nothing.',
+    invokeWrite: (deps, target) =>
+      readSurface.changeTenantCurrency(
+        tenantCurrencyOn(deps.handle as Db),
+        adminContextOf(target),
+        { currency: 'JPY' },
+      ),
   },
 ] as const;
 
