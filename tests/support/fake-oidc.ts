@@ -17,7 +17,7 @@
  * authorize request's `nonce`.
  *
  * TEST INFRASTRUCTURE ONLY: never imported by `packages/*` or `apps/*` (`.dependency-cruiser.cjs`,
- * rule `no-test-support-in-source`). Inside the lint fence: no environment, no wall clock — every
+ * rule `no-test-or-tooling-in-source`). Inside the lint fence: no environment, no wall clock — every
  * time comes from the `clock` argument (tests pass `systemClock`, because Better Auth checks `exp`
  * and the state's expiry against real time) — and every JSON body through the `@momo/domain` codec.
  */

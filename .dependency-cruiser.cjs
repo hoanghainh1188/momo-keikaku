@@ -143,16 +143,25 @@ module.exports = {
       to: { path: '^packages/db/' },
     },
     {
-      name: 'no-test-support-in-source',
+      name: 'no-test-or-tooling-in-source',
       severity: 'error',
       comment:
-        'Story 1.4 slice 3: tests/support/ holds test infrastructure — the fake OIDC provider ' +
-        'Google sign-in talks to in tests and local dev. No application source under apps/ or ' +
-        'packages/ may import it: a fake identity provider reachable from the product would be ' +
-        'a way to sign in that is not Google. `scripts/fake-oidc.ts` (tooling) is the one ' +
-        'non-test importer, and it is not cruised.',
-      from: { path: '^(apps|packages)/' },
-      to: { path: '^tests/support/' },
+        'Story 1.4 slice 3: tests/ and scripts/ hold test infrastructure and developer tooling — ' +
+        'among them the fake OIDC provider Google sign-in talks to in tests and local dev. No ' +
+        'application source under apps/ or packages/ may import either: a fake identity provider ' +
+        'reachable from the product would be a way to sign in that is not Google. ' +
+        'REACHABILITY, NOT THE DIRECT EDGE, is what this bans, which is why `scripts/` is here ' +
+        'and not only `tests/support/`. `scripts/` is outside the cruise ENTRY POINTS ' +
+        '(`depcruise apps packages`) but not outside the GRAPH, so with `to` set to ' +
+        '`^tests/support/` alone a one-line hop through `scripts/` reached the fake with the ' +
+        'gate reporting clean — measured in the fifth review pass, 2026-09-22: a probe ' +
+        'packages/app -> scripts/ -> tests/support/fake-oidc cruised green and exited 0. ' +
+        '`scripts/fake-oidc.ts` is still the one legitimate non-test importer of the fake; it is ' +
+        'tooling, so nothing under apps/ or packages/ may import IT either, and that is now the ' +
+        'rule rather than a remark. Test files are carved out: an in-package `*.test.ts` is not ' +
+        'application source and the fake is exactly what it would want.',
+      from: { path: '^(apps|packages)/', pathNot: '[.]test[.]tsx?$' },
+      to: { path: '^(tests|scripts)/' },
     },
     {
       name: 'schedule-domain-not-to-attribution',
@@ -198,7 +207,16 @@ module.exports = {
     // node_modules: better-auth ships its code in `dist/`, and a bare `dist` exclusion dropped every
     // edge into it — so `better-auth-only-in-db-auth` could never fire (found by the adversarial
     // review of the story 1.4 spine amendment, 2026-09-21).
-    exclude: { path: '(^|/)[.]next/|^(apps|packages)/[^/]+/dist/|^packages/db/auth/dist/' },
+    //
+    // The negative lookahead is what keeps that fix true at ANY depth. The previous form,
+    // `^(apps|packages)/[^/]+/dist/`, only reached depth 3, so `packages/db/auth/dist/` had to be
+    // written out beside it and the next nested package would have had its build output cruised.
+    // The obvious generalisation `^(apps|packages)/(.*/)?dist/` is WRONG and was measured to be:
+    // pnpm nests node_modules under every workspace package, so it also matches
+    // `packages/db/auth/node_modules/better-auth/dist/index.mjs`, which reintroduces exactly the
+    // bug the paragraph above records. Rejecting any path with `node_modules/` in it first is what
+    // makes the depth generic and safe (fifth review pass, 2026-09-22).
+    exclude: { path: '(^|/)[.]next/|^(apps|packages)/(?!.*node_modules/).*?/dist/' },
     doNotFollow: { path: '(^|/)node_modules/' },
     // Type-only imports count: `import type { Db } from '@momo/db'` in a page is the same
     // coupling as a value import, and it is erased before any bundler could object.

@@ -13,16 +13,29 @@ import { createConnection } from 'node:net';
 
 const WEB_PORT = Number(process.env.PORT ?? 3101);
 
-// Both keys, checked before anything is started. The hardcoded localhost fallback that
-// used to live in packages/db/src/client.ts and drizzle.config.ts is gone, so `pnpm demo`
-// now needs them in the environment; failing here names them, rather than failing three
-// steps in with a connection error.
-const MISSING = ['DATABASE_URL', 'APP_DATABASE_URL'].filter((key) => !process.env[key]);
+// EVERY key the run needs, checked before anything is started. The hardcoded localhost fallback
+// that used to live in packages/db/src/client.ts and drizzle.config.ts is gone, so `pnpm demo`
+// needs the two database URLs in the environment. The three sign-in keys joined them with story
+// 1.4: `pnpm seed` hashes SEED_DEMO_PASSWORD into the demo users' credential rows and `next dev`
+// refuses to serve any page without the Better Auth pair. Checking only the database URLs meant a
+// run without them got through compose, push, pgboss:migrate and db:policies before failing, and
+// the web app 500'd on its first request (fifth review pass, 2026-09-22).
+const MISSING = [
+  'DATABASE_URL',
+  'APP_DATABASE_URL',
+  'SEED_DEMO_PASSWORD',
+  'BETTER_AUTH_SECRET',
+  'BETTER_AUTH_URL',
+].filter((key) => !process.env[key]);
 if (MISSING.length > 0) {
+  const plural = MISSING.length === 1 ? '' : 's';
   process.stderr.write(
-    `\n\u001b[31mMissing ${MISSING.join(' and ')}.\u001b[0m Export them first, e.g.\n\n` +
+    `\n\u001b[31mMissing ${MISSING.join(', ')}.\u001b[0m Export the key${plural} first, e.g.\n\n` +
       `  export DATABASE_URL=postgres://momo:momo@localhost:55433/momo_keikaku\n` +
-      `  export APP_DATABASE_URL=postgres://momo_app:momo_app@localhost:55433/momo_keikaku\n\n`,
+      `  export APP_DATABASE_URL=postgres://momo_app:momo_app@localhost:55433/momo_keikaku\n` +
+      `  export SEED_DEMO_PASSWORD=choose-a-demo-password   # 8+ characters\n` +
+      `  export BETTER_AUTH_SECRET=a-local-secret-of-at-least-32-characters\n` +
+      `  export BETTER_AUTH_URL=http://localhost:${WEB_PORT}\n\n`,
   );
   process.exit(1);
 }

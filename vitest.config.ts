@@ -23,8 +23,10 @@ export default defineConfig({
   // `apps/**` and `scripts/**` joined the list with story 1.1 slice B2. A test the runner
   // never collects is not a gate, and both of that slice's gates live outside `packages/`:
   // apps/worker/src/worker-round-trip.test.ts covers pg-boss on the restricted role, and
-  // scripts/pgboss-migrate.test.ts covers the migrator step's pure guards. Nothing under
-  // apps/web carries a test file today.
+  // scripts/pgboss-migrate.test.ts covers the migrator step's pure guards. apps/web carried no
+  // test file then; story 1.4 gave it six (the session gate, the result and form helpers, and the
+  // sign-in, forgot-password and reset-password actions), which is what the `@/` alias above is
+  // for.
   //
   // `tests/**` joined with story 1.2 slice 3. The cross-tenant harness moved there from
   // `packages/db`, because it now wires `packages/app`'s use cases to `packages/db`'s

@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, like, sql } from 'drizzle-orm';
 import { systemClock, uuidV7IdsOn } from '../packages/adapters/src';
 import {
   createAuth,
@@ -140,6 +140,17 @@ async function verificationRow(identifier: string) {
   );
 }
 
+/** How many reset rows exist in total — for the cases that must create none. */
+async function resetRowCount(): Promise<number> {
+  const rows = await owner().transaction((tx) =>
+    tx
+      .select({ id: verification.id })
+      .from(verification)
+      .where(like(verification.identifier, 'reset-password:%')),
+  );
+  return rows.length;
+}
+
 /** Expires a token by moving the `expires_at` COLUMN in SQL — never the wall clock (AD-15). */
 async function expireToken(token: string): Promise<void> {
   await owner().transaction((tx) =>
@@ -178,7 +189,19 @@ async function identityEventsOf(userId: string) {
 async function removeExtras(): Promise<void> {
   const ids = [RESETTER.id, GOOGLE_ONLY.id];
   await owner().transaction(async (tx) => {
-    await tx.delete(identityEvent).where(eq(identityEvent.userId, RESETTER.id));
+    // Both ids, like every other table below. Only RESETTER completes a reset today, but nothing
+    // stops a later case recording an event for GOOGLE_ONLY, and the asymmetry would leave it
+    // behind silently — the application role holds no DELETE on `identity_event` to correct it
+    // afterwards (fifth review pass).
+    await tx.delete(identityEvent).where(inArray(identityEvent.userId, ids));
+    // The reset rows these users leave. `removeProbeTenant` is the only other place that deletes
+    // `reset-password:%`, and it reaches a user through `tenant_membership` — which neither of
+    // these two holds — so without this the expired token and the invalidated first token
+    // survived every run and the table grew on each one, against this file's own promise that
+    // everything is removed afterwards (fifth review pass).
+    await tx
+      .delete(verification)
+      .where(and(inArray(verification.value, ids), like(verification.identifier, 'reset-password:%')));
     for (const id of ids) {
       await tx.delete(session).where(eq(session.userId, id));
       await tx.delete(account).where(eq(account.userId, id));
@@ -222,12 +245,12 @@ describe.skipIf(!reachable)('password reset through MailerPort (story 1.4 slice 
         },
       ]);
     });
-  });
+  }, 120_000);
 
   afterAll(async () => {
     await removeExtras();
     await removeProbeTenant(owner(), PROBE);
-  });
+  }, 120_000);
 
   afterEach(() => {
     mailer.reset();
@@ -246,8 +269,14 @@ describe.skipIf(!reachable)('password reset through MailerPort (story 1.4 slice 
 
   it('answers exactly the same for an unknown email — no mail, no row', async () => {
     const email = OWN('nobody@momo-digital.example');
+    const before = await resetRowCount();
     expect(await requestPasswordReset(auth, headers(), email)).toBe(true);
     expect(mailer.hits()).toBe(0);
+    // "No row" is half the matrix cell and used to be asserted by nothing. A row cannot be looked
+    // up by token here — there is no token, that is the point — so it is counted instead: an
+    // enumerable `verification` row for an address nobody holds would be a slower answer AND a
+    // record of the guess (fifth review pass).
+    expect(await resetRowCount()).toBe(before);
   });
 
   it('answers, rather than throws, when Better Auth itself refuses a malformed address — and sends no mail', async () => {

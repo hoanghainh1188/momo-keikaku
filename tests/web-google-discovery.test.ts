@@ -60,6 +60,11 @@ describe('the composition root with Google on (story 1.4 slice 3)', () => {
   });
 
   it('hides the button when discovery fails fast, having asked once — and the middleware still never asks', async () => {
+    // Stubbed HERE as well as in the case above, though the stub leaks either way: `unstubAllEnvs`
+    // runs in `afterAll`, so this case used to inherit the secret from its predecessor and pass
+    // for the wrong reason when run alone (`-t`, `.only`, a shard) — it would fail on
+    // GOOGLE_CLIENT_SECRET missing rather than on discovery failing (fifth review pass).
+    vi.stubEnv('GOOGLE_CLIENT_SECRET', 'web-google-secret');
     expect(await composition.googleEnabled()).toBe(false);
     expect(fake.hits().discovery).toBe(1);
     expect(await composition.googleSignIn()).toBeNull();

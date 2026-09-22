@@ -25,9 +25,10 @@ export DATABASE_URL=postgres://momo:momo@localhost:55433/momo_keikaku
 export APP_DATABASE_URL=postgres://momo_app:momo_app@localhost:55433/momo_keikaku
 
 # Sign-in (story 1.4). SEED_DEMO_PASSWORD is required by `pnpm seed`: it becomes the password
-# of the two demo users. The web app needs the Better Auth pair (put them in
-# apps/web/.env.local too, since `next dev` reads that file). SESSION_IDLE_TIMEOUT_HOURS is
-# optional (whole hours, default 8).
+# of the two demo users, and must be at least 8 characters. The web app needs the Better Auth
+# pair (put them in apps/web/.env.local too, since `next dev` reads that file).
+# SESSION_IDLE_TIMEOUT_HOURS is optional: DIGITS ONLY, 1 to 720, default 8 — `0x8`, `8.0` and
+# ` 8 ` are each refused by name rather than read as 8.
 export SEED_DEMO_PASSWORD=choose-a-demo-password
 export BETTER_AUTH_SECRET=a-local-secret-of-at-least-32-characters
 export BETTER_AUTH_URL=http://localhost:3101
@@ -237,8 +238,10 @@ Deliberately out of scope for this demo (from the build brief):
   users; Google links only to them (no sign-up); password reset exists (story 1.4 slice 4,
   `MAILER=console` locally) but there is no revocation screen yet, and role checks arrive with
   story 1.5.
-- **No multi-tenant isolation.** `tenant_id` is on every table, but Row Level Security,
-  composite foreign keys and the non-owner application role are not set up (AD-3).
+- **No tenant switcher, and one Tenant seeded.** Row Level Security, the composite foreign keys
+  and the non-owner application role ARE set up — `pnpm demo` applies them, and CI gates them —
+  but the demo seeds a single Tenant, so nothing here exercises switching between two, and there
+  is no UI to switch with (AD-3).
 - **No pg-boss worker.** Snapshots are replayed once at seed time, not on a schedule.
   There is no on-demand *Refresh snapshot*.
 - **No publishing persistence.** The Client View is a live preview; `published_snapshot`,

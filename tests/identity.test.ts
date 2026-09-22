@@ -18,7 +18,7 @@ import {
   signOutOf,
   type Auth,
 } from '../packages/db/auth/src';
-import { hashPassword } from '../packages/db/auth/src/password';
+import { hashPassword, verifyPassword } from '../packages/db/auth/src/password';
 import { closeAllPools, getDb } from '../packages/db/src/client';
 import { DEMO_USERS } from '../packages/db/src/demo-identities';
 import {
@@ -56,6 +56,14 @@ const reachable = await connectWriteHarness({
 const BASE_URL = 'http://localhost:3101';
 const IDLE_HOURS = 8;
 const PASSWORD = 'identity-test-password';
+/**
+ * The key an operator exports and `pnpm seed` hashes into the demo users' credential rows. Read
+ * from the environment rather than pinned, because the point of the assertion that uses it is to
+ * tie the STORED hash to the key the operator actually set. The demo rows only exist because the
+ * seed ran, and the seed refuses to run without this key, so a reachable database and no key here
+ * means something has diverged and the message should say so rather than skip.
+ */
+const DEMO_PASSWORD = process.env.SEED_DEMO_PASSWORD ?? '';
 
 const PROBE: ProbeTenant = buildProbeTenant('xtprobe-idn', 760_000_000);
 const OWN = (value: string) => `${PROBE.writeOptions.idPrefix}${value}`;
@@ -160,12 +168,12 @@ describe.skipIf(!reachable)('sign-in and the request context, against Postgres (
         { userId: SEVERAL.id, tenantId: SECOND_TENANT, role: 'pm', projectIds: [] },
       ]);
     });
-  });
+  }, 120_000);
 
   afterAll(async () => {
     await removeExtras();
     await removeProbeTenant(owner(), PROBE);
-  });
+  }, 120_000);
 
   it('keeps the session cookie cache off — every request reaches the session table', () => {
     expect(auth.options.session?.cookieCache?.enabled).toBe(false);
@@ -230,6 +238,25 @@ describe.skipIf(!reachable)('sign-in and the request context, against Postgres (
     });
     expect({ wrong, unknown }).toEqual({ wrong: false, unknown: false });
     expect((await sessionsOf(PM.id)).length).toBe(before);
+
+    // THE ASSERTION ABOVE CANNOT FAIL ON A DIFFERENCE. `signInWithPassword` answers `boolean`, so
+    // the two refusals are already identical by the type whatever Better Auth carried underneath —
+    // it establishes "neither signed in", not "indistinguishable". NFR-S5 is about what an
+    // attacker can observe, so ask the layer that still has the difference to lose: the raw
+    // `APIError`, before the binding narrows it (fifth review pass).
+    const refusal = async (email: string, password: string) => {
+      try {
+        await auth.api.signInEmail({ body: { email, password }, headers: new Headers({ origin: BASE_URL }) });
+        return 'signed in, which neither of these must';
+      } catch (error) {
+        const api = error as { status?: unknown; body?: { code?: unknown; message?: unknown } };
+        return { status: api.status, code: api.body?.code, message: api.body?.message };
+      }
+    };
+    const wrongRefusal = await refusal(PM.email, 'not-the-password');
+    const unknownRefusal = await refusal(OWN('nobody@momo-digital.example'), PASSWORD);
+    expect(wrongRefusal).not.toBe('signed in, which neither of these must');
+    expect(unknownRefusal).toEqual(wrongRefusal);
   });
 
   it('signs out a session whose active Tenant has no matching membership, and deletes it', async () => {
@@ -392,6 +419,18 @@ describe.skipIf(!reachable)('sign-in and the request context, against Postgres (
           { tenantId: DEMO_TENANT_ID, role: user.role, projectIds: user.onDemoProject ? [demoProject] : [] },
         ],
       });
+
+      // WHICH password, not merely SOME password. `hasPassword` above is `IS NOT NULL`, which the
+      // hash of any string satisfies — so `scripts/seed.ts` hashing the wrong thing (a trimmed or
+      // lower-cased copy of the key, a double hash, a constant) kept lint, three typechecks,
+      // depcruise, `next build` and every suite green while both demo users were locked out of the
+      // login README-DEMO documents. This is the only assertion that ties the stored hash to the
+      // key an operator actually exports (fifth review pass, 2026-09-22).
+      const [stored] = await owner().transaction((tx) =>
+        tx.select({ password: account.password }).from(account).where(eq(account.userId, user.id)),
+      );
+      expect(DEMO_PASSWORD, 'SEED_DEMO_PASSWORD is unset, but the seeded rows it hashes are here').not.toBe('');
+      expect(await verifyPassword(stored!.password!, DEMO_PASSWORD), user.email).toBe(true);
     }
   });
 
@@ -486,7 +525,7 @@ describe.skipIf(!reachable)('sign-in and the request context, against Postgres (
 
     await removeProbeTenant(owner(), probe);
     expect(await count()).toEqual({ users: 0, members: 0 });
-  });
+  }, 120_000);
 });
 
 afterAll(async () => {

@@ -76,11 +76,18 @@
 # writes slice.
 #
 # So this file gates on what is real: lint, all three typechecks, dependency-cruiser and the
-# test suite. Measured on 2026-09-21 — `pnpm lint`, all three typechecks and `pnpm depcruise`
-# exit 0, and `pnpm test` passes 562 tests across 33 files (story 1.4 slice 1; 266 across 18 at the first measurement) against the prepared
-# Postgres service below (165 across 14 before story 1.2 slice 4, 146 across 12 before slice 3,
-# 123 across 11 before slice 2, 72 across 7 before slice 1, 53 across 4 before story 1.1
-# slice B2).
+# test suite. Measured on 2026-09-22 — `pnpm lint`, all three typechecks and `pnpm depcruise`
+# exit 0, and `pnpm test` passes 779 tests across 43 files against the prepared Postgres service
+# below (545 of them, across 35 files, run with no database at all; 8 files skip themselves).
+# The trail: 562 across 33 after story 1.4 slice 1, 165 across 14 before story 1.2 slice 4,
+# 146 across 12 before slice 3, 123 across 11 before slice 2, 72 across 7 before slice 1,
+# 53 across 4 before story 1.1 slice B2, 266 across 18 at the first measurement.
+#
+# KEEP THIS MEASURED, NOT ESTIMATED, AND WRAP IT LIKE ITS NEIGHBOURS. It went three slices stale
+# — it read "562 across 33 (story 1.4 slice 1)" on a branch that had already landed slices 2, 3
+# and 4, on a single ~140-column line inside a block wrapped at ~100 — and a figure nobody
+# re-measures is how a silently dropped test file goes unnoticed in the one file whose stated
+# premise is that it gates on what is real (fifth review pass, 2026-09-22).
 #
 # Every gate here has been watched to fail, because a gate nobody has seen fail is
 # indistinguishable from a green light:
@@ -170,6 +177,57 @@
 #     composition test and identity.test.ts); `tenantBridge` set on `department` (registry.test.ts,
 #     plus rls.sql drift when its tenantColumn is nulled too). The full table is in
 #     spec-1-4-identity-and-request-context.md.
+#   * tests (revocation and the membership writes, story 1.4 slice 2) — the four membership writes
+#     on the restricted role, their audit rows and the three concurrency rows
+#     (tests/membership.test.ts against Postgres, plus the unit tests and the audited-use-case
+#     gate). Five sabotages, each watched to fail and then restored: `tenant_id` dropped from
+#     `lockMembers` (8 failures — the foreign replay of three membership writes in
+#     cross-tenant-writes, and five membership.test rows); `tenant_id` dropped from the
+#     delete/update WHERE (membership.test, the user who is a member of BOTH probe Tenants — the
+#     only row that discriminates it, which is why that user exists); the single lock split in two
+#     (the self-demotion race; split per row instead, all three concurrency rows); `audit.record`
+#     removed from `unassignMemberProject` (8 failures across the gate, the unit test, both
+#     rollback tests, membership.test and web-composition); `membershipWriterOn` re-exported from
+#     `repo-org.ts` (source-discipline.test.ts). The full table is in
+#     spec-1-4-revocation-and-membership.md.
+#   * tests + dependency-cruiser (Google sign-in, story 1.4 slice 3) — the whole refusal matrix
+#     against a fake OIDC provider the test drives knob by knob (tests/google-sign-in.test.ts;
+#     tests/web-google-discovery.test.ts for the discovery and middleware paths). Eight sabotages,
+#     each watched to fail and then restored: `disableSignUp` removed; the `getUserInfo` override
+#     removed; `requireIdTokenVerification: false`; the token-nulling hook removed; `onAPIError`
+#     removed (forged state and five other refusals land on /api/auth/error instead of the one
+#     generic page); `/sign-in/social` moved out of DISABLED_PATHS and into the allowlist
+#     (auth.test.ts, google-sign-in.test.ts, identity.test.ts x2); `refreshSession` called on the
+#     Google instance (web-composition.test.ts and web-google-discovery.test.ts catch the
+#     discovery fetch from the middleware path); and `apps/` or `packages/` importing
+#     `tests/support/`, from either tree (`pnpm depcruise`). The full table is in
+#     spec-1-4-google-sign-in.md.
+#   * tests (password reset through MailerPort, story 1.4 slice 4) — the reset request, the token
+#     redemption, and everything a completed reset must do, against Postgres
+#     (tests/password-reset.test.ts). Watched to fail and then restored:
+#     `revokeSessionsOnPasswordReset` removed (auth.test.ts's options pin, and a session surviving
+#     the reset); the boundary's lowercasing removed from forgot-password/actions.ts (its
+#     co-located action test); `identity_event` granted UPDATE (registry.test.ts's override set
+#     AND the grants.sql drift check); the mailer throwing (the request still answers true and the
+#     warning names no address). TWO ENTRIES THAT ARE NOT PASS->FAIL, recorded as such rather than
+#     as gates: `resetPasswordTokenExpiresIn` removed is caught only by the options pin, because
+#     Better Auth's own default happens to equal 3600 too; and `/reset-password` added to
+#     SERVED_AUTH_ENDPOINTS ALONE still answers 404, since DISABLED_PATHS blocks it independently
+#     at Better Auth's router — only changing both is a real sabotage, and nothing in the suite
+#     demonstrates the compound one. The full table is in spec-1-4-password-reset.md.
+#   * tests (the fences themselves, fifth review pass over story 1.4) —
+#     tests/depcruise-fences.test.ts drives the depcruise CLI over the real tree, because
+#     `pnpm depcruise` reports violations of the rules it can SEE and says nothing at all about a
+#     rule that has stopped APPLYING. Both failures it pins were measured green under the cruiser.
+#     Watched to fail and then restored: the `exclude` regex broadened back to
+#     `(^|/)([.]next|dist)/`, which swallows node_modules' own `dist/` so the graph holds ZERO
+#     better-auth edges and `better-auth-only-in-db-auth` can never fire; and
+#     `no-test-or-tooling-in-source` narrowed back to `to: ^tests/support/`, which leaves the hop
+#     `packages/ -> scripts/ -> tests/support/fake-oidc` cruising clean, because `scripts/` is
+#     outside the cruise ENTRY POINTS but not outside the GRAPH. That rule was renamed from
+#     `no-test-support-in-source` when its `to` widened to `^(tests|scripts)/`; it now also carves
+#     out in-package `*.test.ts`, which is not application source. The findings are in
+#     spec-1-4-password-reset.md.
 
 # THESE GATES REPORT; THEY DO NOT BLOCK. The repository is private on a free plan, so
 # GitHub refuses branch protection ("Upgrade to GitHub Pro or make this repository

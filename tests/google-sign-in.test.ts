@@ -246,13 +246,13 @@ describe.skipIf(!reachable)('Google sign-in against the fake OIDC provider (stor
       }
       await tx.insert(tenantMembership).values({ userId: REVOKEE.id, tenantId: PROBE.tenantId, role: 'pm', projectIds: [] });
     });
-  });
+  }, 120_000);
 
   afterAll(async () => {
     await removeExtras();
     await removeProbeTenant(owner(), PROBE);
     await fake?.close();
-  });
+  }, 120_000);
 
   it('registers Google from discovery, whose issuer is the configured one, and serves its callback', async () => {
     expect(await googleRegistered(auth)).toBe(true);

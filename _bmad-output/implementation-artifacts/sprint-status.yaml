@@ -39,7 +39,7 @@ development_status:
   1-1-one-command-brings-the-whole-system-up: in-progress
   1-2-nothing-crosses-a-tenant-and-the-data-layer-is-what-proves-i: in-progress
   1-3-the-organisation-and-the-record-of-who-changed-it: done
-  1-4-sign-in-and-be-revoked: review
+  1-4-sign-in-and-be-revoked: done
   1-5-roles-decide-what-each-person-can-reach: backlog
   1-6-resources-and-the-dated-rates-behind-every-money-figure: backlog
   1-7-the-tenant-admin-can-read-the-audit-log: backlog

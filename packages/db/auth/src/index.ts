@@ -34,4 +34,4 @@ export {
   type IdentityEventWriter,
   type ResetMailer,
 } from './reset';
-export { hashPassword } from './password';
+export { hashPassword, verifyPassword } from './password';
