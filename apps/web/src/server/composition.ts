@@ -110,7 +110,7 @@ import {
   type UnassignMemberProjectInput,
   type WriteDeps,
 } from '@momo/app';
-import { mailerConsoleOn, fixtureClockOn, systemClock, uuidV7IdsOn } from '@momo/adapters';
+import { mailerConsoleOn, productClockOn, systemClock, uuidV7IdsOn } from '@momo/adapters';
 import {
   getDb,
   identityEventWriterOn,
@@ -143,31 +143,16 @@ function webDb(): Db {
 }
 
 /**
- * Product Clock (AD-15 / story 1.8). Fixture mode returns
- * `max(latest fixture observedAt, FIXTURE_TIME_ANCHOR)`. The demo's last snapshot sits 2h
- * before the anchor (`scripts/gen-fixtures.ts`); composition does not import `fixtures.ts`
- * (filesystem) into the Next bundle — the offset keeps the formula honest for the shipped
- * demo. Built on first use like the mailer, so importing this module still reads no config.
- * Identity / Better Auth stay on `systemClock` below.
+ * Product Clock (AD-15 / story 1.8). Shared factory `productClockOn` (adapters) so web and
+ * worker cannot drift. Built on first use like the mailer. Identity / Better Auth stay on
+ * `systemClock` below.
  */
-const DEMO_LATEST_OBSERVED_OFFSET_MS = -2 * 3_600_000;
-
-let webClockInstance: ReturnType<typeof productClock> | undefined;
-function productClock() {
-  switch (config.CLOCK_MODE) {
-    case 'system':
-      return systemClock;
-    case 'fixture': {
-      const anchorMs = Date.parse(config.FIXTURE_TIME_ANCHOR!);
-      return fixtureClockOn({
-        latestObservedAt: anchorMs + DEMO_LATEST_OBSERVED_OFFSET_MS,
-        anchor: anchorMs,
-      });
-    }
-  }
-}
+let webClockInstance: ReturnType<typeof productClockOn> | undefined;
 function webClock() {
-  return (webClockInstance ??= productClock());
+  return (webClockInstance ??= productClockOn({
+    mode: config.CLOCK_MODE,
+    fixtureTimeAnchor: config.FIXTURE_TIME_ANCHOR,
+  }));
 }
 
 // --- identity: the auth instance and the request context (story 1.4 slice 1) ----------------

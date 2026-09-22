@@ -12,29 +12,16 @@
 //
 // Importing this module starts a worker, which is why `createBoss` lives in `./boss.ts`:
 // the test builds the same runner without any of the below.
-import { fixtureClockOn, systemClock, type Clock } from '@momo/adapters';
+import { productClockOn } from '@momo/adapters';
 import { config, createLogger } from '@momo/app';
 import { createBoss, PGBOSS_SCHEMA } from './boss';
 
-/** Demo last snapshot is 2h before the anchor — same offset as the web composition root. */
-const DEMO_LATEST_OBSERVED_OFFSET_MS = -2 * 3_600_000;
-
-function productClock(): Clock {
-  switch (config.CLOCK_MODE) {
-    case 'system':
-      return systemClock;
-    case 'fixture': {
-      const anchorMs = Date.parse(config.FIXTURE_TIME_ANCHOR!);
-      return fixtureClockOn({
-        latestObservedAt: anchorMs + DEMO_LATEST_OBSERVED_OFFSET_MS,
-        anchor: anchorMs,
-      });
-    }
-  }
-}
-
 // Selected at boot so a misconfigured CLOCK_MODE / DEPLOYMENT fails before the runner starts.
-const workerClock = productClock();
+// Same factory as the web composition root — do not re-inline the −2h offset here.
+const workerClock = productClockOn({
+  mode: config.CLOCK_MODE,
+  fixtureTimeAnchor: config.FIXTURE_TIME_ANCHOR,
+});
 
 // Sync stdout so lifecycle lines survive process exit (SIGTERM round-trip + operators).
 const log = createLogger({ name: 'worker', syncStdout: true });

@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { fixtureClockOn, systemClock } from './clock';
+import {
+  DEMO_LATEST_OBSERVED_OFFSET_MS,
+  fixtureClockOn,
+  productClockOn,
+  systemClock,
+} from './clock';
 
 describe('fixtureClockOn', () => {
   it('returns max(latestObservedAt, anchor)', () => {
@@ -20,6 +25,31 @@ describe('fixtureClockOn', () => {
       anchor: '2026-09-16T09:00:00.000Z',
     });
     expect(clock.now().getTime()).toBe(clock.nowMs());
+  });
+});
+
+describe('productClockOn', () => {
+  it('returns systemClock in system mode', () => {
+    expect(productClockOn({ mode: 'system' })).toBe(systemClock);
+  });
+
+  it('uses DEMO_LATEST_OBSERVED_OFFSET_MS under fixture mode', () => {
+    const anchor = '2026-09-16T09:00:00.000Z';
+    const anchorMs = Date.parse(anchor);
+    const clock = productClockOn({ mode: 'fixture', fixtureTimeAnchor: anchor });
+    expect(clock.nowMs()).toBe(
+      Math.max(anchorMs + DEMO_LATEST_OBSERVED_OFFSET_MS, anchorMs),
+    );
+  });
+
+  it('refuses fixture mode without an anchor', () => {
+    expect(() => productClockOn({ mode: 'fixture' })).toThrow(/fixtureTimeAnchor/);
+  });
+
+  it('refuses a non-parseable fixtureTimeAnchor', () => {
+    expect(() =>
+      productClockOn({ mode: 'fixture', fixtureTimeAnchor: 'not-an-instant' }),
+    ).toThrow(/invalid fixtureTimeAnchor/);
   });
 });
 

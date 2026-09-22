@@ -49,3 +49,43 @@ export function fixtureClockOn(args: {
     nowMs: () => ms,
   };
 }
+
+/**
+ * Demo last-snapshot offset before `FIXTURE_TIME_ANCHOR`. Composition roots pass
+ * `anchorMs + DEMO_LATEST_OBSERVED_OFFSET_MS` into `fixtureClockOn` so they need not
+ * import `packages/db/src/fixtures.ts` (filesystem) into the Next bundle. Must stay
+ * equal to `latestFixtureObservedAt(anchor) − anchor` for the shipped demo
+ * (`packages/db/src/fixtures-time.test.ts`). Seed still reads the real latest via
+ * `latestFixtureObservedAt`.
+ */
+export const DEMO_LATEST_OBSERVED_OFFSET_MS = -2 * 3_600_000;
+
+/**
+ * Product Clock for composition roots (web + worker). Reads no environment — callers
+ * pass already-parsed `CLOCK_MODE` / `FIXTURE_TIME_ANCHOR`. Seed uses a different path
+ * (`latestFixtureObservedAt`) and does not call this.
+ */
+export function productClockOn(args: {
+  readonly mode: 'system' | 'fixture';
+  /** Required when `mode` is `fixture`. Absolute ISO instant. */
+  readonly fixtureTimeAnchor?: string;
+}): Clock {
+  switch (args.mode) {
+    case 'system':
+      return systemClock;
+    case 'fixture': {
+      const anchor = args.fixtureTimeAnchor;
+      if (anchor === undefined || anchor === '') {
+        throw new Error('productClockOn: fixtureTimeAnchor is required when mode is fixture');
+      }
+      const anchorMs = Date.parse(anchor);
+      if (Number.isNaN(anchorMs)) {
+        throw new Error(`productClockOn: invalid fixtureTimeAnchor "${anchor}"`);
+      }
+      return fixtureClockOn({
+        latestObservedAt: anchorMs + DEMO_LATEST_OBSERVED_OFFSET_MS,
+        anchor: anchorMs,
+      });
+    }
+  }
+}

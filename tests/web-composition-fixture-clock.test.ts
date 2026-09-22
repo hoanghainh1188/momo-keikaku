@@ -115,10 +115,12 @@ const spies = vi.hoisted(() => {
     ]),
     identityEventRecord,
     uuidV7ClockArg: null as { now: () => Date; nowMs: () => number } | null,
-    fixtureClockOn: vi.fn(() => ({
-      now: () => FIXTURE,
-      nowMs: () => FIXTURE.getTime(),
-    })),
+    fixtureClockOn: vi.fn(
+      (_args: { latestObservedAt: number; anchor: number }) => ({
+        now: () => FIXTURE,
+        nowMs: () => FIXTURE.getTime(),
+      }),
+    ),
   };
 });
 
@@ -153,14 +155,24 @@ vi.mock('@momo/db-auth', () => ({
   resetPassword: vi.fn(),
 }));
 
-vi.mock('@momo/adapters', () => {
+vi.mock('@momo/adapters', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@momo/adapters')>();
   const systemClock = {
     now: () => spies.WALL,
     nowMs: () => spies.WALL.getTime(),
   };
   return {
+    ...actual,
     systemClock,
     fixtureClockOn: spies.fixtureClockOn,
+    productClockOn: (args: { mode: 'system' | 'fixture'; fixtureTimeAnchor?: string }) => {
+      if (args.mode === 'system') return systemClock;
+      const anchorMs = Date.parse(args.fixtureTimeAnchor!);
+      return spies.fixtureClockOn({
+        latestObservedAt: anchorMs + actual.DEMO_LATEST_OBSERVED_OFFSET_MS,
+        anchor: anchorMs,
+      });
+    },
     uuidV7IdsOn: (clock: { now: () => Date; nowMs: () => number }) => {
       spies.uuidV7ClockArg = clock;
       return { next: () => spies.newId };
@@ -204,9 +216,10 @@ describe('identity stays on systemClock under CLOCK_MODE=fixture (story 1.8 matr
     const result = await composition.createDepartment({ name: 'Fixture Clock Dept' });
     expect(result).toEqual({ ok: true, value: { id: spies.newId } });
     const anchorMs = Date.parse('2026-09-16T09:00:00.000Z');
-    // Pins composition's DEMO_LATEST_OBSERVED_OFFSET_MS = −2h (same pair seed's latestFixtureObservedAt yields for the demo).
+    const { DEMO_LATEST_OBSERVED_OFFSET_MS } = await import('@momo/adapters');
+    // Pins productClockOn's DEMO_LATEST_OBSERVED_OFFSET_MS (same pair seed's latestFixtureObservedAt yields).
     expect(spies.fixtureClockOn).toHaveBeenCalledWith({
-      latestObservedAt: anchorMs - 2 * 3_600_000,
+      latestObservedAt: anchorMs + DEMO_LATEST_OBSERVED_OFFSET_MS,
       anchor: anchorMs,
     });
     expect(spies.inTenantTransaction).toHaveBeenCalledWith(

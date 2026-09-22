@@ -335,9 +335,8 @@ export async function writeTenantRows(
     }
   }
 
-  const baselineWps =
-    versions.find((v) => v.seq === Math.max(...versions.map((x) => x.seq)))?.wps ??
-    f.baseline.wps.map((b) => ({ ...b, baselineMh: mhFromJson(b.baselineMh) }));
+  const activeFixtureSeq = Math.max(...versions.map((v) => v.seq));
+  const baselineWps = versions.find((v) => v.seq === activeFixtureSeq)!.wps;
 
   await tx.insert(s.baselineWp).values(
     baselineWps.map((b, i) => ({
@@ -428,10 +427,17 @@ export async function writeTenantRows(
     );
   }
 
-  const snapshotOfEntry = (windowEnd: string) =>
-    state.snapshots.find((x) => x.observedAt === windowEnd)?.snapshotId ??
-    state.snapshots[state.snapshots.length - 1]?.snapshotId ??
-    null;
+  const snapshotOfEntry = (windowEnd: string): string => {
+    const id =
+      state.snapshots.find((x) => x.observedAt === windowEnd)?.snapshotId ??
+      state.snapshots.at(-1)?.snapshotId;
+    if (id === undefined) {
+      throw new Error(
+        'writeTenantRows: ledger has entries but state.snapshots is empty — cannot resolve snapshotId',
+      );
+    }
+    return id;
+  };
 
   if (state.ledger.length > 0) {
     await chunked(state.ledger, 500, (batch) =>
@@ -451,7 +457,7 @@ export async function writeTenantRows(
             e.activeBaselineVersionSeq === null
               ? null
               : baselineSeqMap.get(e.activeBaselineVersionSeq)!,
-          snapshotId: snapshotOfEntry(e.windowEnd)!,
+          snapshotId: snapshotOfEntry(e.windowEnd),
         })),
       ),
     );

@@ -46,7 +46,10 @@ const MIGRATOR_ROLE = 'momo_migrator';
 /** `application_name` on the worker's pool, which is how its backend is found. */
 const WORKER_APPLICATION_NAME = 'momo-worker';
 
-/** Demo last snapshot is 2h before the anchor — same offset as the worker composition root. */
+/**
+ * Must match `DEMO_LATEST_OBSERVED_OFFSET_MS` in `@momo/adapters` — this test file cannot
+ * import adapters (depcruise: apps-adapters-only-from-composition-root).
+ */
 const DEMO_LATEST_OBSERVED_OFFSET_MS = -2 * 3_600_000;
 
 const POLL_INTERVAL_MS = 100;
