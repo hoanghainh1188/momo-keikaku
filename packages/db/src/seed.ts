@@ -501,6 +501,11 @@ export async function writeTenantRows(
       at: stamp,
     });
 
+  // OVERRIDING SYSTEM VALUE does not advance the identity counter. Without this, the next
+  // product insert that uses the default (e.g. `appendResourceRate`, audit.record) collides
+  // with the fixture seqs the seed just wrote (CI: duplicate key on rate_entry / audit_log).
+  await syncIdentitySequences(tx);
+
   return {
     tenantId,
     activeBaselineSeq,
@@ -689,9 +694,40 @@ async function assertSingleTenantDatabase(tx: Tx, tenantId: string): Promise<voi
 /**
  * Empty every registered table. Does NOT `RESTART IDENTITY` — sequence values are
  * fixture-relative via `OVERRIDING SYSTEM VALUE` (story 1.8), so leftover probe counters
- * no longer silently reclassify Actuals on reseed.
+ * no longer silently reclassify Actuals on reseed. After writing those values,
+ * `writeTenantRows` calls `syncIdentitySequences` so the next identity default is past MAX.
  */
 async function truncateForReseed(tx: Tx): Promise<void> {
   await tx.execute(sql`SELECT set_config(${MAINTENANCE_SETTING}, 'on', true)`);
   await tx.execute(sql.raw(`TRUNCATE ${TRUNCATE_ORDER.map(quoteIdent).join(', ')} CASCADE`));
+}
+
+/**
+ * Tables whose `seq` is `generatedAlwaysAsIdentity` and that `writeTenantRows` stamps with
+ * `OVERRIDING SYSTEM VALUE`. Keep this list aligned with those insert sites.
+ */
+const IDENTITY_SEQ_TABLES = [
+  'rate_entry',
+  'project_default_rate_entry',
+  'baseline_version',
+  'tracker_snapshot',
+  'disposition_event',
+  'audit_log',
+] as const;
+
+/**
+ * Advance each identity counter to `MAX(seq)` so a later default insert does not collide
+ * with fixture-relative values written via `OVERRIDING SYSTEM VALUE`.
+ */
+async function syncIdentitySequences(tx: Tx): Promise<void> {
+  for (const table of IDENTITY_SEQ_TABLES) {
+    const quoted = quoteIdent(table);
+    // pg_get_serial_sequence wants a text literal (single-quoted), not an identifier.
+    await tx.execute(
+      sql.raw(
+        `SELECT setval(pg_get_serial_sequence('${table}', 'seq'), ` +
+          `COALESCE((SELECT MAX(seq) FROM ${quoted}), 1), true)`,
+      ),
+    );
+  }
 }
