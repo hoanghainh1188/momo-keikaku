@@ -28,10 +28,16 @@
  *     it resolves to nothing. Every use-case binding takes its context from there, or from the
  *     caller when a server action has already resolved one: there is no constant Tenant and no
  *     constant actor in this file any more, and `tests/web-composition.test.ts` pins that.
+ *   * GOOGLE SIGN-IN (story 1.4 slice 3), when `AUTH_GOOGLE=on`: `googleProvider()` is passed to
+ *     that instance, which then fetches the issuer's discovery document on first use. The
+ *     middleware's session refresh gets an instance of its own built WITHOUT Google, so a page
+ *     request never waits on discovery. Whether the button shows is the instance's REGISTRATION
+ *     (configured and discovered), never the configuration alone.
  *
  * WHAT IT EXPORTS: use-case bindings, the auth bindings (the route handler, the middleware's
- * session refresh, sign-in, sign-out) and the context resolution — never the handle, the auth
- * instance, a repository function or a Drizzle schema (AD-1). It wires; it never queries.
+ * session refresh, sign-in with a password or Google, sign-out) and the context resolution —
+ * never the handle, an auth instance, a repository function or a Drizzle schema (AD-1). It wires;
+ * it never queries.
  *
  * IMPORTING IT READS NO CONFIGURATION: `next build` evaluates route modules without a database or
  * a secret. Everything that reads `config` is built per call, or memoised on first use.
@@ -47,6 +53,7 @@ import {
   createProgram as createProgramUseCase,
   createProject as createProjectUseCase,
   explainTickets as explainTicketsUseCase,
+  googleProvider,
   getClientView as getClientViewUseCase,
   getProjectHeader as getProjectHeaderUseCase,
   getProjectMapping as getProjectMappingUseCase,
@@ -100,6 +107,8 @@ import {
 } from '@momo/db';
 import {
   createAuth,
+  googleRegistered,
+  googleSignIn as startGoogleSignIn,
   identityOn,
   serveAllowlisted,
   sessionForMiddleware,
@@ -124,22 +133,39 @@ function webDb(): Db {
  */
 const webIds = uuidV7IdsOn(systemClock);
 
-/**
- * The one Better Auth instance for this server bundle, built on FIRST USE — never at import,
- * because building it reads the secret and the base URL. The middleware and the route handlers
- * are separate bundles, so each has its own instance and its own pool (`getDb` memoises one per
- * connection string per bundle, at most 8 connections each).
- */
-let authInstance: Auth | undefined;
-function webAuth(): Auth {
-  authInstance ??= createAuth({
+/** What every instance of this process is built from — everything but the Google provider. */
+function baseAuthOptions() {
+  return {
     db: webDb(),
     secret: config.BETTER_AUTH_SECRET,
     baseURL: config.BETTER_AUTH_URL,
     idleHours: config.SESSION_IDLE_TIMEOUT_HOURS,
     generateId: () => webIds.next(),
-  });
+  };
+}
+
+/**
+ * The Better Auth instance for pages, server actions and the route handler, built on FIRST USE —
+ * never at import, because building it reads the secret, the base URL and the Google keys
+ * (`googleProvider()` fails naming any missing one when `AUTH_GOOGLE=on`). The middleware and the
+ * route handlers are separate bundles, so each has its own instances and its own pool (`getDb`
+ * memoises one per connection string per bundle, at most 8 connections each).
+ */
+let authInstance: Auth | undefined;
+function webAuth(): Auth {
+  authInstance ??= createAuth({ ...baseAuthOptions(), google: googleProvider() });
   return authInstance;
+}
+
+/**
+ * The middleware's instance: the same options WITHOUT Google. Registering Google fetches the
+ * issuer's discovery document when the instance is first used — with no timeout — and the
+ * middleware runs before every page and action request, so it must never be the one waiting.
+ */
+let sessionAuthInstance: Auth | undefined;
+function sessionAuth(): Auth {
+  sessionAuthInstance ??= createAuth(baseAuthOptions());
+  return sessionAuthInstance;
 }
 
 /** The request's headers, as a plain `Headers` (Next hands a read-only wrapper). */
@@ -206,8 +232,9 @@ export async function signInState(): Promise<'signed_in' | 'no_access' | 'signed
 let authRoute: ((request: Request) => Promise<Response>) | undefined;
 
 /**
- * `/api/auth/*`: Better Auth for exactly the endpoints this slice uses (`/get-session`,
- * `/sign-out`, `/sign-in/email`), 404 for everything else — parametrised routes included.
+ * `/api/auth/*`: Better Auth for exactly the endpoints in use (`/get-session`, `/sign-out`,
+ * `/sign-in/email`, and `GET /callback/google` while Google is registered), 404 for everything
+ * else — parametrised routes included.
  */
 export function handleAuthRequest(request: Request): Promise<Response> {
   authRoute ??= serveAllowlisted(webAuth());
@@ -217,10 +244,29 @@ export function handleAuthRequest(request: Request): Promise<Response> {
 /**
  * The middleware's session check, which also SLIDES the session (Better Auth refreshes it when
  * it is more than `updateAge` old) and hands back the `Set-Cookie` to forward. Not the
- * authority: `requestContext()` is, on every render.
+ * authority: `requestContext()` is, on every render. On the Google-less instance (see
+ * `sessionAuth`): it never fetches discovery.
  */
 export function refreshSession(headers: Headers): Promise<MiddlewareSession> {
-  return sessionForMiddleware(webAuth(), headers);
+  return sessionForMiddleware(sessionAuth(), headers);
+}
+
+/**
+ * Whether the sign-in page offers "Sign in with Google": the provider is REGISTERED — configured
+ * and discovered. With `AUTH_GOOGLE=off`, or discovery failed, it is not.
+ */
+export async function googleEnabled(): Promise<boolean> {
+  return googleRegistered(webAuth());
+}
+
+/**
+ * Starts a Google sign-in: the provider's authorization URL to redirect to, or `null` when Google
+ * is not registered or Better Auth refused. The state cookie reaches the browser through
+ * `nextCookies()`, so the `Set-Cookie`s the call also returns are not needed here.
+ */
+export async function googleSignIn(): Promise<string | null> {
+  const started = await startGoogleSignIn(webAuth(), await incomingHeaders());
+  return started?.url ?? null;
 }
 
 /** Email + password sign-in; `false` for every refusal, told apart by nothing. */

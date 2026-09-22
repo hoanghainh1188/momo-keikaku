@@ -6,10 +6,23 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  * success redirects to `/` (a NEXT_REDIRECT error, as `next/navigation` throws it).
  */
 const signInWithEmail = vi.hoisted(() => vi.fn(async (_credentials: { email: string; password: string }) => false));
+const googleSignIn = vi.hoisted(() => vi.fn(async (): Promise<string | null> => null));
 
-vi.mock('@/server/composition', () => ({ signInWithEmail, signOut: vi.fn() }));
+vi.mock('@/server/composition', () => ({ signInWithEmail, googleSignIn, signOut: vi.fn() }));
 
-const { signIn } = await import('./actions');
+const { signIn, signInWithGoogle } = await import('./actions');
+const { isGoogleRefusal } = await import('./google-refusal');
+
+/** Where a server action redirected (`next/navigation` throws a NEXT_REDIRECT error). */
+async function redirectedTo(action: () => Promise<unknown>): Promise<string> {
+  const digest = await action().then(
+    () => 'returned',
+    (error: { digest?: string }) => error.digest ?? 'no digest',
+  );
+  const match = /^NEXT_REDIRECT;[a-z]+;(.*);\d+;?$/.exec(digest);
+  if (match === null) throw new Error(`expected a redirect, got ${digest}`);
+  return match[1]!;
+}
 
 function form(fields: Record<string, string>): FormData {
   const data = new FormData();
@@ -21,6 +34,7 @@ const INITIAL = { refused: false };
 
 beforeEach(() => {
   signInWithEmail.mockReset();
+  googleSignIn.mockReset();
 });
 
 describe('the sign-in action', () => {
@@ -53,5 +67,28 @@ describe('the sign-in action', () => {
       (error: { digest?: string }) => error.digest,
     );
     expect(outcome).toMatch(/^NEXT_REDIRECT;[a-z]+;\/;/);
+  });
+});
+
+describe('the Google sign-in action (story 1.4 slice 3)', () => {
+  it('redirects to the provider URL the binding answers', async () => {
+    googleSignIn.mockResolvedValue('http://127.0.0.1:4455/authorize?client_id=x&state=s');
+    expect(await redirectedTo(() => signInWithGoogle())).toBe('http://127.0.0.1:4455/authorize?client_id=x&state=s');
+  });
+
+  it('lands on the one refusal when Google cannot start', async () => {
+    googleSignIn.mockResolvedValue(null);
+    expect(await redirectedTo(() => signInWithGoogle())).toBe('/sign-in?google=refused');
+  });
+});
+
+describe('isGoogleRefusal', () => {
+  it('reads google=refused as a string or among repeated values, and nothing else', () => {
+    expect(isGoogleRefusal('refused')).toBe(true);
+    expect(isGoogleRefusal(['x', 'refused'])).toBe(true);
+    expect(isGoogleRefusal(undefined)).toBe(false);
+    expect(isGoogleRefusal('')).toBe(false);
+    expect(isGoogleRefusal('REFUSED')).toBe(false);
+    expect(isGoogleRefusal(['1'])).toBe(false);
   });
 });

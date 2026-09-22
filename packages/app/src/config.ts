@@ -32,16 +32,43 @@
 // promise is unchanged: a process that reads a key it has not been given fails naming that
 // key, at the first read rather than at the first query. `parseConfig` still parses the whole
 // schema at once; today only its tests call it, and any whole-schema caller must supply EVERY
-// required key — both connection strings, the Better Auth secret and URL, and the seed password.
+// required key — both connection strings, the Better Auth secret and URL, and the seed password
+// (and, with AUTH_GOOGLE=on, the three Google keys).
 //
 // Later stories extend this schema (mail transport, the fixture-mode clock anchor) by adding
 // keys here — never by reading the environment somewhere else. Story 1.4 slice 1 added the four
 // identity keys below: the Better Auth secret and base URL, the session idle timeout, and the
 // demo password the seed hashes. Only the web process reads the first three, and only the seed
 // the fourth, which is exactly what the per-key getters are for.
+//
+// Story 1.4 slice 3 added Google sign-in, OFF UNLESS CONFIGURED (AD-17): `AUTH_GOOGLE` is `off`
+// by default, and `on` requires `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and `GOOGLE_ISSUER_URL`
+// together. The three are optional one by one — a process with Google off must not need them —
+// so the "required together" rule lives in two places that state it once each: `googleProvider()`,
+// the accessor the web composition root reads (it fails naming every missing key at first read),
+// and `parseConfig`'s `superRefine`. The issuer must be `https:`, unless its host is loopback (the
+// in-repo fake OIDC provider, `tests/support/fake-oidc.ts`, in local dev and CI).
 import { z } from 'zod';
 
-const configSchema = z.object({
+/** Hosts an `http:` issuer may name: this machine only (the fake OIDC provider). */
+const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
+
+/** `https:`, or any scheme-valid URL on a loopback host — the issuer rule, stated once. */
+function isAcceptableIssuer(value: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return false;
+  }
+  if (url.protocol === 'https:') return true;
+  return url.protocol === 'http:' && LOOPBACK_HOSTS.has(url.hostname);
+}
+
+/** The keys `AUTH_GOOGLE=on` requires, in the order a failure names them. */
+const GOOGLE_KEYS = ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_ISSUER_URL'] as const;
+
+const configShape = z.object({
   DATABASE_URL: z
     .string({
       error:
@@ -88,9 +115,39 @@ const configSchema = z.object({
   SEED_DEMO_PASSWORD: z
     .string({ error: 'is required by the seed — the demo users\' password (8+ characters)' })
     .min(8, 'must be at least 8 characters — it is the demo users\' password'),
+
+  // Google sign-in (story 1.4 slice 3). `off` unless a deployment turns it on (AD-17).
+  AUTH_GOOGLE: z
+    .enum(['off', 'on'], { error: 'must be `off` or `on` — whether Google sign-in is offered' })
+    .default('off'),
+
+  // The OAuth client registered for this deployment. Never a real Google client in the
+  // repository or in CI: there, they name the in-repo fake.
+  GOOGLE_CLIENT_ID: z.string().min(1, 'must not be empty — the OAuth client id').optional(),
+  GOOGLE_CLIENT_SECRET: z.string().min(1, 'must not be empty — the OAuth client secret').optional(),
+
+  // The OIDC issuer, e.g. https://accounts.google.com. Discovery is fetched from
+  // `<issuer>/.well-known/openid-configuration`.
+  GOOGLE_ISSUER_URL: z
+    .string()
+    .refine(
+      isAcceptableIssuer,
+      'must be an absolute https: URL (http: only on a loopback host) — the OIDC issuer, e.g. https://accounts.google.com',
+    )
+    .optional(),
 });
 
-export type AppConfig = z.infer<typeof configSchema>;
+/** Whole-schema parsing adds the one cross-key rule: `AUTH_GOOGLE=on` needs all three Google keys. */
+const configSchema = configShape.superRefine((value, ctx) => {
+  if (value.AUTH_GOOGLE !== 'on') return;
+  for (const key of GOOGLE_KEYS) {
+    if (value[key] === undefined) {
+      ctx.addIssue({ code: 'custom', path: [key], message: 'is required when AUTH_GOOGLE=on' });
+    }
+  }
+});
+
+export type AppConfig = z.infer<typeof configShape>;
 
 /**
  * Parses a raw environment into the application configuration.
@@ -113,13 +170,13 @@ export function parseConfig(env: Record<string, string | undefined>): AppConfig 
  * Parses ONE key out of a raw environment, failing naming it.
  *
  * The per-key half of `parseConfig`. It reuses the same schema, so a key's rules are stated
- * once: `configSchema.shape[key]` is the very validator `parseConfig` applies.
+ * once: `configShape.shape[key]` is the very validator `parseConfig` applies.
  */
 export function parseConfigKey<K extends keyof AppConfig>(
   env: Record<string, string | undefined>,
   key: K,
 ): AppConfig[K] {
-  const result = configSchema.shape[key].safeParse(env[key]);
+  const result = configShape.shape[key].safeParse(env[key]);
   if (result.success) return result.data as AppConfig[K];
   const named = result.error.issues.map((issue) => issue.message).join('; ');
   throw new Error(`Invalid configuration: ${key} ${named}`);
@@ -155,4 +212,51 @@ export const config: AppConfig = {
   get SEED_DEMO_PASSWORD(): string {
     return parseConfigKey(process.env, 'SEED_DEMO_PASSWORD');
   },
+  get AUTH_GOOGLE(): 'off' | 'on' {
+    return parseConfigKey(process.env, 'AUTH_GOOGLE');
+  },
+  get GOOGLE_CLIENT_ID(): string | undefined {
+    return parseConfigKey(process.env, 'GOOGLE_CLIENT_ID');
+  },
+  get GOOGLE_CLIENT_SECRET(): string | undefined {
+    return parseConfigKey(process.env, 'GOOGLE_CLIENT_SECRET');
+  },
+  get GOOGLE_ISSUER_URL(): string | undefined {
+    return parseConfigKey(process.env, 'GOOGLE_ISSUER_URL');
+  },
 };
+
+/** The Google provider, as `createAuth` takes it (`@momo/db-auth`'s `google` option). */
+export interface GoogleProviderConfig {
+  readonly clientId: string;
+  readonly clientSecret: string;
+  readonly issuer: string;
+}
+
+/**
+ * Google sign-in's configuration from a raw environment: `null` when `AUTH_GOOGLE` is `off` (the
+ * default), otherwise all three keys — or a failure NAMING EVERY MISSING ONE. Each key's own rule
+ * (non-empty; the issuer `https:` unless loopback) is `parseConfigKey`'s, so it is stated once.
+ */
+export function parseGoogleProvider(env: Record<string, string | undefined>): GoogleProviderConfig | null {
+  if (parseConfigKey(env, 'AUTH_GOOGLE') === 'off') return null;
+  const missing = GOOGLE_KEYS.filter((key) => env[key] === undefined);
+  if (missing.length > 0) {
+    throw new Error(
+      `Invalid configuration: ${missing.join(', ')} ${missing.length === 1 ? 'is' : 'are'} required when AUTH_GOOGLE=on`,
+    );
+  }
+  return {
+    clientId: parseConfigKey(env, 'GOOGLE_CLIENT_ID')!,
+    clientSecret: parseConfigKey(env, 'GOOGLE_CLIENT_SECRET')!,
+    issuer: parseConfigKey(env, 'GOOGLE_ISSUER_URL')!,
+  };
+}
+
+/**
+ * The process's Google provider, read when it is first asked for — by the web composition root,
+ * when it builds its auth instance. `null` when Google sign-in is off.
+ */
+export function googleProvider(): GoogleProviderConfig | null {
+  return parseGoogleProvider(process.env);
+}

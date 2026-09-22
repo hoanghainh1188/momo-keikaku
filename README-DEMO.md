@@ -39,6 +39,39 @@ pnpm demo
 Every page asks you to sign in first. Sign in as **`linh@momo-digital.example`** (the PM) or
 **`hoang@momo-digital.example`** (the Tenant Admin), with the `SEED_DEMO_PASSWORD` you set.
 
+### Sign in with Google, locally (optional)
+
+Google sign-in is **off** unless `AUTH_GOOGLE=on`. Locally — and in CI — it talks to a small
+fake OIDC provider in the repository instead of Google; no real Google client id is needed, or
+allowed, in the repo. In a second terminal:
+
+```bash
+pnpm fake-oidc        # listens on http://127.0.0.1:4455 (FAKE_OIDC_PORT to change it)
+```
+
+The fake reads `BETTER_AUTH_URL` (default `http://localhost:3101`) and `FAKE_OIDC_PORT` (default
+4455) from **its own shell**, not from `apps/web/.env.local`: if the web app runs on another origin,
+export the same `BETTER_AUTH_URL` before `pnpm fake-oidc`, or the fake answers
+`400 redirect_uri not registered`. If you change `FAKE_OIDC_PORT`, set `GOOGLE_ISSUER_URL` below to
+the address the fake prints on start (`http://127.0.0.1:<port>`).
+
+Then start the web app with these four keys (in `apps/web/.env.local`, or the shell):
+
+```bash
+AUTH_GOOGLE=on
+GOOGLE_CLIENT_ID=momo-local-client
+GOOGLE_CLIENT_SECRET=momo-local-secret
+GOOGLE_ISSUER_URL=http://127.0.0.1:4455
+```
+
+`/sign-in` now shows **Sign in with Google**. The fake asks for one thing — the email to sign in
+as — and hands it back as a verified Google identity: `hoang@momo-digital.example` or
+`linh@momo-digital.example` sign in and land on `/`. Google only links to people who already
+exist, so any other email comes back to `/sign-in` with "Google sign-in did not go through".
+If the fake is not running when the web app first needs it, the button simply does not appear
+(restart the web app once the fake is up). The issuer must be `https:` unless it is on this
+machine; in production it is Google's, `https://accounts.google.com`.
+
 > **An older local database** (created before story 1.4) still has the `app_user` table, and
 > `drizzle-kit push` stops on an interactive rename prompt for it. Drop it once, then push:
 > `docker exec momo-keikaku-postgres psql -U momo -d momo_keikaku -c 'DROP TABLE IF EXISTS app_user'`.
@@ -184,8 +217,9 @@ Screenshots: `_bmad-output/demo-screenshots/`.
 
 Deliberately out of scope for this demo (from the build brief):
 
-- **Email + password sign-in only, and no roles enforced.** Two seeded users; no Google
-  sign-in, no password reset, no revocation yet, and role checks arrive with story 1.5.
+- **Email + password, or Google through a local fake — and no roles enforced.** Two seeded
+  users; Google links only to them (no sign-up); no password reset or revocation screen yet,
+  and role checks arrive with story 1.5.
 - **No multi-tenant isolation.** `tenant_id` is on every table, but Row Level Security,
   composite foreign keys and the non-owner application role are not set up (AD-3).
 - **No pg-boss worker.** Snapshots are replayed once at seed time, not on a schedule.

@@ -143,6 +143,18 @@ module.exports = {
       to: { path: '^packages/db/' },
     },
     {
+      name: 'no-test-support-in-source',
+      severity: 'error',
+      comment:
+        'Story 1.4 slice 3: tests/support/ holds test infrastructure — the fake OIDC provider ' +
+        'Google sign-in talks to in tests and local dev. No application source under apps/ or ' +
+        'packages/ may import it: a fake identity provider reachable from the product would be ' +
+        'a way to sign in that is not Google. `scripts/fake-oidc.ts` (tooling) is the one ' +
+        'non-test importer, and it is not cruised.',
+      from: { path: '^(apps|packages)/' },
+      to: { path: '^tests/support/' },
+    },
+    {
       name: 'schedule-domain-not-to-attribution',
       severity: 'error',
       comment:

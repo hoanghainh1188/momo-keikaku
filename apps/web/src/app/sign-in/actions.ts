@@ -2,13 +2,16 @@
 
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
-import { signInWithEmail, signOut } from '@/server/composition';
+import { googleSignIn, signInWithEmail, signOut } from '@/server/composition';
 
 /**
- * Sign-in and sign-out (story 1.4 slice 1) — the composition root's auth bindings, called from
- * forms. Rate-limiting the sign-in action is deferred on purpose (deferred-work.md): Better Auth's
- * limiter runs only in its HTTP router, and this action calls its API directly.
+ * Sign-in and sign-out (story 1.4 slices 1 and 3) — the composition root's auth bindings, called
+ * from forms. Rate-limiting the sign-in actions is deferred on purpose (deferred-work.md): Better
+ * Auth's limiter runs only in its HTTP router, and these actions call its API directly.
  */
+
+/** Where a Google sign-in that could not even start lands: the same one refusal as any other. */
+const GOOGLE_REFUSED = '/sign-in?google=refused';
 
 export interface SignInState {
   /** True after a refusal. One flag, one message: nothing tells an unknown email from a wrong password. */
@@ -35,6 +38,16 @@ export async function signIn(_previous: SignInState, formData: FormData): Promis
   const signedIn = await signInWithEmail(parsed.data);
   if (!signedIn) return { refused: true };
   redirect('/');
+}
+
+/**
+ * Starts a Google sign-in and sends the browser to the provider. The state cookie is set on this
+ * response by `nextCookies()`. The provider comes back to `/api/auth/callback/google`, which lands
+ * on `/` — or on `/sign-in?google=refused`, like this action when Google is not available.
+ */
+export async function signInWithGoogle(): Promise<void> {
+  const url = await googleSignIn();
+  redirect(url ?? GOOGLE_REFUSED);
 }
 
 /** Ends the session and returns to the sign-in page. */

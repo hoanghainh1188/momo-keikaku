@@ -565,6 +565,7 @@ work started and was deliberately deferred, with the evidence for the split.
 - source_spec: none
   summary: Story 1.4 slice 3 — Google sign-in.
   evidence: Split from story 1.4 at Build's multi-goal gate (founder, 2026-09-21); needs a decision on Google OAuth credentials for local and CI (test double or real client ids).
+  resolved: 2026-09-22 in `spec-1-4-google-sign-in.md` (founder decision 2026-09-21, option (a): a fake OIDC provider locally and in CI). Google is one `genericOAuth` provider (`providerId: 'google'`) in `packages/db/auth/src/google.ts`, discovered from `GOOGLE_ISSUER_URL`, off unless `AUTH_GOOGLE=on`. Link by verified email to an existing user only; provider tokens stored as null; every refusal lands on `/sign-in?google=refused`; the middleware refreshes sessions on a Google-less instance. The fake is `tests/support/fake-oidc.ts` (`pnpm fake-oidc` for local dev); the matrix is `tests/google-sign-in.test.ts`.
 
 - source_spec: none
   summary: Story 1.4 slice 4 — password reset through `MailerPort` (`mailer-console` in development, `mailer-ses` in production; AWS account and sender domain are Epic 8's).
@@ -636,3 +637,37 @@ work started and was deliberately deferred, with the evidence for the split.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-4-revocation-and-membership.md`
   summary: A user revoked from their only Tenant keeps `auth_user` and credential rows and can still sign in, landing on `no_access`.
   evidence: Code review (B9). Revocation removes access, not the person; deactivating or deleting accounts needs an account-lifecycle decision (with invitation work).
+
+## Deferred from: implementation of spec-1-4-google-sign-in (2026-09-22)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-google-sign-in.md`
+  summary: The spine's AD-1 carve-out still describes `createAuth({ db, secret, baseURL, idleHours, generateId })` and the four web-edge bindings; slice 3 added the optional `google` argument, the Google bindings (`googleSignIn`, `googleRegistered`, the provider-aware allowlist) and a second, Google-less instance for the middleware. `table-classes.ts:134`'s "why" for `verification` does not yet mention the OAuth state it now holds.
+  evidence: Deferred by the spec on purpose: an amended planning doc gets its own adversarial review (up to two rounds) before it lands. Amend AD-1 (and the `verification` note), review, then regenerate `epic-1-context.md`.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-google-sign-in.md`
+  summary: Epic 8 must check Google sign-in against REAL Google — the issuer's spelling (`https://accounts.google.com` in discovery vs the bare `accounts.google.com` Google puts in some tokens' `iss`), discovery retried after a failure (today a fast failure skips the provider for the life of the instance, i.e. until the process restarts), and a timeout for a discovery request that hangs (Better Auth's `betterFetch` has none, and every call on the page instance waits for it).
+  evidence: The fake always issues `iss` equal to its discovered issuer, so the first cannot be seen in CI. Only the middleware's instance is isolated from discovery (`tests/web-google-discovery.test.ts`); the page instance's first use waits on it.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-google-sign-in.md`
+  summary: Every started Google sign-in writes a `verification` row; an abandoned one is removed only by Better Auth's opportunistic sweep of expired rows (on a later `findVerificationValue`), and nothing limits how often `signInWithGoogle` can be posted.
+  evidence: Same gap as the password sign-in rate-limit entry above: Better Auth's limiter runs only in its HTTP router, and the server action calls `auth.api.signInSocial` directly. Needs the sign-in throttle (Epic 8) and, ideally, a scheduled sweep.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-google-sign-in.md`
+  summary: Better Auth 1.7.5 decides an OAuth state's expiry from the `expiresAt` inside the `verification` row's VALUE, not from its `expires_at` column: a row whose column alone is in the past is still accepted (the lookup returns the row it found before sweeping expired ones).
+  evidence: Measured while writing the expired-state row of `tests/google-sign-in.test.ts`: moving only the column let the sign-in through; the test therefore moves both. Both are set ten minutes ahead at creation, so they agree unless someone edits the row. Harmless today; re-check on a Better Auth upgrade.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-google-sign-in.md`
+  summary: The "Sign in with Google" button and the refusal message are exercised by no browser test; the action, the refusal parser and the whole OAuth flow underneath are.
+  evidence: `actions.test.ts` pins the redirect to the provider and the fallback refusal; `tests/google-sign-in.test.ts` runs the flow through the route handler with the state cookie forwarded. A Playwright pass is the real fix (same entry as the other web-layer coverage ones).
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-google-sign-in.md`
+  summary: A discovery request that HANGS on the page instance blocks every request that instance serves — page renders (the resolver's `identityOn(webAuth())`), `/sign-in`, `/get-session` and password sign-in — not only Google.
+  evidence: Code review (B1, E1, E2), verified: every `auth.api` call and `serveAllowlisted` awaits `auth.$context`, which awaits the plugin's discovery fetch (no timeout). The spec defers a hang to Epic 8 on purpose; this entry records that the blast radius is the whole app, not Google. Cheapest fix when it is picked up: keep identity, password sign-in and the non-Google endpoints on the Google-less instance (as the middleware already is) and await registration only for the button, the start action and `/callback/google`; or bound discovery with a timeout.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-google-sign-in.md`
+  summary: Linking a Google account to an existing user writes no audit row, is invisible to a Tenant Admin, and has no unlink path; revoking a membership leaves the link in place.
+  evidence: Code review (B6). A first Google sign-in adds a `google` `account` row through Better Auth's callback, outside any audited use case. By the founder's decision a link needs a verified email on both sides, and the link grants no Tenant access by itself (membership still decides), so it is not an access change — but it is a new way into an identity. Belongs with the account-lifecycle decision (see the B9 entry above) and invitation work.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-google-sign-in.md`
+  summary: `googleSignIn`'s refusal paths on a REGISTERED instance (an `APIError` from `signInSocial`, or a response without a URL) are run by no test.
+  evidence: Verification-gap review. Every `null` in the tests comes from the not-registered guard before the `try`; removing the `catch` would leave CI green and turn such a refusal into an error page. No clean way to make the real fake trigger it; revisit if the start path gains refusal conditions.
