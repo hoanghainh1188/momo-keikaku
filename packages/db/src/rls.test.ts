@@ -4,7 +4,7 @@ import { eq, sql } from 'drizzle-orm';
 import { closeAllPools, getDb } from './client';
 import * as s from './schema';
 import {
-  APPEND_ONLY,
+  APPEND_ONLY_GUARDED,
   appPrivilegesOf,
   CANONICAL_MAINTENANCE_ROLE,
   REGISTERED_TABLES,
@@ -451,12 +451,13 @@ describe.skipIf(!reachable)('FORCE row-level security and the policy are on ever
     ).toEqual([]);
   });
 
-  it('installs BOTH append-only triggers on every append-only table', async () => {
+  it('installs BOTH append-only triggers on every append-only-guarded table', async () => {
     // Two triggers, because a FOR EACH ROW trigger does not fire for TRUNCATE at all — there
     // are no rows to fire per. Without the statement-level one, TRUNCATE is guarded by the
     // absent grant alone, which is the single point of failure the trigger exists to backstop.
     // `information_schema.triggers` does not report TRUNCATE triggers, so pg_trigger is read
-    // directly and the event bitmask is checked.
+    // directly and the event bitmask is checked. `identity_event` (global + appendOnlyGuard)
+    // is in the set alongside the nine `append-only` tables.
     for (const [triggerName, label] of [
       [APPEND_ONLY_TRIGGER, 'UPDATE/DELETE'],
       [APPEND_ONLY_TRUNCATE_TRIGGER, 'TRUNCATE'],
@@ -473,14 +474,18 @@ describe.skipIf(!reachable)('FORCE row-level security and the policy are on ever
         return rows.map((row) => row.relname);
       });
 
-      const missing = APPEND_ONLY.map((e) => e.table).filter((table) => !tables.includes(table));
+      const missing = APPEND_ONLY_GUARDED.map((e) => e.table).filter(
+        (table) => !tables.includes(table),
+      );
       expect(
         missing,
-        `these append-only tables carry no '${triggerName}' (${label}) trigger: ${missing.join(', ')}.`,
+        `these append-only-guarded tables carry no '${triggerName}' (${label}) trigger: ${missing.join(', ')}.`,
       ).toEqual([]);
-      // And no table that is not append-only carries it: a trigger on a mutable table would
+      // And no table that is not guarded carries it: a trigger on a mutable table would
       // refuse edits the product depends on, and would do so only under load.
-      const unexpected = tables.filter((table) => !APPEND_ONLY.some((e) => e.table === table));
+      const unexpected = tables.filter(
+        (table) => !APPEND_ONLY_GUARDED.some((e) => e.table === table),
+      );
       expect(unexpected, `unexpected '${triggerName}' trigger on: ${unexpected.join(', ')}`).toEqual(
         [],
       );
@@ -734,5 +739,68 @@ describe.skipIf(!reachable)('append-only is enforced twice', () => {
       'the owner was not refused TRUNCATE by the statement-level trigger — without it the ' +
         'grant is the only control on the one verb that empties the table',
     ).toBe(APPEND_ONLY_ERRCODE);
+  });
+
+  it('refuses UPDATE, DELETE and TRUNCATE on identity_event to the owner, until the hatch opens', async () => {
+    // `identity_event` is `global` with `appendOnlyGuard`: same trigger pair as the nine
+    // append-only tables, but no tenant policy. The owner needs no grant, so only the trigger
+    // can refuse — which is the half of the double enforcement the grant cannot cover.
+    const id = await asOwner(async (client) => {
+      const { rows } = await client.query<{ id: string }>(
+        `INSERT INTO identity_event (id, user_id, action, at, payload)
+         VALUES ('idt-rls-probe', 'usr-rls-probe', 'password.reset', now(), NULL)
+         RETURNING id`,
+      );
+      return rows[0]!.id;
+    });
+
+    try {
+      await asOwner(async (client) => {
+        const updateCode = await refusalCode(
+          client.query(`UPDATE identity_event SET action = 'tampered' WHERE id = $1`, [id]),
+        );
+        expect(updateCode, 'owner UPDATE on identity_event was not refused by the trigger').toBe(
+          APPEND_ONLY_ERRCODE,
+        );
+        const deleteCode = await refusalCode(
+          client.query(`DELETE FROM identity_event WHERE id = $1`, [id]),
+        );
+        expect(deleteCode, 'owner DELETE on identity_event was not refused by the trigger').toBe(
+          APPEND_ONLY_ERRCODE,
+        );
+        const truncateCode = await refusalCode(
+          (async () => {
+            await client.query('BEGIN');
+            try {
+              await client.query('TRUNCATE identity_event');
+            } finally {
+              await client.query('ROLLBACK');
+            }
+          })(),
+        );
+        expect(
+          truncateCode,
+          'owner TRUNCATE on identity_event was not refused by the statement-level trigger',
+        ).toBe(APPEND_ONLY_ERRCODE);
+
+        await client.query(`SELECT set_config('app.maintenance', 'on', false)`);
+        try {
+          const deleted = await client.query(`DELETE FROM identity_event WHERE id = $1`, [id]);
+          expect(deleted.rowCount, 'the escape hatch did not let the delete through').toBe(1);
+        } finally {
+          await client.query(`SELECT set_config('app.maintenance', 'off', false)`);
+        }
+      });
+    } finally {
+      // If an assertion failed before the hatch DELETE, the probe row must not survive.
+      await asOwner(async (client) => {
+        await client.query(`SELECT set_config('app.maintenance', 'on', false)`);
+        try {
+          await client.query(`DELETE FROM identity_event WHERE id = $1`, [id]);
+        } finally {
+          await client.query(`SELECT set_config('app.maintenance', 'off', false)`);
+        }
+      }).catch(() => {});
+    }
   });
 });

@@ -7,13 +7,17 @@ import * as schemaModule from './schema';
 import { tenantMembership } from './schema-membership';
 import {
   APPEND_ONLY,
+  APPEND_ONLY_GUARDED,
+  APPEND_ONLY_MAINTENANCE_PRIVILEGES,
   APP_PRIVILEGES,
   TENANT_BRIDGES,
+  appendOnlyGuardOf,
   appPrivilegesOf,
   CANONICAL_APP_ROLE,
   CANONICAL_MAINTENANCE_ROLE,
   CLIENT_ALLOCATED_SEQ,
   MAINTENANCE_PRIVILEGES,
+  maintenancePrivilegesOf,
   REGISTERED_TABLES,
   TABLE_REGISTRY,
   TENANT_OWNED,
@@ -119,10 +123,19 @@ describe('the table-class registry is the single source', () => {
     // tables at once, and the catalog assertion would report nine failures without saying
     // why they all moved together.
     expect(APP_PRIVILEGES['append-only']).toEqual(['SELECT', 'INSERT']);
-    // And the maintenance role holds the exception on those tables and nowhere else.
+    // And the maintenance role holds the hatch grant on every guarded table — the nine
+    // append-only ones plus `identity_event` — and nowhere else.
     expect(MAINTENANCE_PRIVILEGES['append-only']).toEqual(['SELECT', 'UPDATE', 'DELETE']);
+    expect(APPEND_ONLY_MAINTENANCE_PRIVILEGES).toEqual(['SELECT', 'UPDATE', 'DELETE']);
     for (const klass of ['mutable-audited', 'derived', 'global', 'operational'] as const) {
       expect(MAINTENANCE_PRIVILEGES[klass], `maintenance holds something on ${klass}`).toEqual([]);
+    }
+    expect(APPEND_ONLY_GUARDED.map((e) => e.table).sort()).toEqual(
+      [...APPEND_ONLY.map((e) => e.table), 'identity_event'].sort(),
+    );
+    for (const entry of TABLE_REGISTRY) {
+      const expected = appendOnlyGuardOf(entry) ? APPEND_ONLY_MAINTENANCE_PRIVILEGES : [];
+      expect(maintenancePrivilegesOf(entry), entry.table).toEqual(expected);
     }
   });
 
@@ -250,15 +263,22 @@ describe('the checked-in SQL is what the generator emits', () => {
     expect(existence).toBeLessThan(membership);
   });
 
-  it('guards TRUNCATE with a statement-level trigger on every append-only table', () => {
+  it('guards TRUNCATE with a statement-level trigger on every append-only-guarded table', () => {
     // A FOR EACH ROW trigger does not fire for TRUNCATE, so without this the grant is the
     // only control on the one verb that empties a table in a single statement.
     const triggers = generateAll(CANONICAL_APP_ROLE, CANONICAL_MAINTENANCE_ROLE)['triggers.sql']!;
-    for (const entry of APPEND_ONLY) {
+    for (const entry of APPEND_ONLY_GUARDED) {
       expect(triggers, `${entry.table} has no TRUNCATE guard`).toContain(
         `  BEFORE TRUNCATE ON public."${entry.table}"`,
       );
     }
+  });
+
+  it('grants the maintenance hatch on identity_event even though its class is global', () => {
+    const grants = generateAll(CANONICAL_APP_ROLE, CANONICAL_MAINTENANCE_ROLE)['grants.sql']!;
+    expect(grants).toContain(
+      `GRANT SELECT, UPDATE, DELETE ON public."identity_event" TO "${CANONICAL_MAINTENANCE_ROLE}";`,
+    );
   });
 
   it('never grants TRUNCATE to the application role, in any class', () => {
