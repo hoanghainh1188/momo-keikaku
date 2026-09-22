@@ -121,4 +121,25 @@ describe('the middleware wiring', () => {
       expect(matcher.test(path), `matcher on ${path}`).toBe(!isPublic);
     }
   });
+
+  /**
+   * THE COMPLEMENT ABOVE HOLDS FOR ROUTES, NOT FOR ASSETS — and the table simply never listed an
+   * asset path, which hid the exception rather than stating it. Next's own static output and the
+   * favicon are excluded from the matcher while `isPublicPath` calls them protected: they are not
+   * routes, so the question does not arise for them. Pinned here so the exception is deliberate,
+   * and so the anchors stay on: the entries were once unanchored, which let `/faviconXico` and
+   * `/_next/staticfoo` skip the gate as well.
+   */
+  it('excludes Next\'s own assets from the gate, and only those', async () => {
+    const { config } = await import('../middleware');
+    const matcher = new RegExp(`^${config.matcher[0]}$`);
+    for (const asset of ['/favicon.ico', '/_next/static/chunk.js', '/_next/image']) {
+      expect(matcher.test(asset), `matcher on ${asset}`).toBe(false);
+      expect(isPublicPath(asset), `isPublicPath on ${asset}`).toBe(false);
+    }
+    // Anchored: a path that merely starts like an asset is still gated.
+    for (const lookalike of ['/faviconXico', '/favicon.icox', '/_next/staticfoo', '/_next/imagefoo']) {
+      expect(matcher.test(lookalike), `matcher on ${lookalike}`).toBe(true);
+    }
+  });
 });

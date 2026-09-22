@@ -6,11 +6,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  * success redirects to `/` (a NEXT_REDIRECT error, as `next/navigation` throws it).
  */
 const signInWithEmail = vi.hoisted(() => vi.fn(async (_credentials: { email: string; password: string }) => false));
+const signOut = vi.hoisted(() => vi.fn(async () => {}));
 const googleSignIn = vi.hoisted(() => vi.fn(async (): Promise<string | null> => null));
 
-vi.mock('@/server/composition', () => ({ signInWithEmail, googleSignIn, signOut: vi.fn() }));
+vi.mock('@/server/composition', () => ({ signInWithEmail, googleSignIn, signOut }));
 
-const { signIn, signInWithGoogle } = await import('./actions');
+const { signIn, signInWithGoogle, signOutAction } = await import('./actions');
 const { isGoogleRefusal } = await import('./google-refusal');
 
 /** Where a server action redirected (`next/navigation` throws a NEXT_REDIRECT error). */
@@ -90,5 +91,19 @@ describe('isGoogleRefusal', () => {
     expect(isGoogleRefusal('')).toBe(false);
     expect(isGoogleRefusal('REFUSED')).toBe(false);
     expect(isGoogleRefusal(['1'])).toBe(false);
+  });
+});
+
+/**
+ * SIGN-OUT, which nothing exercised. Dropping the `await signOut()` — or redirecting anywhere but
+ * `/sign-in` — used to pass every test in the repo, and the failure is invisible: the button
+ * navigates away while the session cookie stays live, so the middleware and `requestContext()`
+ * both still see a signed-in request. A user on a shared machine believes they are out.
+ */
+describe('the sign-out action', () => {
+  it('ends the session before redirecting to /sign-in', async () => {
+    signOut.mockClear();
+    expect(await redirectedTo(() => signOutAction())).toBe('/sign-in');
+    expect(signOut).toHaveBeenCalledTimes(1);
   });
 });

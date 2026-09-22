@@ -27,6 +27,19 @@ const forgotPasswordForm = z.object({
  */
 export async function requestReset(formData: FormData): Promise<void> {
   const parsed = forgotPasswordForm.safeParse({ email: formData.get('email') });
-  if (parsed.success) await requestPasswordReset(parsed.data.email);
+  // The catch is what makes the answer generic under failure, not only under refusal. Only the
+  // KNOWN-email branch reaches the credential lookup and the mailer, so a throw there — and
+  // nothing but an `APIError` is absorbed below this — would 500 for an address that exists while
+  // an unknown one still redirected. That difference is the account-existence oracle NFR-S5
+  // forbids, visible to anyone who can time or read two responses.
+  if (parsed.success) {
+    try {
+      await requestPasswordReset(parsed.data.email);
+    } catch (error) {
+      console.warn(
+        `[auth] password-reset request failed: ${error instanceof Error ? error.name : 'unknown error'}`,
+      );
+    }
+  }
   redirect('/forgot-password?sent=1');
 }

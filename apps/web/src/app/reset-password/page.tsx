@@ -31,11 +31,23 @@ export default async function ResetPasswordPage({ searchParams }: ResetPasswordP
         <h1 id="reset-password-heading">Choose a new password</h1>
         {refused ? (
           <p className="auth-error" role="alert">
-            That link no longer works, or the password was too short.{' '}
-            <Link href="/forgot-password">Request a new link</Link> and try again.
+            That did not work. The link may have been used already or expired, or the password may
+            have been too short. <Link href="/forgot-password">Request a new link</Link> if you need
+            one.
           </p>
         ) : null}
-        <ResetPasswordForm token={token} />
+        {/* NO TOKEN, NO FORM. Rendering it anyway gave a visitor who arrived without one — a
+            truncated link, a bare `/reset-password` — a field that could only ever be refused, and
+            the refusal returned them to the very same empty form. There is nothing to submit here
+            without a token, so offer the thing that produces one instead. */}
+        {token === '' ? (
+          <p className="auth-note">
+            This page needs the link from your reset email.{' '}
+            <Link href="/forgot-password">Request one</Link>.
+          </p>
+        ) : (
+          <ResetPasswordForm token={token} />
+        )}
         <p className="auth-below auth-note">
           <Link href="/sign-in">Back to sign in</Link>
         </p>

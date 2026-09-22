@@ -12,11 +12,16 @@ export const middleware = sessionGate(refreshSession);
 
 export const config = {
   runtime: 'nodejs',
+  // ASSET ENTRIES ARE ANCHORED TOO. They were not: `favicon.ico` left the dot as a metacharacter
+  // and `_next/static` / `_next/image` had no boundary, so `/faviconXico`, `/_next/staticfoo` and
+  // `/_next/imagefoo` skipped the gate — harmless in practice, since none is a real route and the
+  // gate is not the authority anyway, but the comment below advertises anchoring and three of the
+  // entries did not have it.
   // Static assets and EXACTLY the public paths (`/sign-in`, `/no-access`, `/forgot-password`,
   // `/reset-password` and `/api/auth` and `/api/auth/*`) never reach the gate — anchored, so
   // `/sign-inx` or `/sign-in/x` still do, as `isPublicPath` says. `session-gate.test.ts` runs
   // this regex against `isPublicPath`.
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|sign-in$|no-access$|forgot-password$|reset-password$|api/auth(?:/|$)).*)',
+    '/((?!_next/static/|_next/image$|favicon[.]ico$|sign-in$|no-access$|forgot-password$|reset-password$|api/auth(?:/|$)).*)',
   ],
 };

@@ -1,4 +1,6 @@
 import Link from 'next/link';
+import { RESET_LINK_HOURS } from './reset-link-hours';
+
 import { ForgotPasswordForm } from './forgot-password-form';
 
 export const dynamic = 'force-dynamic';
@@ -31,7 +33,7 @@ export default async function ForgotPasswordPage({ searchParams }: ForgotPasswor
         {sent ? (
           <p className="auth-success" role="status">
             If that email has an account, we&rsquo;ve sent a link to reset the password. It
-            expires in 1 hour.
+            expires in {RESET_LINK_HOURS === 1 ? 'an hour' : `${RESET_LINK_HOURS} hours`}.
           </p>
         ) : (
           <>

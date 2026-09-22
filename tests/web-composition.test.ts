@@ -823,3 +823,46 @@ describe('the Google refusal URL', () => {
     expect(GOOGLE_REFUSED).toBe(GOOGLE_REFUSED_URL);
   });
 });
+
+/**
+ * THE HTTP SURFACE'S INSTANCE. `handleAuthRequest` is the only way into Better Auth over HTTP, and
+ * it must be built from the PAGE instance: the middleware's is created without Google, so
+ * `servedEndpoints` omits `GET /callback/google` and every Google sign-in would 404 on its return
+ * leg — in production only, because both functions return `Auth` and nothing here called this
+ * export. The route module forwards every method to it, so a dropped export is the same failure.
+ */
+describe('the auth route handler', () => {
+  it('serves the allowlist of the page instance, not the middleware\'s', async () => {
+    const { serveAllowlisted } = await import('../packages/db/auth/src/index');
+    const served = vi.mocked(serveAllowlisted);
+    const answer = new Response('ok');
+    served.mockReturnValue(async () => answer);
+
+    const response = await composition.handleAuthRequest(
+      new Request('http://localhost:3101/api/auth/get-session'),
+    );
+    expect(response).toBe(answer);
+    expect(served).toHaveBeenCalledWith(spies.authInstance);
+  });
+
+  // NOT asserted here: that the route module exports the same handler for every method. Importing
+  // `apps/web/src/app/api/auth/[...all]/route` from a root-level test pulls it into the ROOT
+  // tsconfig's program, which has no `@/*` alias — that lives in apps/web's — so the import breaks
+  // `pnpm typecheck`. A co-located test under apps/web could do it; the instance, which is the
+  // half that fails silently in production, is covered above.
+});
+
+/**
+ * The reset link's lifetime, stated twice for the same reason `GOOGLE_REFUSED` is: AD-1 lets only
+ * the composition root import `@momo/db-auth`, and the forgot-password page is a route module. The
+ * mail copy derives from the constant; the page cannot, so this is what keeps them equal.
+ */
+describe('the reset link lifetime', () => {
+  it('is the same number of hours on the page as in the auth package', async () => {
+    const [{ RESET_LINK_HOURS }, { RESET_PASSWORD_TOKEN_EXPIRES_IN_SECONDS }] = await Promise.all([
+      import('../apps/web/src/app/forgot-password/reset-link-hours'),
+      import('../packages/db/auth/src/reset'),
+    ]);
+    expect(RESET_LINK_HOURS * 3600).toBe(RESET_PASSWORD_TOKEN_EXPIRES_IN_SECONDS);
+  });
+});

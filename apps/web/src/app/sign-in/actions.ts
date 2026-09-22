@@ -7,8 +7,11 @@ import { GOOGLE_REFUSED } from './google-refusal';
 
 /**
  * Sign-in and sign-out (story 1.4 slices 1 and 3) — the composition root's auth bindings, called
- * from forms. Rate-limiting the sign-in actions is deferred on purpose (deferred-work.md): Better
- * Auth's limiter runs only in its HTTP router, and these actions call its API directly.
+ * from forms. Rate-limiting is deferred on purpose (deferred-work.md): Better Auth's limiter runs
+ * only in its HTTP router, and these actions call its API directly. THE DEFERRAL COVERS FIVE
+ * ACTIONS, not the two here: story 1.4 slice 4 added `requestReset` and `submitReset`, which are
+ * unauthenticated by definition — one triggers mail to an address the caller names, the other
+ * guesses a token — so they are the ones the Epic 8 throttle matters most for.
  */
 
 

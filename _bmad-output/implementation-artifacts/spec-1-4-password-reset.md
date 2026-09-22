@@ -532,28 +532,45 @@ because applying it is what proved the diagnosis.
 
 - [x] [Review][Patch] `next build` failed without any environment, contradicting the composition root's stated invariant [apps/web/src/app/layout.tsx]
 
-- [ ] [Review][Patch] Add `pnpm --filter @momo/web build` to CI — the gate that would have caught the above, and which now passes with no secrets [.github/workflows/ci.yml]
-- [ ] [Review][Patch] `/reset-password` with no token renders a form that can never succeed, and submitting it returns to the same empty form [apps/web/src/app/reset-password/page.tsx:37]
-- [ ] [Review][Patch] The reset refusal blames the link when the password was merely too short, and nothing states the 8-character minimum [apps/web/src/app/reset-password/{page.tsx:33,reset-password-form.tsx}]
-- [ ] [Review][Patch] Neither auth action absorbs a non-`APIError`, so a failure is a 500 instead of the one generic answer — and on forgot-password that asymmetry is an account-existence oracle, since only the known-email branch reaches the failing query [apps/web/src/app/{forgot-password,reset-password}/actions.ts]
-- [ ] [Review][Patch] A rejected `signInState()` takes down every page including `/sign-in`, leaving no way back in [apps/web/src/app/layout.tsx:18]
-- [ ] [Review][Patch] The matcher's asset entries are unanchored and its dot unescaped, so `/faviconXico`, `/_next/staticfoo` and `/_next/imagefoo` skip the gate; the complement test hides it by omitting asset paths from its table [apps/web/src/middleware.ts:20, session-gate.test.ts]
-- [ ] [Review][Patch] `handleAuthRequest` and the `signOut` binding are exercised by no test, so either can be pointed at the wrong instance or dropped with the suite green [tests/web-composition.test.ts, apps/web/src/app/sign-in/actions.test.ts]
-- [ ] [Review][Patch] "It expires in 1 hour" is hardcoded on the page, the third restatement the slice-4 patch was supposed to end [apps/web/src/app/forgot-password/page.tsx:34]
-- [ ] [Review][Patch] `google-refusal.ts` carries two stacked block comments, the first documenting the function below the second — introduced by the slice-4 review's own patch [apps/web/src/app/sign-in/google-refusal.ts:1]
-- [ ] [Review][Patch] `forgot-password/actions.test.ts`'s header and case name claim a boundary stricter than the code has, which the action's own comment was already corrected to admit [apps/web/src/app/forgot-password/actions.test.ts:5]
-- [ ] [Review][Patch] `roleLabel` renders an empty chip for an empty `roles` array [apps/web/src/app/p/[projectId]/layout.tsx:44]
-- [ ] [Review][Patch] The route handler's comment names three served endpoints and omits `GET /callback/google` [apps/web/src/app/api/auth/[...all]/route.ts:3]
-- [ ] [Review][Patch] The sign-out control is the first focusable element on every signed-in page — a destructive action as the default tab target [apps/web/src/app/layout.tsx:31]
-- [ ] [Review][Patch] The deferred-throttle note names only sign-in, though slice 4 added two more unauthenticated actions calling the API directly [apps/web/src/app/sign-in/actions.ts:8]
-- [ ] [Review][Patch] The `onNoAccess` log appends "no tenant switcher yet", which is false for the `no_membership` reason [apps/web/src/server/composition.ts]
-- [ ] [Review][Patch] A signed-out non-GET request is redirected with 307, which re-POSTs the action body to `/sign-in` [apps/web/src/server/session-gate.ts:52]
+- [x] [Review][Patch] Add `pnpm --filter @momo/web build` to CI — the gate that would have caught the above, and which now passes with no secrets [.github/workflows/ci.yml]
+- [x] [Review][Patch] `/reset-password` with no token renders a form that can never succeed, and submitting it returns to the same empty form [apps/web/src/app/reset-password/page.tsx:37]
+- [x] [Review][Patch] The reset refusal blames the link when the password was merely too short, and nothing states the 8-character minimum [apps/web/src/app/reset-password/{page.tsx:33,reset-password-form.tsx}]
+- [x] [Review][Patch] Neither auth action absorbs a non-`APIError`, so a failure is a 500 instead of the one generic answer — and on forgot-password that asymmetry is an account-existence oracle, since only the known-email branch reaches the failing query [apps/web/src/app/{forgot-password,reset-password}/actions.ts]
+- [x] [Review][Patch] A rejected `signInState()` takes down every page including `/sign-in`, leaving no way back in [apps/web/src/app/layout.tsx:18]
+- [x] [Review][Patch] The matcher's asset entries are unanchored and its dot unescaped, so `/faviconXico`, `/_next/staticfoo` and `/_next/imagefoo` skip the gate; the complement test hides it by omitting asset paths from its table [apps/web/src/middleware.ts:20, session-gate.test.ts]
+- [x] [Review][Patch] `handleAuthRequest` and the `signOut` binding are exercised by no test, so either can be pointed at the wrong instance or dropped with the suite green [tests/web-composition.test.ts, apps/web/src/app/sign-in/actions.test.ts]
+- [x] [Review][Patch] "It expires in 1 hour" is hardcoded on the page, the third restatement the slice-4 patch was supposed to end [apps/web/src/app/forgot-password/page.tsx:34]
+- [x] [Review][Patch] `google-refusal.ts` carries two stacked block comments, the first documenting the function below the second — introduced by the slice-4 review's own patch [apps/web/src/app/sign-in/google-refusal.ts:1]
+- [x] [Review][Patch] `forgot-password/actions.test.ts`'s header and case name claim a boundary stricter than the code has, which the action's own comment was already corrected to admit [apps/web/src/app/forgot-password/actions.test.ts:5]
+- [x] [Review][Patch] `roleLabel` renders an empty chip for an empty `roles` array [apps/web/src/app/p/[projectId]/layout.tsx:44]
+- [x] [Review][Patch] The route handler's comment names three served endpoints and omits `GET /callback/google` [apps/web/src/app/api/auth/[...all]/route.ts:3]
+- [x] [Review][Patch] The sign-out control is the first focusable element on every signed-in page — a destructive action as the default tab target [apps/web/src/app/layout.tsx:31]
+- [x] [Review][Patch] The deferred-throttle note names only sign-in, though slice 4 added two more unauthenticated actions calling the API directly [apps/web/src/app/sign-in/actions.ts:8]
+- [x] [Review][Patch] The `onNoAccess` log appends "no tenant switcher yet", which is false for the `no_membership` reason [apps/web/src/server/composition.ts]
+- [x] [Review][Patch] A signed-out non-GET request is redirected with 307, which re-POSTs the action body to `/sign-in` [apps/web/src/server/session-gate.ts:52]
 
 - [x] [Review][Defer] No test renders any of the four auth pages, so the generic-copy guarantee, the Google button's gating, the sign-out control's visibility and `roleLabel` are all unasserted — deferred: the repo has no component-render harness at all (no jsdom, no testing library, environment `node`), and introducing one belongs with the story that first needs it.
 - [x] [Review][Defer] Form errors are not associated with their fields (no `aria-describedby`, no `aria-invalid`) while all three forms carry `noValidate` — deferred: WCAG 2.1 AA is an epic-wide requirement and the aria wiring spans three forms; it belongs with the UX pass, not a password-reset slice.
 - [x] [Review][Defer] `--signout-gutter: 104px` hard-codes the rendered width of a fixed-position control, costing every viewport that width — deferred: a structural fix (flex spacer, or a non-fixed control) is layout work.
 - [x] [Review][Defer] Four mechanical repetitions the diff introduces: the `ctx ?? await requestContext()` line in ~20 bindings, `tokenOf` vs `isGoogleRefusal` both hand-rolling the searchParams read, three near-identical submit buttons, and the copy-pasted auth-sheet header — deferred: a refactor, and `tokenOf`/`isGoogleRefusal` also disagree on repeated keys (first value vs any value), which a shared helper must settle deliberately.
 - [x] [Review][Defer] `/` still redirects to the hard-coded demo project, so a signed-in member of another Tenant lands on `not_found` — deferred: already recorded from slice 1; carried, no second entry. Noted that slices 2–4 have since made non-demo members reachable, so the original deferral's premise is weaker.
+
+#### Second-pass status
+
+All sixteen patches applied and verified: lint, three typechecks and depcruise clean; **769 tests
+across 42 files** green against Postgres, up from 765; and `next build` clean from an empty
+`.next` with all five environment keys unset — the invariant this pass found broken.
+
+Two of the patches had to be reshaped once they met the toolchain, both recorded here rather than
+quietly: exporting the reset-link hours from `page.tsx` is refused by Next, which allows a page
+module only its own reserved exports, so the constant moved to `reset-link-hours.ts` beside
+`google-refusal.ts`; and asserting the auth route module's method exports from a root-level test
+pulls that module into the root tsconfig's program, which carries no `@/*` alias, so that half was
+dropped with a comment saying why. The half that fails silently in production — which instance
+`handleAuthRequest` serves — is covered.
+
+Groups C (`packages/app`, 2,208 lines), E (`tests`, 3,839) and F (fences and tooling, 205) remain.
+Story 1.4 stays at `review`.
 
 #### Rejected
 

@@ -223,7 +223,11 @@ function resolverDeps() {
       // The reason is logged, never shown: the page says "no access" and nothing else.
       console.warn(
         `[auth] no access for user ${event.userId}: ${event.reason} ` +
-          `(${event.memberships} memberships, no active Tenant, no tenant switcher yet)`,
+          // Derived, not asserted: the switcher is only what `several_memberships` is waiting for,
+          // and saying so on a `no_membership` line described a cause that was not the one.
+          (event.reason === 'several_memberships'
+            ? `(${event.memberships} memberships, no active Tenant chosen — no tenant switcher yet)`
+            : `(no membership in any Tenant)`),
       );
     },
   } satisfies ResolveRequestContextDeps<Headers, Db>;

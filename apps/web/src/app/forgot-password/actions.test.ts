@@ -2,9 +2,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * The forgot-password server action (story 1.4 slice 4), with the composition root mocked: the
- * email is lowercased and trimmed BEFORE the binding sees it, and every outcome — a well-formed
- * email whatever the binding does with it, and a malformed one that never reaches the binding at
- * all — redirects to the same `?sent=1` (NFR-S5's one generic answer).
+ * email is lowercased and trimmed BEFORE the binding sees it, and every outcome redirects to the
+ * same `?sent=1` (NFR-S5's one generic answer).
+ *
+ * The schema has NO `.email()`, so "malformed" below means EMPTY — a blank field, whitespace, a
+ * missing key. A non-empty non-address such as `hoang` is forwarded to the binding and refused
+ * downstream, inside Better Auth; the action's own comment says so, and this header used to claim
+ * the opposite.
  */
 const requestPasswordReset = vi.hoisted(() => vi.fn(async (_email: string) => {}));
 
@@ -48,7 +52,7 @@ describe('the forgot-password action', () => {
     expect(requestPasswordReset).toHaveBeenCalledWith('nobody@example.test');
   });
 
-  it('reaches the same outcome for a malformed submission too, without calling the binding', async () => {
+  it('reaches the same outcome for an empty submission, which never reaches the binding', async () => {
     for (const fields of [{ email: '' }, { email: '   ' }, {}] as Record<string, string>[]) {
       requestPasswordReset.mockClear();
       expect(await redirectedTo(() => requestReset(form(fields)))).toBe('/forgot-password?sent=1');

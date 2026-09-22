@@ -27,7 +27,11 @@ export const dynamic = 'force-dynamic';
  * `cache()`, so the request still resolves once.
  */
 export default async function RootLayout({ children }: { children: ReactNode }) {
-  const signedIn = (await signInState()) !== 'signed_out';
+  // A rejected read must not take the app down. This layout wraps `/sign-in` too, so letting the
+  // rejection through would 500 the one page that could get the user back in — a session store
+  // that blinks would lock everybody out rather than sign them out. The control simply does not
+  // render; the middleware and `requestContext()` remain the authority on who is signed in.
+  const signedIn = await signInState().then((state) => state !== 'signed_out', () => false);
 
   return (
     <html lang="en">
@@ -40,8 +44,11 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
         />
       </head>
       <body>
-        {signedIn ? <SignOut /> : null}
         {children}
+        {/* AFTER the content in DOM order, though `position: fixed` puts it top-right either way.
+            Rendered first it was the first focusable element on every signed-in page, so a
+            keyboard or screen-reader user met a destructive action before any content. */}
+        {signedIn ? <SignOut /> : null}
       </body>
     </html>
   );

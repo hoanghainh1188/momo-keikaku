@@ -48,9 +48,11 @@ export function sessionGate(check: SessionCheck): (request: NextRequest) => Prom
     if (isPublicPath(request.nextUrl.pathname)) return NextResponse.next();
 
     const session = await check(request.headers);
+    // 303 for anything but GET. A 307 preserves the method and the body, so a signed-out server
+    // action — which is a POST — would be re-sent to `/sign-in` rather than navigating there.
     const response = session.signedIn
       ? NextResponse.next()
-      : NextResponse.redirect(new URL('/sign-in', request.url));
+      : NextResponse.redirect(new URL('/sign-in', request.url), request.method === 'GET' ? 307 : 303);
     for (const cookie of session.setCookies) response.headers.append('set-cookie', cookie);
     return response;
   };

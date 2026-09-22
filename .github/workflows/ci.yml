@@ -337,6 +337,20 @@ jobs:
           pnpm db:policies
           pnpm seed
 
+      # THE GATE THAT TYPECHECKING IS NOT. `tsc` reads neither `next.config.ts` nor
+      # `apps/web/package.json`, so `transpilePackages`, the app's own dependencies and the
+      # Node-runtime middleware were all unverified — drop `@momo/db-auth` from any of them and
+      # every other step here stays green while the app does not start. Added after a review pass
+      # ran this by hand and found `next build` failing on `/_not-found`: the root layout reached
+      # the composition root's configuration getters before Next could bail the page out to
+      # dynamic, which made the composition root's "importing it reads no configuration" promise
+      # false. This step inherits the job's `env`, so it does NOT check that promise — a build
+      # needing configuration would still pass here. What it does check is the wiring: that the
+      # app resolves, transpiles and server-bundles its workspace packages at all.
+      - name: Build (apps/web)
+        if: always()
+        run: pnpm --filter @momo/web build
+
       # `always()` throughout so one failure does not hide the others. Every signal
       # lands on the same run.
       - name: Tests

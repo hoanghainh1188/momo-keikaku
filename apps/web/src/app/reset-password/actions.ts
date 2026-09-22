@@ -34,7 +34,13 @@ export async function submitReset(formData: FormData): Promise<void> {
   const password = passwordField.safeParse(formData.get('password'));
   if (!password.success) redirect(refusalUrl(token));
 
-  const ok = await resetPasswordBinding({ token, password: password.data });
+  // `.catch` for the same reason the request side has one: the binding absorbs an `APIError` and
+  // rethrows anything else, and a 500 is a distinguishable outcome where the page promises one.
+  // `redirect` throws its own control-flow error, so it must stay outside this.
+  const ok = await resetPasswordBinding({ token, password: password.data }).catch((error: unknown) => {
+    console.warn(`[auth] password reset failed: ${error instanceof Error ? error.name : 'unknown error'}`);
+    return false;
+  });
   if (!ok) redirect(refusalUrl(token));
   redirect('/sign-in');
 }
