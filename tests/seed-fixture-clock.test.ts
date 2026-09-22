@@ -104,7 +104,8 @@ describe.skipIf(!reachable)('seed under fixture Clock (story 1.8 matrix)', () =>
     );
     expect(rates.length).toBeGreaterThan(0);
     for (const row of rates) {
-      expect(row.effectiveFrom).toBe('2027-03-01');
+      // Rate effectiveFrom stays the fixture origin; Clock stamps demo_anchor / Baseline / audit.
+      expect(row.effectiveFrom).toBe('2026-01-01');
     }
 
     const [projectDefault] = await withTenant(owner(), PROBE.tenantId, (tx) =>
@@ -113,7 +114,7 @@ describe.skipIf(!reachable)('seed under fixture Clock (story 1.8 matrix)', () =>
         .from(schema.projectDefaultRateEntry)
         .where(eq(schema.projectDefaultRateEntry.projectId, PROBE.projectId)),
     );
-    expect(projectDefault?.effectiveFrom).toBe('2027-03-01');
+    expect(projectDefault?.effectiveFrom).toBe('2026-01-01');
   }, 120_000);
 });
 

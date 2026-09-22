@@ -193,7 +193,10 @@ export async function writeTenantRows(
   /** Every id and literal this function invents, rather than reads out of `state`. */
   const own = (value: string) => `${options.idPrefix}${value}`;
   const stamp = options.clock?.now() ?? new Date(state.anchor);
-  const rateFrom = options.clock ? isoDateUtc(stamp) : '2026-01-01';
+  // Rate `effectiveFrom` must cover the whole fixture timeline (domain rates use
+  // `2026-01-01`). Stamping it from the Clock made seeded Rates start at the fixture
+  // "now" and broke Review numbers vs probes / the golden corpus (story 1.8 CI).
+  const rateFrom = '2026-01-01';
   const projectOnly = options.projectOnly === true;
 
   if (!projectOnly) {
