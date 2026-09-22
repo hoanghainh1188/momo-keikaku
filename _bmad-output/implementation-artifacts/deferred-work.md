@@ -732,3 +732,25 @@ work started and was deliberately deferred, with the evidence for the split.
   request/response cycle or a browser's form submission.
   evidence: CI never runs `next build`; the spec says the two pages are "confirmed here or not at
   all" (the manual check). Owed before story 1.4's whole-story review closes it out.
+
+## Deferred from: review of spec-1-4-password-reset (2026-09-22)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-password-reset.md`
+  summary: `sendResetPassword`'s early return for a user with no credential account may be a response-timing oracle once `mailer-ses` lands.
+  evidence: Edge-case and blind layers, graded `maybe-false` at triage. A user with no credential account skips the transport entirely; a credential user awaits it inline. With `mailer-console` the difference is noise. What would settle it: measuring request duration against a real SES call, both branches, on the same unthrottled and enumerable endpoint the deferred sign-in throttle already covers. If measurable, it belongs with that throttle in Epic 8 — send on a queue, or pad both branches.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-password-reset.md`
+  summary: `tests/password-reset.test.ts`'s consume matrix is order-dependent shared state — each case mutates the same user's password and the next assumes the previous value.
+  evidence: Blind layer, graded `low` and rejected at triage because a developer meets it only when isolating a case with `.only`, and the fix is a restructure rather than a direct correction. Real nonetheless: the first case also asserts exactly one `identity_event` for that user, so any reordering breaks the suite for reasons unrelated to the code. Fix by carrying the current password in a variable, or by giving each case its own user.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-password-reset.md`
+  summary: `identity_event.action` is a closed list in TypeScript only — the column is `text` with no `pgEnum` and no CHECK constraint.
+  evidence: Blind layer, graded `low` and rejected at triage because the fix is a migration plus regenerated SQL. `repo-identity-event.ts` states the column does not accept an arbitrary string; that holds only for callers going through its one writer, which `source-discipline.test.ts` fences. Worth closing when the next story adds a second action to the list, since that is when the enum has more than one member to name.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-password-reset.md`
+  summary: The app role holds an unused `SELECT` on `identity_event`, and every row's `payload` is null, so an operator investigating a takeover learns only "user X reset at T".
+  evidence: Blind layer, graded `low` and rejected at triage: `['SELECT', 'INSERT']` is what the approved Code Map specifies, and no application code reads the table today (only the owner role does, in tests). Both are decisions for whoever first reads the table — story 1.7's audit-log reader is the natural owner. Tightening to `['INSERT']` and choosing forensic fields (request ip, user agent) belong together, not piecemeal.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-password-reset.md`
+  summary: An oversized hidden token field may break the refusal redirect rather than landing on the generic refusal.
+  evidence: Edge-case layer, graded `low` and `maybe-false` at triage, then rejected per the rule for a `maybe-false` that would only be `low`. The claim is that an arbitrarily long token yields a `Location` header Next.js refuses to set; nothing in the diff or the surrounding code settles what happens at that size. What would settle it: posting the reset form with a multi-kilobyte token against `next dev` and watching whether the redirect lands or throws.

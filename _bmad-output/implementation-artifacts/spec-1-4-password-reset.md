@@ -219,8 +219,178 @@ exists. Two new public pages request a link and consume it, both through server 
   (`@better-auth/core`'s `init-options`; read at `password.mjs:171`), so the line is an override,
   not a restatement. Rewritten to separate the two, because the comment as written invited a
   future reader to delete a line that silently keeps an attacker's session alive through a reset.
+- 2026-09-22 — a THIRD acceptance-criteria sabotage is false, found by two review layers
+  independently and verified in the library: "the boundary's lowercasing removed (`Hoang@…` finds
+  nobody)". Better Auth lowercases the address inside `findUserByEmail`
+  (`internal-adapter.mjs:572`), and this change's own integration test hands the binding
+  `ADMIN.email.toUpperCase()` and still expects one mail. Removing `.toLowerCase()` from the action
+  therefore changes no behaviour; only `trim()` is load-bearing, and the sole guard that fires is a
+  call-shape assertion in `forgot-password/actions.test.ts`. The criterion is not rewritten here —
+  a finding whose fix is to edit this build's spec is rejected by rule — but it is recorded so the
+  claim is not read as fact, and `HANDOFF.md`, which is not spec text, is corrected.
+- 2026-09-22 — a FOURTH sabotage, "the generic sentence replaced by a distinguishable one", is
+  asserted by nothing: both routes have only an `actions.test.ts` pinning redirect targets, and no
+  test renders either page or reads its copy. Recorded rather than patched, because a page-render
+  test is the same deferred work as the missing browser pass. Of the six sabotages this spec
+  claimed, three are real pass→fail transitions and were each watched to fail; three were written
+  against a wrong model of the code.
 
 ## Review Triage Log
+
+Three layers ran against the diff since the baseline: blind hunter (16 findings), edge-case hunter
+(12) and verification gap (2 gaps + 2 other). Severities below are this triage's, not the
+reviewers' — each claim was checked at its cited location first.
+
+**`onPasswordReset` cannot fail safely** — `high`. Verified in the library, not inferred:
+`password.mjs:170-171` awaits `onPasswordReset` and only then runs `deleteUserSessions`. The hook
+(`auth.ts:205-213`) has no `try`/`catch`, so a failed `markEmailVerified` or `identityEvents.record`
+leaves the password already replaced and the token already spent, skips session revocation entirely
+— defeating the pinned `revokeSessionsOnPasswordReset: true` — and, being no `APIError`, is
+rethrown by `bindings.ts:167` and escapes the server action as a 500 instead of the one generic
+refusal. The likeliest trigger is real: code deployed before `db:policies` applies the new
+`identity_event` grant. Route: patch.
+
+**The two writes inside `onPasswordReset` are separate transactions** — `medium`. Confirmed:
+`markEmailVerified` and `record` each open their own `db.transaction`. A failure between them sets
+`email_verified` with no event recording why, and the table is insert-only so the gap can never be
+corrected. Same root cause as the row above; fixed with it. Route: patch.
+
+**The binding rethrows a non-`APIError`, so both actions can 500** — `medium`. Same root cause as
+the first row and resolved by it: once the hook cannot throw, the rethrow path is unreachable for
+this flow. Route: patch.
+
+**The mailer-failure log prints `error.message` raw** — `medium`. Confirmed at `auth.ts:194-196`.
+The spec, the code comment and the test all promise the address never reaches a log, but the test
+only proves it for a fake throwing `'mailer transport is down'` — it holds by fixture, not by
+construction. A real transport routinely names the rejected recipient (SES `Invalid destination:
+…`, SMTP 550). Latent today, live the day `mailer-ses` lands. Route: patch.
+
+**A second outstanding reset link outlives a completed reset** — `medium`. Verified in the library:
+the verification identifier is `reset-password:<token>`, unique per token, and
+`consumeVerificationValue`'s `deleteMany` is scoped to that one identifier
+(`internal-adapter.mjs:840-846`). Request a reset twice, use the second link, and the first still
+works for the rest of its hour — so a user resetting precisely to lock someone out does not. Graded
+on harm rather than likelihood, per "when the harm is real but you cannot tell how bad, pick the
+higher grade". The fix is a single scoped delete on a table the app role already holds DELETE on,
+riding inside the `try`/`catch` the row above adds, which is what keeps it a patch rather than an
+intent gap. Route: patch.
+
+**`MAILER=ses` is documented wrongly and pinned by nothing** — `medium`. Two verified halves.
+(1) `composition.ts:147-148` says a misconfigured deployment "finds out at boot" and
+`README-DEMO.md:38` says "the web app fails to start"; neither is true — `webMailer()` runs inside
+`baseAuthOptions()`, reached only when an instance is first built. Because `sessionAuth()` shares
+that value, the first request through the middleware throws and every route including `/sign-in`
+500s, which is loud but is not "fails to start". (2) No test sets `MAILER=ses`:
+`config.test.ts:142-155` only proves `parseConfig` accepts it, and `web-composition.test.ts` never
+stubs the key, so replacing the throw with a silent console fallback keeps CI green while a
+production deployment writes every live reset link to its logs. Route: patch.
+
+**The `requestPasswordReset` binding's refusal branch is run by no test, and the form reaches it** —
+`medium`, filed pre-verified by the verification-gap layer, which demonstrated it empirically. The
+action's zod has no `.email()` and the form carries `noValidate`, so `hoang` reaches Better Auth,
+which refuses it with `VALIDATION_ERROR` before any database access. Delete the `try`/`catch` and
+the suite stays green while a mistyped address becomes an error page. Route: patch.
+
+**`auth.test.ts`'s exact pin on `emailAndPassword` was weakened** — `medium`. Confirmed: `:38` is
+now `toMatchObject`, which no longer catches an *added* key — exactly what the pin existed to catch,
+and exactly how a future `requireEmailVerification: false` would slip in. `:209-210` then re-assert
+two keys the same `toMatchObject` already covers, so the file grew while the guarantee shrank.
+Route: patch.
+
+**`/reset-password` tells the user to request a new link and offers none** — `medium`. Confirmed:
+the file imports no `Link` and contains no `href`, while `/forgot-password` carries "Back to sign
+in". A signed-out visitor holding a spent or expired token is left with no way forward. Route: patch.
+
+**The one-hour lifetime is restated in three places with nothing tying them together** — `medium`.
+Confirmed: `resetPasswordTokenExpiresIn: 3600`, the mail body's "expires in 1 hour", and the page
+copy's "It expires in 1 hour", plus a test asserting the literal string. Changing the option turns
+the other two into lies with every gate still green. Route: patch (derive the copy from the same
+constant inside `packages/db/auth`, where both already live — no new cross-package surface).
+
+**The console mailer's own format is pinned by nothing, and a spy is dead** — `low`. Confirmed:
+`mailer-console.test.ts:17` asserts `consoleMailLine(...)` against itself, and no test names the
+`--- mail (console) ---` delimiters that `README-DEMO.md` tells demo users to look for;
+`tests/web-composition.test.ts:135,189` declares and fills `spies.mailLines` and never asserts it.
+Kept despite `low` because both fixes are a direct addition and a direct deletion. Route: patch.
+
+**Two comments describe boundaries stricter than the code** — `low`. Confirmed:
+`forgot-password/actions.ts:20-24` says only a submission with no usable email is refused before the
+binding, but without `.email()` a non-empty non-address is forwarded and refused downstream; and
+`globals.css`'s new block describes an "updated" message that exists nowhere in the change. Both
+fixes are direct corrections, so the `low` rejection rule does not apply. Route: patch.
+
+**`HANDOFF.md` records the lowercasing sabotage as caught** — `medium`. Verified in the library:
+`findUserByEmail` lowercases the address itself (`internal-adapter.mjs:572`), and the change's own
+integration test hands the binding `ADMIN.email.toUpperCase()` and still expects one mail. So
+removing `.toLowerCase()` at the boundary changes no behaviour; only `trim()` is load-bearing, and
+the only guard that fires is a call-shape assertion. The next session reads `HANDOFF.md` as fact,
+so the false claim is corrected there. Route: patch. The same correction is owed to this spec's
+acceptance criteria, but a finding whose fix is to edit this build's spec is rejected by rule — it
+is recorded in the Spec Change Log instead, as the two earlier mis-modelled sabotages were.
+
+**The "generic sentence replaced by a distinguishable one" sabotage has no test** — `medium`.
+Confirmed: only `actions.test.ts` exists for both routes and it pins redirect targets; no test
+renders either page or asserts its copy. Recorded here and in the Spec Change Log rather than
+patched: a page-render test is the same deferred work as the missing browser pass, and the
+acceptance criterion is spec text this rule forbids patching.
+
+**The consume matrix is order-dependent shared state** — `low`. Confirmed: each `it` mutates
+`RESETTER`'s password and the next assumes the previous value, and the first asserts exactly one
+`identity_event`. Running one case with `.only` breaks them for reasons unrelated to the code.
+Rejected: a developer meets this only when isolating a case, and the fix is a restructure rather
+than a direct correction. Recorded in `deferred-work.md`.
+
+**`identity_event.action` is a closed list only in TypeScript** — `low`. Confirmed:
+`schema.ts:171` is `text('action').notNull()` with no `pgEnum` and no CHECK, while
+`repo-identity-event.ts` claims the column does not accept an arbitrary string. The claim holds for
+callers going through the one writer, which `source-discipline.test.ts` fences. Rejected: the fix
+is a migration plus regenerated SQL, well past a direct correction. Recorded in `deferred-work.md`.
+
+**The app role's unused `SELECT` on `identity_event`, and the always-null payload** — `low`.
+Confirmed: no application code reads the table, and the only caller writes `payload: null`, so an
+operator learns only "user X reset at T". Rejected: `['SELECT', 'INSERT']` is what the approved
+Code Map specifies, and forensic fields are a design decision for whoever first reads the table.
+Recorded in `deferred-work.md`.
+
+**`sendResetPassword`'s early return is a response-timing oracle** — `maybe-false`. A user with no
+credential account skips the transport entirely while a credential user awaits it inline. With
+`mailer-console` the difference is noise; whether it is measurable through a real SES call on this
+unthrottled endpoint is exactly what is not established. Would be `medium` if true. Route: defer,
+with what would settle it.
+
+**An oversized hidden token could break the refusal redirect** — `low`, `maybe-false`. The claim is
+that an arbitrarily long token yields a `Location` header that throws instead of redirecting;
+nothing in the diff or the surrounding code settles what Next.js does at that size. Rejected per the
+rule for a `maybe-false` that would only be `low`, with the note recorded.
+
+**A Google-only user still gets a `verification` row** — `low`. Confirmed: Better Auth creates the
+row before `sendResetPassword` runs, and the credential gate is inside that callback. The token is
+never disclosed to anyone, so nothing can consume it and it expires. Rejected: unreachable in
+practice, and gating the consume side too would add a second lookup guarding a state never shown
+reachable.
+
+**`?sent=1` replaces the form, so a mistyped address has no retry** — `low`. Confirmed: the page
+renders the hint and form or the confirmation, never both. Rejected as a UX preference the spec does
+not settle; it costs a visitor one trip back to `/sign-in` and discloses nothing either way.
+
+**A successful reset gives no confirmation** — `low`. Confirmed: `submitReset` redirects to a bare
+`/sign-in`. Rejected on the same ground; the `globals.css` half of this finding (a comment naming a
+message that does not exist) is patched above.
+
+**The composition root discards the request binding's boolean** — `false`. The binding already logs
+its own refusal with status and code, and `requestPasswordReset` is declared `Promise<void>`
+deliberately, because every outcome must look the same to the caller (NFR-S5). There is no bad
+outcome at the cited location: nothing downstream needs a distinction it is forbidden to draw.
+
+**`identity_event.user_id` carries no foreign key** — `false`. Raised by this triage, not by a
+layer, against the Code Map's "`user_id` → `auth_user`". Checked and disproved: `schema.ts` contains
+no `references()` at all, and `session.userId` and `account.userId` are declared exactly the same
+way. The new table follows the house convention rather than deviating from it.
+
+**AC1 is not proven end to end** — `medium`, already deferred. Confirmed: the suite drives a
+capturing fake rather than `mailerConsoleOn`, `web-composition.test.ts` mocks that adapter away, and
+no browser exists in the sandbox. Route: defer — already recorded in `deferred-work.md` by the
+implementation; no second entry added.
 
 ## Design Notes
 
