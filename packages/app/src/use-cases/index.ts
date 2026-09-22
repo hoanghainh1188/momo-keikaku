@@ -40,3 +40,4 @@ export {
   appendResourceRate,
   createResource,
 } from './resource-writes';
+export { listAuditLog } from './list-audit-log';

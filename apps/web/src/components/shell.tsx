@@ -3,6 +3,10 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState, type ReactNode } from 'react';
+import { formatUserChip } from '@/lib/user-chip';
+import { UserChip } from './user-chip-menu';
+
+export { UserChip } from './user-chip-menu';
 
 const SURFACES = [
   { slug: 'review', label: 'Review', glyph: '≡', title: 'Reconciliation Review' },
@@ -20,6 +24,13 @@ export interface ShellProps {
   snapshotAgeMinutes: number;
   /** The signed-in user's role in this Tenant, as a label (story 1.4: no longer a constant). */
   roleLabel: string;
+  /**
+   * Name (preferred) or email for the top-bar chip (story 1.7). When absent, the chip shows
+   * the role alone — the lookup returned nothing.
+   */
+  userLabel?: string;
+  /** When true, the user menu offers the Audit log (Tenant Admin only). */
+  showAuditLog?: boolean;
   children: ReactNode;
 }
 
@@ -30,11 +41,14 @@ export function Shell({
   snapshotLabel,
   snapshotAgeMinutes,
   roleLabel,
+  userLabel,
+  showAuditLog = false,
   children,
 }: ShellProps) {
   const [collapsed, setCollapsed] = useState(false);
   const pathname = usePathname();
   const stale = snapshotAgeMinutes > 24 * 60;
+  const chipText = formatUserChip(userLabel, roleLabel);
 
   return (
     <div className="app">
@@ -56,7 +70,7 @@ export function Shell({
             Snapshot {snapshotLabel} · {formatAge(snapshotAgeMinutes)}
           </span>
         </div>
-        <div className="userchip">{roleLabel}</div>
+        <UserChip label={chipText} showAuditLog={showAuditLog} />
       </header>
 
       <nav className={`sidebar${collapsed ? ' collapsed' : ''}`} aria-label="Project surfaces">

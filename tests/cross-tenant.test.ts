@@ -2,7 +2,6 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { sql } from 'drizzle-orm';
 import { hours, present, stringify } from '@momo/domain';
-import type { ProjectReadDeps } from '../packages/app/src/ports/project-read';
 import type { AppError } from '../packages/app/src/result';
 import { getProjectReview } from '../packages/app/src/use-cases';
 import { closeAllPools, getDb, getPool, schema, type Db } from '../packages/db/src/client';
@@ -13,12 +12,15 @@ import {
   loadProjectBundle,
   loadReview,
 } from '../packages/db/src/repo';
+import { listAuditLog } from '../packages/db/src/repo-audit';
+import { lookupUserOn } from '../packages/db/auth/src/identity';
 import {
   READ_SURFACE_MODULE,
   READ_USE_CASES,
   REGISTRY_MODULE,
   UNREACHED_TENANT_OWNED_TABLES,
   readSurfaceFunctionNames,
+  type HarnessReadDeps,
   type ReadUseCase,
   type UseCaseTarget,
 } from './read-use-cases';
@@ -482,11 +484,13 @@ function owner(): Db {
  * the RESTRICTED role's logging handle. The `satisfies` is the same structural check the web
  * app's composition root makes — this file is a composition root too.
  */
-function restrictedDeps() {
+function restrictedDeps(): HarnessReadDeps {
   return {
     handle: restricted!,
     projectRead: { loadProjectBundle, loadReview },
-  } satisfies ProjectReadDeps<Db>;
+    auditLogRead: { list: listAuditLog },
+    lookupUser: (userId) => lookupUserOn(restricted!, userId),
+  } satisfies HarnessReadDeps;
 }
 
 /**
@@ -875,22 +879,38 @@ describe.skipIf(!reachable)('the cross-tenant harness, driven against two probe 
         // throw, which the page would render as a crash, and never an `ok` carrying a default,
         // which would render as a Project with no data. `not_found` rather than any code that
         // says "it exists, but not for you", so existence is not disclosed.
+        //
+        // Tenant-wide reads (story 1.7's audit log) ignore projectId: they return the caller's
+        // own Tenant's rows (`crossTenant: 'own-tenant-ok'`) and must still carry nothing of A.
         const { cross } = got();
-        expect(
-          cross.error,
-          `${entry.name} THREW when probe Tenant B asked for A's Project id, instead of ` +
-            `answering not_found: ${String((cross.error as Error | undefined)?.message ?? cross.error)}`,
-        ).toBeUndefined();
-        expect(
-          cross.refused?.code,
-          `${entry.name} did not answer not_found when probe Tenant B asked for A's Project id` +
-            (cross.refused
-              ? ` — it answered ${cross.refused.code}`
-              : ' — it answered ok, so it turned an invisible Project into a value'),
-        ).toBe('not_found');
+        if (entry.crossTenant === 'own-tenant-ok') {
+          expect(
+            cross.error,
+            `${entry.name} THREW on the cross-Tenant probe: ${String((cross.error as Error | undefined)?.message ?? cross.error)}`,
+          ).toBeUndefined();
+          expect(
+            cross.refused,
+            `${entry.name} refused the cross-Tenant probe — tenant-wide reads answer the ` +
+              `caller's own Tenant, not not_found: ${cross.refused?.code ?? 'ok'}`,
+          ).toBeUndefined();
+          expect(cross.value, `${entry.name} returned no value on the cross-Tenant probe`).toBeDefined();
+        } else {
+          expect(
+            cross.error,
+            `${entry.name} THREW when probe Tenant B asked for A's Project id, instead of ` +
+              `answering not_found: ${String((cross.error as Error | undefined)?.message ?? cross.error)}`,
+          ).toBeUndefined();
+          expect(
+            cross.refused?.code,
+            `${entry.name} did not answer not_found when probe Tenant B asked for A's Project id` +
+              (cross.refused
+                ? ` — it answered ${cross.refused.code}`
+                : ' — it answered ok, so it turned an invisible Project into a value'),
+          ).toBe('not_found');
+        }
 
-        // And the refusal itself carries nothing of A. The whole outcome is walked, error arm
-        // included, so a use case that put the foreign row into `details` fails here.
+        // And the refusal / own-Tenant result itself carries nothing of A. The whole outcome is
+        // walked, error arm included, so a use case that put the foreign row into `details` fails.
         const leaked = foreignStringsIn({ value: cross.value, refused: cross.refused }, PROBE_A.token);
         expect(
           leaked,

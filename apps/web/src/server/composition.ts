@@ -64,6 +64,7 @@ import {
   getProjectHeader as getProjectHeaderUseCase,
   getProjectMapping as getProjectMappingUseCase,
   getProjectReview as getProjectReviewUseCase,
+  listAuditLog as listAuditLogUseCase,
   mapTicket as mapTicketUseCase,
   mapTickets as mapTicketsUseCase,
   markChangeRequestCandidates as markChangeRequestCandidatesUseCase,
@@ -87,11 +88,14 @@ import {
   type CreateResourceInput,
   type ExplainTicketsInput,
   type IdentityPort,
+  type IdentityUser,
+  type ListAuditLogInput,
   type MailerPort,
   type MapTicketInput,
   type MapTicketsInput,
   type MembershipReader,
   type PlanTicketsInput,
+  type AuditLogReadDeps,
   type ProjectInput,
   type ProjectReadDeps,
   type ReassignProjectDepartmentInput,
@@ -111,6 +115,7 @@ import {
   getDb,
   identityEventWriterOn,
   inTenantTransaction,
+  listAuditLog as listAuditLogRows,
   loadProjectBundle,
   loadReview,
   membershipsOf,
@@ -121,6 +126,7 @@ import {
   googleRegistered,
   googleSignIn as startGoogleSignIn,
   identityOn,
+  lookupUserOn,
   requestPasswordReset as startPasswordResetRequest,
   resetPassword as consumePasswordReset,
   serveAllowlisted,
@@ -222,7 +228,7 @@ async function incomingHeaders(): Promise<Headers> {
 /** What `resolveRequestContext` is given: the session store, the bridge's one reader, the log. */
 function resolverDeps() {
   return {
-    identity: identityOn(webAuth()) satisfies IdentityPort<Headers>,
+    identity: identityOn(webAuth(), webDb()) satisfies IdentityPort<Headers>,
     handle: webDb(),
     memberships: { membershipsOf } satisfies MembershipReader<Db>,
     onNoAccess: (event) => {
@@ -384,6 +390,32 @@ export async function getClientView(input: ProjectInput, ctx?: RequestContext) {
   return getClientViewUseCase(projectReadDeps(), context, input);
 }
 
+/**
+ * The audit-log read port, wired (story 1.7). Identity lookup resolves actor emails; the
+ * use case authorises Tenant Admin before parse.
+ */
+function auditLogReadDeps() {
+  return {
+    handle: webDb(),
+    auditLogRead: { list: listAuditLogRows },
+    lookupUser: (userId: string) => lookupUserOn(webDb(), userId),
+  } satisfies AuditLogReadDeps<Db>;
+}
+
+/** NFR-A1: the Tenant Admin's audit log. See `packages/app`'s `listAuditLog`. */
+export async function listAuditLog(input: ListAuditLogInput = {}, ctx?: RequestContext) {
+  const context = ctx ?? (await requestContext());
+  return listAuditLogUseCase(auditLogReadDeps(), context, input);
+}
+
+/**
+ * The signed-in user's display identity for the top-bar chip (story 1.7). `null` when the
+ * `auth_user` row is gone — the chip then falls back to the role alone.
+ */
+export async function currentUserIdentity(ctx?: RequestContext): Promise<IdentityUser | null> {
+  const context = ctx ?? (await requestContext());
+  return lookupUserOn(webDb(), context.userId);
+}
 
 /**
  * The write deps, wired: the one tenant transaction every write use case runs its change and its

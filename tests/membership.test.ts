@@ -162,7 +162,7 @@ async function signIn(email: string): Promise<Headers> {
 
 function resolve(headers: Headers): Promise<RequestContextResolution> {
   return resolveRequestContext(
-    { identity: identityOn(auth), handle: getDb(process.env.APP_DATABASE_URL!), memberships: { membershipsOf } },
+    { identity: identityOn(auth, getDb(process.env.APP_DATABASE_URL!)), handle: getDb(process.env.APP_DATABASE_URL!), memberships: { membershipsOf } },
     headers,
   );
 }

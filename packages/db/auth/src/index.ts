@@ -12,7 +12,7 @@
 // mailer and the identity-event writer arrive as arguments, exactly as Google's provider does.
 export { AUTH_BASE_PATH, SESSION_UPDATE_AGE_SECONDS, authOptions, createAuth } from './auth';
 export type { Auth, CreateAuthOptions } from './auth';
-export { identityOn, type BetterAuthIdentity, type SessionIdentity } from './identity';
+export { identityOn, lookupUserOn, type BetterAuthIdentity, type IdentityUser, type SessionIdentity } from './identity';
 export {
   SERVED_AUTH_ENDPOINTS,
   googleRegistered,

@@ -9,20 +9,21 @@
 //
 // Importing this module starts a worker, which is why `createBoss` lives in `./boss.ts`:
 // the test builds the same runner without any of the below.
-import { config } from '@momo/app';
+import { config, createLogger } from '@momo/app';
 import { createBoss, PGBOSS_SCHEMA } from './boss';
 
+// Sync stdout so lifecycle lines survive process exit (SIGTERM round-trip + operators).
+const log = createLogger({ name: 'worker', syncStdout: true });
 const boss = createBoss(config.APP_DATABASE_URL);
 
 // pg-boss reports background failures through events rather than a rejected promise, so an
-// unhandled 'error' would otherwise take the process down with no context. There is no
-// logger port yet (no story has declared one), so the console is the honest interface for
-// an inbound adapter with no other output.
+// unhandled 'error' would otherwise take the process down with no context. Story 1.7 lands
+// the shared pino logger (AD-16 redaction); a LoggerPort can wait until more call sites exist.
 boss.on('error', (error) => {
-  console.error('[worker] pg-boss error', error);
+  log.error({ err: error }, 'pg-boss error');
 });
 boss.on('warning', (warning) => {
-  console.warn('[worker] pg-boss warning', warning);
+  log.warn({ warning }, 'pg-boss warning');
 });
 
 /**
@@ -36,16 +37,16 @@ boss.on('warning', (warning) => {
 let stopping = false;
 async function shutdown(signal: NodeJS.Signals): Promise<void> {
   if (stopping) {
-    console.error(`[worker] ${signal} received while already stopping — exiting now`);
+    log.error({ signal }, 'received while already stopping — exiting now');
     process.exit(1);
   }
   stopping = true;
-  console.log(`[worker] ${signal} received, stopping`);
+  log.info({ signal }, 'stopping');
   try {
     await boss.stop({ graceful: true, close: true });
-    console.log('[worker] stopped');
+    log.info('stopped');
   } catch (error) {
-    console.error('[worker] failed to stop cleanly', error);
+    log.error({ err: error }, 'failed to stop cleanly');
     process.exitCode = 1;
   }
 }
@@ -57,5 +58,5 @@ await boss.start();
 // `stop()` waits for an in-flight `start()`, so a signal that arrived during startup leaves
 // this resolving *after* shutdown began. Claiming a start then would be a lie in the log.
 if (!stopping) {
-  console.log(`[worker] started against schema '${PGBOSS_SCHEMA}' with migration disabled`);
+  log.info({ schema: PGBOSS_SCHEMA }, 'started with migration disabled');
 }

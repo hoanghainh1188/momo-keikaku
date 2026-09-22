@@ -204,6 +204,19 @@ const tenantSyntax = [
   },
 ];
 
+// --- untrusted content (story 1.7, AD-16 / NFR-S8) ------------------------------------------
+//
+// Tracker- and workbook-sourced text always goes through React escaping. `dangerouslySetInnerHTML`
+// is a lint error everywhere this fence runs — there is no sanctioned home.
+
+const htmlSyntax = [
+  {
+    selector: "JSXAttribute[name.name='dangerouslySetInnerHTML']",
+    message:
+      'NFR-S8 / AD-16: rendering goes only through React escaping. dangerouslySetInnerHTML is banned.',
+  },
+];
+
 /**
  * Builds the rule pair for a file group. Each ban is switched on or off independently,
  * and the surviving entries are re-declared in full because a later flat-config block
@@ -222,6 +235,7 @@ const fence = ({ clock, env, stringify = false, arithmetic = false }) => ({
     ...(clock ? clockSyntax : []),
     ...(env ? envSyntax : []),
     ...tenantSyntax,
+    ...htmlSyntax,
   ],
 });
 

@@ -38,11 +38,15 @@
  * suite spanning layers belongs to none of them.
  */
 import type { ProjectReadDeps } from '../packages/app/src/ports/project-read';
+import type { AuditLogReadDeps } from '../packages/app/src/ports/audit-log-read';
 import type { WriteDeps } from '../packages/app/src/ports/write-deps';
 import * as readSurface from '../packages/app/src/use-cases';
 import type { Db } from '../packages/db/src/client';
 import type { DemoState } from '../packages/db/src/fixtures';
 import { adminContextFor, pmContextFor } from './request-context';
+
+/** What the harness wires for every read invoke — project reads plus story 1.7's audit port. */
+export type HarnessReadDeps = ProjectReadDeps<Db> & AuditLogReadDeps<Db>;
 
 /** Named in failure messages, so the reader is sent to the file rather than to a diff. */
 export const READ_SURFACE_MODULE = 'packages/app/src/use-cases/index.ts';
@@ -140,8 +144,17 @@ export interface ReadUseCase {
    * role and the entry decides only how to call its use case. It returns whatever the use
    * case returns — a `Result` — and the harness, not the entry, unwraps it: an entry that
    * unwrapped its own result could turn an error arm into a value on the way out.
+   *
+   * Deps may carry more than `ProjectReadDeps` (story 1.7's audit-log read adds its own
+   * port and identity lookup); project reads ignore the extras.
    */
-  readonly invoke?: (deps: ProjectReadDeps<Db>, target: UseCaseTarget) => Promise<unknown>;
+  readonly invoke?: (deps: HarnessReadDeps, target: UseCaseTarget) => Promise<unknown>;
+  /**
+   * How the cross-Tenant probe (B's context naming A's Project id) must answer.
+   * Default `'not_found'` for project-scoped reads. Tenant-wide reads that ignore `projectId`
+   * set `'own-tenant-ok'`: they return the caller's own Tenant's rows and never A's.
+   */
+  readonly crossTenant?: 'not_found' | 'own-tenant-ok';
   /**
    * The fixture values this use case's result MUST carry. Required for a `read`.
    *
@@ -290,6 +303,14 @@ export function projectMappingLabels(state: DemoState): string[] {
 }
 
 /**
+ * What the audit-log reader must surface from the seed row: the Project id (target). Action
+ * `demo.seed` is a literal outside the relabel map, so it is not required via decode.
+ */
+export function auditLogLabels(state: DemoState): string[] {
+  return [state.fixture.project.id];
+}
+
+/**
  * Every export of the use-case surface, reads and writes alike. (The name predates the writes;
  * `kind` is what tells them apart.)
  */
@@ -364,6 +385,21 @@ export const READ_USE_CASES: readonly ReadUseCase[] = [
         { projectId: target.projectId },
       ),
     mustSurface: projectMappingLabels,
+  },
+  {
+    name: 'listAuditLog',
+    kind: 'read',
+    why:
+      'The Tenant Admin audit-log reader (story 1.7): packages/db repo-audit listAuditLog ' +
+      'inside withTenant over audit_log. Tenant-wide — ignores projectId. Admin context so ' +
+      'the role gate passes; cross-Tenant probe expects own-tenant rows, not not_found.',
+    crossTenant: 'own-tenant-ok',
+    invoke: (deps, target) =>
+      readSurface.listAuditLog(deps, adminContextOf(target), {}),
+    mustSurface: auditLogLabels,
+    // Seed writes one audit row; originalsIn finds the Project id only (demo.seed is outside
+    // the fixture universe). Floor 0: toBeGreaterThan(0) still requires at least one label.
+    minimumLabels: 0,
   },
   {
     name: 'mapTickets',
@@ -710,12 +746,5 @@ export const UNREACHED_TENANT_OWNED_TABLES: readonly UnreachedTable[] = [
       'reads project.default_rate_jpy. History is loaded only for a pinned lookup (Epic 5\'s ' +
       'Published Snapshot). No dedicated Rate read this story — the day one lands, this entry ' +
       'comes out or the reach assertion fails.',
-  },
-  {
-    table: 'audit_log',
-    why:
-      'Written by the seed and by the write use cases, never read. Story 1.7 gives the ' +
-      'Tenant Admin the log viewer, which is the read use case that will bring it into this ' +
-      'harness — and the day it does, this entry has to come out or the reach assertion fails.',
   },
 ] as const;

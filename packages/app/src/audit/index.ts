@@ -139,6 +139,12 @@ export function refusingNonMembers(sink: AuditSink): AuditSink {
 
 export const audit = { record } as const;
 
+export {
+  AUDIT_PAYLOAD_BY_ACTION,
+  auditPayloadSchema,
+  decodeAuditPayload,
+} from './payloads';
+
 /**
  * What a use case that changes anything declares about its audit, for the gate
  * (`tests/audited-use-cases.test.ts`): the actions it records — at least one — or, for a change

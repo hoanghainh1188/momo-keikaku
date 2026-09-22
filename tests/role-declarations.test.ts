@@ -211,6 +211,12 @@ describe('every use case declares its roles', () => {
             "pm",
           ],
         },
+        "listAuditLog": {
+          "projectScoped": false,
+          "roles": [
+            "tenant_admin",
+          ],
+        },
         "mapTicket": {
           "projectScoped": true,
           "roles": [
