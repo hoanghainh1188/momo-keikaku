@@ -628,3 +628,51 @@ at the lock query whose filter was still in place. A partial sabotage proves not
 - `orgAudit` is misnamed now that it builds membership expectations too; `lockMembers` calls `.slice()` on a fresh `.filter()`; three comment paragraphs were left unwrapped — `low`, cosmetic, and bundled here rather than spent as separate patches.
 - `decodeURIComponent` on a Basic credential can throw a `URIError`, answering 500 instead of 401 — `low`. No test sends a malformed credential and the fake is test-only infrastructure; the fix adds a try/catch guarding a state never shown reachable.
 - `moreWrites` is driven by the audit gate only, so `secondAdminUserId`'s real value is never exercised — `false`. `membership.test.ts` covers the demote/revoke-second-admin branches against Postgres; the registry entry is the gate's input, not a claim about the probes.
+
+### Review Findings — fourth pass: `packages/app`
+
+The application layer — use cases, ports, `RequestContext`, authorisation and audit; 2,208 lines
+across 33 files, same baseline. Four layers: blind hunter (12), edge-case hunter (8), verification
+gap (2), acceptance auditor (2 + a detailed clean bill).
+
+**The acceptance auditor found no violation of any acceptance criterion or frozen constraint that
+lands in this package**, and checked the four membership rules individually rather than in summary:
+the last `tenant_admin` is refused on both revoke and demote and the rule correctly skips
+promotion; every write re-checks the caller against the caller's own locked row, taken as the one
+lock and taken first; `forbidden` does not exist in `APP_ERROR_CODES` to be returned, and the admin
+gate answers `not_found` before the zod parse so a non-admin cannot even learn its input was
+malformed; and no use case in the package reads `ctx.projectIds` at all.
+
+**Two layers filed opposite complaints about the same branch, and both dissolve against the spec.**
+The blind hunter reported that revocation in one Tenant signs the user out of all of them; the
+edge-case hunter reported the reverse, that a revoked user with no active Tenant keeps a live
+session, contradicting the story's own "signed out on their next request". Read together with the
+code: the resolver ends the session only when an `activeTenantId` has no usable membership, and
+returns `no_access` with the session intact otherwise. Both behaviours are specified — the epic
+context states the first verbatim, and slice 2's own I/O matrix row 80 states the second ("Revoke
+before first page | Session has no `activeTenantId` yet | Next request resolves `no_access`; session
+kept"). Neither is a defect; the story's short summary of the rule is what omits the exception.
+
+- [x] [Review][Patch] `ASSIGNABLE_ROLES` had no compile-time tie to the closed `Role` enum, and `setRole` takes a bare `string` — a rename would have `changeMemberRole` write a role the resolver then rejects, signing the member out as the result of a successful audited admin action [packages/app/src/use-cases/membership-input.ts:24]
+- [x] [Review][Patch] `BETTER_AUTH_URL` was validated by `.url()` alone, which accepts `javascript:`, `mailto:` and `ftp:` (measured) — this value is the origin Better Auth matches every state-changing request's `Origin` against [packages/app/src/config.ts:105]
+- [x] [Review][Patch] `SESSION_IDLE_TIMEOUT_HOURS` read `0x10` as 16 and `1e2` as 100 (measured), so a typo became a different idle timeout instead of a named failure [packages/app/src/config.ts:111]
+- [x] [Review][Patch] `changeMemberRole`'s "promotion skips the last-admin rule" branch was pinned by nothing: removing the guard makes the sole admin re-confirming their own role get a spurious `last_tenant_admin` refusal, and every existing case stayed green [packages/app/src/use-cases/membership-writes.test.ts]
+- [x] [Review][Patch] `SEED_DEMO_PASSWORD`'s eight-character floor and the idle timeout's 720-hour ceiling had no failing case, against this file's own stated convention of one per key per failure mode [packages/app/src/config.test.ts]
+
+- [x] [Review][Defer] `assignMemberProject` takes a second, undocumented row lock: `org.findProject` is `SELECT … FOR UPDATE` by contract, so an assignment serialises against concurrent renames of the same Project while the port doc says "ONE LOCK, TAKEN FIRST" — deferred: the ordering is correct (memberships before projects) and the fix is either a non-locking existence read on the port or a doc amendment, both decisions rather than corrections.
+- [x] [Review][Defer] An unknown stored role is treated as a tampered session — `usable()` drops the row, the active-Tenant lookup misses, and the session is deleted — while the membership writes treat unknown roles as first-class and re-role them — deferred: the two halves disagree, but slice 1's Implementation Notes bless the filter and changing it is a behaviour decision.
+- [x] [Review][Defer] `onNoAccess` fires only for `several_memberships`; `no_membership` — the state a just-revoked user lands in, and the one an operator wants to see — returns silently, while `NoAccessEvent.reason` is typed as the full union — deferred with the `apps/web` log-suffix fix from the second pass, which is the same seam.
+- [x] [Review][Defer] The callback is optional at this layer, so slice 1's "more than one also logs the reason" is held up by `apps/web` alone — deferred: a non-optional member or a no-op default would pin it.
+- [x] [Review][Defer] The "AUTH_GOOGLE=on needs all three keys" rule is implemented twice with two different messages, and `parseGoogleProvider` groups only absent keys, so an empty one is reported only after the absent ones are fixed — two failed boots instead of one — deferred: both are real; sharing one message builder is a small refactor of a path with its own tests.
+- [x] [Review][Defer] `contextOf` recomputes the role check `usable()` already made, so the empty branch is unreachable and would mint a role-less context if reached — deferred: narrowing `usable()`'s return type states the rule once, and is a type change rather than a correction.
+- [x] [Review][Defer] The viewer roles are unreachable once changed: `ASSIGNABLE_ROLES` excludes them, so an accidentally promoted `client_viewer` can only be revoked, not restored — deferred: story 1.5 owns the role model.
+- [x] [Review][Defer] Stale headers: `config.ts` still promises mail transport as a later story three paragraphs above its own `MAILER`, and the package barrel credits slices 1 and 2 only — deferred with the other prose upkeep.
+
+#### Rejected
+
+- A revoked user with no active Tenant keeps a live session, contradicting "signed out on their next request" — `false`. Slice 2's I/O matrix row 80 specifies exactly this case and calls the kept session correct.
+- Revocation in one Tenant signs the user out of all of them — `low`, and specified: the epic context says the resolver "ends any session whose active Tenant has no membership". Clearing the active Tenant and re-resolving is a better design, not a deviation; it belongs with the tenant switcher.
+- `identity.endSession` / `setActiveTenant` rejecting leaves the request throwing rather than signed out — `low`, already rejected in slice 1's triage (B6/E4) on the same evidence. Carried.
+- A `client_viewer` or `internal_viewer` member reaches every read use case unrestricted — `false` for this diff: no read in `packages/app` consults roles at all, and the role model is story 1.5's by the spec's own division. Not something this story left undone.
+- `parseConfig` has no production caller, so its `superRefine` runs only in tests — `low`. The per-key getters carry the same rules through `parseConfigKey`, and the whole-schema parse is the shape a future migration script needs; deleting it to make a test honest is the wrong direction.
+- `org-writes.test.ts` and `project-writes.test.ts` keep a literal `ACTOR` beside a matching `CTX.userId` — `low`, and deliberate: a literal pin is what keeps `auditActorOf` honest, as the third pass established when it refuted the same finding about `TEST_ACTOR`.
