@@ -21,11 +21,22 @@ link from `/sign-in`. One generic answer covers a known email, an unknown one an
 account alike; a mailer failure is logged without the address and the request still answers as on
 success. The suite is **758 tests across 43 files** (verified locally in this session against a
 native Postgres 16, since Docker was unavailable in the sandbox — CI's `postgres:18.6-alpine`
-service should be re-verified once a session has Docker again). The acceptance criteria's
-sabotages were each watched to fail, then restored: `revokeSessionsOnPasswordReset` removed,
-`resetPasswordTokenExpiresIn` removed, the boundary's lowercasing removed (all three caught, unit
-and/or integration level), `identity_event` granted UPDATE (caught by both the registry assertion
-and the SQL-drift check). Manual browser verification of `/forgot-password` and `/reset-password`
+service should be re-verified once a session has Docker again). Two of the acceptance criteria's
+six sabotages were caught as real pass→fail transitions: `revokeSessionsOnPasswordReset` removed
+(a session survives the reset) and `identity_event` granted UPDATE (caught by both the registry
+assertion and the SQL-drift check). **Correction (post-implementation review, 2026-09-22): the
+other four were mis-modelled or already true regardless.** `resetPasswordTokenExpiresIn` removed
+changes no behaviour (Better Auth's own default is already 3600 s); `/reset-password` added to
+`SERVED_AUTH_ENDPOINTS` alone still 404s (`DISABLED_PATHS` blocks it independently); "the generic
+sentence replaced by a distinguishable one" is asserted by no test today. Most notably: **the
+boundary's lowercasing is NOT load-bearing** — Better Auth lowercases the address itself inside
+`findUserByEmail`, and the integration test hands the binding an upper-cased email and still
+expects mail. Removing `.toLowerCase()` from the `forgot-password` action changes no observable
+system behaviour; only `.trim()` matters, and the one test that fails on its removal
+(`forgot-password/actions.test.ts`) is pinning the call shape, not a real security boundary. See
+the spec's own Spec Change Log and Review Triage Log for the full accounting; do not read the
+sabotage table above as six independently-verified guarantees. Manual browser verification of
+`/forgot-password` and `/reset-password`
 under `next dev` was **not** performed in this session (no browser available); `next build`
 succeeds and both routes compile and render as dynamic routes — the actual click-through is still
 owed. **Story 1.4 is now complete across all four slices; the next session should run

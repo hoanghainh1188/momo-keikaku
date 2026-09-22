@@ -250,6 +250,14 @@ describe.skipIf(!reachable)('password reset through MailerPort (story 1.4 slice 
     expect(mailer.hits()).toBe(0);
   });
 
+  it('answers, rather than throws, when Better Auth itself refuses a malformed address — and sends no mail', async () => {
+    // The web action's zod has no `.email()` and the form carries `noValidate`, so a mistyped
+    // address reaches this binding and Better Auth refuses it with VALIDATION_ERROR before any
+    // database access. The binding's own try/catch must turn that into `false`, not a throw.
+    expect(await requestPasswordReset(auth, headers(), 'not-an-email-address')).toBe(false);
+    expect(mailer.hits()).toBe(0);
+  });
+
   it('lowercases at the boundary it controls: Better Auth still finds the seeded user by mixed case', async () => {
     expect(await requestPasswordReset(auth, headers(), ADMIN.email.toUpperCase())).toBe(true);
     expect(mailer.hits()).toBe(1);
@@ -348,6 +356,29 @@ describe.skipIf(!reachable)('password reset through MailerPort (story 1.4 slice 
       expect(await resetPassword(auth, headers(), { token, password: 'fifth-new-password-1' })).toBe(true);
       expect(
         await signInWithPassword(auth, headers(), { email: RESETTER.email, password: 'fifth-new-password-1' }),
+      ).toBe(true);
+    });
+
+    it('invalidates a first outstanding link once a second one for the same user is used', async () => {
+      mailer.reset();
+      expect(await requestPasswordReset(auth, headers(), RESETTER.email)).toBe(true);
+      const firstToken = tokenFromMail(mailer.last());
+
+      mailer.reset();
+      expect(await requestPasswordReset(auth, headers(), RESETTER.email)).toBe(true);
+      const secondToken = tokenFromMail(mailer.last());
+      expect(secondToken).not.toBe(firstToken);
+
+      expect(
+        await resetPassword(auth, headers(), { token: secondToken, password: 'sixth-new-password-1' }),
+      ).toBe(true);
+
+      // The first link, requested earlier and never followed, no longer works.
+      expect(
+        await resetPassword(auth, headers(), { token: firstToken, password: 'seventh-new-password-1' }),
+      ).toBe(false);
+      expect(
+        await signInWithPassword(auth, headers(), { email: RESETTER.email, password: 'sixth-new-password-1' }),
       ).toBe(true);
     });
   });

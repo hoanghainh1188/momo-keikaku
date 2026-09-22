@@ -35,8 +35,9 @@ export BETTER_AUTH_URL=http://localhost:3101
 
 # Password reset (story 1.4 slice 4). MAILER defaults to `console`: every reset mail is written to
 # THIS TERMINAL (the one `pnpm demo`/`pnpm dev` runs in) instead of actually being sent — there is
-# no real mail transport until `mailer-ses` (Epic 8). `ses` is accepted here too but the web app
-# fails to start with it until that adapter lands.
+# no real mail transport until `mailer-ses` (Epic 8). `ses` is accepted here too, but every route
+# (sign-in included) starts answering 500 on its first request until that adapter lands — not a
+# failure to start, since it is only reached when a request first needs the auth instance.
 # export MAILER=console
 
 pnpm demo

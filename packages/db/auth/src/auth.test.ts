@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { Db } from '@momo/db';
 import { SESSION_UPDATE_AGE_SECONDS, authOptions } from './auth';
 import { discoveryUrlOf, verifiedGoogleIdentity, withoutProviderTokens } from './google';
-import { resetLinkOf, resetPasswordMail } from './reset';
+import { RESET_PASSWORD_TOKEN_EXPIRES_IN_SECONDS, resetLinkOf, resetPasswordMail } from './reset';
 
 /**
  * The auth configuration, pinned with no database (story 1.4 slice 1). `tests/identity.test.ts`
@@ -35,14 +35,16 @@ describe('the Better Auth options', () => {
   });
 
   it('enables email + password with sign-up disabled, and pins the reset timing (story 1.4 slice 4)', () => {
-    expect(OPTIONS.emailAndPassword).toMatchObject({
+    // `toEqual`, not `toMatchObject`: an exact pin over the whole key set, so a key ADDED later
+    // (a future `requireEmailVerification: false`, say) fails here too, not only a key removed.
+    expect(OPTIONS.emailAndPassword).toEqual({
       enabled: true,
       disableSignUp: true,
-      resetPasswordTokenExpiresIn: 3600,
+      resetPasswordTokenExpiresIn: RESET_PASSWORD_TOKEN_EXPIRES_IN_SECONDS,
       revokeSessionsOnPasswordReset: true,
+      sendResetPassword: expect.any(Function),
+      onPasswordReset: expect.any(Function),
     });
-    expect(OPTIONS.emailAndPassword.sendResetPassword).toEqual(expect.any(Function));
-    expect(OPTIONS.emailAndPassword.onPasswordReset).toEqual(expect.any(Function));
   });
 
   it('adds the two product fields, neither of them client-writable', () => {
@@ -201,13 +203,6 @@ describe('withoutProviderTokens — the account create hook', () => {
       },
     });
     expect(await withoutProviderTokens({ providerId: 'credential' })).toBeUndefined();
-  });
-});
-
-describe('password reset options (story 1.4 slice 4)', () => {
-  it('pins the timing explicitly rather than inheriting Better Auth\'s defaults', () => {
-    expect(OPTIONS.emailAndPassword.resetPasswordTokenExpiresIn).toBe(3600);
-    expect(OPTIONS.emailAndPassword.revokeSessionsOnPasswordReset).toBe(true);
   });
 });
 

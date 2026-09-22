@@ -144,8 +144,11 @@ const webIds = uuidV7IdsOn(systemClock);
  * The process's mailer (story 1.4 slice 4), built on FIRST USE and memoised like the auth
  * instances below — reading `config.MAILER` at import time would defeat the point of the
  * per-key, read-on-first-use config getters. `console` is the only transport that ships;
- * `ses` (Epic 8) fails naming the missing adapter rather than silently falling back, so a
- * misconfigured deployment finds out at boot, not the first time someone requests a reset.
+ * `ses` (Epic 8) fails naming the missing adapter rather than silently falling back — NOT at
+ * boot, since this runs inside `baseAuthOptions()`, reached only when an auth instance is first
+ * built. Because `sessionAuth()` shares that same value, the first request through the
+ * middleware throws and every route, `/sign-in` included, answers 500 — loud, but only once a
+ * request actually arrives, not before.
  */
 let mailerInstance: MailerPort | undefined;
 function webMailer(): MailerPort {

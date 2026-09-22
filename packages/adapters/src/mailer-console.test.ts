@@ -14,11 +14,25 @@ describe('mailerConsoleOn', () => {
     });
 
     expect(lines).toHaveLength(1);
+    // Pinned literally — not only against `consoleMailLine` itself — because `README-DEMO.md`
+    // tells demo users to look for exactly these two delimiter lines in their terminal.
+    expect(lines[0]).toBe(
+      [
+        '--- mail (console) ---',
+        'to: hoang@momo-digital.example',
+        'subject: Reset your momo-keikaku password',
+        '',
+        'Reset it here: http://localhost:3101/reset-password?token=abc',
+        '--- end mail ---',
+      ].join('\n'),
+    );
     expect(lines[0]).toBe(consoleMailLine({
       to: 'hoang@momo-digital.example',
       subject: 'Reset your momo-keikaku password',
       text: 'Reset it here: http://localhost:3101/reset-password?token=abc',
     }));
+    expect(lines[0]).toMatch(/^--- mail \(console\) ---\n/);
+    expect(lines[0]).toMatch(/\n--- end mail ---$/);
     expect(lines[0]).toContain('to: hoang@momo-digital.example');
     expect(lines[0]).toContain('subject: Reset your momo-keikaku password');
     expect(lines[0]).toContain('http://localhost:3101/reset-password?token=abc');

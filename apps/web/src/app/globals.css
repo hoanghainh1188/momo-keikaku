@@ -776,7 +776,8 @@ details > summary {
    .auth-page/.auth-sheet/.auth-form/.auth-field/.auth-error/.auth-note as they are; these three
    rules are the only new ones — the spacing a lone paragraph before or after the form needs
    (the Google divider above already carried its own), and the success-toned counterpart of
-   .auth-error for the one generic "sent" / "updated" message. */
+   .auth-error for /forgot-password's one generic "sent" message (a completed reset shows no
+   message of its own; it redirects straight to /sign-in). */
 .auth-hint {
   margin: 0 0 14px;
   color: var(--ink-muted);

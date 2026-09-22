@@ -17,11 +17,13 @@ const forgotPasswordForm = z.object({
  * Requests a password reset, then REDIRECTS to the same generic outcome — matching
  * `/sign-in?google=refused`'s shape, never returning a distinguishable refusal to re-render.
  *
- * One answer for every submission that could name an email at all: a known address, an unknown
- * one, and a Google-only account with no credential to reset all land on the same
- * `?sent=1` (NFR-S5) — nothing here, or in the composition binding it calls, tells them apart.
- * Only a submission with no usable email at all is refused before it reaches the binding, and it
- * still lands on the very same place.
+ * One answer for EVERY submission: a known address, an unknown one, a Google-only account with no
+ * credential to reset, and even a well-formed-looking but non-existent one Better Auth itself
+ * refuses downstream all land on the same `?sent=1` (NFR-S5) — nothing here, or in the composition
+ * binding it calls, tells them apart. The schema below only rejects an EMPTY or oversized field
+ * before the binding is called; it has no `.email()` check, so a non-empty, malformed address is
+ * still forwarded, still refused (silently, inside the binding), and still redirects here the
+ * same way.
  */
 export async function requestReset(formData: FormData): Promise<void> {
   const parsed = forgotPasswordForm.safeParse({ email: formData.get('email') });

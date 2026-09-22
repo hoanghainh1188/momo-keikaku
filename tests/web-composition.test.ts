@@ -131,8 +131,7 @@ const spies = vi.hoisted(() => {
     ),
     sessionForMiddleware: vi.fn(async (_auth: unknown, _headers: Headers) => ({ signedIn: true, setCookies: [] })),
     requestHeaders: new Headers({ cookie: 'momo.session_token=signed' }),
-    /** Story 1.4 slice 4: the mail sink, the identity-event writer, and the two reset bindings. */
-    mailLines: [] as string[],
+    /** Story 1.4 slice 4: the identity-event writer and the two reset bindings. */
     identityEventRecord: vi.fn(async (_entry: unknown) => {}),
     requestPasswordReset: vi.fn(async (_auth: unknown, _headers: Headers, _email: string) => true),
     resetPassword: vi.fn(
@@ -186,7 +185,6 @@ vi.mock('@momo/adapters', () => ({
   mailerConsoleOn: (sink: (line: string) => void) => ({
     send: async (message: { to: string; subject: string; text: string }) => {
       sink(`to: ${message.to}\nsubject: ${message.subject}\n\n${message.text}`);
-      spies.mailLines.push(message.to);
     },
   }),
 }));
@@ -751,6 +749,22 @@ describe('the request context the bindings run with', () => {
 
     spies.resetPassword.mockResolvedValueOnce(false);
     expect(await composition.resetPassword({ token: 'tok-2', password: 'x' })).toBe(false);
+  });
+
+  it('fails naming the missing adapter when MAILER=ses, on the first binding that builds auth', async () => {
+    // A fresh module instance, so this file's already-built `mailerInstance`/`authInstance`
+    // singletons (memoised on THIS import of composition.ts) cannot mask the failure.
+    vi.resetModules();
+    vi.stubEnv('MAILER', 'ses');
+    try {
+      const freshComposition = await import('../apps/web/src/server/composition');
+      await expect(freshComposition.requestPasswordReset('someone@example.test')).rejects.toThrow(
+        /MAILER=ses/,
+      );
+    } finally {
+      vi.stubEnv('MAILER', 'console');
+      vi.resetModules();
+    }
   });
 });
 

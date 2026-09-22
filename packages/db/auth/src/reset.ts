@@ -12,6 +12,13 @@
  * separately, so the product builds its own page URL from it — never Better Auth's `url`.
  */
 
+/**
+ * The token's lifetime, in seconds — the ONE place it is a number. `auth.ts` passes this to
+ * `resetPasswordTokenExpiresIn` and `resetPasswordMail` below reads its own copy from the same
+ * constant, so the option and the mail's "expires in …" text cannot drift from each other.
+ */
+export const RESET_PASSWORD_TOKEN_EXPIRES_IN_SECONDS = 3600;
+
 /** What `createAuth` needs to send a reset mail. `@momo/app`'s `MailerPort`, structurally. */
 export interface ResetMailer {
   readonly send: (message: { readonly to: string; readonly subject: string; readonly text: string }) => Promise<void>;
@@ -50,11 +57,25 @@ export interface ResetPasswordMail {
   readonly text: string;
 }
 
+/** The lifetime as whole hours, for the mail copy — `RESET_PASSWORD_TOKEN_EXPIRES_IN_SECONDS` is a whole number of hours today; this throws rather than print a fraction if that ever stops being true. */
+function expiryHours(): number {
+  const hours = RESET_PASSWORD_TOKEN_EXPIRES_IN_SECONDS / 3600;
+  if (!Number.isInteger(hours)) {
+    throw new Error(
+      `RESET_PASSWORD_TOKEN_EXPIRES_IN_SECONDS (${RESET_PASSWORD_TOKEN_EXPIRES_IN_SECONDS}) is not a whole number of hours; resetPasswordMail's copy assumes one.`,
+    );
+  }
+  return hours;
+}
+
 /**
  * THE ONE MAIL COPY BUILDER (hardcoded English — `packages/i18n` is empty until story 1.9).
- * Pure: no clock, no environment, no randomness, so a test can assert its exact text.
+ * Pure: no clock, no environment, no randomness, so a test can assert its exact text. The
+ * "expires in …" line reads `RESET_PASSWORD_TOKEN_EXPIRES_IN_SECONDS` — the same constant
+ * `resetPasswordTokenExpiresIn` is built from — so the two cannot say different things.
  */
 export function resetPasswordMail({ to, link }: ResetPasswordMailInput): ResetPasswordMail {
+  const hours = expiryHours();
   return {
     to,
     subject: 'Reset your momo-keikaku password',
@@ -63,8 +84,8 @@ export function resetPasswordMail({ to, link }: ResetPasswordMailInput): ResetPa
       '',
       `Reset it here: ${link}`,
       '',
-      'This link expires in 1 hour and can be used once. If you did not request this, you can ' +
-        'ignore this email — your password will not change.',
+      `This link expires in ${hours} hour${hours === 1 ? '' : 's'} and can be used once. If you ` +
+        'did not request this, you can ignore this email — your password will not change.',
     ].join('\n'),
   };
 }

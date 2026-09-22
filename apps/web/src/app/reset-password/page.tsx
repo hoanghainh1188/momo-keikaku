@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { ResetPasswordForm } from './reset-password-form';
 import { tokenOf } from './reset-token';
 
@@ -30,11 +31,14 @@ export default async function ResetPasswordPage({ searchParams }: ResetPasswordP
         <h1 id="reset-password-heading">Choose a new password</h1>
         {refused ? (
           <p className="auth-error" role="alert">
-            That link no longer works, or the password was too short. Request a new link and try
-            again.
+            That link no longer works, or the password was too short.{' '}
+            <Link href="/forgot-password">Request a new link</Link> and try again.
           </p>
         ) : null}
         <ResetPasswordForm token={token} />
+        <p className="auth-below auth-note">
+          <Link href="/sign-in">Back to sign in</Link>
+        </p>
       </section>
     </main>
   );

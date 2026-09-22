@@ -49,8 +49,8 @@
 import { betterAuth, type BetterAuthOptions } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { nextCookies } from 'better-auth/next-js';
-import { and, eq } from 'drizzle-orm';
-import { account, authSchema, authUser, type Db } from '@momo/db';
+import { and, eq, like } from 'drizzle-orm';
+import { account, authSchema, authUser, verification, type Db } from '@momo/db';
 import {
   GOOGLE_REFUSED_URL,
   googlePlugin,
@@ -58,6 +58,7 @@ import {
   type GoogleProviderOptions,
 } from './google';
 import {
+  RESET_PASSWORD_TOKEN_EXPIRES_IN_SECONDS,
   resetLinkOf,
   resetPasswordMail,
   type IdentityEventWriter,
@@ -150,6 +151,20 @@ async function markEmailVerified(db: Db, userId: string, at: Date): Promise<void
   );
 }
 
+/**
+ * Deletes every OTHER outstanding `reset-password:*` token of this user. `consumeVerificationValue`
+ * deletes only the ONE row matching the identifier just consumed (`identifier = reset-password:
+ * <token>`, unique per token), so a second link requested earlier and never followed would
+ * otherwise still work after this one is used.
+ */
+async function invalidateOtherResetTokens(db: Db, userId: string): Promise<void> {
+  await db.transaction((tx) =>
+    tx
+      .delete(verification)
+      .where(and(eq(verification.value, userId), like(verification.identifier, 'reset-password:%'))),
+  );
+}
+
 /** The options, as a value — so a test can pin them without building an instance. */
 export function authOptions(options: CreateAuthOptions) {
   if (!Number.isInteger(options.idleHours) || options.idleHours < 1) {
@@ -176,7 +191,7 @@ export function authOptions(options: CreateAuthOptions) {
       //     Removing it silently leaves every existing session alive through a reset — including
       //     the session of whoever the reset was meant to lock out. The integration test in
       //     `tests/password-reset.test.ts` fails if it goes.
-      resetPasswordTokenExpiresIn: 3600,
+      resetPasswordTokenExpiresIn: RESET_PASSWORD_TOKEN_EXPIRES_IN_SECONDS,
       revokeSessionsOnPasswordReset: true,
       // THE REQUEST SIDE. Called only when Better Auth already found a user by email (an unknown
       // email never reaches here, and the endpoint still answers its one generic sentence either
@@ -184,7 +199,9 @@ export function authOptions(options: CreateAuthOptions) {
       // creates no user and no account row for a user who has none, and the only account
       // `resetPassword` (the consume endpoint) would create is reachable solely through a token
       // this branch never mails out. A mailer failure is logged WITHOUT the address and never
-      // surfaced — the request still answers exactly as on success (NFR-S5).
+      // surfaced — the request still answers exactly as on success (NFR-S5). Only the error's
+      // `name` is logged, never `message`: a real transport's rejection carries the address in its
+      // message (SES "Invalid destination: …", SMTP 550), which is exactly what must not be logged.
       sendResetPassword: async ({ user, token }) => {
         if (!(await hasCredentialAccount(options.db, user.id))) return;
         const link = resetLinkOf(options.baseURL, token);
@@ -192,25 +209,38 @@ export function authOptions(options: CreateAuthOptions) {
           await options.mailer.send(resetPasswordMail({ to: user.email, link }));
         } catch (error) {
           console.warn(
-            `[auth] password-reset mail failed to send: ${error instanceof Error ? error.message : String(error)}`,
+            `[auth] password-reset mail failed to send: ${error instanceof Error ? error.name : 'unknown error'}`,
           );
         }
       },
       // THE CONSUME SIDE, fired AFTER the password is replaced and BEFORE session revocation
-      // (Better Auth's own ordering). Redeeming a token the product mailed is what proves the
-      // address, so this is where `email_verified` is set — through `options.db`, never Better
-      // Auth's own hook surface for it (there is none for this path) — and where the one
-      // `identity_event` row is written, never on the request side (unauthenticated, enumerable,
-      // unthrottled — recording it there would be a write amplifier).
+      // (Better Auth's own ordering, `password.mjs`: it awaits this, then — only if it returns —
+      // deletes the user's sessions). MUST NOT THROW: an uncaught rejection here is not an
+      // `APIError`, so it escapes `bindings.ts`'s catch as an unhandled 500 AND skips session
+      // revocation entirely, on a request that already replaced the password and spent the token.
+      // So every step below runs inside one try/catch that only logs.
+      //
+      // The event is written FIRST, `email_verified` second: `identity_event` is insert-only and
+      // can never be corrected, so if only one of the two survives a mid-way failure it must be
+      // the one that explains what happened, not a flag with no record of why it changed.
+      // `invalidateOtherResetTokens` runs last — a second outstanding link surviving one more
+      // moment is far less harm than the two ahead of it not landing.
       onPasswordReset: async ({ user }) => {
-        const at = options.now();
-        await markEmailVerified(options.db, user.id, at);
-        await options.identityEvents.record({
-          id: options.generateId(),
-          userId: user.id,
-          action: 'password.reset',
-          at,
-        });
+        try {
+          const at = options.now();
+          await options.identityEvents.record({
+            id: options.generateId(),
+            userId: user.id,
+            action: 'password.reset',
+            at,
+          });
+          await markEmailVerified(options.db, user.id, at);
+          await invalidateOtherResetTokens(options.db, user.id);
+        } catch (error) {
+          console.warn(
+            `[auth] onPasswordReset failed after a completed reset: ${error instanceof Error ? error.name : 'unknown error'}`,
+          );
+        }
       },
     },
     user: {
