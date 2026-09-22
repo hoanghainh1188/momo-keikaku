@@ -14,7 +14,7 @@
  *     first used. A fast failure (refused, an error status, no `jwks_uri`) skips the provider for
  *     the life of that instance, and Better Auth logs it: no button, `/callback/google` 404.
  *   * `requireIdTokenVerification`: EVERY sign-in, first or later, needs an id token verified by
- *     the plugin (signature against the discovered JWKS, `iss`, `aud`, `exp`, and the nonce bound to
+ *     the plugin (signature against the discovered JWKS, `iss`, `aud`, `exp` when present, and the nonce bound to
  *     the flow's state) — before `getUserInfo` below is even called.
  *   * `getUserInfo` is THE refusal point. It answers `null` — which Better Auth turns into a
  *     redirect to the error URL — when the token response carries no id token, or when the token's

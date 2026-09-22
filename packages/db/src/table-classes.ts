@@ -125,14 +125,14 @@ export const TABLE_REGISTRY: readonly TableEntry[] = [
     table: 'account',
     class: 'global',
     tenantColumn: null,
-    why: 'A user\'s credential (the password hash; Google later). Belongs to the person, not to a Tenant.',
+    why: 'A user\'s credentials: the password hash, and a Google link (no provider tokens kept). Belongs to the person, not to a Tenant.',
     appPrivileges: ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
   },
   {
     table: 'verification',
     class: 'global',
     tenantColumn: null,
-    why: 'Better Auth\'s one-time tokens (password reset, story 1.4 slice 4). Issued before any Tenant is known.',
+    why: 'Better Auth\'s one-time values: the OAuth state of a Google sign-in (story 1.4 slice 3) and password-reset tokens (slice 4). Issued before any Tenant is known.',
     appPrivileges: ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
   },
   {

@@ -652,7 +652,7 @@ describe('the request context the bindings run with', () => {
     expect(spies.identity.sessionFrom).not.toHaveBeenCalled();
   });
 
-  it('builds the one auth instance lazily, from the configuration, and reuses it', async () => {
+  it('builds the page auth instance lazily, from the configuration, and reuses it', async () => {
     await composition.signInState();
     await composition.signInState();
     // One build for the whole process (every test above resolved a context through it), and it

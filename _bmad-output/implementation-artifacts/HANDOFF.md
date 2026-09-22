@@ -1,10 +1,11 @@
-# Handoff — 2026-09-21 (updated at the end of the 2026-09-21 session)
+# Handoff — 2026-09-22 (updated at the end of the 2026-09-22 session)
 
-State at `main` = the merge of PR #31 (AD-21/AD-23, the membership bridge's one writer), `980483e`.
-This session's slice 3 work is uncommitted on branch `story-1-4-google-sign-in`.
+State at `main` = the merge of PR #32 (story 1.4 slice 3, Google sign-in), `b8ef2f6`, plus the
+docs PR that follows it (the AD-1/AD-15/AD-16/AD-17/AD-23 spine amendment and this handoff).
 
-**Latest (2026-09-22): story 1.4 slice 3 (Google sign-in) is implemented on branch
-`story-1-4-google-sign-in`, not yet reviewed or merged** (`spec-1-4-google-sign-in.md`).
+**Latest (2026-09-22): story 1.4 slice 3 (Google sign-in) is merged (PR #32)**
+(`spec-1-4-google-sign-in.md`, `done`: two adversarial spec rounds, one code review), and the
+spine is amended to match it (two adversarial rounds, rubric and tech-currency reviews).
 Google is one OIDC provider discovered from an issuer URL — a fake in-repo provider
 (`tests/support/fake-oidc.ts`, `pnpm fake-oidc`) locally and in CI — off unless
 `AUTH_GOOGLE=on`, linking by verified email to existing users only. The suite is
@@ -106,13 +107,17 @@ to their share. Track upgrade-style work separately from feature work.
 | #27 | Story 1.4 slice 1 — Better Auth tables + `tenant_membership`, `@momo/db-auth`, `RequestContext`/`resolveRequestContext`, email + password sign-in, Node middleware; AD-1/AD-15 amended |
 | #28 | Handoff after story 1.4 slice 1 |
 | #29 | Story 1.4 slice 2 — revoke, change role, assign/unassign a PM's Project as audited use cases; one writer of `tenant_membership` with one ordered lock; the last Tenant Admin protected |
+| #30 | Handoff after story 1.4 slice 2 |
+| #31 | AD-21/AD-23 — the membership bridge's one writer (spine) |
+| #32 | Story 1.4 slice 3 — Google sign-in: one `genericOAuth` provider from an issuer URL, off unless `AUTH_GOOGLE=on`, link-never-create by verified email, provider-aware allowlist, two auth instances, the in-repo fake OIDC provider (`pnpm fake-oidc`) |
+| (next) | AD-1/AD-15/AD-16/AD-17/AD-23 spine amendment for Google sign-in; `epic-1-context.md` regenerated; this handoff |
 
 **CI has ten steps**, all watched to fail before being trusted: lint (the
 clock/env fence, the tenant bans, and AD-4's arithmetic fences — rounding only
 in `domain/present`, `JSON.stringify` only in the codec), three typechecks,
 **dependency-cruiser** (no database), a Postgres 18.6-alpine service, a prepare
 step (schema → pgboss roles → RLS/grants/triggers → seed), and the suite.
-**678 tests across 36 files**, up from 46 across 3. The gates report and do not
+**722 tests across 38 files**, up from 46 across 3. The gates report and do not
 block (no branch protection on a private free-plan repo).
 
 **The import direction is gated.** `.dependency-cruiser.cjs` fails on: Drizzle
@@ -122,7 +127,7 @@ from any other app; `packages/adapters` from any `apps/*` file but the compositi
 root, and from `packages/app|domain|db` at all; `better-auth` anywhere but
 `packages/db/auth`, and `packages/db/auth` from any `apps/web` file but the
 composition root; `apps/web` importing any `packages/domain` module but
-`present/index.ts`; the AD-1 scheduling edges (forward-looking); and any import
+`present/index.ts`; `tests/support/` from `apps/` or `packages/`; the AD-1 scheduling edges (forward-looking); and any import
 it cannot resolve. What it does not enforce yet is listed in AD-1 and tracked in
 `deferred-work.md` — the worker's `pg-boss`/`pg`, package-to-package
 directions, raw `pg` in `apps/web`, and pages' own `bigint` arithmetic.
@@ -229,14 +234,20 @@ reading.
 
 ## Next, in order
 
-### 1. Review and merge slice 3 (Google), then story 1.4 slice 4 — password reset
+### 1. Story 1.4 slice 4 — password reset
 
-Slice 3 is built (`spec-1-4-google-sign-in.md`): review it, merge it. It left, in
-`deferred-work.md`: the spine's AD-1 amendment (new `createAuth` argument, the Google
-bindings, the `verification` table's "why") with its own adversarial review; Epic 8's
-checks against real Google (issuer spelling, discovery retry, a discovery timeout);
-`verification` row growth with the sign-in rate limit; and a note that Better Auth
-reads a state's expiry from the row's value, not its column.
+Slice 3 (Google) is merged and the spine carries it. What it left, in `deferred-work.md` and
+the spine's Deferred section: Epic 8's checks against real Google (exact `iss`, a discovery
+timeout and retry — a HUNG discovery today blocks the whole page instance, password sign-in
+included), `verification` row growth with the sign-in rate limit, unaudited Google account
+links, no page-render test for `/sign-in`, and whether the `error` code Better Auth appends to
+`/sign-in?google=refused` may disclose that an email has an account (NFR-S5).
+
+**Slice 4 must first answer, under review (spine Deferred, "Who creates users and who marks an
+email verified"):** today only the seed creates `auth_user` rows and sets `email_verified`, and
+Google linking trusts that flag; Better Auth's reset proves inbox control but does not set it.
+Also: a Clock-expired value never goes in `verification` (AD-15), and the fake OIDC provider is
+the pattern for any fake external identity service.
 
 Slice 4 is unblocked:
 ```
@@ -256,9 +267,6 @@ done, run `bmad-code-review` over the whole story, as for 1.3, then mark 1.4
 `done`.
 
 What slice 2 left, in `deferred-work.md`:
-- **The spine (AD-21/AD-23) and `epic-1-context.md` still call the bridge
-  SELECT-only with a single reader.** Amending the spine needs an adversarial
-  review (budget two rounds); then regenerate the context.
 - Story 1.5 must not read a Tenant Admin's `projectIds` as a limit (kept on
   promotion so a demotion restores them).
 - A user revoked from their only Tenant keeps their account and can sign in to
@@ -362,6 +370,9 @@ clock); CI never runs `next build` (it passed locally for story 1.4 slice 1).
 - **OQ-3** — which client specifically. Contract type decided (準委任/labo).
 - **OQ-4** pricing, **OQ-5** AI provider, **OQ-7** competitive watch (re-check
   2026-12-01), **OQ-8** client sign-in, **D2** the 30 UX assumptions.
+- **Google refusal URL disclosure** — Better Auth appends `error=signup_disabled`
+  vs `error=account_not_linked` to `/sign-in?google=refused`, which tells a visitor
+  whether an email has an account. Decide with the NFR-S5 check sheet (Epic 8).
 
 ---
 

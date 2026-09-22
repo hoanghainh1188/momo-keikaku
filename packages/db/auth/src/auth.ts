@@ -7,7 +7,7 @@
  * `@momo/adapters` (the Clock and the id port), and may not read the environment. `apps/web`'s
  * composition root builds its instances lazily, on first use (importing the composition root
  * reads no configuration): one with Google for pages, actions and the route handler, and one
- * WITHOUT Google for the middleware's session refresh, so a page request never waits on discovery.
+ * WITHOUT Google for the middleware's session refresh, so the middleware never waits on discovery.
  *
  * WHAT IS DECIDED HERE, and pinned by `auth.test.ts`, `tests/identity.test.ts` and
  * `tests/google-sign-in.test.ts`:
@@ -169,7 +169,7 @@ export function authOptions(options: CreateAuthOptions) {
   } satisfies BetterAuthOptions;
 }
 
-/** The one Better Auth instance for a server bundle. See the module note. */
+/** A Better Auth instance, built from arguments. See the module note. */
 export function createAuth(options: CreateAuthOptions) {
   return betterAuth(authOptions(options));
 }
