@@ -150,10 +150,6 @@ export function fixtureRelativeSeq(fixtureValue: number, offset: number): number
   return fixtureValue + offset;
 }
 
-function isoDateUtc(instant: Date): string {
-  return instant.toISOString().slice(0, 10);
-}
-
 export interface TenantRowWriteResult {
   readonly tenantId: string;
   /**

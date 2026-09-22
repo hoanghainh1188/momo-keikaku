@@ -67,7 +67,7 @@ afterAll(async () => {
 });
 
 describe.skipIf(!reachable)('seed under fixture Clock (story 1.8 matrix)', () => {
-  it('stamps demo_anchor, Baseline recordedAt and Rate effectiveFrom from the injected Clock', async () => {
+  it('stamps demo_anchor and Baseline recordedAt from the Clock; Rates keep 2026-01-01 coverage', async () => {
     await advanceBaselineIdentity(99_000_000);
     await writeProbeWithClock();
 
