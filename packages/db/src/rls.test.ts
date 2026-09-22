@@ -379,7 +379,11 @@ describe.skipIf(!reachable)('FORCE row-level security and the policy are on ever
     // They are read to resolve WHICH Tenant a request acts in, so a tenant policy on any of them
     // would make every session invisible. They must exist, and carry no RLS and no policy.
     const { flags, policies } = await readPolicyCatalog();
-    const identity = ['auth_user', 'session', 'account', 'verification', 'tenant_membership'];
+    // Every `global` table, not a hand-kept subset: `identity_event` (story 1.4 slice 4) joined
+    // the class and was missed here, and row-level security switched on there would make the app
+    // role's own reset events invisible to it with every other gate still green. Derived from the
+    // registry so the sixth table cannot be forgotten the way it was, and so a seventh cannot be.
+    const identity = TABLE_REGISTRY.filter((entry) => entry.class === 'global').map((e) => e.table);
     for (const table of identity) {
       const flag = flags.find((row) => row.relname === table);
       expect(flag, `${table} does not exist — run drizzle-kit push`).toBeDefined();

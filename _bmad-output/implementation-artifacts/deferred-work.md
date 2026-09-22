@@ -672,3 +672,146 @@ work started and was deliberately deferred, with the evidence for the split.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-4-google-sign-in.md`
   summary: `googleSignIn`'s refusal paths on a REGISTERED instance (an `APIError` from `signInSocial`, or a response without a URL) are run by no test.
   evidence: Verification-gap review. Every `null` in the tests comes from the not-registered guard before the `try`; removing the `catch` would leave CI green and turn such a refusal into an error page. No clean way to make the real fake trigger it; revisit if the start path gains refusal conditions.
+
+## Deferred from: implementation of spec-1-4-password-reset (2026-09-22)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-password-reset.md`
+  summary: `mailer-ses` (the production mail transport) is Epic 8's — the AWS account and sender
+  domain that would let it be tested against don't exist yet. `MAILER=ses` is accepted by config
+  today (AD-17/AD-18) but the composition root's `webMailer()` throws naming the missing adapter.
+  evidence: By the spec's own decision, recorded 2026-09-22. When Epic 8 adds `mailer-ses`, wire it
+  into `webMailer()`'s `switch` beside `console` and drop the throw.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-password-reset.md`
+  summary: The sign-in rate limit stays deferred to Epic 8 (as already recorded from story 1.4
+  slice 1), and now covers a SECOND unauthenticated, enumerable endpoint: `requestPasswordReset`
+  calls `auth.api.requestPasswordReset` directly from a server action, bypassing Better Auth's own
+  HTTP-router rate limiter exactly as `signInWithEmail` and `googleSignIn` already do.
+  evidence: By the spec's own decision ("R0 runs locally"). Nothing here throttles repeated reset
+  requests for the same or different emails; only Better Auth's own generic-response shape and the
+  lack of any observable difference between outcomes limit what an unthrottled caller learns.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-password-reset.md`
+  summary: The spine (`ARCHITECTURE-SPINE.md`) and the compiled `epic-1-context.md` do not yet
+  describe `CreateAuthOptions`'s new `mailer`/`now`/`identityEvents` arguments, the `identity_event`
+  table's AD-21 entry, or the four founder decisions this slice made (identity events in one
+  global insert-only table, a completed reset sets `email_verified`, the sign-in throttle stays
+  deferred, `mailer-console` only for R0).
+  evidence: Deferred by the spec on purpose, mirroring how slice 3's AD-1 amendment for Google was
+  handled: an amended planning doc gets its own adversarial review (up to two rounds) before it
+  lands. Amend the spine, review, then regenerate `epic-1-context.md`.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-password-reset.md`
+  summary: The credential-account check in `sendResetPassword` (`packages/db/auth/src/auth.ts`'s
+  `hasCredentialAccount`) reads the `account` table directly through `options.db`, rather than
+  through a declared port. It is the one place this package queries a table beyond what
+  `authSchema`'s Drizzle adapter already touches for Better Auth's own bookkeeping.
+  evidence: Judgment call made during implementation, not reviewed. It stays inside the same
+  carve-out (`packages/db/auth` may read the four Better Auth tables directly; `account` is one of
+  them) and needs no new port, but a reviewer should confirm that reading and not just writing
+  those tables directly is intended, since every other read in this package goes through
+  `internalAdapter` or `auth.api` instead.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-password-reset.md`
+  summary: `identity_event` rows written for a probe Tenant's members during a test are not swept
+  by `removeProbeTenant` (it skips every table with a null `tenantColumn`, `identity_event`
+  included) — `tests/password-reset.test.ts` cleans up its own dedicated extra users' rows by hand,
+  but a probe Tenant's SEEDED members (created with a credential account) would leave any
+  `identity_event` rows they earned behind if a later test ever reset one of their passwords.
+  evidence: Not exercised today — no test resets a seeded probe member's password, only a
+  dedicated extra user's. Small rows in the dev/CI database either way, the same shape as B8's
+  `verification`-row growth from the Google slice.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-password-reset.md`
+  summary: The `/forgot-password` and `/reset-password` pages were not clicked through in a real
+  browser under `pnpm dev` in this implementation session (no browser available in the sandbox).
+  `next build` succeeds and both routes compile as dynamic routes; the full flow (request a reset,
+  copy the link from the console mailer's stdout line, set a new password, sign in with it) is
+  otherwise verified end-to-end against real Postgres in `tests/password-reset.test.ts`, which
+  drives the same `createAuth` options the composition root builds, but not through Next's own
+  request/response cycle or a browser's form submission.
+  evidence: CI never runs `next build`; the spec says the two pages are "confirmed here or not at
+  all" (the manual check). Owed before story 1.4's whole-story review closes it out.
+
+## Deferred from: review of spec-1-4-password-reset (2026-09-22)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-password-reset.md`
+  summary: `sendResetPassword`'s early return for a user with no credential account may be a response-timing oracle once `mailer-ses` lands.
+  evidence: Edge-case and blind layers, graded `maybe-false` at triage. A user with no credential account skips the transport entirely; a credential user awaits it inline. With `mailer-console` the difference is noise. What would settle it: measuring request duration against a real SES call, both branches, on the same unthrottled and enumerable endpoint the deferred sign-in throttle already covers. If measurable, it belongs with that throttle in Epic 8 — send on a queue, or pad both branches.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-password-reset.md`
+  summary: `tests/password-reset.test.ts`'s consume matrix is order-dependent shared state — each case mutates the same user's password and the next assumes the previous value.
+  evidence: Blind layer, graded `low` and rejected at triage because a developer meets it only when isolating a case with `.only`, and the fix is a restructure rather than a direct correction. Real nonetheless: the first case also asserts exactly one `identity_event` for that user, so any reordering breaks the suite for reasons unrelated to the code. Fix by carrying the current password in a variable, or by giving each case its own user.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-password-reset.md`
+  summary: `identity_event.action` is a closed list in TypeScript only — the column is `text` with no `pgEnum` and no CHECK constraint.
+  evidence: Blind layer, graded `low` and rejected at triage because the fix is a migration plus regenerated SQL. `repo-identity-event.ts` states the column does not accept an arbitrary string; that holds only for callers going through its one writer, which `source-discipline.test.ts` fences. Worth closing when the next story adds a second action to the list, since that is when the enum has more than one member to name.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-password-reset.md`
+  summary: The app role holds an unused `SELECT` on `identity_event`, and every row's `payload` is null, so an operator investigating a takeover learns only "user X reset at T".
+  evidence: Blind layer, graded `low` and rejected at triage: `['SELECT', 'INSERT']` is what the approved Code Map specifies, and no application code reads the table today (only the owner role does, in tests). Both are decisions for whoever first reads the table — story 1.7's audit-log reader is the natural owner. Tightening to `['INSERT']` and choosing forensic fields (request ip, user agent) belong together, not piecemeal.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-password-reset.md`
+  summary: An oversized hidden token field may break the refusal redirect rather than landing on the generic refusal.
+  evidence: Edge-case layer, graded `low` and `maybe-false` at triage, then rejected per the rule for a `maybe-false` that would only be `low`. The claim is that an arbitrarily long token yields a `Location` header Next.js refuses to set; nothing in the diff or the surrounding code settles what happens at that size. What would settle it: posting the reset form with a multi-kilobyte token against `next dev` and watching whether the redirect lands or throws.
+
+## Deferred from: code review of spec-1-4-password-reset (2026-09-22)
+
+Whole-story review of story 1.4, `packages/db` group (Better Auth carve-out and data layer).
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-password-reset.md`
+  summary: `packages/db/auth/src/bindings.ts`'s routing logic has no unit test, although every part of it is pure and needs no database.
+  evidence: Blind layer, graded `low` at triage and deferred rather than patched. Untested and Postgres-free: `endpointOf`'s trailing-slash normalisation and its `null` for a path outside the base path, the method-and-path allowlist match, `notFound()`'s body and its `cache-control: no-store`, and the `if (!isAPIError(error)) throw error` re-throw branch in all five wrappers. `auth.test.ts` calls itself the gate that runs without Postgres, but it stops at `auth.ts`, `google.ts` and `reset.ts`. `identity.ts` (`textOrNull`, the `locale ?? 'en'` fallback, the session-vanished throw) and `password.ts`'s empty-password guard are in the same position. A suite for all of them is substantial new work, and the `tests` group of this story has not been reviewed yet — fold it into that pass.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-password-reset.md`
+  summary: `minPasswordLength` and `maxPasswordLength` are inherited from Better Auth while the same file pins every other reset-relevant setting, and `hashPassword` accepts any non-empty string.
+  evidence: Blind layer, graded `low` at triage. `auth.ts` pins `resetPasswordTokenExpiresIn` (which only restates a default) and `revokeSessionsOnPasswordReset` precisely so they read as decisions, yet the two length bounds the reset flow actually enforces are silent — and `bindings.ts`'s `resetPassword` comment names "a password Better Auth's `minPasswordLength` refuses" as a refusal it handles. Meanwhile `packages/db/auth/src/password.ts` rejects only the empty string, so `SEED_DEMO_PASSWORD` may be shorter than what reset will accept. Choosing the password policy is a product decision rather than a correction, which is why it is deferred rather than patched. Note that `auth.test.ts` now pins `emailAndPassword` with an exact `toEqual`, so adding the keys later is a deliberate, visible test change.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-password-reset.md`
+  summary: Expired `verification` rows have no owned sweep, and when one lands it will want an index the table does not have.
+  evidence: Founder decision 2026-09-22 at the code review's decision gate — deferred to Epic 8, to land with the sign-in throttle. Correcting the finding as two review layers filed it: Better Auth DOES delete expired rows. `findVerificationValue` issues an unscoped `DELETE … WHERE expires_at < now()` unless `verification.disableCleanup` is set, which this project does not set, and it is called from `password.mjs:66` — the unknown-email branch of `requestPasswordReset`, which `/forgot-password` reaches every time a visitor mistypes an address. Do not re-derive this. What is actually wrong is narrower: that sweep is a side effect of an unrelated branch, not an owned maintenance step, so nothing guarantees it ever runs. The growth that can outpace it comes from two unthrottled, enumerable endpoints — a Google sign-in start and a reset request, each writing one row — and the throttle covering both is already an Epic 8 deployment blocker recorded above. Same root cause, same owner. Where the sweep runs is an AD-19 decision: `apps/worker` has no composition root yet, and the maintenance role belongs to the operations envelope. The index is deferred deliberately with it: `invalidateOtherResetTokens` runs once per completed reset, so a sequential scan costs nothing today, and the query that will want an index is the sweep's own `expires_at < now()`, not `value` — indexing `value` now would pin the wrong column.
+
+## Deferred from: code review of spec-1-4-password-reset (2026-09-22)
+
+Whole-story review of story 1.4, fifth and final pass — the four Postgres auth suites and the
+fences and tooling that gate them. Seventeen findings were patched; these ten were not.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-password-reset.md`
+  summary: `cookieFrom` is written four times across the auth suites, and only one copy drops cleared cookies.
+  evidence: Blind layer, graded `medium` at triage. `tests/google-sign-in.test.ts:101`, `tests/identity.test.ts:79` and `tests/membership.test.ts:150` each declare it, and `tests/password-reset.test.ts` inlines a fourth copy inside its `signIn`. Only the Google copy carries `.filter((pair) => !pair.endsWith('='))`, so the other three would replay a `Set-Cookie: …=; Max-Age=0` as a live cookie — which matters most in exactly the sign-out and revocation rows those files exercise. `tests/` already holds shared modules (`write-harness.ts`, `request-context.ts`, `support/`); one of them is where this belongs, with the filter. Deferred because moving it touches all four suites at once and none of them is currently wrong.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-password-reset.md`
+  summary: The `createAuth(...)` option block and the `NOOP_RESET_DEPS` literal are copy-pasted across all four auth suites.
+  evidence: Blind layer, graded `medium` at triage. Each suite repeats `db`/`secret`/`baseURL`/`idleHours`/`generateId`, and slice 4's `NOOP_RESET_DEPS` appears verbatim, comment included, in `google-sign-in.test.ts:86` and `identity.test.ts:76` and inlined again in `membership.test.ts`. This story is itself the evidence of the cost: slice 4's three new fields had to be retro-fitted into slices 1-3's files. A `tests/support/auth.ts` factory makes the fifth field a one-line change. Deferred as a refactor of four green suites rather than a correction.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-password-reset.md`
+  summary: `hashPassword` is deep-imported past its own barrel in five files, and no `@momo/db-auth/*` subpath mapping exists to make the barrel reachable.
+  evidence: Blind layer, graded `low` at triage. `packages/db/auth/src/index.ts` exports it, yet `scripts/seed.ts` and all four auth suites import `.../packages/db/auth/src/password` directly — three of them in the very import block where they already import from `.../packages/db/auth/src`. `scripts/seed.ts`'s header describes this as hashing "through `@momo/db-auth`", which is not what the import says. The cause is that neither `tsconfig.base.json` nor `vitest.config.ts` maps a `@momo/db-auth/*` subpath beside the bare one, so consumers fall back to relative deep paths. Note this pass ADDED a sixth such import (`verifyPassword` in `tests/identity.test.ts`), deliberately matching the existing shape rather than mixing two. Deferred: adding the subpath mapping is a build-config change that wants its own check.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-password-reset.md`
+  summary: The fake OIDC provider's `interactive: true` branch — the local Google sign-in the README walks a developer through — is executed by no test and no CI step.
+  evidence: Verification-gap layer, measured. `grep -rn interactive tests/*.ts scripts/*.ts` outside `tests/support/` returns one hit, `scripts/fake-oidc.ts:35`; every suite starts the fake with `interactive` unset and drives it over `GET /authorize`, so the POST branch and the `signInAsPage` form builder (`tests/support/fake-oidc.ts:140-155`, `:243-255`) never run. `signInAsPage` re-emits every authorize parameter as a hidden input and posts to `action="/authorize"`, dropping the original query string, so the whole branch depends on that round trip being complete: omit one field (`code_challenge`, say) and `authorizeProblem` answers `400 S256 PKCE required` while every gate stays green. What would close it: one case in `tests/google-sign-in.test.ts` that starts a second fake with `interactive: true`, GETs the authorize URL, scrapes the hidden inputs from the HTML, POSTs them with an `email`, and runs the result through the existing `callback()` + `expectLandedHome` — roughly fifteen lines on machinery that file already has. Deferred: it is developer tooling, not shipped product.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-password-reset.md`
+  summary: The Google refusal matrix has no row for a wrong `iss`, nor for a mismatched (rather than absent) `nonce`.
+  evidence: Acceptance-auditor and blind layers, agreeing. `tests/google-sign-in.test.ts` drives every knob `FakeScript` exposes — no id token, foreign signing key, wrong `aud`, no `nonce`, expired, refused exchange, `access_denied`, discovery without `jwks_uri` — but `tests/support/fake-oidc.ts` has no knob for an id token whose `iss` is not the configured issuer (it always signs `iss: issuer`, `:176`) and none for a `nonce` that is present but wrong (only `dropNonce`, `:50`). AD-23 states the guarantee as "plugin verifies, iss exact, exp when present", which makes issuer confusion the one named guarantee this otherwise exhaustive matrix does not exercise. Deferred: both need new knobs in the fake, which is shared by four suites.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-password-reset.md`
+  summary: The `Build (apps/web)` CI step inherits the job's `env`, so it cannot check the promise it was added for.
+  evidence: Blind and verification-gap layers. The step's own comment concedes it: "This step inherits the job's `env`, so it does NOT check that promise — a build needing configuration would still pass here." The regression it was created for is precisely a build that reads configuration at import time, which is what made `next build` fail on `/_not-found` and falsified the composition root's "importing it reads no configuration". Giving the step its own `env:` with `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL` and `SEED_DEMO_PASSWORD` blanked turns the admission into the gate. Deferred rather than patched because the blanked-env build was verified BY HAND in this pass (clean `.next`, all five keys unset, exit 0, every route still `ƒ (Dynamic)`) and wiring it into CI is a workflow change that wants its own watched-to-fail run.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-password-reset.md`
+  summary: `scripts/seed.ts` hashes before it reads `DATABASE_URL`, so with both keys unset only `SEED_DEMO_PASSWORD` is named.
+  evidence: Edge-case layer, graded `low`, `kind: deletion`. `const demoPasswordHash = await hashPassword(config.SEED_DEMO_PASSWORD)` runs before `getDb(config.DATABASE_URL)`, and each getter throws on its own key, so the first missing key wins. The file's header states the opposite rule — "A missing DATABASE_URL fails here, naming the key, which is the whole point of the removal". Reading the handle first restores it. Deferred: an operator still gets a named key, just not the one the header promises, and `pnpm demo`'s pre-flight (patched in this pass) now names ALL five missing keys at once before either is reached.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-password-reset.md`
+  summary: `scripts/fake-oidc.ts` has no test, though `scripts/pgboss-migrate.test.ts` sets the precedent for testing a script's pure guards.
+  evidence: Edge-case and blind layers. The two guards this pass ADDED — `digitsOnly` for `FAKE_OIDC_PORT` and `httpOrigin` for `BETTER_AUTH_URL` — are pure, exported from nothing, and verified only by hand (`FAKE_OIDC_PORT=4a5` and `BETTER_AUTH_URL=ftp://nope` each fail naming the key; the default path listens on 4455). `scripts/pgboss-migrate.test.ts` does exactly this for the migrator's guards, so the shape exists. What would close it: lift both helpers into a module the script imports and the test can call. Deferred: it is tooling, and the guards are three lines each.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-password-reset.md`
+  summary: The four-table round trip only READS `auth_user` and `account` back, and checks neither id against the UUIDv7 regex.
+  evidence: Acceptance-auditor layer, against slice 1's task "each of the four Better Auth tables round-trips through the adapter, with UUIDv7 ids". `tests/identity.test.ts:445-470`: `session` (created by `signIn`, read by `findSession`) and `verification` (create → find → delete) are genuine round trips with their ids matched against the regex; `auth_user` and `account` are reached only by `findUserByEmail(PM.email, { includeAccounts: true })` on rows `createProbeTenant` inserted directly through Drizzle. Their ids are prefixed probe strings (`xtprobe-idn-019b…`) and so cannot match the regex by construction. An adapter-side write defect on either table would not fail this test. Closing it means creating a user and a credential account THROUGH the adapter, with ids the adapter mints — which collides with the probe-Tenant id discipline every other row in the file depends on. Deferred as a design question, not a correction.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-password-reset.md`
+  summary: "Keeps the session cookie cache off — every request reaches the session table" asserts two option flags, not the behaviour its name claims.
+  evidence: Acceptance-auditor layer, graded as a naming nit. `tests/identity.test.ts:170` asserts `auth.options.session?.cookieCache?.enabled === false` and `disableSignUp === true`. The behavioural half is carried implicitly by the four mutate-then-resolve rows elsewhere in the file (which would read a stale cached session if the cache were on), but no assertion ties the name to them. Either the name narrows to what it checks, or one of those rows gains a comment pointing back here. Deferred as prose upkeep.

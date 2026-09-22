@@ -771,3 +771,29 @@ details > summary {
   font-size: 13px;
   width: 100%;
 }
+
+/* Password reset (story 1.4 slice 4): /forgot-password and /reset-password reuse
+   .auth-page/.auth-sheet/.auth-form/.auth-field/.auth-error/.auth-note as they are; these three
+   rules are the only new ones — the spacing a lone paragraph before or after the form needs
+   (the Google divider above already carried its own), and the success-toned counterpart of
+   .auth-error for /forgot-password's one generic "sent" message (a completed reset shows no
+   message of its own; it redirects straight to /sign-in). */
+.auth-hint {
+  margin: 0 0 14px;
+  color: var(--ink-muted);
+  font-size: 13px;
+}
+
+.auth-below {
+  margin: 18px 0 0;
+  font-size: 13px;
+}
+
+.auth-success {
+  margin: 0;
+  padding: 8px 10px;
+  font-size: 13px;
+  color: var(--health-green);
+  background: var(--health-green-soft);
+  border-left: 2px solid var(--health-green);
+}

@@ -67,12 +67,13 @@ describe('the table-class registry is the single source', () => {
     expect(new Set(TRUNCATE_ORDER).size, 'a table is truncated twice').toBe(TRUNCATE_ORDER.length);
   });
 
-  it('holds the 22 tables of this release, 16 of them tenant-owned', () => {
+  it('holds the 23 tables of this release, 16 of them tenant-owned', () => {
     // Pinned as numbers as well as names: a future change that removes a table and adds
     // another keeps the name lists agreeing with `schema.ts` while silently changing what
     // this story was reasoned about. Story 1.4 slice 1: `app_user` out; the four Better Auth
-    // tables and the tenant-membership bridge in, all `global`.
-    expect(TABLE_REGISTRY).toHaveLength(22);
+    // tables and the tenant-membership bridge in, all `global`. Slice 4 adds `identity_event`,
+    // also `global`.
+    expect(TABLE_REGISTRY).toHaveLength(23);
     expect(TENANT_OWNED).toHaveLength(16);
     expect(TABLE_REGISTRY.filter((e) => e.tenantColumn === null).map((e) => e.table)).toEqual([
       'tenant',
@@ -81,9 +82,10 @@ describe('the table-class registry is the single source', () => {
       'account',
       'verification',
       'tenant_membership',
+      'identity_event',
     ]);
     expect(TABLE_REGISTRY.filter((e) => e.class === 'global').map((e) => e.table).sort()).toEqual(
-      ['account', 'auth_user', 'session', 'tenant', 'tenant_membership', 'verification'],
+      ['account', 'auth_user', 'identity_event', 'session', 'tenant', 'tenant_membership', 'verification'],
     );
   });
 
@@ -124,29 +126,36 @@ describe('the table-class registry is the single source', () => {
     }
   });
 
-  it('gives the application role read-only access to the global class, except the Better Auth tables and the bridge', () => {
+  it('gives the application role read-only access to the global class, except the Better Auth tables, the bridge and identity_event', () => {
     // `tenant` has no isolation policy — it is what `tenant_id` points at — so the grant
     // is the only thing standing between the application role and writing another Tenant's
     // row. It reads, and that is all. The membership bridge has one reader for request
     // resolution and one writer (story 1.4 slice 2's audited use cases, which filter by
     // `tenant_id` themselves): SELECT, UPDATE and DELETE — never INSERT, because adding a user
-    // to a Tenant is invitation work, not a request's side effect.
+    // to a Tenant is invitation work, not a request's side effect. `identity_event` (slice 4)
+    // is the third shape: SELECT and INSERT only — its one writer never updates or deletes.
     expect(APP_PRIVILEGES.global).toEqual(['SELECT']);
     const overridden = TABLE_REGISTRY.filter((e) => e.appPrivileges !== undefined);
     expect(overridden.map((e) => e.table).sort()).toEqual([
       'account',
       'auth_user',
+      'identity_event',
       'session',
       'tenant_membership',
       'verification',
     ]);
-    for (const entry of overridden.filter((e) => e.table !== 'tenant_membership')) {
+    const fullDml = overridden.filter((e) => e.table !== 'tenant_membership' && e.table !== 'identity_event');
+    expect(fullDml.map((e) => e.table).sort()).toEqual(['account', 'auth_user', 'session', 'verification']);
+    for (const entry of fullDml) {
       expect(appPrivilegesOf(entry), entry.table).toEqual(['SELECT', 'INSERT', 'UPDATE', 'DELETE']);
     }
     expect(appPrivilegesOf(TABLE_REGISTRY.find((e) => e.table === 'tenant')!)).toEqual(['SELECT']);
     expect(
       appPrivilegesOf(TABLE_REGISTRY.find((e) => e.table === 'tenant_membership')!),
     ).toEqual(['SELECT', 'UPDATE', 'DELETE']);
+    expect(
+      appPrivilegesOf(TABLE_REGISTRY.find((e) => e.table === 'identity_event')!),
+    ).toEqual(['SELECT', 'INSERT']);
   });
 });
 

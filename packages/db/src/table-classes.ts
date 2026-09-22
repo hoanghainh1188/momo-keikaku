@@ -23,10 +23,10 @@
  *
  * `tenantColumn` is the second, independent axis. A table is *tenant-owned* when it
  * carries one, and a tenant-owned table gets ENABLE + FORCE row-level security and the
- * isolation policy. 16 of the 22 tables today are tenant-owned. `tenant` itself is not — it is
+ * isolation policy. 16 of the 23 tables today are tenant-owned. `tenant` itself is not — it is
  * the table the column points at — so it is `global`, which is the class for rows that exist
  * before any tenant is resolved. Story 1.4 slice 1 put the four Better Auth tables and the
- * tenant-membership bridge in that class beside it.
+ * tenant-membership bridge in that class beside it; slice 4 adds `identity_event`.
  *
  * TWO PER-ENTRY EXCEPTIONS, each stated where it applies rather than by a new class:
  *
@@ -34,7 +34,10 @@
  *     (no tenant policy) but Better Auth writes them on the application role's connection, so
  *     they need DML. `tenant_membership` gets SELECT, UPDATE and DELETE and no INSERT (story 1.4
  *     slice 2): its audited use cases revoke a membership, change its role and its Projects, and
- *     adding a user to a Tenant is invitation work, later. `tenant` keeps the class's SELECT.
+ *     adding a user to a Tenant is invitation work, later. `identity_event` gets SELECT and INSERT
+ *     and neither UPDATE nor DELETE (story 1.4 slice 4): its one writer only ever inserts, and the
+ *     missing grant is what makes a row that landed there permanent. `tenant` keeps the class's
+ *     SELECT.
  *   * `tenantBridge` marks the ONE table that carries `tenant_id` without row-level security:
  *     `tenant_membership`, read to decide which Tenant a request acts in, and so read before any
  *     Tenant is known. `rls.test.ts` otherwise fails a `tenant_id` column with a null
@@ -93,8 +96,9 @@ export interface TableEntry {
 }
 
 /**
- * The 22 tables of this release (story 1.3 slice 2 added `program`; story 1.4 slice 1 removed
- * `app_user` and added the four Better Auth tables and `tenant_membership`), in dependency order.
+ * The 23 tables of this release (story 1.3 slice 2 added `program`; story 1.4 slice 1 removed
+ * `app_user` and added the four Better Auth tables and `tenant_membership`; slice 4 adds
+ * `identity_event`), in dependency order.
  *
  * Nine are insert-only today and are classed `append-only` accordingly:
  * baseline_version, baseline_wp, tracker_snapshot, ticket_observation,
@@ -142,6 +146,13 @@ export const TABLE_REGISTRY: readonly TableEntry[] = [
     why: 'The bridge: which Tenants a user belongs to, as which role. Read to resolve the Tenant, so it cannot be filtered by one. One reader for request resolution (resolveRequestContext), one writer (the audited membership use cases, story 1.4 slice 2), which filter by tenant_id explicitly. No INSERT: adding a user is invitation work.',
     tenantBridge: true,
     appPrivileges: ['SELECT', 'UPDATE', 'DELETE'],
+  },
+  {
+    table: 'identity_event',
+    class: 'global',
+    tenantColumn: null,
+    why: 'Identity events (a password reset today; a link, an unlink or an invitation acceptance later) that happen before any Tenant exists (story 1.4 slice 4). Insert-only comes from the missing UPDATE/DELETE grant, the same mechanism as tenant\'s SELECT-only.',
+    appPrivileges: ['SELECT', 'INSERT'],
   },
   {
     table: 'department',

@@ -42,6 +42,10 @@ const ROLE_LABELS: Readonly<Record<Role, string>> = {
 };
 
 function roleLabel(roles: readonly Role[]): string {
+  // A context with no role is not reachable today — the resolver refuses before a page renders —
+  // but an empty join renders an empty chip, which reads as a broken header rather than as the
+  // absence it is. Say it instead.
+  if (roles.length === 0) return 'No role';
   return roles.map((role) => ROLE_LABELS[role]).join(' · ');
 }
 

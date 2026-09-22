@@ -45,7 +45,14 @@ describe('the session gate', () => {
   });
 
   it('never asks about a session on the public paths, so /sign-in cannot redirect to itself', async () => {
-    for (const path of ['/sign-in', '/no-access', '/api/auth/get-session', '/api/auth/sign-in/email']) {
+    for (const path of [
+      '/sign-in',
+      '/no-access',
+      '/forgot-password',
+      '/reset-password',
+      '/api/auth/get-session',
+      '/api/auth/sign-in/email',
+    ]) {
       const { gate, seen } = gateAnswering({ signedIn: false, setCookies: [] });
       const response = await gate(request(path));
       expect(response.headers.get('location'), path).toBeNull();
@@ -59,6 +66,13 @@ describe('the session gate', () => {
     expect(isPublicPath('/sign-inx')).toBe(false);
     expect(isPublicPath('/api/authx')).toBe(false);
     expect(isPublicPath('/p/sign-in')).toBe(false);
+    // Story 1.4 slice 4: /forgot-password and /reset-password join the exact-match set.
+    expect(isPublicPath('/forgot-password')).toBe(true);
+    expect(isPublicPath('/reset-password')).toBe(true);
+    expect(isPublicPath('/forgot-password/x')).toBe(false);
+    expect(isPublicPath('/forgot-passwordx')).toBe(false);
+    expect(isPublicPath('/reset-password/x')).toBe(false);
+    expect(isPublicPath('/reset-passwordx')).toBe(false);
   });
 });
 
@@ -90,15 +104,42 @@ describe('the middleware wiring', () => {
       ['/sign-inx', false],
       ['/sign-in/x', false],
       ['/no-access/x', false],
+      ['/forgot-password/x', false],
+      ['/forgot-passwordx', false],
+      ['/reset-password/x', false],
+      ['/reset-passwordx', false],
       ['/api/authx', false],
       ['/sign-in', true],
       ['/no-access', true],
+      ['/forgot-password', true],
+      ['/reset-password', true],
       ['/api/auth', true],
       ['/api/auth/get-session', true],
     ];
     for (const [path, isPublic] of table) {
       expect(isPublicPath(path), path).toBe(isPublic);
       expect(matcher.test(path), `matcher on ${path}`).toBe(!isPublic);
+    }
+  });
+
+  /**
+   * THE COMPLEMENT ABOVE HOLDS FOR ROUTES, NOT FOR ASSETS — and the table simply never listed an
+   * asset path, which hid the exception rather than stating it. Next's own static output and the
+   * favicon are excluded from the matcher while `isPublicPath` calls them protected: they are not
+   * routes, so the question does not arise for them. Pinned here so the exception is deliberate,
+   * and so the anchors stay on: the entries were once unanchored, which let `/faviconXico` and
+   * `/_next/staticfoo` skip the gate as well.
+   */
+  it('excludes Next\'s own assets from the gate, and only those', async () => {
+    const { config } = await import('../middleware');
+    const matcher = new RegExp(`^${config.matcher[0]}$`);
+    for (const asset of ['/favicon.ico', '/_next/static/chunk.js', '/_next/image']) {
+      expect(matcher.test(asset), `matcher on ${asset}`).toBe(false);
+      expect(isPublicPath(asset), `isPublicPath on ${asset}`).toBe(false);
+    }
+    // Anchored: a path that merely starts like an asset is still gated.
+    for (const lookalike of ['/faviconXico', '/favicon.icox', '/_next/staticfoo', '/_next/imagefoo']) {
+      expect(matcher.test(lookalike), `matcher on ${lookalike}`).toBe(true);
     }
   });
 });

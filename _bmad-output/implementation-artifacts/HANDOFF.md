@@ -1,9 +1,52 @@
 # Handoff — 2026-09-22 (updated at the end of the 2026-09-22 session)
 
 State at `main` = the merge of PR #32 (story 1.4 slice 3, Google sign-in), `b8ef2f6`, plus the
-docs PR that follows it (the AD-1/AD-15/AD-16/AD-17/AD-23 spine amendment and this handoff).
+docs PR that follows it (the AD-1/AD-15/AD-16/AD-17/AD-23 spine amendment and this handoff), plus
+story 1.4 slice 4 (password reset), implemented in this session.
 
-**Latest (2026-09-22): story 1.4 slice 3 (Google sign-in) is merged (PR #32)**
+**Latest (2026-09-22): story 1.4 slice 4 (password reset) is implemented.** A new `MailerPort`
+(`packages/app/src/ports/mailer.ts`), satisfied by `mailerConsoleOn` (`packages/adapters`,
+`MAILER=console` by default; `ses` is accepted in config but fails at the composition root until
+Epic 8) and handed to `createAuth` as an argument, exactly as `google` is. `packages/db/auth`
+gained `reset.ts` (the pure link and mail-copy builder) and two callbacks on `emailAndPassword`
+(`sendResetPassword`, `onPasswordReset`) plus two pinned settings (`resetPasswordTokenExpiresIn:
+3600`, `revokeSessionsOnPasswordReset: true`) and two bindings (`requestPasswordReset`,
+`resetPassword`), both server actions only — `/request-password-reset` and `/reset-password` stay
+in `DISABLED_PATHS` and 404 over HTTP, unchanged. A new global, insert-only `identity_event` table
+(`packages/db/src/schema.ts`, `table-classes.ts` — 23 tables now) records a completed reset (never
+a request, to avoid a write amplifier on an unauthenticated, enumerable endpoint); a Google-only
+user gets no mail and no account row. `apps/web` gained `/forgot-password` and `/reset-password`
+(public, server actions, one generic answer/refusal each — NFR-S5), and a "Forgot your password?"
+link from `/sign-in`. One generic answer covers a known email, an unknown one and a Google-only
+account alike; a mailer failure is logged without the address and the request still answers as on
+success. The suite is **758 tests across 43 files** (verified locally in this session against a
+native Postgres 16, since Docker was unavailable in the sandbox — CI's `postgres:18.6-alpine`
+service should be re-verified once a session has Docker again). Two of the acceptance criteria's
+six sabotages were caught as real pass→fail transitions: `revokeSessionsOnPasswordReset` removed
+(a session survives the reset) and `identity_event` granted UPDATE (caught by both the registry
+assertion and the SQL-drift check). **Correction (post-implementation review, 2026-09-22): the
+other four were mis-modelled or already true regardless.** `resetPasswordTokenExpiresIn` removed
+changes no behaviour (Better Auth's own default is already 3600 s); `/reset-password` added to
+`SERVED_AUTH_ENDPOINTS` alone still 404s (`DISABLED_PATHS` blocks it independently); "the generic
+sentence replaced by a distinguishable one" is asserted by no test today. Most notably: **the
+boundary's lowercasing is NOT load-bearing** — Better Auth lowercases the address itself inside
+`findUserByEmail`, and the integration test hands the binding an upper-cased email and still
+expects mail. Removing `.toLowerCase()` from the `forgot-password` action changes no observable
+system behaviour; only `.trim()` matters, and the one test that fails on its removal
+(`forgot-password/actions.test.ts`) is pinning the call shape, not a real security boundary. See
+the spec's own Spec Change Log and Review Triage Log for the full accounting; do not read the
+sabotage table above as six independently-verified guarantees. Manual browser verification of
+`/forgot-password` and `/reset-password`
+under `next dev` was **not** performed in this session (no browser available); `next build`
+succeeds and both routes compile and render as dynamic routes — the actual click-through is still
+owed. **Story 1.4 is now complete across all four slices; the next session should run
+`bmad-code-review` over the whole story**, as was done for 1.3, then mark 1.4 `done`. What this
+slice left in `deferred-work.md`: `mailer-ses` (Epic 8), the sign-in/reset-request rate limit
+(already deferred, extended to cover the new endpoint), and the spine amendment recording
+`identity_event` and this session's decisions (needs its own adversarial review before
+`epic-1-context.md` is regenerated, as slice 3's AD-1 amendment was).
+
+**Earlier (2026-09-22): story 1.4 slice 3 (Google sign-in) is merged (PR #32)**
 (`spec-1-4-google-sign-in.md`, `done`: two adversarial spec rounds, one code review), and the
 spine is amended to match it (two adversarial rounds, rubric and tech-currency reviews).
 Google is one OIDC provider discovered from an issuer URL — a fake in-repo provider
@@ -110,7 +153,8 @@ to their share. Track upgrade-style work separately from feature work.
 | #30 | Handoff after story 1.4 slice 2 |
 | #31 | AD-21/AD-23 — the membership bridge's one writer (spine) |
 | #32 | Story 1.4 slice 3 — Google sign-in: one `genericOAuth` provider from an issuer URL, off unless `AUTH_GOOGLE=on`, link-never-create by verified email, provider-aware allowlist, two auth instances, the in-repo fake OIDC provider (`pnpm fake-oidc`) |
-| (next) | AD-1/AD-15/AD-16/AD-17/AD-23 spine amendment for Google sign-in; `epic-1-context.md` regenerated; this handoff |
+| #33 | AD-1/AD-15/AD-16/AD-17/AD-23 spine amendment for Google sign-in; `epic-1-context.md` regenerated; handoff |
+| (next) | Story 1.4 slice 4 — password reset: `MailerPort`/`mailer-console`, global insert-only `identity_event`, `sendResetPassword`/`onPasswordReset`, `/forgot-password` + `/reset-password`; this handoff |
 
 **CI has ten steps**, all watched to fail before being trusted: lint (the
 clock/env fence, the tenant bans, and AD-4's arithmetic fences — rounding only
@@ -234,37 +278,34 @@ reading.
 
 ## Next, in order
 
-### 1. Story 1.4 slice 4 — password reset
+### 1. Story 1.4's whole-story code review
 
-Slice 3 (Google) is merged and the spine carries it. What it left, in `deferred-work.md` and
-the spine's Deferred section: Epic 8's checks against real Google (exact `iss`, a discovery
+All four slices are now implemented (identity/context, revocation/membership, Google, password
+reset). Run `bmad-code-review` over the whole story, as was done for 1.3, then mark 1.4 `done` in
+`sprint-status.yaml`. Points to look at first: the credential-account check in
+`packages/db/auth/src/auth.ts`'s `sendResetPassword` (a direct read on `account`, not through any
+port — is that the right shape, or does it want its own small port?); whether the two new public
+pages (`/forgot-password`, `/reset-password`) need a rate limit sooner than Epic 8, since a reset
+request is now the SECOND unauthenticated, enumerable, unthrottled endpoint beside sign-in; and
+the deferred spine amendment (below) before `epic-1-context.md` is regenerated.
+
+What slice 4 left, in `deferred-work.md`: `mailer-ses` (Epic 8, the AWS account and sender domain
+exist there to test it against); the sign-in/reset-request rate limit (already deferred from
+slice 1, now covering a second endpoint); the AD-1 spine amendment for `mailer`/`now`/the
+identity-event writer on `CreateAuthOptions`, the `identity_event` table's own AD-21 entry, and
+the four founder decisions this slice made (identity events in one global table, a completed
+reset sets `email_verified`, the sign-in throttle stays deferred, `mailer-console` only for R0) —
+needs its own adversarial review before the spine and the compiled context are amended, as slice
+3's AD-1 amendment was.
+
+Also still open from slice 3: Epic 8's checks against real Google (exact `iss`, a discovery
 timeout and retry — a HUNG discovery today blocks the whole page instance, password sign-in
-included), `verification` row growth with the sign-in rate limit, unaudited Google account
-links, no page-render test for `/sign-in`, and whether the `error` code Better Auth appends to
+included), `verification` row growth with the sign-in rate limit, unaudited Google account links,
+no page-render test for `/sign-in`, and whether the `error` code Better Auth appends to
 `/sign-in?google=refused` may disclose that an email has an account (NFR-S5).
 
-**Slice 4 must first answer, under review (spine Deferred, "Who creates users and who marks an
-email verified"):** today only the seed creates `auth_user` rows and sets `email_verified`, and
-Google linking trusts that flag; Better Auth's reset proves inbox control but does not set it.
-Also: a Clock-expired value never goes in `verification` (AD-15), and the fake OIDC provider is
-the pattern for any fake external identity service.
-
-Slice 4 is unblocked:
-```
-/bmad-build story 1.4 slice 4 — password reset through MailerPort (deferred-work.md). Hãy chạy `git fetch` trước.
-```
-Mail goes through a new `MailerPort`: `mailer-console` in development,
-`mailer-ses` as the production implementation (the AWS account, sender domain
-and SES access are Epic 8's). The route handler's allowlist
-(`packages/db/auth/src/bindings.ts`) must grow the reset endpoints on purpose —
-`/reset-password/*` is 404 today and a test pins that. Consider the deferred
-sign-in rate limit at the same time: reset is the second unauthenticated,
-enumerable endpoint.
-
-Continuity: slices 1 and 2's specs (`spec-1-4-identity-and-request-context.md`,
-`spec-1-4-revocation-and-membership.md`, both `done`). When all four slices are
-done, run `bmad-code-review` over the whole story, as for 1.3, then mark 1.4
-`done`.
+Continuity: all four slices' specs (`spec-1-4-identity-and-request-context.md`,
+`spec-1-4-revocation-and-membership.md`, `spec-1-4-google-sign-in.md`, `spec-1-4-password-reset.md`).
 
 What slice 2 left, in `deferred-work.md`:
 - Story 1.5 must not read a Tenant Admin's `projectIds` as a limit (kept on
@@ -359,6 +400,14 @@ clock); CI never runs `next build` (it passed locally for story 1.4 slice 1).
   cases require `tenant_admin` now (a local check ahead of 1.5, `not_found`
   otherwise); the last Tenant Admin cannot be revoked or demoted; adding a user
   to a Tenant is invitation work, so no INSERT grant; no Users screen yet.
+- **Story 1.4 slice 4 decisions (founder, 2026-09-22)**: identity events that happen before any
+  Tenant exists (a password reset today; later a link, an unlink, an invitation acceptance) land
+  in one new global, insert-only `identity_event` table, never in `audit_log` or an
+  `operator_audit`; a completed reset sets `email_verified` (redeeming a mailed token is what
+  proves the address), written from `onPasswordReset` before session revocation; the sign-in
+  throttle stays deferred to Epic 8, so R0 runs unthrottled locally; `mailer-console` is the only
+  mailer this release ships, with `mailer-ses` moving to Epic 8 where the AWS account exists to
+  test it against.
 
 ---
 

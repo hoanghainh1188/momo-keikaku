@@ -33,6 +33,9 @@
  *     middleware's session refresh gets an instance of its own built WITHOUT Google, so the
  *     middleware never waits on discovery (a hung fetch still blocks this instance: Epic 8). Whether the button shows is the instance's REGISTRATION
  *     (configured and discovered), never the configuration alone.
+ *   * PASSWORD RESET (story 1.4 slice 4): `webMailer()` (console today; `ses` fails naming the
+ *     missing adapter until Epic 8), `systemClock.now` and the identity-event writer over
+ *     `webDb()` are ONE value fed into `baseAuthOptions()`, so both instances agree.
  *
  * WHAT IT EXPORTS: use-case bindings, the auth bindings (the route handler, the middleware's
  * session refresh, sign-in with a password or Google, sign-out) and the context resolution —
@@ -78,6 +81,7 @@ import {
   type CreateProjectInput,
   type ExplainTicketsInput,
   type IdentityPort,
+  type MailerPort,
   type MapTicketInput,
   type MapTicketsInput,
   type MembershipReader,
@@ -96,9 +100,10 @@ import {
   type UnassignMemberProjectInput,
   type WriteDeps,
 } from '@momo/app';
-import { systemClock, uuidV7IdsOn } from '@momo/adapters';
+import { mailerConsoleOn, systemClock, uuidV7IdsOn } from '@momo/adapters';
 import {
   getDb,
+  identityEventWriterOn,
   inTenantTransaction,
   loadProjectBundle,
   loadReview,
@@ -110,6 +115,8 @@ import {
   googleRegistered,
   googleSignIn as startGoogleSignIn,
   identityOn,
+  requestPasswordReset as startPasswordResetRequest,
+  resetPassword as consumePasswordReset,
   serveAllowlisted,
   sessionForMiddleware,
   signInWithPassword,
@@ -133,7 +140,37 @@ function webDb(): Db {
  */
 const webIds = uuidV7IdsOn(systemClock);
 
-/** What every instance of this process is built from — everything but the Google provider. */
+/**
+ * The process's mailer (story 1.4 slice 4), built on FIRST USE and memoised like the auth
+ * instances below — reading `config.MAILER` at import time would defeat the point of the
+ * per-key, read-on-first-use config getters. `console` is the only transport that ships;
+ * `ses` (Epic 8) fails naming the missing adapter rather than silently falling back — NOT at
+ * boot, since this runs inside `baseAuthOptions()`, reached only when an auth instance is first
+ * built. Because `sessionAuth()` shares that same value, the first request through the
+ * middleware throws and every route, `/sign-in` included, answers 500 — loud, but only once a
+ * request actually arrives, not before.
+ */
+let mailerInstance: MailerPort | undefined;
+function webMailer(): MailerPort {
+  if (mailerInstance) return mailerInstance;
+  switch (config.MAILER) {
+    case 'console':
+      mailerInstance = mailerConsoleOn((line) => console.log(line)) satisfies MailerPort;
+      break;
+    case 'ses':
+      throw new Error(
+        'MAILER=ses is not implemented yet — mailer-ses lands in Epic 8, when the AWS account ' +
+          'and sender domain exist to test it against. Set MAILER=console for local dev.',
+      );
+  }
+  return mailerInstance;
+}
+
+/**
+ * What every instance of this process is built from — everything but the Google provider. The
+ * mailer, `now` and the identity-event writer (story 1.4 slice 4) are ONE value shared by both
+ * instances (AD-1's no-drift rule), exactly as the id generator already is.
+ */
 function baseAuthOptions() {
   return {
     db: webDb(),
@@ -141,6 +178,9 @@ function baseAuthOptions() {
     baseURL: config.BETTER_AUTH_URL,
     idleHours: config.SESSION_IDLE_TIMEOUT_HOURS,
     generateId: () => webIds.next(),
+    mailer: webMailer(),
+    now: systemClock.now,
+    identityEvents: identityEventWriterOn(webDb()),
   };
 }
 
@@ -183,7 +223,11 @@ function resolverDeps() {
       // The reason is logged, never shown: the page says "no access" and nothing else.
       console.warn(
         `[auth] no access for user ${event.userId}: ${event.reason} ` +
-          `(${event.memberships} memberships, no active Tenant, no tenant switcher yet)`,
+          // Derived, not asserted: the switcher is only what `several_memberships` is waiting for,
+          // and saying so on a `no_membership` line described a cause that was not the one.
+          (event.reason === 'several_memberships'
+            ? `(${event.memberships} memberships, no active Tenant chosen — no tenant switcher yet)`
+            : `(no membership in any Tenant)`),
       );
     },
   } satisfies ResolveRequestContextDeps<Headers, Db>;
@@ -280,6 +324,23 @@ export async function signInWithEmail(credentials: {
 /** Ends the request's session and clears its cookie. */
 export async function signOut(): Promise<void> {
   await signOutOf(webAuth(), await incomingHeaders());
+}
+
+/**
+ * Requests a password reset (story 1.4 slice 4). The caller shows the same generic sentence
+ * whatever happens on the other side of this call — an unknown email, a Google-only user, a mail
+ * that failed to send, or a mail actually sent all look the same from here, by design (NFR-S5).
+ */
+export async function requestPasswordReset(email: string): Promise<void> {
+  await startPasswordResetRequest(webAuth(), await incomingHeaders(), email);
+}
+
+/**
+ * Consumes a reset token and sets a new password. `false` for every refusal — a reused or
+ * expired token, a password Better Auth's `minPasswordLength` refuses — told apart by nothing.
+ */
+export async function resetPassword(input: { readonly token: string; readonly password: string }): Promise<boolean> {
+  return consumePasswordReset(webAuth(), await incomingHeaders(), input);
 }
 
 /**

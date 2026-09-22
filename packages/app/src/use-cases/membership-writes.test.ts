@@ -231,6 +231,23 @@ describe('changeMemberRole', () => {
     expect(fake.writes()).toEqual([]);
   });
 
+  /**
+   * THE OTHER SIDE OF THE SAME RULE, which nothing pinned. `keepAnAdmin` is skipped when the
+   * REQUESTED role is `tenant_admin`, so naming the role a member already holds stays a no-op
+   * rather than a refusal — including for a Tenant's only admin re-confirming their own. Delete
+   * that condition and this is the one test that notices: every other case targets a `pm`, or a
+   * Tenant with two admins, or asks for `pm`, and both enumeration gates drive a `pm` target in a
+   * two-admin Tenant.
+   */
+  it('lets the sole tenant_admin be given the role they already hold, writing and recording nothing', async () => {
+    const fake = fakeDeps(MEMBERS.filter((row) => row.userId !== OTHER_ADMIN));
+    expect(await changeMemberRole(fake.deps, CTX, { userId: ADMIN, role: 'tenant_admin' })).toMatchObject({
+      ok: true,
+    });
+    expect(fake.writes()).toEqual([]);
+    expect(fake.audits).toEqual([]);
+  });
+
   it('re-roles a member whose stored role is unknown', async () => {
     const fake = fakeDeps();
     expect(await changeMemberRole(fake.deps, CTX, { userId: ODD, role: 'pm' })).toMatchObject({ ok: true });

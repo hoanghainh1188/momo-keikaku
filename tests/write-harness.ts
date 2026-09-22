@@ -170,6 +170,15 @@ export function staleProjectIdOf(probe: ProbeTenant): string {
 /**
  * Stages a probe Tenant's memberships for the membership writes (story 1.4 slice 2), as the owner:
  *
+ * HAZARD, RECORDED RATHER THAN FIXED (code review, 2026-09-22): `HARNESS_USER_ID` is ONE constant
+ * shared by every suite and is staged here UNPREFIXED, while `removeProbeTenant` collects user ids
+ * from a Tenant's memberships and then deletes matching rows in `identity_event`, `verification`,
+ * `session`, `account` and `auth_user` — none tenant-scoped, and the first two were added to that
+ * teardown by this same story. Latent only because no `auth_user` row exists for this id. Prefixing
+ * it per probe was tried and reverted: the id is also the user of every registry CONTEXT, so the
+ * prefixed membership no longer matches the caller and every membership write refuses. The real fix
+ * threads a per-probe id through `request-context.ts` and each context, which is not a patch.
+ *
  *   * the harness's own user (`HARNESS_USER_ID`, the user of every registry context) gets a
  *     `tenant_admin` membership — the membership writes re-check the caller against the bridge
  *     inside their transaction, so without one every write would answer `not_found` at the

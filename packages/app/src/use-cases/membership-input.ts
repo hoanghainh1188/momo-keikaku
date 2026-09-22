@@ -5,6 +5,7 @@
  * exports ARE the enumerated surface.
  */
 import { z } from 'zod';
+import type { Role } from '../authz/request-context';
 
 const noNul = (value: string) => !value.includes('\0');
 const NUL_MESSAGE = 'must not contain a NUL character';
@@ -21,7 +22,11 @@ const id = z.string().min(1).refine(noNul, NUL_MESSAGE);
  * `internal_viewer` exist in the enum (`authz/request-context.ts`) but are not assignable, so they
  * answer `invalid_input` like any other string.
  */
-export const ASSIGNABLE_ROLES = ['tenant_admin', 'pm'] as const;
+// `satisfies readonly Role[]` so the compiler ties this list to the closed enum the RESOLVER
+// reads. Without it the two agreed only by hand: re-spell a role in `ROLES` and `changeMemberRole`
+// keeps writing the old string, which `resolveRequestContext` then classes as unusable — signing
+// the member out as the result of a successful, audited admin action.
+export const ASSIGNABLE_ROLES = ['tenant_admin', 'pm'] as const satisfies readonly Role[];
 
 export const revokeMembershipInputSchema = z.object({ userId: id });
 

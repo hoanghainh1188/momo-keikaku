@@ -25,19 +25,36 @@ export DATABASE_URL=postgres://momo:momo@localhost:55433/momo_keikaku
 export APP_DATABASE_URL=postgres://momo_app:momo_app@localhost:55433/momo_keikaku
 
 # Sign-in (story 1.4). SEED_DEMO_PASSWORD is required by `pnpm seed`: it becomes the password
-# of the two demo users. The web app needs the Better Auth pair (put them in
-# apps/web/.env.local too, since `next dev` reads that file). SESSION_IDLE_TIMEOUT_HOURS is
-# optional (whole hours, default 8).
+# of the two demo users, and must be at least 8 characters. The web app needs the Better Auth
+# pair (put them in apps/web/.env.local too, since `next dev` reads that file).
+# SESSION_IDLE_TIMEOUT_HOURS is optional: DIGITS ONLY, 1 to 720, default 8 — `0x8`, `8.0` and
+# ` 8 ` are each refused by name rather than read as 8.
 export SEED_DEMO_PASSWORD=choose-a-demo-password
 export BETTER_AUTH_SECRET=a-local-secret-of-at-least-32-characters
 export BETTER_AUTH_URL=http://localhost:3101
 # export SESSION_IDLE_TIMEOUT_HOURS=8
+
+# Password reset (story 1.4 slice 4). MAILER defaults to `console`: every reset mail is written to
+# THIS TERMINAL (the one `pnpm demo`/`pnpm dev` runs in) instead of actually being sent — there is
+# no real mail transport until `mailer-ses` (Epic 8). `ses` is accepted here too, but every route
+# (sign-in included) starts answering 500 on its first request until that adapter lands — not a
+# failure to start, since it is only reached when a request first needs the auth instance.
+# export MAILER=console
 
 pnpm demo
 ```
 
 Every page asks you to sign in first. Sign in as **`linh@momo-digital.example`** (the PM) or
 **`hoang@momo-digital.example`** (the Tenant Admin), with the `SEED_DEMO_PASSWORD` you set.
+
+### Forgot your password?
+
+`/sign-in` has a "Forgot your password?" link to `/forgot-password`. Enter a seeded user's
+email; the page always says the same thing ("if that email has an account…") whether or not it
+does. With `MAILER=console` (the default), the mail — including the reset link — is written to
+**this terminal** (the one running `pnpm demo`/`pnpm dev`), never actually sent anywhere. Copy the
+`/reset-password?token=…` link out of it, open it, set a new password, and sign in with that
+instead of the old one. The link expires in 1 hour and works once.
 
 ### Sign in with Google, locally (optional)
 
@@ -218,10 +235,13 @@ Screenshots: `_bmad-output/demo-screenshots/`.
 Deliberately out of scope for this demo (from the build brief):
 
 - **Email + password, or Google through a local fake — and no roles enforced.** Two seeded
-  users; Google links only to them (no sign-up); no password reset or revocation screen yet,
-  and role checks arrive with story 1.5.
-- **No multi-tenant isolation.** `tenant_id` is on every table, but Row Level Security,
-  composite foreign keys and the non-owner application role are not set up (AD-3).
+  users; Google links only to them (no sign-up); password reset exists (story 1.4 slice 4,
+  `MAILER=console` locally) but there is no revocation screen yet, and role checks arrive with
+  story 1.5.
+- **No tenant switcher, and one Tenant seeded.** Row Level Security, the composite foreign keys
+  and the non-owner application role ARE set up — `pnpm demo` applies them, and CI gates them —
+  but the demo seeds a single Tenant, so nothing here exercises switching between two, and there
+  is no UI to switch with (AD-3).
 - **No pg-boss worker.** Snapshots are replayed once at seed time, not on a schedule.
   There is no on-demand *Refresh snapshot*.
 - **No publishing persistence.** The Client View is a live preview; `published_snapshot`,

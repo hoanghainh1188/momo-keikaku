@@ -35,5 +35,15 @@ export { membershipsOf, type MembershipRow } from './repo-membership';
 // …and its ONE WRITER (story 1.4 slice 2) crosses the way the other write repositories do: as a
 // type only. `membershipWriterOn` is reachable solely through the scope `inTenantTransaction` binds.
 export type { LockedMemberRow } from './repo-membership-write';
+// `identity_event`'s one writer (story 1.4 slice 4) crosses as a RUNTIME VALUE, unlike the
+// membership writer above: the table is global (no Tenant, no tenant transaction to fold it into),
+// so the composition root calls it directly and hands the result to `createAuth` as
+// `identityEvents`. `source-discipline.test.ts` pins that this barrel and the composition root are
+// its only callers besides its own definition.
+export {
+  identityEventWriterOn,
+  type IdentityEventAction,
+  type IdentityEventRecord,
+} from './repo-identity-event';
 export * from './table-classes';
 export * from './with-tenant';

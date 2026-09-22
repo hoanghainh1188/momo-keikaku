@@ -29,12 +29,19 @@ const COMPLETE = {
 
 describe('parseConfig', () => {
   it('returns every key when all are present, with the idle timeout defaulted to 8 hours', () => {
-    expect(parseConfig({ ...COMPLETE })).toEqual({ ...COMPLETE, SESSION_IDLE_TIMEOUT_HOURS: 8, AUTH_GOOGLE: 'off' });
+    expect(parseConfig({ ...COMPLETE })).toEqual({
+      ...COMPLETE,
+      SESSION_IDLE_TIMEOUT_HOURS: 8,
+      AUTH_GOOGLE: 'off',
+      MAILER: 'console',
+    });
   });
 
   it('reads SESSION_IDLE_TIMEOUT_HOURS as a whole number of hours', () => {
     expect(parseConfig({ ...COMPLETE, SESSION_IDLE_TIMEOUT_HOURS: '12' }).SESSION_IDLE_TIMEOUT_HOURS).toBe(12);
-    for (const bad of ['0', '1.5', 'eight']) {
+    // `0x10` and `1e2` are the ones the raw coercion read as 16 and 100 — a typo becoming a
+    // different idle timeout rather than a named failure. `721` is the ceiling, which had no case.
+    for (const bad of ['0', '1.5', 'eight', '0x10', '1e2', ' 12 ', '721']) {
       expect(() => parseConfig({ ...COMPLETE, SESSION_IDLE_TIMEOUT_HOURS: bad })).toThrow(
         /Invalid configuration: SESSION_IDLE_TIMEOUT_HOURS/,
       );
@@ -48,6 +55,26 @@ describe('parseConfig', () => {
     expect(() => parseConfig({ ...COMPLETE, BETTER_AUTH_URL: '/relative' })).toThrow(
       /Invalid configuration: BETTER_AUTH_URL must be an absolute URL/,
     );
+  });
+
+  /**
+   * ONE CASE PER KEY PER FAILURE MODE, as this file states below — two clauses had none.
+   * `SEED_DEMO_PASSWORD`'s floor is the demo Tenant Admin's sign-in credential; the URL's scheme
+   * is what Better Auth matches request Origins against, and `.url()` alone accepted
+   * `javascript:`, `mailto:` and `ftp:` (measured).
+   */
+  it('refuses a short SEED_DEMO_PASSWORD and a non-origin BETTER_AUTH_URL, naming each', () => {
+    expect(() => parseConfig({ ...COMPLETE, SEED_DEMO_PASSWORD: 'short' })).toThrow(
+      /Invalid configuration: SEED_DEMO_PASSWORD must be at least 8 characters/,
+    );
+    for (const bad of ['javascript:alert(1)', 'mailto:a@b.example', 'ftp://host', 'http://a.example/path']) {
+      expect(() => parseConfig({ ...COMPLETE, BETTER_AUTH_URL: bad }), bad).toThrow(
+        /Invalid configuration: BETTER_AUTH_URL/,
+      );
+    }
+    for (const ok of ['http://localhost:3101', 'https://app.example']) {
+      expect(parseConfig({ ...COMPLETE, BETTER_AUTH_URL: ok }).BETTER_AUTH_URL, ok).toBe(ok);
+    }
   });
 
   for (const key of ['BETTER_AUTH_SECRET', 'BETTER_AUTH_URL', 'SEED_DEMO_PASSWORD'] as const) {
@@ -130,5 +157,22 @@ describe('googleProvider', () => {
         /GOOGLE_ISSUER_URL must be an absolute https: URL/,
       );
     }
+  });
+});
+
+/** The mail transport (story 1.4 slice 4, AD-17): `console` by default; `ses` is accepted too. */
+describe('MAILER', () => {
+  it('defaults to console', () => {
+    expect(parseConfig({ ...COMPLETE }).MAILER).toBe('console');
+  });
+
+  it('accepts ses, even though only console ships today', () => {
+    expect(parseConfig({ ...COMPLETE, MAILER: 'ses' }).MAILER).toBe('ses');
+  });
+
+  it('refuses anything else, naming the key', () => {
+    expect(() => parseConfig({ ...COMPLETE, MAILER: 'smtp' })).toThrow(
+      /Invalid configuration: MAILER must be `console` or `ses`/,
+    );
   });
 });

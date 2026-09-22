@@ -21,8 +21,36 @@
 import { systemClock } from '../packages/adapters/src/clock.js';
 import { startFakeOidc } from '../tests/support/fake-oidc.js';
 
-const port = Number(process.env.FAKE_OIDC_PORT ?? '4455');
-const webOrigin = (process.env.BETTER_AUTH_URL ?? 'http://localhost:3101').replace(/\/+$/, '');
+/**
+ * A BAD KEY FAILS HERE, NAMING THE KEY — the same rule `packages/app/src/config.ts` holds itself
+ * to, and `scripts/seed.ts`'s header states outright. `Number('')`, `Number('12a')` and
+ * `Number(' ')` are `NaN` or a surprise, and Node answers `NaN` by listening on a RANDOM port:
+ * discovery then advertises an issuer the web app was never pointed at, and every sign-in ends at
+ * the `400 redirect_uri not registered` this file's own README section warns about — with nothing
+ * anywhere naming the typo that caused it (fifth review pass, 2026-09-22).
+ */
+function digitsOnly(key: string, fallback: string): number {
+  const raw = process.env[key] ?? fallback;
+  if (!/^\d+$/.test(raw)) throw new Error(`${key} must be digits only, got ${JSON.stringify(raw)}`);
+  return Number(raw);
+}
+
+function httpOrigin(key: string, fallback: string): string {
+  const raw = process.env[key] ?? fallback;
+  let parsed: URL;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    throw new Error(`${key} must be an http(s) origin, got ${JSON.stringify(raw)}`);
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new Error(`${key} must be an http(s) origin, got ${JSON.stringify(raw)}`);
+  }
+  return parsed.origin;
+}
+
+const port = digitsOnly('FAKE_OIDC_PORT', '4455');
+const webOrigin = httpOrigin('BETTER_AUTH_URL', 'http://localhost:3101');
 const clientId = 'momo-local-client';
 const clientSecret = 'momo-local-secret';
 

@@ -130,14 +130,62 @@ export async function signInWithPassword(
   }
 }
 
+/**
+ * Requests a password reset (story 1.4 slice 4): `auth.api.requestPasswordReset` — never served
+ * over HTTP (`/request-password-reset` stays in `DISABLED_PATHS`). Better Auth answers the same
+ * `{ status: true }` whether or not the email exists, and this binding answers the same `true`
+ * either way; it returns `false` only when Better Auth itself refuses the call (logged, status and
+ * code only — never the address), which the caller shows as the very same generic sentence.
+ */
+export async function requestPasswordReset(auth: Auth, headers: Headers, email: string): Promise<boolean> {
+  try {
+    await auth.api.requestPasswordReset({ body: { email }, headers });
+    return true;
+  } catch (error) {
+    if (!isAPIError(error)) throw error;
+    const code = (error as { body?: { code?: unknown } }).body?.code;
+    console.warn(`[auth] password-reset request refused by Better Auth: status ${String(error.status)}, code ${String(code)}`);
+    return false;
+  }
+}
+
+/**
+ * Consumes a reset token and sets a new password (story 1.4 slice 4): `auth.api.resetPassword` —
+ * never served over HTTP (`/reset-password` stays in `DISABLED_PATHS`). `false` for every
+ * refusal — a reused or expired token, a password Better Auth's `minPasswordLength` refuses —
+ * told apart by nothing (NFR-S5): the caller shows one generic sentence for all of them.
+ */
+export async function resetPassword(
+  auth: Auth,
+  headers: Headers,
+  input: { readonly token: string; readonly password: string },
+): Promise<boolean> {
+  try {
+    await auth.api.resetPassword({ body: { newPassword: input.password, token: input.token }, headers });
+    return true;
+  } catch (error) {
+    if (!isAPIError(error)) throw error;
+    const code = (error as { body?: { code?: unknown } }).body?.code;
+    console.warn(`[auth] password reset refused by Better Auth: status ${String(error.status)}, code ${String(code)}`);
+    return false;
+  }
+}
+
 /** Ends the request's session and clears its cookie (through `nextCookies()`). */
 export async function signOutOf(auth: Auth, headers: Headers): Promise<void> {
   try {
     await auth.api.signOut({ headers });
   } catch (error) {
-    // Signing out a request that has no session is not a failure: it is already signed out.
-    if (isAPIError(error)) return;
-    throw error;
+    // Signing out a request that has no session is not a failure: it is already signed out, and
+    // Better Auth's `/sign-out` swallows a missing or unknown session token internally rather than
+    // refusing. So an `APIError` HERE means something else — missing headers, a rejected origin —
+    // and the caller is told the sign-out succeeded either way, because the cookie is cleared and
+    // there is nothing useful it could do differently. Leave a trace of it rather than none: a
+    // sign-out that silently did not happen is the one failure a user cannot see. Status and code
+    // only, never a header or a token, as `signInWithPassword` does with a refusal it did not expect.
+    if (!isAPIError(error)) throw error;
+    const code = (error as { body?: { code?: unknown } }).body?.code;
+    console.warn(`[auth] sign-out refused by Better Auth: status ${String(error.status)}, code ${String(code)}`);
   }
 }
 

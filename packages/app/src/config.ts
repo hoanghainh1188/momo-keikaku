@@ -48,12 +48,29 @@
 // the accessor the web composition root reads (it fails naming every missing key at first read),
 // and `parseConfig`'s `superRefine`. The issuer must be `https:`, unless its host is loopback (the
 // in-repo fake OIDC provider, `tests/support/fake-oidc.ts`, in local dev and CI).
+//
+// Story 1.4 slice 4 added `MAILER` (AD-17's dev default, AD-18): `console` unless a deployment
+// names another transport. `ses` (Epic 8) is ACCEPTED here and fails only at the composition root,
+// naming the missing adapter — the key is not a lie about what ships today; it is the name of what
+// will, so a deployment can be configured for it ahead of the adapter landing.
 import { z } from 'zod';
 
 /** Hosts an `http:` issuer may name: this machine only (the fake OIDC provider). */
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
 
 /** `https:`, or any scheme-valid URL on a loopback host — the issuer rule, stated once. */
+/** An http(s) ORIGIN: scheme and host, nothing else. `BETTER_AUTH_URL`'s rule. */
+function isHttpOrigin(value: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return false;
+  return (url.pathname === '/' || url.pathname === '') && url.search === '' && url.hash === '';
+}
+
 function isAcceptableIssuer(value: string): boolean {
   let url: URL;
   try {
@@ -97,17 +114,29 @@ const configShape = z.object({
 
   // The origin the web app is served from, e.g. http://localhost:3101. Better Auth checks the
   // Origin of every state-changing request against it.
+  // `.url()` alone is not enough: it accepts anything the URL parser takes, so `javascript:…`,
+  // `mailto:…` and `ftp://…` all passed (measured). This value is the ORIGIN Better Auth matches
+  // every state-changing request's `Origin` against, so the scheme is the point of it.
   BETTER_AUTH_URL: z
     .string({ error: 'is required — the web app origin, e.g. http://localhost:3101' })
-    .url('must be an absolute URL — the web app origin, e.g. http://localhost:3101'),
+    .url('must be an absolute URL — the web app origin, e.g. http://localhost:3101')
+    .refine(isHttpOrigin, 'must be an http(s) origin with no path — e.g. http://localhost:3101'),
 
   // FR (sign-in scope): the idle timeout, configurable, default 8 hours. A session that sees no
   // page or action request for this long is refused on the next one.
-  SESSION_IDLE_TIMEOUT_HOURS: z.coerce
-    .number({ error: 'must be a whole number of hours' })
-    .int('must be a whole number of hours')
-    .min(1, 'must be at least 1 hour')
-    .max(24 * 30, 'must be at most 720 hours (30 days)')
+  // The SHAPE is checked before coercing: `z.coerce.number()` reads `0x10` as 16, `1e2` as 100 and
+  // ` 12 ` as 12 (measured), so a typo became a different idle timeout instead of a named failure.
+  SESSION_IDLE_TIMEOUT_HOURS: z
+    .string()
+    .regex(/^\d+$/, 'must be a whole number of hours, digits only')
+    .transform(Number)
+    .pipe(
+      z
+        .number()
+        .int('must be a whole number of hours')
+        .min(1, 'must be at least 1 hour')
+        .max(24 * 30, 'must be at most 720 hours (30 days)'),
+    )
     .default(8),
 
   // The password the seed gives the demo users `linh` and `hoang` (founder decision,
@@ -135,6 +164,13 @@ const configShape = z.object({
       'must be an absolute https: URL (http: only on a loopback host) — the OIDC issuer, e.g. https://accounts.google.com',
     )
     .optional(),
+
+  // Password reset's mail transport (story 1.4 slice 4, AD-17's dev default). `console` writes
+  // every message to the server log; `ses` is Epic 8's, and is accepted here so a deployment can
+  // name it before the adapter exists — the composition root fails naming the missing adapter.
+  MAILER: z
+    .enum(['console', 'ses'], { error: 'must be `console` or `ses` — which mail transport to use' })
+    .default('console'),
 });
 
 /** Whole-schema parsing adds the one cross-key rule: `AUTH_GOOGLE=on` needs all three Google keys. */
@@ -223,6 +259,9 @@ export const config: AppConfig = {
   },
   get GOOGLE_ISSUER_URL(): string | undefined {
     return parseConfigKey(process.env, 'GOOGLE_ISSUER_URL');
+  },
+  get MAILER(): 'console' | 'ses' {
+    return parseConfigKey(process.env, 'MAILER');
   },
 };
 

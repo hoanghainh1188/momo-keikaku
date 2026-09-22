@@ -22,9 +22,9 @@
  * This module reads no environment and no clock. It takes its handle as an argument.
  */
 import { stringify } from '@momo/domain';
-import { eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, inArray, like, sql } from 'drizzle-orm';
 import type { Db } from './client';
-import { account, authUser, session } from './schema';
+import { account, authUser, identityEvent, session, verification } from './schema';
 import { tenantMembership } from './schema-membership';
 import { DEMO_USERS } from './demo-identities';
 import { buildDemoState, type DemoState } from './fixtures';
@@ -436,6 +436,20 @@ async function deleteTenantMembers(
     .where(eq(tenantMembership.tenantId, tenantId));
   const userIds = [...new Set([...knownUserIds, ...members.map((row) => row.userId)])];
   if (userIds.length > 0) {
+    // Every `global` table that names a user, not only the three Better Auth ones. The registry
+    // walk in `deleteTenantRows` skips a table whose `tenantColumn` is null on the stated ground
+    // that it "holds nothing a probe Tenant wrote", and story 1.4 made that untrue: a probe member
+    // who completes a password reset leaves an `identity_event` row, and one who requests a reset
+    // leaves a `reset-password:` row in `verification`. Both name a user this function is about to
+    // delete, and the application role holds no DELETE on `identity_event` with which to correct
+    // the leak afterwards. Only the reset rows are taken from `verification`: an OAuth state row
+    // keeps JSON in `value`, not a user id, so it is not this Tenant's to remove.
+    await tx.delete(identityEvent).where(inArray(identityEvent.userId, userIds));
+    await tx
+      .delete(verification)
+      .where(
+        and(inArray(verification.value, userIds), like(verification.identifier, 'reset-password:%')),
+      );
     await tx.delete(session).where(inArray(session.userId, userIds));
     await tx.delete(account).where(inArray(account.userId, userIds));
     await tx.delete(authUser).where(inArray(authUser.id, userIds));

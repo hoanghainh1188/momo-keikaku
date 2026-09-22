@@ -77,6 +77,12 @@ const spies = vi.hoisted(() => {
   const append = vi.fn(async (_entry: unknown) => {});
   type AuthBuild = { readonly generateId: () => string } & Record<string, unknown>;
   const authInstance = { marker: 'auth-instance' };
+  // Typed with their real parameters, so `mock.calls[0]![1]` is the `Headers` the assertions read
+  // rather than an empty tuple.
+  const signInWithPassword = vi.fn(
+    async (_auth: unknown, _headers: Headers, _credentials: { email: string; password: string }) => true,
+  );
+  const signOutOf = vi.fn(async (_auth: unknown, _headers: Headers) => {});
   const authBuilds: AuthBuild[] = [];
   /** The session the fake identity adapter answers: a user and the Tenant it last acted in. */
   const session = {
@@ -113,6 +119,8 @@ const spies = vi.hoisted(() => {
       { tenantId: 'ten-from-session', role: 'pm', projectIds: ['prj-ec2'] },
     ]),
     authInstance,
+    signInWithPassword,
+    signOutOf,
     /** The middleware's instance: built WITHOUT Google (story 1.4 slice 3). */
     sessionAuthInstance: { marker: 'session-auth-instance' },
     /** Every options object `createAuth` was built with — never cleared, the instances are per process. */
@@ -131,6 +139,12 @@ const spies = vi.hoisted(() => {
     ),
     sessionForMiddleware: vi.fn(async (_auth: unknown, _headers: Headers) => ({ signedIn: true, setCookies: [] })),
     requestHeaders: new Headers({ cookie: 'momo.session_token=signed' }),
+    /** Story 1.4 slice 4: the identity-event writer and the two reset bindings. */
+    identityEventRecord: vi.fn(async (_entry: unknown) => {}),
+    requestPasswordReset: vi.fn(async (_auth: unknown, _headers: Headers, _email: string) => true),
+    resetPassword: vi.fn(
+      async (_auth: unknown, _headers: Headers, _input: { token: string; password: string }) => true,
+    ),
   };
 });
 
@@ -141,6 +155,10 @@ vi.mock('@momo/db', async (importOriginal) => ({
   loadProjectBundle: spies.loadProjectBundle,
   loadReview: spies.loadReview,
   membershipsOf: spies.membershipsOf,
+  identityEventWriterOn: (handle: unknown) => {
+    expect(handle).toBe(spies.handle);
+    return { record: spies.identityEventRecord };
+  },
 }));
 
 vi.mock('@momo/db-auth', () => ({
@@ -151,10 +169,12 @@ vi.mock('@momo/db-auth', () => ({
   },
   googleRegistered: spies.googleRegistered,
   googleSignIn: spies.googleSignIn,
+  requestPasswordReset: spies.requestPasswordReset,
+  resetPassword: spies.resetPassword,
   serveAllowlisted: vi.fn(),
   sessionForMiddleware: spies.sessionForMiddleware,
-  signInWithPassword: vi.fn(),
-  signOutOf: vi.fn(),
+  signInWithPassword: spies.signInWithPassword,
+  signOutOf: spies.signOutOf,
 }));
 
 /**
@@ -170,6 +190,11 @@ vi.mock(nextHeadersPath, () => ({ headers: async () => spies.requestHeaders }));
 vi.mock('@momo/adapters', () => ({
   systemClock: { now: () => spies.now, nowMs: () => spies.now.getTime() },
   uuidV7IdsOn: () => ({ next: () => spies.newId }),
+  mailerConsoleOn: (sink: (line: string) => void) => ({
+    send: async (message: { to: string; subject: string; text: string }) => {
+      sink(`to: ${message.to}\nsubject: ${message.subject}\n\n${message.text}`);
+    },
+  }),
 }));
 
 const APP_URL = 'postgres://momo_app:momo_app@localhost:55433/momo_keikaku';
@@ -668,6 +693,11 @@ describe('the request context the bindings run with', () => {
       google: null,
     });
     expect(spies.authBuilds[0]!.generateId()).toBe(spies.newId);
+    // Story 1.4 slice 4: the mailer, `now` and the identity-event writer, fed into the SAME
+    // options value both instances are built from (AD-1's no-drift rule).
+    expect(spies.authBuilds[0]!.mailer).toEqual({ send: expect.any(Function) });
+    expect((spies.authBuilds[0]!.now as () => Date)()).toBe(spies.now);
+    expect(spies.authBuilds[0]!.identityEvents).toEqual({ record: spies.identityEventRecord });
   });
 
   it('answers whether Google is offered from the page instance\'s registration (story 1.4 slice 3)', async () => {
@@ -706,6 +736,44 @@ describe('the request context the bindings run with', () => {
     spies.identity.sessionFrom.mockResolvedValueOnce(null);
     expect(await composition.signInState()).toBe('signed_out');
   });
+
+  it('requests a password reset on the page instance with the request\'s headers (story 1.4 slice 4)', async () => {
+    await composition.requestPasswordReset('hoang@momo-digital.example');
+    expect(spies.requestPasswordReset).toHaveBeenCalledWith(
+      spies.authInstance,
+      expect.any(Headers),
+      'hoang@momo-digital.example',
+    );
+    expect(spies.requestPasswordReset.mock.calls[0]![1].get('cookie')).toBe('momo.session_token=signed');
+  });
+
+  it('consumes a reset token on the page instance, answering the binding\'s boolean', async () => {
+    spies.resetPassword.mockResolvedValueOnce(true);
+    expect(await composition.resetPassword({ token: 'tok-1', password: 'new-password' })).toBe(true);
+    expect(spies.resetPassword).toHaveBeenCalledWith(spies.authInstance, expect.any(Headers), {
+      token: 'tok-1',
+      password: 'new-password',
+    });
+
+    spies.resetPassword.mockResolvedValueOnce(false);
+    expect(await composition.resetPassword({ token: 'tok-2', password: 'x' })).toBe(false);
+  });
+
+  it('fails naming the missing adapter when MAILER=ses, on the first binding that builds auth', async () => {
+    // A fresh module instance, so this file's already-built `mailerInstance`/`authInstance`
+    // singletons (memoised on THIS import of composition.ts) cannot mask the failure.
+    vi.resetModules();
+    vi.stubEnv('MAILER', 'ses');
+    try {
+      const freshComposition = await import('../apps/web/src/server/composition');
+      await expect(freshComposition.requestPasswordReset('someone@example.test')).rejects.toThrow(
+        /MAILER=ses/,
+      );
+    } finally {
+      vi.stubEnv('MAILER', 'console');
+      vi.resetModules();
+    }
+  });
 });
 
 /**
@@ -738,10 +806,110 @@ describe('apps/web states no Tenant and no actor of its own', () => {
       ['a constant actor', /\bactor\s*:/],
     ];
 
-    const offences = walk(root).flatMap((file) => {
-      const text = readFileSync(file, 'utf8');
+    const files = walk(root);
+    // A FLOOR, so the scan cannot pass having read nothing. `expect(offences).toEqual([])` is
+    // vacuously true for an empty file list, and this is the only gate on "no constant Tenant id
+    // or actor literal remains in apps/web" — a moved or renamed source root would retire it in
+    // silence. The number is a floor, not a count: it only has to notice the directory vanishing.
+    expect(files.length, 'the apps/web scan found no source file — has src/ moved?').toBeGreaterThan(20);
+
+    const offences = files.flatMap((file) => {
+      // Comments stripped first, as `packages/db/src/source-discipline.test.ts` does: a JSDoc
+      // example or a prose sentence naming `tenantId:` is not a constant in the code.
+      const text = readFileSync(file, 'utf8')
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/(^|[^:])\/\/.*$/gm, '$1');
       return banned.filter(([, pattern]) => pattern.test(text)).map(([what]) => `${file}: ${what}`);
     });
     expect(offences).toEqual([]);
+  });
+});
+
+/**
+ * The one string the web edge and `@momo/db-auth` must agree on, and cannot share. Better Auth
+ * reads `GOOGLE_REFUSED_URL` as `onAPIError.errorURL`, so every OAuth refusal lands there; the
+ * sign-in action sends its own could-not-even-start refusal to the same place. AD-1 lets only the
+ * composition root import that package, and both are route modules, so one imports the other is
+ * not available — a second declaration is. This test is what keeps the two honest, so a change to
+ * either is a change that fails here rather than a page that quietly never renders its message.
+ */
+describe('the Google refusal URL', () => {
+  it('is the same string in the web edge as in the auth package', async () => {
+    const [{ GOOGLE_REFUSED }, { GOOGLE_REFUSED_URL }] = await Promise.all([
+      import('../apps/web/src/app/sign-in/google-refusal'),
+      import('../packages/db/auth/src/google'),
+    ]);
+    expect(GOOGLE_REFUSED).toBe(GOOGLE_REFUSED_URL);
+  });
+});
+
+/**
+ * THE HTTP SURFACE'S INSTANCE. `handleAuthRequest` is the only way into Better Auth over HTTP, and
+ * it must be built from the PAGE instance: the middleware's is created without Google, so
+ * `servedEndpoints` omits `GET /callback/google` and every Google sign-in would 404 on its return
+ * leg — in production only, because both functions return `Auth` and nothing here called this
+ * export. The route module forwards every method to it, so a dropped export is the same failure.
+ */
+describe('the auth route handler', () => {
+  it('serves the allowlist of the page instance, not the middleware\'s', async () => {
+    const { serveAllowlisted } = await import('../packages/db/auth/src/index');
+    const served = vi.mocked(serveAllowlisted);
+    const answer = new Response('ok');
+    served.mockReturnValue(async () => answer);
+
+    const response = await composition.handleAuthRequest(
+      new Request('http://localhost:3101/api/auth/get-session'),
+    );
+    expect(response).toBe(answer);
+    expect(served).toHaveBeenCalledWith(spies.authInstance);
+  });
+
+  // NOT asserted here: that the route module exports the same handler for every method. Importing
+  // `apps/web/src/app/api/auth/[...all]/route` from a root-level test pulls it into the ROOT
+  // tsconfig's program, which has no `@/*` alias — that lives in apps/web's — so the import breaks
+  // `pnpm typecheck`. A co-located test under apps/web could do it; the instance, which is the
+  // half that fails silently in production, is covered above.
+});
+
+/**
+ * The reset link's lifetime, stated twice for the same reason `GOOGLE_REFUSED` is: AD-1 lets only
+ * the composition root import `@momo/db-auth`, and the forgot-password page is a route module. The
+ * mail copy derives from the constant; the page cannot, so this is what keeps them equal.
+ */
+describe('the reset link lifetime', () => {
+  it('is the same number of hours on the page as in the auth package', async () => {
+    const [{ RESET_LINK_HOURS }, { RESET_PASSWORD_TOKEN_EXPIRES_IN_SECONDS }] = await Promise.all([
+      import('../apps/web/src/app/forgot-password/reset-link-hours'),
+      import('../packages/db/auth/src/reset'),
+    ]);
+    expect(RESET_LINK_HOURS * 3600).toBe(RESET_PASSWORD_TOKEN_EXPIRES_IN_SECONDS);
+  });
+});
+
+/**
+ * THE TWO BINDINGS THE PER-BINDING PASS MISSED. `signInWithPassword` and `signOutOf` were stubbed
+ * in the module mock and asserted nowhere, while every other identity binding added by this story
+ * got a block. Dropping the RETURN from `signInWithEmail` — `await` instead of `return` — makes
+ * every sign-in read as a refusal, and nothing failed: the action's own test mocks the binding
+ * away, and the DB suites call `signInWithPassword` on an instance they build themselves.
+ */
+describe('the password sign-in and sign-out bindings', () => {
+  it('signs in on the page instance, with the request\'s headers, answering what the binding answered', async () => {
+    spies.signInWithPassword.mockResolvedValueOnce(true);
+    expect(await composition.signInWithEmail({ email: 'hoang@momo-digital.example', password: 'pw' })).toBe(true);
+    expect(spies.signInWithPassword).toHaveBeenCalledWith(spies.authInstance, expect.any(Headers), {
+      email: 'hoang@momo-digital.example',
+      password: 'pw',
+    });
+    expect(spies.signInWithPassword.mock.calls[0]![1].get('cookie')).toBe('momo.session_token=signed');
+
+    spies.signInWithPassword.mockResolvedValueOnce(false);
+    expect(await composition.signInWithEmail({ email: 'nobody@momo-digital.example', password: 'pw' })).toBe(false);
+  });
+
+  it('signs out on the page instance, with the request\'s headers', async () => {
+    await composition.signOut();
+    expect(spies.signOutOf).toHaveBeenCalledWith(spies.authInstance, expect.any(Headers));
+    expect(spies.signOutOf.mock.calls[0]![1].get('cookie')).toBe('momo.session_token=signed');
   });
 });

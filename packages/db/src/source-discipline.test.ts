@@ -200,4 +200,18 @@ describe('the tenant-membership bridge has one reader for request resolution, on
     expect(barrel).not.toMatch(/schema-membership/);
     expect(barrel).not.toMatch(/\btenantMembership\b/);
   });
+
+  it('has `identityEventWriterOn`, `identity_event`\'s one writer, named only where it is defined, exported and composed (story 1.4 slice 4)', () => {
+    // `identity_event` is global — no tenant, no tenant transaction to run inside — so its writer
+    // is not folded into `inTenantTransaction`'s scope the way the membership writer is; the
+    // composition root calls it directly and hands the result to `createAuth` as `identityEvents`.
+    const namers = applicationSources().filter((path) => /\bidentityEventWriterOn\b/.test(code(path)));
+    expect(namers.sort()).toEqual(
+      [
+        'packages/db/src/repo-identity-event.ts',
+        'packages/db/src/index.ts',
+        'apps/web/src/server/composition.ts',
+      ].sort(),
+    );
+  });
 });
