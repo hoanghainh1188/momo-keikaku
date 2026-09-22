@@ -1,10 +1,19 @@
-# Handoff — 2026-09-22 (updated after the slice-4 spine amendment)
+﻿# Handoff — 2026-09-22 (story 1.5 in review)
 
-State at `main` = the merge of PR #34 (story 1.4 slice 4 and the whole-story review of 1.4),
-`dcd7da9`, plus the docs PR that follows it (the slice-4 spine amendment, the regenerated
-`epic-1-context.md` and this handoff). **Story 1.5 is `done` (sprint `review`); the next story is 1.6.**
+State at `main` = `e9940d1`, the merge of PR #36 (appendOnlyGuard on `identity_event` and
+best-effort reset hooks). **Story 1.5 is on branch `story/1-5-roles-decide-what-each-person-can-reach`,
+sprint `review`; the next story after it merges is 1.6.**
 
-**Latest (2026-09-22): story 1.4 slice 4 (password reset) is implemented.** A new `MailerPort`
+**Latest (2026-09-22): story 1.5 (roles decide what each person can reach) is implemented and in
+review.** Declared-roles helper in `packages/app/src/authz/authorize.ts` (`authorize` /
+`reachesProject`): every use-case export declares roles; membership and Organisation writes are
+`tenant_admin` only (role check before parse); Project reads and Plan/Mapping writes are
+`tenant_admin` | `pm` plus Project reach (a Tenant Admin's `projectIds` are never a limit). Refusal
+is always `not_found`. Mechanical gate: `tests/role-declarations.test.ts` — enumeration of
+`USE_CASE_ROLES` plus a behavioural check that every export, called as a viewer with throwing deps
+and malformed input, answers `not_found` without touching a port.
+
+**Earlier (2026-09-22): story 1.4 slice 4 (password reset) is implemented.** A new `MailerPort`
 (`packages/app/src/ports/mailer.ts`), satisfied by `mailerConsoleOn` (`packages/adapters`,
 `MAILER=console` by default; `ses` is accepted in config but fails at the composition root until
 Epic 8) and handed to `createAuth` as an argument, exactly as `google` is. `packages/db/auth`
