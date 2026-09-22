@@ -54,6 +54,16 @@ CREATE TRIGGER "append_only_truncate_guard"
   BEFORE TRUNCATE ON public."rate_entry"
   FOR EACH STATEMENT EXECUTE FUNCTION public."momo_append_only_truncate_guard"();
 
+-- project_default_rate_entry: The Project default Rate is bitemporal like rate_entry (FR-12, story 1.6). A live cache sits on project.default_rate_jpy; history and pins read this table.
+DROP TRIGGER IF EXISTS "append_only_guard" ON public."project_default_rate_entry";
+CREATE TRIGGER "append_only_guard"
+  BEFORE UPDATE OR DELETE ON public."project_default_rate_entry"
+  FOR EACH ROW EXECUTE FUNCTION public."momo_append_only_guard"();
+DROP TRIGGER IF EXISTS "append_only_truncate_guard" ON public."project_default_rate_entry";
+CREATE TRIGGER "append_only_truncate_guard"
+  BEFORE TRUNCATE ON public."project_default_rate_entry"
+  FOR EACH STATEMENT EXECUTE FUNCTION public."momo_append_only_truncate_guard"();
+
 -- baseline_version: A Baseline is a pinned historical fact. Re-baselining appends a version; it never edits one.
 DROP TRIGGER IF EXISTS "append_only_guard" ON public."baseline_version";
 CREATE TRIGGER "append_only_guard"

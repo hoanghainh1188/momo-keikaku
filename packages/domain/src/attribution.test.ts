@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { attribute } from './attribution';
+import { attribute, rateOnDate } from './attribution';
 import { periodOf } from './calendar';
 import { checkLedgerInvariant, ingestSnapshot } from './ledger';
 import { applyRules, evaluateRules, mappingHead } from './mapping';
@@ -158,7 +158,7 @@ describe('attribution (FR-20, FR-21, FR-24)', () => {
       name: 'R',
       departmentId: 'd',
       trackerAccountIds: ['acct-1'],
-      rates: [{ effectiveFrom: '2026-01-01', yenPerHour: 5000n }],
+      rates: [{ seq: 1, effectiveFrom: '2026-01-01', yenPerHour: 5000n }],
     },
   ];
   const wps = [
@@ -272,5 +272,100 @@ describe('attribution (FR-20, FR-21, FR-24)', () => {
       period,
     });
     expect(unattributed.cumulative.totalJpy).toBe(10n * project.defaultRateYenPerHour);
+  });
+
+  it('honours an optional rate_seq_max pin and leaves a retroactive head unused under the pin', () => {
+    const withHistory: Resource[] = [
+      {
+        ...resources[0]!,
+        rates: [
+          { seq: 1, effectiveFrom: '2026-01-01', yenPerHour: 5000n },
+          { seq: 2, effectiveFrom: '2026-01-01', yenPerHour: 9000n }, // retroactive head
+        ],
+      },
+    ];
+    const live = attribute({
+      entries: [entry(1, 'tb', 1, IN)],
+      head: mappingHead(events),
+      wps,
+      baselineVersions,
+      resources: withHistory,
+      project,
+      period,
+    });
+    // Equal effectiveFrom: higher seq wins live (not insertion order / engine quirk).
+    expect(live.cumulative.totalJpy).toBe(9000n);
+    const pinned = attribute({
+      entries: [entry(1, 'tb', 1, IN)],
+      head: mappingHead(events),
+      wps,
+      baselineVersions,
+      resources: withHistory,
+      project,
+      period,
+      pins: { rateSeqMax: 1 },
+    });
+    expect(pinned.cumulative.totalJpy).toBe(5000n);
+  });
+
+  it('honours projectDefaultRateSeqMax against history, while live unpinned uses the column', () => {
+    // Column head ≠ pinned history head under the ceiling — so the two paths cannot agree by accident.
+    const column = 4000n;
+    const underPin = 2500n;
+    const laterHead = 6000n;
+    const projectWithColumn: typeof project = { ...project, defaultRateYenPerHour: column };
+    const history = [
+      { seq: 1, effectiveFrom: '2026-01-01', yenPerHour: underPin },
+      { seq: 2, effectiveFrom: '2026-01-01', yenPerHour: laterHead },
+    ];
+    const unattributed = [{ ...entry(1, 'tb', 1, IN), assigneeAccountId: 'acct-unlinked' }];
+    const live = attribute({
+      entries: unattributed,
+      head: mappingHead(events),
+      wps,
+      baselineVersions,
+      resources,
+      project: projectWithColumn,
+      period,
+    });
+    expect(live.cumulative.totalJpy).toBe(column);
+    const pinned = attribute({
+      entries: unattributed,
+      head: mappingHead(events),
+      wps,
+      baselineVersions,
+      resources,
+      project: projectWithColumn,
+      period,
+      pins: { projectDefaultRateSeqMax: 1 },
+      projectDefaultRates: history,
+    });
+    expect(pinned.cumulative.totalJpy).toBe(underPin);
+  });
+});
+
+describe('rateOnDate (story 1.6 pins)', () => {
+  it('picks the latest effective_from under an optional seq ceiling', () => {
+    const rates = [
+      { seq: 1, effectiveFrom: '2026-01-01', yenPerHour: 3000n },
+      { seq: 2, effectiveFrom: '2026-06-01', yenPerHour: 4000n },
+      { seq: 3, effectiveFrom: '2026-03-01', yenPerHour: 3500n },
+    ];
+    expect(rateOnDate(rates, '2026-07-01')).toBe(4000n);
+    expect(rateOnDate(rates, '2026-07-01', 2)).toBe(4000n);
+    expect(rateOnDate(rates, '2026-07-01', 1)).toBe(3000n);
+    expect(rateOnDate(rates, '2026-02-01', 3)).toBe(3000n);
+    expect(rateOnDate(rates, '2025-12-01')).toBeUndefined();
+  });
+
+  it('on equal effectiveFrom picks the higher seq', () => {
+    // Lower seq listed last — without a seq tie-break the old comparator returned −1 on ties
+    // and kept whichever the engine left first.
+    const rates = [
+      { seq: 2, effectiveFrom: '2026-01-01', yenPerHour: 9000n },
+      { seq: 1, effectiveFrom: '2026-01-01', yenPerHour: 5000n },
+    ];
+    expect(rateOnDate(rates, '2026-06-01')).toBe(9000n);
+    expect(rateOnDate([...rates].reverse(), '2026-06-01')).toBe(9000n);
   });
 });

@@ -23,10 +23,11 @@
  *
  * `tenantColumn` is the second, independent axis. A table is *tenant-owned* when it
  * carries one, and a tenant-owned table gets ENABLE + FORCE row-level security and the
- * isolation policy. 16 of the 23 tables today are tenant-owned. `tenant` itself is not — it is
+ * isolation policy. 17 of the 24 tables today are tenant-owned. `tenant` itself is not — it is
  * the table the column points at — so it is `global`, which is the class for rows that exist
  * before any tenant is resolved. Story 1.4 slice 1 put the four Better Auth tables and the
- * tenant-membership bridge in that class beside it; slice 4 adds `identity_event`.
+ * tenant-membership bridge in that class beside it; slice 4 adds `identity_event`. Story 1.6
+ * adds `project_default_rate_entry`.
  *
  * THREE PER-ENTRY PROPERTIES, each stated where it applies rather than by a new class:
  *
@@ -194,6 +195,12 @@ export const TABLE_REGISTRY: readonly TableEntry[] = [
     class: 'append-only',
     tenantColumn: 'tenant_id',
     why: 'Rates are bitemporal: a retroactive correction appends a row. Rewriting one would change an already-published figure.',
+  },
+  {
+    table: 'project_default_rate_entry',
+    class: 'append-only',
+    tenantColumn: 'tenant_id',
+    why: 'The Project default Rate is bitemporal like rate_entry (FR-12, story 1.6). A live cache sits on project.default_rate_jpy; history and pins read this table.',
   },
   {
     table: 'work_package',

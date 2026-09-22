@@ -3,6 +3,7 @@ import type { Bound } from './bound';
 import type { Db } from './client';
 import { membershipWriterOn } from './repo-membership-write';
 import { orgRepositoryOn } from './repo-org';
+import { resourceWriteRepositoryOn } from './repo-resource';
 import { projectWriteRepositoryOn } from './repo-writes';
 import { withTenant } from './with-tenant';
 
@@ -14,6 +15,7 @@ import { withTenant } from './with-tenant';
  *
  *   * `projectWrite` — FR-29's Dispositions and FR-21's manual Mapping (`repo-writes.ts`);
  *   * `org` — FR-1's Departments, Programs and Projects (`repo-org.ts`);
+ *   * `resources` — Resources and dated Rates (`repo-resource.ts`, story 1.6);
  *   * `membership` — the tenant-membership bridge's one writer (`repo-membership-write.ts`, story
  *     1.4 slice 2): revocation, role and Project changes. The bridge has no row-level security,
  *     so that writer filters by the bound Tenant itself;
@@ -37,6 +39,7 @@ function writeScopeOn(bound: Bound) {
   return {
     projectWrite: projectWriteRepositoryOn(bound),
     org: orgRepositoryOn(bound),
+    resources: resourceWriteRepositoryOn(bound),
     membership: membershipWriterOn(bound),
     audit: auditSinkOn(bound.tx, bound.tenantId),
   };

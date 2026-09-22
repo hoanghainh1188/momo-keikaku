@@ -61,6 +61,7 @@ export const TRUNCATE_ORDER: readonly string[] = [
   'baseline_version',
   'work_package',
   'rate_entry',
+  'project_default_rate_entry',
   'resource',
   'project',
   'program',
@@ -219,6 +220,13 @@ export async function writeTenantRows(
       yenPerHour: r.yenPerHour,
     })),
   );
+  // Story 1.6: the Project's default Rate history — head matches `project.default_rate_jpy`.
+  await tx.insert(s.projectDefaultRateEntry).values({
+    tenantId,
+    projectId: f.project.id,
+    effectiveFrom: '2026-01-01',
+    yenPerHour: f.project.defaultRateYenPerHour,
+  });
 
   await tx.insert(s.workPackage).values(
     state.wps.map((w) => ({

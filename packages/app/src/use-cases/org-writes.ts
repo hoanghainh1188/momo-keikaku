@@ -1,8 +1,10 @@
 import type { z } from 'zod';
+import { projectDate } from '@momo/domain';
 import { audit, type AuditDeclaration } from '../audit';
 import { authorize, TENANT_ADMIN_ROLES } from '../authz/authorize';
 import type { RequestContext } from '../authz/request-context';
 import type { NewProjectRow, OrgRepository, OrgWriteDeps, OrgWriteScope } from '../ports/org-write';
+import type { WriteDeps } from '../ports/write-deps';
 import type { WriteStamp } from '../ports/audited-write';
 import type { Result } from '../result';
 import { refuse, runAuditedWrite } from './audited-write';
@@ -62,8 +64,9 @@ import {
  *     Project time zone (default JST)");
  *   * `teireiWeekday: 1` — Monday (`0` is Sunday, as `calendar.ts`'s `weekday` counts), until the
  *     PM sets the teirei;
- *   * `defaultRateJpy: 0` — no default Rate yet: story 1.6 creates the Project default Rate and
- *     its audited history, and until then a zero values nothing rather than inventing a price;
+ *   * `defaultRateJpy: 0` — the dual-write cache of the Project default Rate head; `createProject`
+ *     also inserts the first `project_default_rate_entry` at yen 0 (story 1.6). Live unpinned
+ *     valuation reads this column; history and pinned lookups read the append-only table;
  *   * `eacMethod: 'typical'` — the only method the domain has;
  *   * `calendarJp: true, calendarVn: false` — the Japanese holiday calendar only, until the PM
  *     adds the offshore one.
@@ -205,38 +208,61 @@ export async function renameProgram<Handle>(
 /**
  * FR-1: a new Project — its name, owning Department, optional Program (only one of that
  * Department's), client name and contract type. Every other column takes `NEW_PROJECT_DEFAULTS`,
- * and `demo_anchor` the Clock's `now`. The record carries every column the row was created with
- * (the anchor as an ISO instant), not only the ones the caller supplied.
+ * and `demo_anchor` the Clock's `now`. The first `project_default_rate_entry` is inserted at
+ * yen 0 (dual-write with the column head) so the Rate history starts with the Project (story 1.6).
+ * The record carries every column the row was created with (the anchor as an ISO instant), not
+ * only the ones the caller supplied.
+ *
+ * Takes `WriteDeps` (not only `OrgWriteDeps`) so the first default Rate lands through the
+ * Resource/Rate repository on the same transaction.
  */
 export async function createProject<Handle>(
-  deps: OrgWriteDeps<Handle>,
+  deps: WriteDeps<Handle>,
   ctx: RequestContext,
   input: CreateProjectInput,
 ): Promise<Result<Created>> {
-  return runOrgWrite(createProjectInputSchema, deps, ctx, input, async (scope, stamp, command) => {
-    const department = await visibleDepartment(scope.org, command.departmentId);
-    const programId = await programFor(scope.org, command.programId, department.id);
-    const id = deps.ids.next();
-    const row: NewProjectRow = {
-      id,
-      name: command.name,
-      departmentId: department.id,
-      programId,
-      clientName: command.clientName,
-      contractType: command.contractType,
-      ...NEW_PROJECT_DEFAULTS,
-      demoAnchor: stamp.at,
-    };
-    await scope.org.insertProject(row);
-    // Everything the row was created with — the defaulted columns and the anchor included — so
-    // the record alone says what the Project started as. The id is the record's target.
-    const { id: _target, demoAnchor, ...created } = row;
-    await audit.record(scope, stamp, 'project.create', id, {
-      ...created,
-      demoAnchor: demoAnchor.toISOString(),
-    });
-    return { id };
-  });
+  const gate = authorize(ctx, { roles: TENANT_ADMIN_ROLES });
+  if (!gate.ok) return Promise.resolve(gate);
+  return runAuditedWrite(
+    createProjectInputSchema,
+    deps,
+    ctx,
+    input,
+    { at: async () => deps.clock.now() },
+    async (scope, stamp, command) => {
+      const department = await visibleDepartment(scope.org, command.departmentId);
+      const programId = await programFor(scope.org, command.programId, department.id);
+      const id = deps.ids.next();
+      const row: NewProjectRow = {
+        id,
+        name: command.name,
+        departmentId: department.id,
+        programId,
+        clientName: command.clientName,
+        contractType: command.contractType,
+        ...NEW_PROJECT_DEFAULTS,
+        demoAnchor: stamp.at,
+      };
+      await scope.org.insertProject(row);
+      // First default Rate at yen 0 — same head as the column; history starts with the Project.
+      await scope.resources.appendProjectDefaultRate({
+        projectId: id,
+        effectiveFrom: projectDate(
+          stamp.at.toISOString(),
+          NEW_PROJECT_DEFAULTS.tzOffsetMinutes,
+        ),
+        yenPerHour: NEW_PROJECT_DEFAULTS.defaultRateJpy,
+      });
+      // Everything the row was created with — the defaulted columns and the anchor included — so
+      // the record alone says what the Project started as. The id is the record's target.
+      const { id: _target, demoAnchor, ...created } = row;
+      await audit.record(scope, stamp, 'project.create', id, {
+        ...created,
+        demoAnchor: demoAnchor.toISOString(),
+      });
+      return { id };
+    },
+  );
 }
 
 /** FR-1: renames a Project; the record carries the previous name. */

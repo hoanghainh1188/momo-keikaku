@@ -3,11 +3,13 @@ import { isAuditAction, type AuditDeclaration, type AuditEntry } from '../packag
 import type { MembershipWriteRepository } from '../packages/app/src/ports/membership-write';
 import type { OrgRepository } from '../packages/app/src/ports/org-write';
 import type { ProjectWriteRepository } from '../packages/app/src/ports/project-write';
+import type { ResourceWriteRepository } from '../packages/app/src/ports/resource-write';
 import type { WriteDeps, WriteScope } from '../packages/app/src/ports/write-deps';
 import { USE_CASE_AUDIT } from '../packages/app/src/use-cases/audit-declarations';
 import { MEMBERSHIP_WRITE_AUDIT } from '../packages/app/src/use-cases/membership-writes';
 import { ORG_WRITE_AUDIT } from '../packages/app/src/use-cases/org-writes';
 import { PROJECT_WRITE_AUDIT } from '../packages/app/src/use-cases/project-writes';
+import { RESOURCE_WRITE_AUDIT } from '../packages/app/src/use-cases/resource-writes';
 import {
   READ_SURFACE_MODULE,
   READ_USE_CASES,
@@ -96,6 +98,7 @@ const TARGET: WriteTarget = {
   memberUserId: 'usr-gate-pm',
   staleProjectId: 'prj-gate-gone',
   secondAdminUserId: 'usr-gate-admin-2',
+  resourceId: 'res-gate',
 };
 
 interface Committed {
@@ -170,6 +173,17 @@ const FAKE_FAMILIES: {
     setRole: write('membership.setRole', undefined),
     setProjectIds: write('membership.setProjectIds', undefined),
   }),
+  resources: (write): ResourceWriteRepository => ({
+    findDepartment: async (id) => (id === WORLD.department.id ? { id } : null),
+    findResource: async (id) =>
+      id === 'res-gate'
+        ? { id, departmentId: WORLD.department.id, name: 'Gate Resource', role: 'Engineer' }
+        : null,
+    findProject: async (id) => (id === WORLD.project.id ? { id } : null),
+    insertResource: write('resources.insertResource', undefined),
+    appendResourceRate: write('resources.appendResourceRate', undefined),
+    appendProjectDefaultRate: write('resources.appendProjectDefaultRate', undefined),
+  }),
 };
 
 /** Drives one invocation against a fresh fake transaction. */
@@ -197,6 +211,7 @@ async function drive(invoke: InvokeWrite, sabotage: Sabotage = {}): Promise<Run>
         projectWrite: FAKE_FAMILIES.projectWrite(write),
         org: FAKE_FAMILIES.org(write),
         membership: FAKE_FAMILIES.membership(write),
+        resources: FAKE_FAMILIES.resources(write),
         audit: {
           append: async (auditEntry) => {
             pendingRecords.push({ transaction: index, entry: auditEntry });
@@ -298,6 +313,7 @@ function expectedStamp(name: string): Date | undefined {
   if (Object.hasOwn(PROJECT_WRITE_AUDIT, name)) return AT;
   if (Object.hasOwn(ORG_WRITE_AUDIT, name)) return NOW;
   if (Object.hasOwn(MEMBERSHIP_WRITE_AUDIT, name)) return NOW;
+  if (Object.hasOwn(RESOURCE_WRITE_AUDIT, name)) return NOW;
   return undefined;
 }
 

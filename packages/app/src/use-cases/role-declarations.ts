@@ -10,7 +10,7 @@
  * a table entry that never reaches `authorize` cannot pass CI.
  */
 import type { Role } from '../authz/request-context';
-import { PROJECT_REACH_ROLES, TENANT_ADMIN_ROLES } from '../authz/authorize';
+import { PROJECT_REACH_ROLES, STAFF_RESOURCE_ROLES, TENANT_ADMIN_ROLES } from '../authz/authorize';
 
 /** What one use case declares: allowed roles, and whether it names a Project the caller must reach. */
 export interface RoleDeclaration {
@@ -27,6 +27,12 @@ const adminOnly = {
 const projectReach = {
   roles: PROJECT_REACH_ROLES,
   projectScoped: true,
+} as const satisfies RoleDeclaration;
+
+/** Tenant Admin or PM, no Project — Resource create only (story 1.6). */
+const staffResource = {
+  roles: STAFF_RESOURCE_ROLES,
+  projectScoped: false,
 } as const satisfies RoleDeclaration;
 
 /** Project reads and Plan/Mapping writes — `tenant_admin` | `pm` plus Project reach. */
@@ -62,8 +68,16 @@ export const MEMBERSHIP_USE_CASE_ROLES = {
   unassignMemberProject: adminOnly,
 } as const satisfies Readonly<Record<string, RoleDeclaration>>;
 
+/** Resource / Rate writes (story 1.6): create is Admin|PM; Rate appends are Admin only. */
+export const RESOURCE_USE_CASE_ROLES = {
+  createResource: staffResource,
+  appendResourceRate: adminOnly,
+  appendProjectDefaultRate: adminOnly,
+} as const satisfies Readonly<Record<string, RoleDeclaration>>;
+
 export const USE_CASE_ROLES: Readonly<Record<string, RoleDeclaration>> = {
   ...PROJECT_USE_CASE_ROLES,
   ...ORG_USE_CASE_ROLES,
   ...MEMBERSHIP_USE_CASE_ROLES,
+  ...RESOURCE_USE_CASE_ROLES,
 };

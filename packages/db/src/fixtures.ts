@@ -208,7 +208,9 @@ export function buildDemoState(anchorIso?: string): DemoState {
     name: r.name,
     departmentId: fixture.department.id,
     trackerAccountIds: [r.accountId],
-    rates: [{ effectiveFrom: '2026-01-01', yenPerHour: integerFromJson(r.yenPerHour) }],
+    // Demo Rates are sequential from 1; the seed's identity `seq` differs, but fixtures never
+    // pin — live valuation ignores `seq` when no ceiling is set (story 1.6).
+    rates: [{ seq: 1, effectiveFrom: '2026-01-01', yenPerHour: integerFromJson(r.yenPerHour) }],
   }));
 
   // --- UJ-2: the PM's manual Mappings, recorded before the first snapshot.

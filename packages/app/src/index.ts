@@ -110,3 +110,8 @@ export type {
   RevokeMembershipInput,
   UnassignMemberProjectInput,
 } from './use-cases/membership-input';
+export type {
+  AppendProjectDefaultRateInput,
+  AppendResourceRateInput,
+  CreateResourceInput,
+} from './use-cases/resource-input';

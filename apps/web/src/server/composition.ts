@@ -55,6 +55,9 @@ import {
   createDepartment as createDepartmentUseCase,
   createProgram as createProgramUseCase,
   createProject as createProjectUseCase,
+  createResource as createResourceUseCase,
+  appendProjectDefaultRate as appendProjectDefaultRateUseCase,
+  appendResourceRate as appendResourceRateUseCase,
   explainTickets as explainTicketsUseCase,
   googleProvider,
   getClientView as getClientViewUseCase,
@@ -74,11 +77,14 @@ import {
   revokeMembership as revokeMembershipUseCase,
   unassignMemberProject as unassignMemberProjectUseCase,
   type AssignMemberProjectInput,
+  type AppendProjectDefaultRateInput,
+  type AppendResourceRateInput,
   type ChangeMemberRoleInput,
   type ChangeRequestCandidatesInput,
   type CreateDepartmentInput,
   type CreateProgramInput,
   type CreateProjectInput,
+  type CreateResourceInput,
   type ExplainTicketsInput,
   type IdentityPort,
   type MailerPort,
@@ -475,6 +481,28 @@ export async function reassignProjectProgram(input: ReassignProjectProgramInput,
 export async function reassignProjectDepartment(input: ReassignProjectDepartmentInput, ctx?: RequestContext) {
   const context = ctx ?? (await requestContext());
   return reassignProjectDepartmentUseCase(writeDeps(), context, input);
+}
+
+// --- Resources and dated Rates (story 1.6). No page calls them yet — the Resources & Rates
+// admin surface waits. Each declares roles through story 1.5's helper; Rate writes are
+// `tenant_admin` only; Resource create is `tenant_admin` | `pm`.
+
+/** FR-12: a new Resource in an own Department (no Rate row). See `createResource`. */
+export async function createResource(input: CreateResourceInput, ctx?: RequestContext) {
+  const context = ctx ?? (await requestContext());
+  return createResourceUseCase(writeDeps(), context, input);
+}
+
+/** FR-12: append a dated Rate for a Resource. See `appendResourceRate`. */
+export async function appendResourceRate(input: AppendResourceRateInput, ctx?: RequestContext) {
+  const context = ctx ?? (await requestContext());
+  return appendResourceRateUseCase(writeDeps(), context, input);
+}
+
+/** FR-12: append a dated Project default Rate (dual-writes the column). See `appendProjectDefaultRate`. */
+export async function appendProjectDefaultRate(input: AppendProjectDefaultRateInput, ctx?: RequestContext) {
+  const context = ctx ?? (await requestContext());
+  return appendProjectDefaultRateUseCase(writeDeps(), context, input);
 }
 
 // --- Membership changes (story 1.4 slice 2). No page calls them yet — there is no Users screen.

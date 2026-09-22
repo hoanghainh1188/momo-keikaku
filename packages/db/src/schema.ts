@@ -224,6 +224,18 @@ export const rateEntry = pgTable('rate_entry', {
   yenPerHour: integer('yen_per_hour').notNull(),
 });
 
+/**
+ * FR-12's Project default Rate, bitemporal like `rate_entry` (story 1.6). The live head is also
+ * cached on `project.default_rate_jpy`; history and pinned lookups read this table.
+ */
+export const projectDefaultRateEntry = pgTable('project_default_rate_entry', {
+  seq: bigint('seq', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+  tenantId: text('tenant_id').notNull(),
+  projectId: text('project_id').notNull(),
+  effectiveFrom: date('effective_from').notNull(),
+  yenPerHour: integer('yen_per_hour').notNull(),
+});
+
 export const workPackage = pgTable(
   'work_package',
   {
@@ -391,6 +403,7 @@ export const schemaTables = {
   project,
   resource,
   rateEntry,
+  projectDefaultRateEntry,
   workPackage,
   baselineVersion,
   baselineWp,

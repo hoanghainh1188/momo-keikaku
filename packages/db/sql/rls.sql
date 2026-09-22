@@ -74,6 +74,20 @@ CREATE POLICY "maintenance_bypass" ON public."rate_entry"
   USING (true)
   WITH CHECK (true);
 
+-- project_default_rate_entry (append-only): The Project default Rate is bitemporal like rate_entry (FR-12, story 1.6). A live cache sits on project.default_rate_jpy; history and pins read this table.
+ALTER TABLE public."project_default_rate_entry" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public."project_default_rate_entry" FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "tenant_isolation" ON public."project_default_rate_entry";
+CREATE POLICY "tenant_isolation" ON public."project_default_rate_entry"
+  FOR ALL
+  USING ("tenant_id" = NULLIF(current_setting('app.tenant_id', true), ''))
+  WITH CHECK ("tenant_id" = NULLIF(current_setting('app.tenant_id', true), ''));
+DROP POLICY IF EXISTS "maintenance_bypass" ON public."project_default_rate_entry";
+CREATE POLICY "maintenance_bypass" ON public."project_default_rate_entry"
+  FOR ALL TO "momo_maintenance"
+  USING (true)
+  WITH CHECK (true);
+
 -- work_package (mutable-audited): The Current Plan is edited. Deletion is soft (`deleted_at`) so the Baseline still resolves it.
 ALTER TABLE public."work_package" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public."work_package" FORCE ROW LEVEL SECURITY;

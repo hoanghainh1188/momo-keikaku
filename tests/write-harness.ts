@@ -150,6 +150,7 @@ export function targetOf(probe: ProbeTenant, tenantId: string): WriteTarget {
     wpId: leaf.id,
     departmentId: probe.state.fixture.department.id,
     programId: probe.state.fixture.program.id,
+    resourceId: probe.state.fixture.resources[0]!.id,
     memberUserId: probePmId(probe),
     staleProjectId: staleProjectIdOf(probe),
     // The probe's seeded Tenant Admin; the harness user (`stageProbeMembers`) is the other one.
@@ -315,6 +316,9 @@ const auditPayloadJson = z.union([
   // role change is `{ before, after }` of strings (the shape above); a Project change is the list.
   z.object({ before: z.object({ role: z.string(), projectIds: z.array(z.string()) }).strict() }).strict(),
   z.object({ before: z.array(z.string()), after: z.array(z.string()) }).strict(),
+  // Resource / Rate writes (story 1.6).
+  z.object({ departmentId: z.string(), name: z.string(), role: z.string() }).strict(),
+  z.object({ effectiveFrom: z.string(), yenPerHour: z.number().int() }).strict(),
 ]);
 
 /** The rows a write may land, for one Tenant, keyed so a later read can be diffed. */
@@ -341,6 +345,15 @@ export async function landedRows(tenantId: string) {
       .where(eq(schema.department.tenantId, tenantId)),
     programs: await tx.select().from(schema.program).where(eq(schema.program.tenantId, tenantId)),
     projects: await tx.select().from(schema.project).where(eq(schema.project.tenantId, tenantId)),
+    resources: await tx.select().from(schema.resource).where(eq(schema.resource.tenantId, tenantId)),
+    rateEntries: await tx
+      .select()
+      .from(schema.rateEntry)
+      .where(eq(schema.rateEntry.tenantId, tenantId)),
+    projectDefaultRates: await tx
+      .select()
+      .from(schema.projectDefaultRateEntry)
+      .where(eq(schema.projectDefaultRateEntry.tenantId, tenantId)),
     // The bridge has no RLS: `withTenant` scopes nothing here, the filter does.
     memberships: await tx
       .select()
@@ -360,6 +373,9 @@ export const LANDED_TABLE: Readonly<Record<keyof Landed, string>> = {
   departments: 'department',
   programs: 'program',
   projects: 'project',
+  resources: 'resource',
+  rateEntries: 'rate_entry',
+  projectDefaultRates: 'project_default_rate_entry',
   memberships: 'tenant_membership',
 };
 
@@ -400,7 +416,10 @@ export function newSince(before: Landed, after: Landed) {
   const mapSeqs = seqs(before.mappingEvents);
   const dispSeqs = seqs(before.dispositions);
   const auditSeqs = seqs(before.audits);
+  const rateSeqs = seqs(before.rateEntries);
+  const defaultRateSeqs = seqs(before.projectDefaultRates);
   const wpIds = new Set(before.workPackages.map((row) => row.id));
+  const resourceIds = new Set(before.resources.map((row) => row.id));
   return {
     mappingEvents: after.mappingEvents
       .filter((row) => !mapSeqs.has(row.seq))
@@ -411,6 +430,9 @@ export function newSince(before: Landed, after: Landed) {
     departments: changedSince(before.departments, after.departments),
     programs: changedSince(before.programs, after.programs),
     projects: changedSince(before.projects, after.projects),
+    resources: after.resources.filter((row) => !resourceIds.has(row.id)),
+    rateEntries: after.rateEntries.filter((row) => !rateSeqs.has(row.seq)),
+    projectDefaultRates: after.projectDefaultRates.filter((row) => !defaultRateSeqs.has(row.seq)),
     ...membershipsSince(before.memberships, after.memberships),
   };
 }

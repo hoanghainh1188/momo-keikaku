@@ -127,6 +127,18 @@ describe('every use case declares its roles', () => {
   it('pins every use case\'s declared roles', () => {
     expect(USE_CASE_ROLES).toMatchInlineSnapshot(`
       {
+        "appendProjectDefaultRate": {
+          "projectScoped": false,
+          "roles": [
+            "tenant_admin",
+          ],
+        },
+        "appendResourceRate": {
+          "projectScoped": false,
+          "roles": [
+            "tenant_admin",
+          ],
+        },
         "assignMemberProject": {
           "projectScoped": false,
           "roles": [
@@ -155,6 +167,13 @@ describe('every use case declares its roles', () => {
           "projectScoped": false,
           "roles": [
             "tenant_admin",
+          ],
+        },
+        "createResource": {
+          "projectScoped": false,
+          "roles": [
+            "tenant_admin",
+            "pm",
           ],
         },
         "explainTickets": {

@@ -136,7 +136,12 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
     rates: rateRows
       .filter((x) => x.resourceId === r.id)
       // The yen columns stay Postgres `integer`; they are read into `bigint` here (AD-4).
-      .map((x) => ({ effectiveFrom: x.effectiveFrom, yenPerHour: BigInt(x.yenPerHour) })),
+      // `seq` is the append-only watermark a pinned lookup ceilings on (story 1.6).
+      .map((x) => ({
+        seq: Number(x.seq),
+        effectiveFrom: x.effectiveFrom,
+        yenPerHour: BigInt(x.yenPerHour),
+      })),
   }));
 
   const [latestSnap] = await tx

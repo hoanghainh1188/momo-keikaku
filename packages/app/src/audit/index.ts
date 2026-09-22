@@ -51,6 +51,11 @@ export const AUDIT_ACTIONS = [
   'membership.change_role',
   'membership.assign_project',
   'membership.unassign_project',
+  // Resources and dated Rates (story 1.6, FR-12 / NFR-A1's "Rates"): create is empty of Rates;
+  // each Rate append is its own record. The Project default Rate dual-writes the column head.
+  'resource.create',
+  'rate.append',
+  'project_default_rate.append',
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];

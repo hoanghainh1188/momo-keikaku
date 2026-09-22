@@ -34,6 +34,9 @@ export const TENANT_ADMIN_ROLES = [TENANT_ADMIN] as const satisfies readonly Rol
 /** Roles that may call Project reads and Plan/Mapping writes — plus Project reach. */
 export const PROJECT_REACH_ROLES = [TENANT_ADMIN, 'pm'] as const satisfies readonly Role[];
 
+/** Roles that may create a Resource (no Project check) — the third declaration shape. */
+export const STAFF_RESOURCE_ROLES = [TENANT_ADMIN, 'pm'] as const satisfies readonly Role[];
+
 /**
  * Authorises a call against `RequestContext`. Returns `not_found` when the caller is outside
  * the allowed set or outside Project reach; otherwise `ok`.

@@ -1,10 +1,20 @@
-# Handoff — 2026-09-22 (story 1.5 reviewed, awaiting merge)
+# Handoff — 2026-09-22 (story 1.6 implemented)
 
-State at `main` = `e9940d1`, the merge of PR #36 (appendOnlyGuard on `identity_event` and
-best-effort reset hooks). **Story 1.5 is on branch `story/1-5-roles-decide-what-each-person-can-reach`,
-sprint `done` after two code reviews, awaiting its PR and merge; the next story is 1.6.**
+State at branch `story/1-6-resources-and-the-dated-rates-behind-every-money-figure`. **Story 1.6
+(Resources and the dated Rates behind every money figure) is implemented; sprint stays
+`in-progress` until review.**
 
-**Latest (2026-09-22): story 1.5 (roles decide what each person can reach) is implemented and
+**Latest (2026-09-22): story 1.6 landed.** `project_default_rate_entry` is registered append-only
+(24 tables / 17 tenant-owned); seed and `createProject` dual-write the first row at yen 0 with
+`project.default_rate_jpy` as the live cache; `appendProjectDefaultRate` updates both.
+`createResource` (`tenant_admin` | `pm`), `appendResourceRate` and `appendProjectDefaultRate`
+(`tenant_admin` only) are audited use cases with role declarations (third shape: Admin|PM, no
+Project). Domain `rateOnDate` / attribution accept optional `rate_seq_max` /
+`project_default_rate_seq_max` pins; live unpinned default still reads the column. No Resources &
+Rates UI. Probe suite `tests/resources-rates.test.ts` (base ≥ 830_000_000). Deferred L512–513 Rate
+half resolved; `demo_anchor` remains for 1.8.
+
+**Earlier (2026-09-22): story 1.5 (roles decide what each person can reach) is implemented and
 reviewed.** Declared-roles helper in `packages/app/src/authz/authorize.ts` (`authorize` /
 `reachesProject`): every use-case export declares roles; membership and Organisation writes are
 `tenant_admin` only (role check before parse); Project reads and Plan/Mapping writes are
@@ -330,7 +340,7 @@ Advisory locks before `seq` allocation. Needs Epic 2 and Epic 5's writers.
 
 ### 4. Then the rest of Epic 1
 
-Stories 1.6 through 1.9 (1.5 awaits merge, §1b). Epic 1 is 156 h and is the calibration point for the
+Stories 1.7 through 1.9 (1.6 implemented, awaiting review). Epic 1 is 156 h and is the calibration point for the
 whole estimate — its closing is the first date-slip checkpoint (above).
 
 What story 1.3 left, in `deferred-work.md` (**148 entries** now): the
@@ -385,7 +395,7 @@ clock); CI never runs `next build` (it passed locally for story 1.4 slice 1).
   sign-in and roles exist; PM assignment belongs to 1.4/1.5; no deleting or
   archiving org units, no name-uniqueness rule; new Projects take documented
   defaults (`NEW_PROJECT_DEFAULTS`) for columns later stories own, including a
-  default Rate of 0 until story 1.6.
+  default Rate dual-writes `project_default_rate_entry` (story 1.6).
 - **Story 1.4 decisions (founder, 2026-09-21)**: split into four slices (1
   identity + context + email/password, 2 revocation and membership writes, 3
   Google, 4 password reset); the seed creates `linh` (PM) and `hoang` (Tenant

@@ -91,7 +91,7 @@ const input: ReviewInput = {
       name: 'R',
       departmentId: 'd',
       trackerAccountIds: ['acct-1'],
-      rates: [{ effectiveFrom: '2026-01-01', yenPerHour: 5000n }],
+      rates: [{ seq: 1, effectiveFrom: '2026-01-01', yenPerHour: 5000n }],
     },
   ],
   period: periodOf('2026-09-16T09:00:00.000Z', 540, 4),

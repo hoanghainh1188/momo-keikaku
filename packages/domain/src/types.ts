@@ -103,8 +103,27 @@ export interface Resource {
   name: string;
   departmentId: string;
   trackerAccountIds: string[];
-  /** FR-12: dated Rate history. */
-  rates: { effectiveFrom: IsoDate; yenPerHour: Jpy }[];
+  /**
+   * FR-12: dated Rate history. `seq` is the append-only watermark (story 1.6); a pinned lookup
+   * keeps only rows with `seq ≤ rate_seq_max`.
+   */
+  rates: RateEntry[];
+}
+
+/** One dated Rate row — Resource Rates and Project default Rate history share this shape. */
+export interface RateEntry {
+  seq: number;
+  effectiveFrom: IsoDate;
+  yenPerHour: Jpy;
+}
+
+/**
+ * Optional seq ceilings for a live vs. Published Snapshot valuation (story 1.6 / Epic 5). Omit a
+ * pin to use every row (live view); with a pin, only rows at or below it count.
+ */
+export interface RatePins {
+  readonly rateSeqMax?: number;
+  readonly projectDefaultRateSeqMax?: number;
 }
 
 export interface ProjectConfig {
@@ -114,6 +133,7 @@ export interface ProjectConfig {
   contractType: '請負' | '準委任';
   tzOffsetMinutes: number;
   teireiWeekday: number;
+  /** Live unpinned default — the dual-write cache of `project_default_rate_entry`'s head. */
   defaultRateYenPerHour: Jpy;
   eacMethod: 'typical';
   /**
