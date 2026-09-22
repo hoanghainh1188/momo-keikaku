@@ -429,4 +429,5 @@ export const EXPECTED: Readonly<Record<string, Expect>> = {
       }),
     };
   },
+  changeTenantCurrency: () => NO_ROWS,
 };

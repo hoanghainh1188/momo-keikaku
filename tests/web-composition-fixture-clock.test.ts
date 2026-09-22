@@ -153,6 +153,7 @@ vi.mock('@momo/db-auth', () => ({
   signOutOf: vi.fn(),
   requestPasswordReset: vi.fn(),
   resetPassword: vi.fn(),
+  resetPasswordExpiryHours: () => 1,
 }));
 
 vi.mock('@momo/adapters', async (importOriginal) => {

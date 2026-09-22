@@ -39,3 +39,15 @@ export async function changeTenantCurrency(
   await deps.setCurrency(ctx.tenantId, parsed.data.currency);
   return ok(undefined);
 }
+
+/**
+ * Not on NFR-A1's list. R0 accepts only JPY, and refuses once any Rate exists — a probe Tenant
+ * already has Rates, so the successful write never changes a reported figure. The refusal writes
+ * nothing.
+ */
+export const TENANT_CURRENCY_AUDIT = {
+  changeTenantCurrency: {
+    unaudited:
+      'R0 accepts only JPY and refuses once any Rate exists; that refusal writes nothing, and a probe Tenant already has Rates so the success path never changes a reported figure.',
+  },
+} as const;
