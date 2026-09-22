@@ -1,0 +1,9 @@
+root = true
+
+# UTF-8 without a byte-order mark: JSON.parse, shebang scripts and frontmatter/YAML readers
+# all expect the first bytes of a file to be its content. (A CSV export for Excel adds its BOM
+# deliberately, at runtime — that is output, not source.)
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
