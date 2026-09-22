@@ -676,3 +676,86 @@ kept"). Neither is a defect; the story's short summary of the rule is what omits
 - A `client_viewer` or `internal_viewer` member reaches every read use case unrestricted — `false` for this diff: no read in `packages/app` consults roles at all, and the role model is story 1.5's by the spec's own division. Not something this story left undone.
 - `parseConfig` has no production caller, so its `superRefine` runs only in tests — `low`. The per-key getters carry the same rules through `parseConfigKey`, and the whole-schema parse is the shape a future migration script needs; deleting it to make a test honest is the wrong direction.
 - `org-writes.test.ts` and `project-writes.test.ts` keep a literal `ACTOR` beside a matching `CTX.userId` — `low`, and deliberate: a literal pin is what keeps `auditActorOf` honest, as the third pass established when it refuted the same finding about `TEST_ACTOR`.
+
+### Review Findings — fifth pass: the four auth suites and the fences
+
+The last two groups, reviewed together: `tests/{identity,membership,google-sign-in,password-reset,
+web-google-discovery}.test.ts` plus the fences and tooling they are gated by
+(`.dependency-cruiser.cjs`, `eslint.config.js`, `vitest.config.ts`, both tsconfigs,
+`.github/workflows/ci.yml`, `scripts/{seed,fake-oidc}.ts`, `README-DEMO.md`, `package.json`,
+`pnpm-workspace.yaml`) — 2,434 lines across 14 files, same baseline. Four layers: blind hunter
+(16), edge-case hunter (8), verification gap (4 + 3), acceptance auditor (11 + a clean bill on
+every fence).
+
+**These files ARE the evidence the other four groups' specs point at**, so the question this pass
+asked was not "is the test correct" but "does the assertion establish the criterion, or a weaker
+proxy". Six criteria turned out to rest on a proxy; they are listed under Carried below, because
+each was already disclosed in this spec's Change Log or an earlier triage and none is new.
+
+**The verification-gap layer measured its findings rather than asserting them**, and two of the
+three are holes in fences this story added:
+
+- It built a probe workspace package that imports `better-auth`, ran `pnpm depcruise` twice, and
+  showed `better-auth-only-in-db-auth` firing under the shipped `exclude` and **not firing** under
+  the pre-change one (170 modules, 0 violations, exit 0). The regex at `.dependency-cruiser.cjs:201`
+  is the single point of failure for the AD-1 carve-out, and no test, typecheck, lint or the new
+  `next build` step observes it. The diff's own comment records that this already broke once and
+  was caught only by a manual adversarial read.
+- It built `packages/app → scripts/ → tests/support/fake-oidc` and got
+  `✔ no dependency violations found`, exit 0. `no-test-support-in-source` matches the direct edge
+  only, and `scripts/` is outside the rule's `from` while still being **inside** the cruised graph.
+  The fake identity provider is one hop from `apps/web`'s bundle with the gate that exists to
+  prevent exactly that reporting clean.
+
+**The blind hunter's proposed fix for the `dist` exclusion is wrong, and measurably so.** It
+correctly notes that `^(apps|packages)/[^/]+/dist/` only reaches depth 3, which is why
+`^packages/db/auth/dist/` had to be written out by hand. Its suggested replacement
+`^(apps|packages)/(.*/)?dist/` also matches
+`packages/db/auth/node_modules/better-auth/dist/index.mjs` and
+`packages/db/node_modules/.pnpm/better-auth@1.7.5/node_modules/better-auth/dist/index.mjs`
+(measured against both regexes) — pnpm nests `node_modules` under every workspace package, so the
+"simplification" reintroduces precisely the bug the comment above it records. The finding is real;
+the fix must exclude `node_modules` explicitly.
+
+- [ ] [Review][Patch] `no-test-support-in-source` forbids the direct edge, not reachability: `packages/app → scripts/x → tests/support/fake-oidc` cruises clean and exits 0 (measured), so the fake identity provider is one hop from the product graph [.dependency-cruiser.cjs:146]
+- [ ] [Review][Patch] The `exclude` regex is the only thing keeping `better-auth-only-in-db-auth` able to fire, and nothing observes it — restore its pre-change value and the rule sees 0 better-auth edges while `pnpm depcruise` still exits 0 (measured) [.dependency-cruiser.cjs:201]
+- [ ] [Review][Patch] Nothing checks that the seed's `account.password` is the hash of `SEED_DEMO_PASSWORD` — the one assertion that looks is `hasPassword IS NOT NULL`, so hashing anything else keeps every gate green and locks both demo users out of the login the README documents [scripts/seed.ts:27]
+- [ ] [Review][Patch] `no-test-support-in-source` has no `pathNot` for test files, so it also bans the ~30 cruised in-package `*.test.ts` from using the fake, though its comment says "application source" [.dependency-cruiser.cjs:154]
+- [ ] [Review][Patch] The CI header — the record `.dependency-cruiser.cjs:21` points at for "every rule here has been watched to fail" — is three slices stale: the measurement reads 562 tests across 33 files (actual 773 across 42), the only story-1.4 bullet is slice 1's, and `no-test-support-in-source` appears nowhere [.github/workflows/ci.yml:80,159]
+- [ ] [Review][Patch] `README-DEMO.md:240` still says Row Level Security, composite foreign keys and the application role "are not set up", while line 96 of the same file says `pnpm demo` applies them [README-DEMO.md:240]
+- [ ] [Review][Patch] `tests/web-google-discovery.test.ts`'s third case depends on the second leaking `GOOGLE_CLIENT_SECRET` — `unstubAllEnvs` runs only in `afterAll`, so running the third alone fails for the wrong reason [tests/web-google-discovery.test.ts:57]
+- [ ] [Review][Patch] `identity`, `google-sign-in` and `password-reset` close their `beforeAll`/`afterAll` with no timeout, against the 120_000 that `membership`, `org-writes`, `cross-tenant-writes` and `cross-tenant` all use — vitest's 10s hook default aborts setup or teardown on a loaded runner and leaves probe rows behind [tests/identity.test.ts:129,165]
+- [ ] [Review][Patch] The matrix row "request, unknown email → no mail, **no row**" asserts only `mailer.hits() === 0`; the `verificationRow` helper it needs is used one test earlier [tests/password-reset.test.ts:247]
+- [ ] [Review][Patch] "Refuses a wrong password and an unknown email identically" asserts `{wrong: false, unknown: false}` — `signInWithPassword` returns `boolean`, so the two refusals are indistinguishable by the type and the assertion cannot fail on a difference [tests/identity.test.ts:231]
+- [ ] [Review][Patch] Neither new suite removes its `verification` rows: `removeProbeTenant` is the only path that deletes `reset-password:%`, and neither probe user holds a membership for it to reach — the expired and invalidated tokens, and every OAuth state row, survive each run [tests/password-reset.test.ts:178]
+- [ ] [Review][Patch] `removeExtras()` deletes `identityEvent` for `RESETTER.id` only while `session`, `account` and `authUser` go through the `ids` loop [tests/password-reset.test.ts:181]
+- [ ] [Review][Patch] `scripts/fake-oidc.ts` turns a mistyped `FAKE_OIDC_PORT` into `NaN` and listens on a random port — the exact cause of the `400 redirect_uri not registered` the README warns about — against the repo's rule that a bad key fails naming the key [scripts/fake-oidc.ts:24]
+- [ ] [Review][Patch] `pnpm demo`'s pre-flight checks `DATABASE_URL` and `APP_DATABASE_URL` only, so a run without `SEED_DEMO_PASSWORD` gets through compose, push, pgboss:migrate and db:policies before failing [scripts/demo.ts:20]
+- [ ] [Review][Patch] The `dist` exclusion enumerates `packages/db/auth/dist` by hand and the next nested package gets its build output cruised — but the obvious generalisation matches pnpm's nested `node_modules/**/dist/` and re-breaks the better-auth rule (measured); the replacement has to exclude `node_modules` [.dependency-cruiser.cjs:201]
+- [ ] [Review][Patch] `vitest.config.ts` gained the `@/` alias for `apps/web` while the comment eight lines below still reads "Nothing under apps/web carries a test file today" — there are six [vitest.config.ts:26]
+- [ ] [Review][Patch] `README-DEMO.md`'s env block states the 32-character floor for `BETTER_AUTH_SECRET` but omits `SEED_DEMO_PASSWORD`'s eight and `SESSION_IDLE_TIMEOUT_HOURS`' digits-only 1–720 [README-DEMO.md:31]
+
+- [ ] [Review][Defer] `cookieFrom` is written four times — three named copies and one inlined in `password-reset`'s `signIn` — and only the Google copy drops cleared cookies, so the other three would replay a `Max-Age=0` as live [tests/identity.test.ts:79]
+- [ ] [Review][Defer] The `createAuth(...)` option block and the `NOOP_RESET_DEPS` literal are copy-pasted across all four suites; this diff is the evidence of the cost, since slice 4's three fields had to be retro-fitted into slices 1–3 [tests/google-sign-in.test.ts:86]
+- [ ] [Review][Defer] `hashPassword` is deep-imported past its own barrel in five files, and neither tsconfig nor vitest maps a `@momo/db-auth/*` subpath to make the barrel reachable [scripts/seed.ts:23]
+- [ ] [Review][Defer] The `interactive: true` branch of the fake — the local Google sign-in the README now walks a developer through — is executed by no test and no CI step; omit one hidden input from `signInAsPage` and the flow dies with the full gate green [tests/support/fake-oidc.ts:243]
+- [ ] [Review][Defer] The Google matrix drives every knob the fake exposes but has none for a wrong `iss` or a *mismatched* (rather than absent) `nonce`, and AD-23 names "iss exact" as the guarantee [tests/support/fake-oidc.ts:50]
+- [ ] [Review][Defer] The `Build (apps/web)` step inherits the job's `env` and its own comment concedes it therefore cannot check the promise it was added for; giving the step blanked `BETTER_AUTH_SECRET`/`BETTER_AUTH_URL`/`SEED_DEMO_PASSWORD` turns the admission into the gate [.github/workflows/ci.yml:347]
+- [ ] [Review][Defer] `scripts/seed.ts` hashes before it reads `DATABASE_URL`, so with both keys unset only `SEED_DEMO_PASSWORD` is named, against the file header's own "a missing DATABASE_URL fails here, naming the key" [scripts/seed.ts:27]
+- [ ] [Review][Defer] `scripts/fake-oidc.ts` has no guard that `BETTER_AUTH_URL` is an http(s) origin and no `scripts/fake-oidc.test.ts`, though `scripts/pgboss-migrate.test.ts` sets the precedent for testing a script's pure guards [scripts/fake-oidc.ts:25]
+- [ ] [Review][Defer] The four-table round trip only reads `auth_user` and `account` back — rows `createProbeTenant` inserted through Drizzle — and checks neither id against the UUIDv7 regex, so an adapter-side write defect on either would not fail it [tests/identity.test.ts:445]
+- [ ] [Review][Defer] "Keeps the session cookie cache off — every request reaches the session table" asserts two option flags; the behavioural half is carried implicitly by the mutate-then-resolve rows elsewhere in the file [tests/identity.test.ts:170]
+
+#### Carried — criteria proven by a proxy, each already disclosed
+
+- The `/reset-password` compound sabotage (removed from `DISABLED_PATHS` **and** added to `SERVED_AUTH_ENDPOINTS`) is demonstrated by nothing: `serveAllowlisted` 404s before `auth.handler` is reached, so the suite's 404 assertions exercise the allowlist alone. Recorded in the Change Log; the second gate is pinned by `packages/db/auth/src/auth.test.ts`, outside this diff.
+- AC1 runs through a hand-rolled `fakeMailer()`, never `mailerConsoleOn`, and against probe users rather than the seeded `linh`/`hoang` — so `MAILER=console`'s resolution in the composition root is unproven. Already graded `medium` and deferred.
+- "The generic sentence replaced by a distinguishable one" is asserted by nothing — no test renders either page's copy. Already in the Change Log.
+- "`/no-access` renders" and both "no button" rows are proven by the resolver's and the binding's return values, not by rendering. The component-render harness is already deferred.
+- The "lowercased at the boundary" case calls the `@momo/db-auth` binding, not the web action, and Better Auth lowercases in `findUserByEmail` either way. The sabotage was already recorded as false; only the test's opening clause still over-claims, which is a naming nit.
+- Slice 2's rollback criterion has no case in `membership.test.ts`. Not a defect of this file — the spec attributes that signal to `cross-tenant-writes` and the audited-use-case gate, both reviewed in the third pass.
+
+#### Rejected
+
+- `internal_viewer` is missing from the Postgres membership suite's `invalid_input` cases — `low`. It is covered at `packages/app/src/use-cases/membership-writes.test.ts:257`, which is where input validation belongs; duplicating it against Postgres tests the same zod twice.
+- The acceptance auditor's clean bill on every fence was checked and stands: `better-auth-only-in-db-auth` matches both `better-auth` and `@better-auth/*` under pnpm's store and symlink layouts, the `apps-not-to-db` carve-out plus `other-apps-not-to-db` reconstitute the stated ban, and `tests/support/fake-oidc.ts` falls under `momo/fence-both` rather than `momo/fence-tests` because it is not a `*.test.ts`.
