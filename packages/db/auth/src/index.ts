@@ -28,5 +28,10 @@ export {
   type ServedEndpoint,
 } from './bindings';
 export type { GoogleProviderOptions } from './google';
-export { resetLinkOf, type IdentityEventWriter, type ResetMailer } from './reset';
+export {
+  RESET_PASSWORD_TOKEN_EXPIRES_IN_SECONDS,
+  resetLinkOf,
+  type IdentityEventWriter,
+  type ResetMailer,
+} from './reset';
 export { hashPassword } from './password';

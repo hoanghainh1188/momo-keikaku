@@ -249,7 +249,10 @@ export async function writeTenantRows(
       projectId: f.project.id,
       reason: f.baseline.reason,
       recordedAt: new Date(f.baseline.recordedAt),
-      actor: own(actorOf(DEMO_USERS.linh.id)),
+      // `actorOf(own(id))`, never `own(actorOf(id))`: the prefix belongs to the USER ID, inside the
+      // `user:` stamp. The other order yields `<prefix>user:<uuid>`, which names no seeded user in
+      // a probe Tenant and matches nothing the audit gate builds.
+      actor: actorOf(own(DEMO_USERS.linh.id)),
     })
     .returning({ seq: s.baselineVersion.seq });
   // Trap 1. This is the allocated value, not the fixture's — read back rather than assumed.

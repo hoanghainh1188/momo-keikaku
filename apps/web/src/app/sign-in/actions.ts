@@ -3,6 +3,7 @@
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { googleSignIn, signInWithEmail, signOut } from '@/server/composition';
+import { GOOGLE_REFUSED } from './google-refusal';
 
 /**
  * Sign-in and sign-out (story 1.4 slices 1 and 3) — the composition root's auth bindings, called
@@ -10,8 +11,6 @@ import { googleSignIn, signInWithEmail, signOut } from '@/server/composition';
  * Auth's limiter runs only in its HTTP router, and these actions call its API directly.
  */
 
-/** Where a Google sign-in that could not even start lands: the same one refusal as any other. */
-const GOOGLE_REFUSED = '/sign-in?google=refused';
 
 export interface SignInState {
   /** True after a refusal. One flag, one message: nothing tells an unknown email from a wrong password. */

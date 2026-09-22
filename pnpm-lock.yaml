@@ -300,6 +300,9 @@ importers:
       drizzle-orm:
         specifier: 0.45.2
         version: 0.45.2(@types/pg@8.23.1)(kysely@0.29.6)(pg@8.23.0)
+      next:
+        specifier: '>=15'
+        version: 15.5.25(@types/node@24.13.6)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
 
   packages/domain:
     dependencies:

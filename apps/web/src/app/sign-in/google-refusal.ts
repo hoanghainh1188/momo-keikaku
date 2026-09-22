@@ -7,6 +7,15 @@
  *
  * `searchParams.google` is a string, a string array when the key repeats, or absent.
  */
+/**
+ * Where a refused Google sign-in lands. The SAME string as `@momo/db-auth`'s `GOOGLE_REFUSED_URL`
+ * (`google.ts`), which Better Auth reads as `onAPIError.errorURL` — but a second declaration
+ * rather than an import, because AD-1 lets only the composition root import that package and this
+ * is a route module. `tests/web-composition.test.ts` asserts the two are equal, so they cannot
+ * drift silently; it is the test, not a shared symbol, that keeps them honest.
+ */
+export const GOOGLE_REFUSED = '/sign-in?google=refused';
+
 export function isGoogleRefusal(value: string | readonly string[] | undefined): boolean {
   if (value === undefined) return false;
   return typeof value === 'string' ? value === 'refused' : value.includes('refused');

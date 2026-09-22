@@ -194,6 +194,30 @@ describe.skipIf(!reachable)('sign-in and the request context, against Postgres (
     expect(await resolve(headers)).toEqual(resolved);
   });
 
+  /**
+   * THE `locale` ROUND TRIP, which every other assertion in this file takes on faith. They all
+   * expect `'en'` — which is also the column default AND the `?? 'en'` fallback in `identityOn`,
+   * so the whole path from `auth_user.locale` to `RequestContext` could stop working and each one
+   * would still pass: the `expect(x ?? DEFAULT).toBe(DEFAULT)` shape. `session.activeTenantId` is
+   * pinned properly (the case below writes a value nothing would guess and requires the resolver
+   * to observe it); this does the same for the field story 1.9's Japanese catalog will read.
+   */
+  it('carries a non-default locale from auth_user through to the resolved context', async () => {
+    await owner().transaction((tx) =>
+      tx.update(authUser).set({ locale: 'ja' }).where(eq(authUser.id, PM.id)),
+    );
+    try {
+      const headers = await signIn(PM.email);
+      const resolved = await resolve(headers);
+      if (resolved.status !== 'signed_in') throw new Error(`expected signed_in, got ${resolved.status}`);
+      expect(resolved.context.locale).toBe('ja');
+    } finally {
+      await owner().transaction((tx) =>
+        tx.update(authUser).set({ locale: 'en' }).where(eq(authUser.id, PM.id)),
+      );
+    }
+  });
+
   it('refuses a wrong password and an unknown email identically, creating no session', async () => {
     const before = (await sessionsOf(PM.id)).length;
     const wrong = await signInWithPassword(auth, new Headers({ origin: BASE_URL }), {

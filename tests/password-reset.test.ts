@@ -381,6 +381,49 @@ describe.skipIf(!reachable)('password reset through MailerPort (story 1.4 slice 
         await signInWithPassword(auth, headers(), { email: RESETTER.email, password: 'sixth-new-password-1' }),
       ).toBe(true);
     });
+
+    /**
+     * THE HOOK'S FAILURE CONTAINMENT, which nothing exercised until this case. Better Auth awaits
+     * `onPasswordReset` and only then deletes the user's sessions (`password.mjs:170-171`), on a
+     * request that has ALREADY replaced the password and spent the token. So a rejection there —
+     * a lost connection, a revoked INSERT grant on `identity_event`, a deployment that shipped
+     * this code before `db:policies` ran — must not escape: it is not an `APIError`, so the
+     * binding would rethrow it as a 500, and every session the reset was meant to end would
+     * survive. Deleting the try/catch in `auth.ts` passes every other test in this file; it fails
+     * this one.
+     */
+    it('still revokes every session, and still answers true, when the identity-event write fails', async () => {
+      const failing = createAuth({
+        db: appDb(),
+        secret: 'password-reset-test-secret-0123456789abcdef',
+        baseURL: BASE_URL,
+        idleHours: 8,
+        generateId: uuidV7IdsOn(systemClock).next,
+        mailer,
+        now: () => NOW,
+        identityEvents: {
+          record: async () => {
+            throw new Error('identity_event insert refused');
+          },
+        },
+      });
+
+      // A live session to prove the revocation still happened.
+      await signIn(RESETTER.email, 'sixth-new-password-1');
+      expect((await sessionsOf(RESETTER.id)).length).toBeGreaterThan(0);
+
+      mailer.reset();
+      expect(await requestPasswordReset(failing, headers(), RESETTER.email)).toBe(true);
+      const token = tokenFromMail(mailer.last());
+
+      expect(
+        await resetPassword(failing, headers(), { token, password: 'eighth-new-password-1' }),
+      ).toBe(true);
+      expect(await sessionsOf(RESETTER.id)).toEqual([]);
+      expect(
+        await signInWithPassword(auth, headers(), { email: RESETTER.email, password: 'eighth-new-password-1' }),
+      ).toBe(true);
+    });
   });
 
   it('never writes an identity_event on the request side, only on a completed consume', async () => {

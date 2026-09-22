@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Db } from '@momo/db';
 import { SESSION_UPDATE_AGE_SECONDS, authOptions } from './auth';
+import { SERVED_AUTH_ENDPOINTS } from './bindings';
 import { discoveryUrlOf, verifiedGoogleIdentity, withoutProviderTokens } from './google';
 import { RESET_PASSWORD_TOKEN_EXPIRES_IN_SECONDS, resetLinkOf, resetPasswordMail } from './reset';
 
@@ -139,6 +140,54 @@ describe('Google sign-in options (story 1.4 slice 3)', () => {
 
   it('keeps /sign-in/social disabled over HTTP even with Google on', () => {
     expect(WITH_GOOGLE.disabledPaths).toContain('/sign-in/social');
+  });
+});
+
+/**
+ * The two lists the HTTP boundary is MADE OF, pinned exactly rather than sampled. `toContain`
+ * catches an endpoint wrongly added and misses one quietly removed — and removal is the direction
+ * that opens a door: dropping a path from `disabledPaths` serves it, and the allowlist is the only
+ * thing left standing between the router and the internet. Changing either list should take a
+ * deliberate edit here, which is what AD-1's "a new endpoint joins the list by a spine-reviewed
+ * change" means in practice.
+ */
+describe('the HTTP boundary lists (story 1.4 whole-story review)', () => {
+  it('disables exactly these endpoints in Better Auth\'s router, Google on or off', () => {
+    const expected = [
+      '/sign-up/email',
+      '/update-session',
+      '/update-user',
+      '/change-password',
+      '/set-password',
+      '/change-email',
+      '/delete-user',
+      '/request-password-reset',
+      '/reset-password',
+      '/verify-email',
+      '/send-verification-email',
+      '/verify-password',
+      '/list-sessions',
+      '/revoke-session',
+      '/revoke-sessions',
+      '/revoke-other-sessions',
+      '/sign-in/social',
+      '/link-social',
+      '/unlink-account',
+      '/list-accounts',
+      '/refresh-token',
+      '/get-access-token',
+      '/account-info',
+    ];
+    expect([...OPTIONS.disabledPaths!].sort()).toEqual([...expected].sort());
+    expect([...WITH_GOOGLE.disabledPaths!].sort()).toEqual([...expected].sort());
+  });
+
+  it('serves exactly three endpoints unconditionally', () => {
+    expect(SERVED_AUTH_ENDPOINTS).toEqual([
+      { method: 'GET', path: '/get-session' },
+      { method: 'POST', path: '/sign-out' },
+      { method: 'POST', path: '/sign-in/email' },
+    ]);
   });
 });
 

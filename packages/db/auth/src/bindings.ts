@@ -176,9 +176,16 @@ export async function signOutOf(auth: Auth, headers: Headers): Promise<void> {
   try {
     await auth.api.signOut({ headers });
   } catch (error) {
-    // Signing out a request that has no session is not a failure: it is already signed out.
-    if (isAPIError(error)) return;
-    throw error;
+    // Signing out a request that has no session is not a failure: it is already signed out, and
+    // Better Auth's `/sign-out` swallows a missing or unknown session token internally rather than
+    // refusing. So an `APIError` HERE means something else — missing headers, a rejected origin —
+    // and the caller is told the sign-out succeeded either way, because the cookie is cleared and
+    // there is nothing useful it could do differently. Leave a trace of it rather than none: a
+    // sign-out that silently did not happen is the one failure a user cannot see. Status and code
+    // only, never a header or a token, as `signInWithPassword` does with a refusal it did not expect.
+    if (!isAPIError(error)) throw error;
+    const code = (error as { body?: { code?: unknown } }).body?.code;
+    console.warn(`[auth] sign-out refused by Better Auth: status ${String(error.status)}, code ${String(code)}`);
   }
 }
 

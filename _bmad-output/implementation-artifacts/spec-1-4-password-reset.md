@@ -466,24 +466,37 @@ contradiction in the data layer. Severities below are this triage's; each claim 
 cited location first. Groups C (`packages/app`), D (`apps/web`), E (`tests`) and F (fences and
 tooling) remain for later passes.
 
-- [ ] [Review][Decision] Nothing ever removes an expired `verification` row, and the reset's own sweep cannot use an index — Story 1.4 introduces three kinds of row in that table (OAuth state, reset tokens, and a never-mailed token for every Google-only user who requests a reset) and adds no cleanup anywhere. Verified: no `delete` against `expiresAt` exists in `packages/db`, `apps/worker` or `scripts`. Separately, `invalidateOtherResetTokens` filters on `value = <userId> AND identifier LIKE 'reset-password:%'`, but `verification` is indexed on `identifier` alone, so the sweep degrades as the table grows — which it does, unboundedly, for the same reason.
+- [x] [Review][Defer] Expired `verification` rows have no owned sweep, and the reset's own sweep cannot use an index [packages/db/src/schema.ts:128] — deferred: founder decision 2026-09-22, to Epic 8 alongside the sign-in throttle. **The finding as filed was partly wrong and is corrected here:** Better Auth DOES delete expired rows — `findVerificationValue` runs an unscoped `DELETE … WHERE expires_at < now()` unless `verification.disableCleanup` is set, which this project does not set, and it is reached from `password.mjs:66`, the unknown-email branch of `requestPasswordReset` that `/forgot-password` hits whenever a visitor mistypes an address. So "nothing ever removes expired rows" is false. What remains true is narrower: that sweep is a side effect of an unrelated branch rather than an owned maintenance step, so nothing guarantees it runs. The growth that outpaces it comes from two unthrottled endpoints, and that throttle is already recorded as an Epic 8 deployment blocker — same root cause, same owner, so splitting them would solve half the problem twice. Where a sweep runs (the worker, which has no composition root, or the maintenance role) is an AD-19 operations decision, not one a password-reset story should make. The index is deferred with it on purpose: `invalidateOtherResetTokens` runs once per completed reset, and when a real sweep lands the query wanting an index is its own `WHERE expires_at < now()`, not `value` — indexing `value` now would be guessing at the wrong column.
 
-- [ ] [Review][Patch] The new `global` tables are outside every probe-cleanup path [packages/db/src/probe-tenants.ts:437-443]
-- [ ] [Review][Patch] `rls.test.ts`'s no-row-level-security pin omits `identity_event` [packages/db/src/rls.test.ts:382]
-- [ ] [Review][Patch] `DISABLED_PATHS` and `SERVED_AUTH_ENDPOINTS` are not pinned exactly [packages/db/auth/src/auth.test.ts:141]
-- [ ] [Review][Patch] `signOutOf` reports every `APIError` as a successful sign-out [packages/db/auth/src/bindings.ts:175-183]
-- [ ] [Review][Patch] `next` is an undeclared dependency of `@momo/db-auth`, and its absence fails silently [packages/db/auth/package.json]
-- [ ] [Review][Patch] The token-lifetime constant is not exported, so the forgot-password page still hand-writes "1 hour" [packages/db/auth/src/index.ts:31]
-- [ ] [Review][Patch] The reset hook's failure containment is never exercised [tests/password-reset.test.ts]
-- [ ] [Review][Patch] No test carries a non-`en` locale from `auth_user` through to the resolved context [tests/identity.test.ts]
-- [ ] [Review][Patch] `IdentityEventWriter` drops the `payload` field its counterpart carries [packages/db/auth/src/reset.ts:32-39]
-- [ ] [Review][Patch] `GOOGLE_REFUSED_URL` is re-declared as a literal in the web app [apps/web/src/app/sign-in/actions.ts:14]
-- [ ] [Review][Patch] A probe Tenant's baseline actor prefixes in the wrong order, so it names no seeded user [packages/db/src/seed.ts:252]
+- [x] [Review][Patch] The new `global` tables are outside every probe-cleanup path [packages/db/src/probe-tenants.ts:437-443]
+- [x] [Review][Patch] `rls.test.ts`'s no-row-level-security pin omits `identity_event` [packages/db/src/rls.test.ts:382]
+- [x] [Review][Patch] `DISABLED_PATHS` and `SERVED_AUTH_ENDPOINTS` are not pinned exactly [packages/db/auth/src/auth.test.ts:141]
+- [x] [Review][Patch] `signOutOf` reports every `APIError` as a successful sign-out [packages/db/auth/src/bindings.ts:175-183]
+- [x] [Review][Patch] `next` is an undeclared dependency of `@momo/db-auth`, and its absence fails silently [packages/db/auth/package.json]
+- [x] [Review][Patch] The token-lifetime constant is not exported, so the forgot-password page still hand-writes "1 hour" [packages/db/auth/src/index.ts:31]
+- [x] [Review][Patch] The reset hook's failure containment is never exercised [tests/password-reset.test.ts]
+- [x] [Review][Patch] No test carries a non-`en` locale from `auth_user` through to the resolved context [tests/identity.test.ts]
+- [x] [Review][Patch] `IdentityEventWriter` drops the `payload` field its counterpart carries [packages/db/auth/src/reset.ts:32-39]
+- [x] [Review][Patch] `GOOGLE_REFUSED_URL` is re-declared as a literal in the web app [apps/web/src/app/sign-in/actions.ts:14]
+- [x] [Review][Patch] A probe Tenant's baseline actor prefixes in the wrong order, so it names no seeded user [packages/db/src/seed.ts:252]
 
 - [x] [Review][Defer] `bindings.ts`'s routing logic has no unit test, although all of it is pure [packages/db/auth/src/bindings.ts] — deferred: `endpointOf`'s trailing-slash normalisation, the method-and-path match, `notFound()`'s `cache-control`, and the re-throw branch in all five wrappers need no database; a suite for them is substantial new work and the `tests` group has not been reviewed yet.
 - [x] [Review][Defer] `minPasswordLength` is inherited while the file's stated rule is to pin what reset depends on [packages/db/auth/src/auth.ts:165] — deferred: `hashPassword` accepts any non-empty string, so `SEED_DEMO_PASSWORD` may be shorter than the minimum the reset flow enforces; choosing the password policy is a decision, not a correction.
 - [x] [Review][Defer] `identity_event.action` is a closed list in TypeScript only [packages/db/src/schema.ts:171] — deferred: already recorded from the slice-4 review; carried, no second entry added.
 - [x] [Review][Defer] Google discovery has no timeout and no retry [packages/db/auth/src/bindings.ts:40-43] — deferred: already in the spine's Deferred section as an Epic 8 item; carried, no second entry added.
+
+#### First-pass status
+
+All eleven patches applied and verified: `pnpm lint`, `pnpm typecheck` (root, `@momo/web`,
+`@momo/worker`) and `pnpm depcruise` clean; 765 tests across 42 files green against Postgres with
+`REQUIRE_DB=1`, up from 760. Two sabotages were watched to fail and then restored — dropping a path
+from `DISABLED_PATHS` (caught by the new exact pin) and removing `onPasswordReset`'s `try`/`catch`
+(caught by the new containment test) — so the new guards bite rather than merely passing.
+
+**This review covered one of six file groups.** `packages/app` (2,208 lines), `apps/web` (2,017),
+`tests` (3,839) and the fences-and-tooling group (205) have not been reviewed. Story 1.4 therefore
+stays at `review` in `sprint-status.yaml` rather than moving to `done`: the whole-story review the
+handoff calls for is not finished, and marking it done would claim four passes that never ran.
 
 #### Rejected
 

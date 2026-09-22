@@ -35,6 +35,9 @@ export interface IdentityEventWriter {
     readonly userId: string;
     readonly action: 'password.reset';
     readonly at: Date;
+    /** Restated from `IdentityEventRecord`, which carries it: without this member the two shapes
+     *  diverge the moment a second action needs detail, and this package could never pass any. */
+    readonly payload?: unknown;
   }) => Promise<void>;
 }
 

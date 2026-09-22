@@ -805,3 +805,21 @@ describe('apps/web states no Tenant and no actor of its own', () => {
     expect(offences).toEqual([]);
   });
 });
+
+/**
+ * The one string the web edge and `@momo/db-auth` must agree on, and cannot share. Better Auth
+ * reads `GOOGLE_REFUSED_URL` as `onAPIError.errorURL`, so every OAuth refusal lands there; the
+ * sign-in action sends its own could-not-even-start refusal to the same place. AD-1 lets only the
+ * composition root import that package, and both are route modules, so one imports the other is
+ * not available — a second declaration is. This test is what keeps the two honest, so a change to
+ * either is a change that fails here rather than a page that quietly never renders its message.
+ */
+describe('the Google refusal URL', () => {
+  it('is the same string in the web edge as in the auth package', async () => {
+    const [{ GOOGLE_REFUSED }, { GOOGLE_REFUSED_URL }] = await Promise.all([
+      import('../apps/web/src/app/sign-in/google-refusal'),
+      import('../packages/db/auth/src/google'),
+    ]);
+    expect(GOOGLE_REFUSED).toBe(GOOGLE_REFUSED_URL);
+  });
+});
