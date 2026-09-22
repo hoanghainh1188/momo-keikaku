@@ -267,7 +267,9 @@ describe.skipIf(!reachable)('the worker runs pg-boss as the restricted applicati
 
       try {
         await withTimeout(
-          pollUntil(() => output.includes('[worker] started')),
+          // Story 1.7 moved the entry point onto pino JSON (`createLogger`); the old
+          // `[worker] started` console prefix is gone.
+          pollUntil(() => output.includes('"msg":"started with migration disabled"')),
           `the worker never reported started. Output so far: ${output}`,
         );
 
@@ -296,7 +298,11 @@ describe.skipIf(!reachable)('the worker runs pg-boss as the restricted applicati
       }
 
       const { code, signal } = await withTimeout(exited, 'the worker never exited after SIGTERM');
-      expect({ code, signal, stopped: output.includes('[worker] stopped') }).toEqual({
+      expect({
+        code,
+        signal,
+        stopped: output.includes('"msg":"stopped"'),
+      }).toEqual({
         code: 0,
         signal: null,
         stopped: true,
