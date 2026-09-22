@@ -1,4 +1,4 @@
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import type { Bound } from './bound';
 import { projectNotFound } from './project-not-found';
 import * as s from './schema';
@@ -259,10 +259,27 @@ function recordManualMapping({ tx, tenantId }: Bound) {
   };
 }
 
+/**
+ * Whether `wpId` is a Work Package of `projectId` (AD-12). The use case asks before it writes a
+ * Mapping or a Disposition naming the Work Package, and refuses `not_found` on `false` — so a PM
+ * who reaches one Project cannot append rows in it that name another Project's Work Package.
+ */
+function workPackageInProject({ tx }: Bound) {
+  return async (projectId: string, wpId: string): Promise<boolean> => {
+    const rows = await tx
+      .select({ id: s.workPackage.id })
+      .from(s.workPackage)
+      .where(and(eq(s.workPackage.id, wpId), eq(s.workPackage.projectId, projectId)))
+      .limit(1);
+    return rows.length > 0;
+  };
+}
+
 /** The project write repository, bound to one transaction and its Tenant. */
 export function projectWriteRepositoryOn(bound: Bound) {
   return {
     projectAnchor: (projectId: string) => anchorOf(bound.tx, projectId),
+    workPackageInProject: workPackageInProject(bound),
     recordMapDisposition: recordMapDisposition(bound),
     recordPlanDisposition: recordPlanDisposition(bound),
     recordExplainDisposition: recordExplainDisposition(bound),
