@@ -1,7 +1,15 @@
-# Handoff — 2026-09-22 (story 1.8 merged)
+# Handoff — 2026-09-23 (story 1.9 in progress)
 
-State at `main` (PR #42, `57ada6a`). **Story 1.8 (A load fixture worth measuring against) is
-`done` — implemented, code-reviewed, CI green, merged.** Next: story 1.9.
+State on branch (story 1.9). **Story 1.9 (every string externalised; currency fixed) is
+`in-progress`.** Landed so far: `@momo/i18n` catalogs + key-parity / shell +30% gate; `next-intl`
+on web (R0 UI `en`); reset mail via `renderMail` injected in composition; `messageKey` mapping in
+web; `compareNfkc` + locale-aware `yen`; `tenant.currency` (default JPY) + `changeTenantCurrency`
+use case with Rate lock, role declaration, and web composition binding; SQL grants regenerated via
+`pnpm db:sql`. Remaining before close: full acceptance review, optional `auth_user.locale` cookie,
+live DB column apply on environments, and incremental externalisation of long Review/Client report
+prose (documented in spec Implementation Notes).
+
+**Previous:** Story 1.8 (PR #42, `57ada6a`) is `done`.
 
 **Latest (2026-09-22): story 1.8 merged via PR #42.** `SEED_PROFILE=demo|load` (default demo);
 in-process deterministic 5×500 load generator (no committed load JSON); required

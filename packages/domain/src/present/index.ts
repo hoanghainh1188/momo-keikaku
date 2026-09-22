@@ -48,7 +48,9 @@ export function hoursSigned(mh: Mh): string {
 }
 
 /** Yen, grouped: `¥1,234,000`. Money is already integral (AD-4's `costOf`). */
-export const yen = (jpy: Jpy): string => `¥${jpy.toLocaleString('en-US')}`;
+export function yen(jpy: Jpy, locale = 'en-US'): string {
+  return `¥${jpy.toLocaleString(locale)}`;
+}
 
 /** A share as a percentage to 1 decimal: 168/1000 → `16.8%`. */
 export const share = (r: Ratio): string => `${fixed(divRoundHalfEven(r.num * 1000n, r.den), 1)}%`;

@@ -15,6 +15,7 @@ import {
 } from '../packages/app/src/use-cases';
 import { LAST_TENANT_ADMIN } from '../packages/app/src/use-cases/membership-writes';
 import { createAuth, identityOn, type Auth } from '../packages/db/auth/src';
+import { testResetPasswordMailRenderer } from './support/reset-mail-renderer';
 import { hashPassword } from '../packages/db/auth/src/password';
 import { closeAllPools, getDb, getPool } from '../packages/db/src/client';
 import { DEMO_USERS } from '../packages/db/src/demo-identities';
@@ -246,6 +247,7 @@ describe.skipIf(!reachable)('membership writes and revocation, against Postgres 
       mailer: { send: async () => {} },
       now: systemClock.now,
       identityEvents: { record: async () => {} },
+      resetPasswordMail: testResetPasswordMailRenderer(),
     });
     passwordHash = await hashPassword(PASSWORD);
     await createProbeTenant(owner(), { ...P, writeOptions: { ...P.writeOptions, passwordHash } });

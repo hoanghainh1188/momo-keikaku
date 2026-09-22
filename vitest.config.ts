@@ -18,6 +18,7 @@ export default defineConfig({
       '@momo/db': fileURLToPath(new URL('./packages/db/src/index.ts', import.meta.url)),
       '@momo/app': fileURLToPath(new URL('./packages/app/src/index.ts', import.meta.url)),
       '@momo/adapters': fileURLToPath(new URL('./packages/adapters/src/index.ts', import.meta.url)),
+      '@momo/i18n': fileURLToPath(new URL('./packages/i18n/src/index.ts', import.meta.url)),
     },
   },
   // `apps/**` and `scripts/**` joined the list with story 1.1 slice B2. A test the runner

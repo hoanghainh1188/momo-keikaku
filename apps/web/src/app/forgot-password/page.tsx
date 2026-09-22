@@ -1,3 +1,4 @@
+import { getTranslations } from 'next-intl/server';
 import Link from 'next/link';
 import { RESET_LINK_HOURS } from './reset-link-hours';
 
@@ -5,7 +6,10 @@ import { ForgotPasswordForm } from './forgot-password-form';
 
 export const dynamic = 'force-dynamic';
 
-export const metadata = { title: 'Forgot password · momo-keikaku' };
+export async function generateMetadata() {
+  const t = await getTranslations('auth.forgotPassword');
+  return { title: t('forgot_password_momo_keikaku') };
+}
 
 interface ForgotPasswordPageProps {
   readonly searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -20,29 +24,30 @@ interface ForgotPasswordPageProps {
  * action behind it, tells them apart.
  */
 export default async function ForgotPasswordPage({ searchParams }: ForgotPasswordPageProps) {
+  const t = await getTranslations();
   const params = await searchParams;
   const sent = params.sent !== undefined;
 
   return (
     <main className="auth-page">
       <section className="auth-sheet" aria-labelledby="forgot-password-heading">
-        <p className="auth-brand">
-          momo-keikaku <span>／ 計画</span>
+        <p className="auth-brand">{t('admin.momo_keikaku')}<span>{t('shell.brandSuffix')}</span>
         </p>
-        <h1 id="forgot-password-heading">Reset your password</h1>
+        <h1 id="forgot-password-heading">{t('auth.forgotPassword.reset_your_password')}</h1>
         {sent ? (
           <p className="auth-success" role="status">
-            If that email has an account, we&rsquo;ve sent a link to reset the password. It
-            expires in {RESET_LINK_HOURS === 1 ? 'an hour' : `${RESET_LINK_HOURS} hours`}.
+            {RESET_LINK_HOURS === 1
+              ? t('auth.forgotPassword.sent.oneHour')
+              : t('auth.forgotPassword.sent.manyHours', { hours: RESET_LINK_HOURS })}
           </p>
         ) : (
           <>
-            <p className="auth-hint">Enter the email you sign in with.</p>
+            <p className="auth-hint">{t('auth.forgotPassword.enter_the_email_you_sign_in_with')}</p>
             <ForgotPasswordForm />
           </>
         )}
         <p className="auth-below auth-note">
-          <Link href="/sign-in">Back to sign in</Link>
+          <Link href="/sign-in">{t('auth.forgotPassword.back_to_sign_in')}</Link>
         </p>
       </section>
     </main>

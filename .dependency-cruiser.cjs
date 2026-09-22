@@ -119,6 +119,15 @@ module.exports = {
       to: { path: '^packages/adapters/' },
     },
     {
+      name: 'i18n-imports-nothing',
+      severity: 'error',
+      comment:
+        'Story 1.9: packages/i18n owns catalogs and renderMail only — no workspace imports, so ' +
+        'web and worker can depend on it without pulling the app layer.',
+      from: { path: '^packages/i18n/' },
+      to: { path: '^packages/', pathNot: '^packages/i18n/' },
+    },
+    {
       name: 'web-to-domain-present-only',
       severity: 'error',
       comment:

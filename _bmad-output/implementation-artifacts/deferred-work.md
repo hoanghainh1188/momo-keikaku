@@ -916,3 +916,15 @@ fences and tooling that gate them. Seventeen findings were patched; these ten we
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-8-a-load-fixture-worth-measuring-against.md`
   summary: Resolved deferred entries for the Clock port still carry pre-resolution `evidence:` text (e.g. "no import of `@momo/adapters` exists anywhere").
   evidence: Docs-only. Updating or striking stale evidence on resolved rows is housekeeping, not a runtime defect.
+
+## Deferred from: spec-1-9-every-string-is-externalised-and-the-currency-is-fixed (2026-09-22 split)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-9-every-string-is-externalised-and-the-currency-is-fixed.md`
+  summary: Automated Japanese +30% layout gate for Project and Client demo surfaces (Review, Plan, Mapping, Connectors, Baselines, `/c/...`).
+  evidence: Split from story 1.9 to keep the Epic 1 close under the Build scope budget. Founder chose automated gate (4-A); 1.9 applies that gate to the durable shell only. Those Project/Client pages are the demo spike Epic 2.2 rewrites file-by-file — re-run the gate when their strings land in the final surfaces.
+
+## Deferred from: review of spec-1-9-every-string-is-externalised-and-the-currency-is-fixed (2026-09-23)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-9-every-string-is-externalised-and-the-currency-is-fixed.md`
+  summary: `changeTenantCurrency` checks `hasAnyRate` then `setCurrency` without a single-transaction re-check — a Rate inserted between the two calls could leave currency updated after a Rate exists.
+  evidence: Edge-case review. Everyday window is only before the first Project (createProject always inserts a default rate). Settle with a single txn that re-reads rates under a Tenant lock before UPDATE.

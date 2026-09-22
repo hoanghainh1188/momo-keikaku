@@ -47,5 +47,6 @@ export {
   type IdentityEventAction,
   type IdentityEventRecord,
 } from './repo-identity-event';
+export { tenantCurrencyOn } from './repo-tenant-currency';
 export * from './table-classes';
 export * from './with-tenant';

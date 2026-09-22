@@ -1,8 +1,10 @@
+import { getTranslations } from 'next-intl/server';
 import Link from 'next/link';
 import { getClientView } from '@/server/composition';
 import { valueOrNotFound } from '@/server/result';
 import { HealthBadge } from '@/components/ui';
 import { GanttRow, ganttScale } from '@/components/gantt';
+import { formatReportDate, REPORT_LOCALE } from '@/lib/report-locale';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,6 +22,8 @@ export default async function ClientViewPage({
 }: {
   params: Promise<{ projectId: string }>;
 }) {
+  const t = await getTranslations();
+  const em = t('common.em_dash');
   const { projectId } = await params;
   const { clientName, projection: c } = valueOrNotFound(await getClientView({ projectId }));
 
@@ -32,20 +36,21 @@ export default async function ClientViewPage({
   return (
     <div style={{ padding: 24, background: 'var(--ground)', minHeight: '100vh' }}>
       <div className="client-sheet" data-testid="client-view">
-        <div className="preview-band">
-          Preview — not published · this is exactly what a Client Viewer would see
-        </div>
+        <div className="preview-band">{t('clientView.preview_not_published_this_is_exactly_what_a_cli')}</div>
         <div style={{ padding: 40 }}>
           <h1 className="report-title">{c.projectName}</h1>
           <div className="report-sub">
-            {clientName} · Report as of {c.asOf.slice(0, 10)} · Effort in 工数 (h)
+            {t('clientView.report_sub', {
+              clientName,
+              asOf: formatReportDate(c.asOf, REPORT_LOCALE),
+            })}
           </div>
 
           <section className="section" style={{ marginTop: 32 }}>
-            <h2 className="section-title">Status</h2>
+            <h2 className="section-title">{t('clientView.status')}</h2>
             <hr className="section-rule" />
             <div style={{ marginBottom: 20 }}>
-              <span className="label">Overall</span>{' '}
+              <span className="label">{t('clientView.overall')}</span>{' '}
               <HealthBadge colour={c.overall} label={c.overall} />
             </div>
             <div className="health-row">
@@ -62,23 +67,23 @@ export default async function ClientViewPage({
           </section>
 
           <section className="section">
-            <h2 className="section-title">計画外作業 — Unplanned Work</h2>
+            <h2 className="section-title">{t('clientView.unplanned_work_title')}</h2>
             <hr className="section-rule" />
             <div className="metric" style={{ maxWidth: 320 }}>
-              <div className="label">This reporting period</div>
+              <div className="label">{t('clientView.this_reporting_period')}</div>
               <div
                 className="value"
                 style={{ color: 'var(--unplanned)', fontSize: 30 }}
                 data-testid="client-unplanned"
               >
-                {c.unplanned.sharePeriod ?? '—'}{' '}
+                {c.unplanned.sharePeriod ?? em}{' '}
                 <span className="unit">({c.unplanned.hours} h)</span>
               </div>
               <div className="formula">{c.unplanned.statement}</div>
             </div>
             {c.unplanned.notes.length > 0 ? (
               <div style={{ marginTop: 20 }}>
-                <div className="label">From your project manager</div>
+                <div className="label">{t('clientView.from_your_project_manager')}</div>
                 {c.unplanned.notes.map((n, i) => (
                   <p key={i} data-testid="client-note">
                     “{n}”
@@ -86,27 +91,22 @@ export default async function ClientViewPage({
                 ))}
               </div>
             ) : (
-              <p className="caption" style={{ marginTop: 16 }}>
-                No explanatory note has been attached for this period yet.
-              </p>
+              <p className="caption" style={{ marginTop: 16 }}>{t('clientView.no_explanatory_note_has_been_attached_for_this_p')}</p>
             )}
-            <p className="caption" style={{ marginTop: 16 }}>
-              The Unplanned Work indicator is always counted in the Health Indicators above. The
-              project manager controls the notes and the level of detail, not whether it counts.
-            </p>
+            <p className="caption" style={{ marginTop: 16 }}>{t('clientView.the_unplanned_work_indicator_is_always_counted_i')}</p>
           </section>
 
           <section className="section">
-            <h2 className="section-title">Milestones</h2>
+            <h2 className="section-title">{t('clientView.milestones')}</h2>
             <hr className="section-rule" />
             <table className="ledger" data-testid="client-milestones">
               <thead>
                 <tr>
-                  <th>Milestone</th>
-                  <th>Planned (baseline)</th>
-                  <th>Current</th>
-                  <th>Done</th>
-                  <th>Status</th>
+                  <th>{t('clientView.milestone')}</th>
+                  <th>{t('clientView.planned_baseline')}</th>
+                  <th>{t('clientView.current')}</th>
+                  <th>{t('clientView.done')}</th>
+                  <th>{t('clientView.status')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -114,15 +114,15 @@ export default async function ClientViewPage({
                   <tr key={m.name}>
                     <td>{m.name}</td>
                     <td>{m.baselineDate}</td>
-                    <td>{m.currentDate ?? '—'}</td>
-                    <td>{m.doneDate ?? '—'}</td>
+                    <td>{m.currentDate ?? em}</td>
+                    <td>{m.doneDate ?? em}</td>
                     <td>
                       {m.doneDate ? (
-                        <span className="tag done">Done</span>
+                        <span className="tag done">{t('clientView.done')}</span>
                       ) : m.slipped ? (
-                        <HealthBadge colour="amber" label="slipped" />
+                        <HealthBadge colour="amber" label={t('clientView.slipped')} />
                       ) : (
-                        <span className="tag">open</span>
+                        <span className="tag">{t('clientView.open')}</span>
                       )}
                     </td>
                   </tr>
@@ -132,17 +132,17 @@ export default async function ClientViewPage({
           </section>
 
           <section className="section">
-            <h2 className="section-title">Schedule</h2>
+            <h2 className="section-title">{t('clientView.schedule')}</h2>
             <hr className="section-rule" />
             <table className="ledger" data-testid="client-schedule">
               <thead>
                 <tr>
-                  <th>WBS</th>
-                  <th>Work Package</th>
-                  <th>Planned</th>
-                  <th>Current</th>
-                  <th className="num">Complete</th>
-                  <th style={{ width: '34%' }}>Plan vs current</th>
+                  <th>{t('clientView.wbs')}</th>
+                  <th>{t('clientView.work_package')}</th>
+                  <th>{t('clientView.planned')}</th>
+                  <th>{t('clientView.current')}</th>
+                  <th className="num">{t('clientView.complete')}</th>
+                  <th style={{ width: '34%' }}>{t('clientView.plan_vs_current')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -151,10 +151,10 @@ export default async function ClientViewPage({
                     <td>{sch.wbsCode}</td>
                     <td>{sch.name}</td>
                     <td className="caption">
-                      {sch.baselineStart ? `${sch.baselineStart} → ${sch.baselineFinish}` : '—'}
+                      {sch.baselineStart ? `${sch.baselineStart} → ${sch.baselineFinish}` : em}
                     </td>
                     <td className="caption">
-                      {sch.currentStart ? `${sch.currentStart} → ${sch.currentFinish}` : '—'}
+                      {sch.currentStart ? `${sch.currentStart} → ${sch.currentFinish}` : em}
                     </td>
                     <td className="num">{sch.progress.label}%</td>
                     <td>
@@ -185,12 +185,9 @@ export default async function ClientViewPage({
 
           <footer className="section">
             <hr className="section-rule" />
+            <p className="caption">{t('clientView.this_report_shows_effort_only_it_contains_no_cos')}</p>
             <p className="caption">
-              This report shows effort only. It contains no cost, no rates, no named staffing and
-              no ticket content. Views of a published report are recorded.
-            </p>
-            <p className="caption">
-              <Link href={`/p/${projectId}/review`}>← Back to the PM&apos;s Reconciliation Review</Link>
+              <Link href={`/p/${projectId}/review`}>{t('clientView.back_to_review')}</Link>
             </p>
           </footer>
         </div>

@@ -1,10 +1,13 @@
+import { getTranslations } from 'next-intl/server';
 import Link from 'next/link';
 import { getProjectReview } from '@/server/composition';
 import { valueOrNotFound } from '@/server/result';
-import { hours, hoursSigned, present, share, wholePercent, yen, type Mh } from '@momo/domain/present';
+import { hours, hoursSigned, present, share, wholePercent, yen } from '@momo/domain/present';
 import { HealthBadge, Internal, MetricCell, Section, UnplannedChip } from '@/components/ui';
 import { ScopeLedgerBar } from '@/components/scope-ledger-bar';
 import { DispositionRail } from '@/components/disposition-rail';
+import { UnmappedGroupRows } from '@/components/unmapped-group-rows';
+import { REPORT_LOCALE } from '@/lib/report-locale';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,6 +16,9 @@ export default async function ReviewPage({
 }: {
   params: Promise<{ projectId: string }>;
 }) {
+  const t = await getTranslations();
+  const em = t('common.em_dash');
+  const money = (jpy: Parameters<typeof yen>[0]) => yen(jpy, REPORT_LOCALE);
   const { projectId } = await params;
   const { bundle, review: r } = valueOrNotFound(await getProjectReview({ projectId }));
   const p = bundle.project;
@@ -20,48 +26,44 @@ export default async function ReviewPage({
   const leafWps = bundle.wps.filter((w) => w.isLeaf && !w.isMilestone);
 
   const overall = r.health.overall;
-  const spi = present(r.evm.spi);
-  const cpiAll = present(r.evm.cpiAllIn);
 
   return (
     <div className="layout-review">
       <div className="sheet">
-        {/* ---------------------------------------------------------- header */}
         <header>
           <h1 className="report-title" data-testid="report-title">
-            {p.name} — Reconciliation Review
+            {t('review.report_title', { projectName: p.name })}
           </h1>
           <div className="report-sub">
-            Reporting Period {period.label} (weekly, teirei Thursday, {tz(p.tzOffsetMinutes)}) ·
-            Contract type {p.contractType} · Client {p.clientName}
+            {t('review.meta.report_sub_period', {
+              period: period.label,
+              tz: tz(p.tzOffsetMinutes),
+              contractType: p.contractType,
+              clientName: p.clientName,
+            })}
           </div>
           <div className="report-sub" style={{ marginTop: 8 }}>
-            Pinned to Tracker Snapshot <code>{r.snapshot.id}</code> ·{' '}
-            {r.snapshot.ticketCount} Tickets in scope · Connector{' '}
-            <em>{bundle.meta.connector.spaceLabel}</em> · Measurement basis{' '}
-            <strong>{r.measurementBasis}</strong> · Formula {r.formulaVersion}
+            {t('review.pinned_to_tracker_snapshot')}
+            <code>{r.snapshot.id}</code> ·{' '}
+            {t('review.meta.tickets_in_scope', { count: r.snapshot.ticketCount })} ·{' '}
+            {t('review.meta.connector')} <em>{bundle.meta.connector.spaceLabel}</em> ·{' '}
+            {t('review.meta.measurement_basis')} <strong>{r.measurementBasis}</strong> ·{' '}
+            {t('review.meta.formula')} {r.formulaVersion}
           </div>
           <div className="btn-row">
-            <Link className="btn" href={`/p/${projectId}/mapping`}>
-              Mapping
-            </Link>
-            <Link className="btn" href={`/p/${projectId}/plan`}>
-              Plan
-            </Link>
-            <Link className="btn primary" href={`/c/${projectId}`}>
-              Preview client view
-            </Link>
+            <Link className="btn" href={`/p/${projectId}/mapping`}>{t('review.mapping')}</Link>
+            <Link className="btn" href={`/p/${projectId}/plan`}>{t('review.plan')}</Link>
+            <Link className="btn primary" href={`/c/${projectId}`}>{t('review.preview_client_view')}</Link>
           </div>
         </header>
 
-        {/* ---------------------------------------------------------- status */}
         <Section
-          title="Status"
+          title={t('clientView.status')}
           id="status"
-          intro="The overall status is the worst of the three indicators. Each shows the rule behind its colour."
+          intro={t('review.the_overall_status_is_the_worst_of_the_three_ind')}
         >
           <div style={{ marginBottom: 16 }} data-testid="overall-status">
-            <span className="label">Overall</span>{' '}
+            <span className="label">{t('clientView.overall')}</span>{' '}
             <HealthBadge colour={overall} label={overall} />
             {r.health.overallNote ? (
               <span className="caption"> · {r.health.overallNote}</span>
@@ -70,7 +72,7 @@ export default async function ReviewPage({
           <div className="health-row">
             {r.health.indicators.map((i) => (
               <div className="health" key={i.key} data-testid={`health-${i.key}`}>
-                <div className="label">{healthLabel(i.key)}</div>
+                <div className="label">{t(`review.health.${i.key}`)}</div>
                 <div style={{ margin: '6px 0 4px' }}>
                   <HealthBadge colour={i.colour} label={`${i.colour} · ${i.driver}`} />
                 </div>
@@ -82,51 +84,56 @@ export default async function ReviewPage({
           <div className="metric-row" style={{ marginTop: 24 }}>
             <MetricCell
               xl
-              label="SPI"
+              label={t('review.spi')}
               metric={r.evm.spi}
-              formula="SPI = EV ÷ PV"
-              note={`${hours(r.evm.evMh)}h ÷ ${hours(r.evm.pvMh)}h — ${r.behindPlan ? 'behind plan' : 'on or ahead of plan'}`}
+              formula={t('review.metrics.formula_spi')}
+              note={`${hours(r.evm.evMh)}h ÷ ${hours(r.evm.pvMh)}h — ${t(r.behindPlan ? 'review.metrics.behind_plan' : 'review.metrics.on_or_ahead_of_plan')}`}
               testId="m-spi"
             />
             <MetricCell
               xl
-              label="CPI (all-in)"
+              label={t('review.cpi_all_in')}
               metric={r.evm.cpiAllIn}
-              formula="CPI = EV ÷ AC (all actual hours)"
-              note={`${hours(r.evm.evMh)}h ÷ ${hours(r.evm.acMh)}h — includes Unplanned Work`}
+              formula={t('review.metrics.formula_cpi_all_in')}
+              note={t('review.metrics.note_cpi_all_in', { ev: hours(r.evm.evMh), ac: hours(r.evm.acMh) })}
               testId="m-cpi-allin"
             />
             <MetricCell
               xl
-              label="CPI (planned scope)"
+              label={t('review.cpi_planned_scope')}
               metric={r.evm.cpiPlannedScope}
-              formula="CPI = EV ÷ AC of baselined WPs only"
-              note="The gap between the two CPIs is the Unplanned Work."
+              formula={t('review.metrics.formula_cpi_planned')}
+              note={t('review.metrics.note_cpi_gap')}
               testId="m-cpi-planned"
             />
             <MetricCell
               xl
               tone="unplanned"
-              label="Unplanned Work (period)"
+              label={t('review.unplanned_work_period')}
               metric={{
-                text: r.unplanned.sharePeriod === null ? '—' : share(r.unplanned.sharePeriod),
+                text: r.unplanned.sharePeriod === null ? em : share(r.unplanned.sharePeriod),
               }}
-              formula={`${hours(r.unplanned.period.unplannedMh)}h of ${hours(r.unplanned.period.totalMh)}h this period`}
+              formula={t('review.metrics.formula_unplanned_period', {
+                unplanned: hours(r.unplanned.period.unplannedMh),
+                total: hours(r.unplanned.period.totalMh),
+              })}
               note={
                 r.unplanned.shareCumulative === null
                   ? undefined
-                  : `Cumulative ${share(r.unplanned.shareCumulative)} (${hours(r.unplanned.cumulative.unplannedMh)}h)`
+                  : t('review.metrics.note_unplanned_cumulative', {
+                      share: share(r.unplanned.shareCumulative),
+                      hours: hours(r.unplanned.cumulative.unplannedMh),
+                    })
               }
               testId="m-unplanned-share"
             />
           </div>
         </Section>
 
-        {/* ------------------------------------------------- unplanned work */}
         <Section
-          title="Unplanned Work"
+          title={t('review.unplanned_work')}
           id="unplanned"
-          intro="Hours spent outside the baselined plan. They carry actual effort and no earned value — this is information about how accurate the plan is, not a judgement of people."
+          intro={t('review.hours_spent_outside_the_baselined_plan_they_carr')}
         >
           <ScopeLedgerBar
             segments={r.scopeLedger}
@@ -134,16 +141,14 @@ export default async function ReviewPage({
             totalMh={r.attribution.cumulative.totalMh}
           />
 
-          <h3 className="label" style={{ marginTop: 32 }}>
-            The three components of Unplanned Work (cumulative)
-          </h3>
+          <h3 className="label" style={{ marginTop: 32 }}>{t('review.the_three_components_of_unplanned_work_cumulativ')}</h3>
           <table className="ledger" data-testid="unplanned-components">
             <thead>
               <tr>
-                <th>Component</th>
-                <th className="num">Hours</th>
-                <th className="num">Share of Unplanned</th>
-                <th>Where it comes from</th>
+                <th>{t('review.component')}</th>
+                <th className="num">{t('mapping.hours')}</th>
+                <th className="num">{t('review.share_of_unplanned')}</th>
+                <th>{t('review.where_it_comes_from')}</th>
               </tr>
             </thead>
             <tbody>
@@ -157,51 +162,49 @@ export default async function ReviewPage({
                     <span className="unit">h</span>
                   </td>
                   <td className="num">
-                    {c.share === null ? '—' : share(c.share)}
+                    {c.share === null ? em : share(c.share)}
                   </td>
-                  <td className="caption">{COMPONENT_SOURCE[c.key]}</td>
+                  <td className="caption">{t(`review.componentSource.${componentSourceKey(c.key)}`)}</td>
                 </tr>
               ))}
               <tr className="total-row">
-                <td>Total Unplanned Work</td>
+                <td>{t('review.total_unplanned_work')}</td>
                 <td className="num" data-testid="unplanned-total-cum">
                   {hours(r.unplanned.cumulative.unplannedMh)}
                   <span className="unit">h</span>
                 </td>
-                <td className="num">100.0%</td>
+                <td className="num">{t('review.percent_complete_total')}</td>
                 <td className="caption">
-                  <Internal /> {yen(r.unplanned.cumulative.unplannedJpy)} at the Rates in
-                  effect when each hour was recorded
+                  <Internal />{' '}
+                  {t('review.unplanned.total_row_rates', {
+                    amount: money(r.unplanned.cumulative.unplannedJpy),
+                  })}
                 </td>
               </tr>
             </tbody>
           </table>
 
           <p className="caption" style={{ marginTop: 8 }}>
-            Opening Balance {hours(r.openingBalanceMh)}h — hours the Tickets already carried
-            before momo-keikaku could observe them. Counted in cumulative AC, excluded from
-            period metrics, so a Project connected mid-flight shows no false spike.
+            {t('review.unplanned.opening_balance_footnote', { hours: hours(r.openingBalanceMh) })}
           </p>
 
-          <h3 className="label" style={{ marginTop: 32 }}>
-            Unmapped Work by Tracker attribute — expand to Tickets
-          </h3>
+          <h3 className="label" style={{ marginTop: 32 }}>{t('review.unmapped_work_by_tracker_attribute_expand_to_tic')}</h3>
           <table className="ledger" data-testid="unmapped-groups">
             <thead>
               <tr>
-                <th>Group</th>
-                <th>Attribute</th>
-                <th className="num">Tickets</th>
-                <th className="num">Hours</th>
-                <th>Disposition</th>
+                <th>{t('review.group')}</th>
+                <th>{t('review.attribute')}</th>
+                <th className="num">{t('mapping.tickets')}</th>
+                <th className="num">{t('mapping.hours')}</th>
+                <th>{t('review.disposition.column_header')}</th>
               </tr>
             </thead>
             <tbody>
               {r.unmappedGroups.map((g) => (
-                <GroupRows key={g.key} group={g} />
+                <UnmappedGroupRows key={g.key} group={g} />
               ))}
               <tr className="total-row">
-                <td colSpan={2}>Total Unmapped Work</td>
+                <td colSpan={2}>{t('review.total_unmapped_work')}</td>
                 <td className="num">{r.coverage.unmappedTickets}</td>
                 <td className="num" data-testid="unmapped-total">
                   {hours(r.unplanned.cumulative.unmappedMh)}
@@ -212,44 +215,49 @@ export default async function ReviewPage({
             </tbody>
           </table>
           <p className="caption" style={{ marginTop: 8 }}>
-            Mapping coverage: {share(r.coverage.mappedHourShare)} of hours and{' '}
-            {share(r.coverage.mappedTicketShare)} of Tickets are mapped (FR-23 reports the two
-            separately).
+            {t('review.unplanned.mapping_coverage', {
+              hourShare: share(r.coverage.mappedHourShare),
+              ticketShare: share(r.coverage.mappedTicketShare),
+            })}
           </p>
         </Section>
 
-        {/* ------------------------------------------------- ahead / behind */}
-        <Section title="Ahead / Behind" id="ahead-behind">
+        <Section title={t('review.ahead_behind')} id="ahead-behind">
           <div className="metric-row">
             <MetricCell
-              label="SV (schedule variance)"
+              label={t('review.sv_schedule_variance')}
               metric={{ text: hoursSigned(r.evm.svMh), unit: 'h' }}
-              formula="SV = EV − PV"
-              note={r.evm.svMh < 0n ? 'Behind plan' : 'Ahead of plan'}
+              formula={t('review.metrics.formula_sv')}
+              note={t(r.evm.svMh < 0n ? 'review.metrics.behind_plan_cap' : 'review.metrics.ahead_of_plan')}
               testId="m-sv"
             />
-            <MetricCell label="SPI" metric={r.evm.spi} formula="SPI = EV ÷ PV" />
             <MetricCell
-              label="Forecast finish"
-              metric={{ text: r.forecast.forecastFinish ?? '—' }}
-              formula="Baseline start + (Baseline working days ÷ SPI)"
-              note={`Baseline finish ${r.forecast.baselineFinish ?? '—'} · ${r.forecast.note}`}
+              label={t('review.spi')}
+              metric={r.evm.spi}
+              formula={t('review.metrics.formula_spi')}
+            />
+            <MetricCell
+              label={t('review.forecast_finish')}
+              metric={{ text: r.forecast.forecastFinish ?? em }}
+              formula={t('review.metrics.formula_forecast_finish')}
+              note={t('review.metrics.note_forecast_finish', {
+                baselineFinish: r.forecast.baselineFinish ?? em,
+                note: r.forecast.note,
+              })}
               testId="m-forecast-finish"
             />
           </div>
 
-          <h3 className="label" style={{ marginTop: 32 }}>
-            Milestones
-          </h3>
+          <h3 className="label" style={{ marginTop: 32 }}>{t('clientView.milestones')}</h3>
           <table className="ledger" data-testid="milestones">
             <thead>
               <tr>
-                <th>WBS</th>
-                <th>Milestone</th>
-                <th>Baseline date</th>
-                <th>Current date</th>
-                <th>Done</th>
-                <th>Status</th>
+                <th>{t('clientView.wbs')}</th>
+                <th>{t('clientView.milestone')}</th>
+                <th>{t('review.baseline_date')}</th>
+                <th>{t('review.current_date')}</th>
+                <th>{t('clientView.done')}</th>
+                <th>{t('clientView.status')}</th>
               </tr>
             </thead>
             <tbody>
@@ -258,15 +266,15 @@ export default async function ReviewPage({
                   <td>{m.wbsCode}</td>
                   <td>{m.name}</td>
                   <td>{m.baselineDate}</td>
-                  <td>{m.currentDate ?? '—'}</td>
-                  <td>{m.doneDate ?? '—'}</td>
+                  <td>{m.currentDate ?? em}</td>
+                  <td>{m.doneDate ?? em}</td>
                   <td>
                     {m.doneDate ? (
-                      <span className="tag done">Done</span>
+                      <span className="tag done">{t('clientView.done')}</span>
                     ) : m.slipped ? (
-                      <HealthBadge colour="amber" label="slipped" />
+                      <HealthBadge colour="amber" label={t('clientView.slipped')} />
                     ) : (
-                      <span className="tag">open</span>
+                      <span className="tag">{t('clientView.open')}</span>
                     )}
                   </td>
                 </tr>
@@ -274,21 +282,19 @@ export default async function ReviewPage({
             </tbody>
           </table>
 
-          <h3 className="label" style={{ marginTop: 32 }}>
-            Divergence by Work Package — Baseline vs Current Plan vs actual
-          </h3>
+          <h3 className="label" style={{ marginTop: 32 }}>{t('review.divergence_by_work_package_baseline_vs_current_p')}</h3>
           <table className="ledger" data-testid="divergence">
             <thead>
               <tr>
-                <th>WBS</th>
-                <th>Work Package</th>
-                <th>Baseline finish</th>
-                <th>Current finish</th>
-                <th className="num">Baseline h</th>
-                <th className="num">EV h</th>
-                <th className="num">AC h</th>
-                <th className="num">%</th>
-                <th>Basis</th>
+                <th>{t('clientView.wbs')}</th>
+                <th>{t('clientView.work_package')}</th>
+                <th>{t('review.baseline_finish')}</th>
+                <th>{t('review.current_finish')}</th>
+                <th className="num">{t('plan.baseline_h')}</th>
+                <th className="num">{t('review.ev_h')}</th>
+                <th className="num">{t('review.ac_h')}</th>
+                <th className="num">{t('common.percent_symbol')}</th>
+                <th>{t('review.basis')}</th>
               </tr>
             </thead>
             <tbody>
@@ -299,12 +305,12 @@ export default async function ReviewPage({
                     <td>{d.wbsCode}</td>
                     <td>
                       {d.name}{' '}
-                      {d.isCatchAll ? <span className="tag">catch-all · LOE</span> : null}
+                      {d.isCatchAll ? <span className="tag">{t('plan.catch_all_loe')}</span> : null}
                       {d.nonBaselined ? (
-                        <span className="tag unplanned">non-baselined</span>
+                        <span className="tag unplanned">{t('plan.non_baselined')}</span>
                       ) : null}
                     </td>
-                    <td>{d.baselineFinish ?? '—'}</td>
+                    <td>{d.baselineFinish ?? em}</td>
                     <td
                       style={
                         d.baselineFinish && d.currentFinish && d.currentFinish > d.baselineFinish
@@ -312,7 +318,7 @@ export default async function ReviewPage({
                           : undefined
                       }
                     >
-                      {d.currentFinish ?? '—'}
+                      {d.currentFinish ?? em}
                     </td>
                     <td className="num">{hours(d.baselineMh)}</td>
                     <td className="num">{hours(d.evMh)}</td>
@@ -321,7 +327,7 @@ export default async function ReviewPage({
                     <td>
                       <span className="tag">{d.pctBasis}</span>
                       {d.lowEvidence && d.baselineMh > 0n ? (
-                        <span className="tag">low evidence</span>
+                        <span className="tag">{t('review.low_evidence')}</span>
                       ) : null}
                     </td>
                   </tr>
@@ -329,163 +335,153 @@ export default async function ReviewPage({
             </tbody>
           </table>
           <p className="caption" style={{ marginTop: 8 }}>
-            {leafWps.length} leaf Work Packages in the Current Plan; {bundle.baseline.wps.length}{' '}
-            carry Baseline hours or are Milestones. Percent Complete is never derived from burned
-            effort.
+            {t('review.divergence.footnote', {
+              leafCount: leafWps.length,
+              baselineCount: bundle.baseline.wps.length,
+            })}
           </p>
         </Section>
 
-        {/* ------------------------------------------------- effort & cost */}
         <Section
-          title="Effort &amp; Cost"
+          title={t('review.effort_cost')}
           id="effort-cost"
-          intro="Measured in effort hours (工数). The money column is derived (hours × Rate) and is internal only."
+          intro={t('review.measured_in_effort_hours_the_money_column_is_der')}
         >
           <table className="ledger" data-testid="evm-table">
             <thead>
               <tr>
-                <th>Metric</th>
-                <th className="num">Hours</th>
-                <th className="num">
-                  Money <Internal />
+                <th>{t('review.metric')}</th>
+                <th className="num">{t('mapping.hours')}</th>
+                <th className="num">{t('review.money')}<Internal />
                 </th>
-                <th>Formula</th>
-                <th>Reading</th>
+                <th>{t('review.formula')}</th>
+                <th>{t('review.reading')}</th>
               </tr>
             </thead>
             <tbody>
               <EvmRow
-                name="PV — Planned Value"
+                name={t('review.evm.pv.name')}
                 value={`${hours(r.evm.pvMh)}h`}
-                money={yen(r.money.pvJpy)}
-                formula="Baseline hours spread over baseline working days, to the as-of date"
-                reading="What the Baseline said would be earned by now"
+                money={money(r.money.pvJpy)}
+                formula={t('review.evm.pv.formula')}
+                reading={t('review.evm.pv.reading')}
               />
               <EvmRow
-                name="EV — Earned Value"
+                name={t('review.evm.ev.name')}
                 value={`${hours(r.evm.evMh)}h`}
-                money={yen(r.money.evJpy)}
-                formula="Σ Baseline hours × Percent Complete"
-                reading="What has actually been earned"
+                money={money(r.money.evJpy)}
+                formula={t('review.evm.ev.formula')}
+                reading={t('review.evm.ev.reading')}
                 testId="evm-ev"
               />
               <EvmRow
-                name="AC — Actual Cost (all-in)"
+                name={t('review.evm.ac.name')}
                 value={`${hours(r.evm.acMh)}h`}
-                money={yen(r.attribution.cumulative.totalJpy)}
-                formula="Actuals Ledger, attributed by the current Mapping"
-                reading="Includes the Unplanned line below"
+                money={money(r.attribution.cumulative.totalJpy)}
+                formula={t('review.evm.ac.formula')}
+                reading={t('review.evm.ac.reading')}
                 testId="evm-ac"
               />
               <EvmRow
-                name="— of which planned scope"
+                name={t('review.evm.planned_scope.name')}
                 value={`${hours(r.attribution.cumulative.mappedBaselinedMh + r.attribution.cumulative.catchAllMh)}h`}
                 money=""
-                formula="AC of baselined WPs (incl. Catch-all within its Baseline)"
-                reading=""
+                formula={t('review.evm.planned_scope.formula')}
+                reading={t('review.evm.planned_scope.reading')}
               />
               <EvmRow
-                name="— of which Unplanned (PV = EV = 0)"
+                name={t('review.evm.unplanned_line.name')}
                 value={`${hours(r.attribution.cumulative.unplannedMh)}h`}
-                money={yen(r.attribution.cumulative.unplannedJpy)}
-                formula="Unmapped + non-baselined WPs + Catch-all overflow"
-                reading="Actual effort with no earned value"
+                money={money(r.attribution.cumulative.unplannedJpy)}
+                formula={t('review.evm.unplanned_line.formula')}
+                reading={t('review.evm.unplanned_line.reading')}
                 unplanned
                 testId="evm-unplanned-line"
               />
               <EvmRow
-                name="CV — Cost Variance"
-                value={r.evm.cvMh.kind === 'value' ? `${hoursSigned(r.evm.cvMh.value)}h` : '—'}
+                name={t('review.evm.cv.name')}
+                value={r.evm.cvMh.kind === 'value' ? `${hoursSigned(r.evm.cvMh.value)}h` : em}
                 money=""
-                formula="CV = EV − AC"
-                reading="< 0 means over budget"
+                formula={t('review.evm.cv.formula')}
+                reading={t('review.evm.cv.reading')}
               />
               <EvmRow
-                name="SV — Schedule Variance"
+                name={t('review.evm.sv.name')}
                 value={`${hoursSigned(r.evm.svMh)}h`}
                 money=""
-                formula="SV = EV − PV"
-                reading="< 0 means behind"
+                formula={t('review.evm.sv.formula')}
+                reading={t('review.evm.sv.reading')}
               />
               <EvmRow
-                name="CPI (all-in)"
+                name={t('review.evm.cpi_all_in.name')}
                 value={present(r.evm.cpiAllIn).text}
                 money=""
-                formula="CPI = EV ÷ AC"
-                reading="< 1 means over budget. This is the headline figure and the one every EAC uses."
+                formula={t('review.evm.cpi_all_in.formula')}
+                reading={t('review.evm.cpi_all_in.reading')}
               />
               <EvmRow
-                name="CPI (planned scope)"
+                name={t('review.evm.cpi_planned.name')}
                 value={present(r.evm.cpiPlannedScope).text}
                 money=""
-                formula="CPI = EV ÷ AC of baselined WPs"
-                reading="Higher than all-in CPI: the planned work is close to plan; the overrun is Unplanned Work."
+                formula={t('review.evm.cpi_planned.formula')}
+                reading={t('review.evm.cpi_planned.reading')}
               />
               <EvmRow
-                name="TCPI"
+                name={t('review.evm.tcpi.name')}
                 value={present(r.evm.tcpi).text}
                 money=""
-                formula="TCPI = (BAC − EV) ÷ (BAC − AC)"
-                reading="> 1.1 means the remaining work must beat the planned efficiency — a red flag."
+                formula={t('review.evm.tcpi.formula')}
+                reading={t('review.evm.tcpi.reading')}
                 testId="evm-tcpi"
               />
               <EvmRow
-                name="BAC — Budget at Completion"
+                name={t('review.evm.bac.name')}
                 value={`${hours(r.evm.bacMh)}h`}
                 money=""
-                formula="Σ Baseline hours over baselined leaf WPs"
-                reading=""
+                formula={t('review.evm.bac.formula')}
+                reading={t('review.evm.bac.reading')}
               />
             </tbody>
           </table>
           <p className="caption" style={{ marginTop: 8 }}>
-            CPI in money can differ from CPI in hours, because the people planned and the people
-            who did the work can have different Rates. Money above uses the Project default Rate
-            of {yen(p.defaultRateYenPerHour)}/h for PV and EV, and the per-Resource Rate in effect
-            for AC.
+            {t('review.evm.cpi_money_footnote', {
+              defaultRate: money(p.defaultRateYenPerHour),
+            })}
           </p>
         </Section>
 
-        {/* ------------------------------------------------- forecast */}
-        <Section title="Forecast" id="forecast">
+        <Section title={t('review.forecast')} id="forecast">
           <div className="metric-row">
             <MetricCell
-              label="EAC (Typical)"
+              label={t('review.eac_typical')}
               metric={r.evm.eacMh}
-              formula="EAC = BAC ÷ CPI (all-in)"
-              note="EAC Method: Typical — the only method in R0"
+              formula={t('review.metrics.formula_eac')}
+              note={t('review.metrics.note_eac')}
               testId="m-eac"
             />
             <MetricCell
-              label="ETC"
+              label={t('review.etc')}
               metric={r.evm.etcMh}
-              formula="ETC = EAC − AC"
+              formula={t('review.metrics.formula_etc')}
               testId="m-etc"
             />
             <MetricCell
-              label="VAC"
+              label={t('review.vac')}
               metric={r.evm.vacMh}
-              formula="VAC = BAC − EAC"
-              note="Negative means the forecast overruns the budget"
+              formula={t('review.metrics.formula_vac')}
+              note={t('review.metrics.note_vac')}
               testId="m-vac"
             />
             <MetricCell
-              label="Forecast finish"
-              metric={{ text: r.forecast.forecastFinish ?? '—' }}
-              formula="Trend heuristic, not a PMI formula"
+              label={t('review.forecast_finish')}
+              metric={{ text: r.forecast.forecastFinish ?? em }}
+              formula={t('review.metrics.formula_forecast_trend')}
             />
           </div>
-          <p className="caption" style={{ marginTop: 16 }}>
-            The effort forecast is the EAC from the Project&apos;s EAC Method, so it includes
-            Unplanned Work.
-          </p>
+          <p className="caption" style={{ marginTop: 16 }}>{t('review.the_effort_forecast_is_the_eac_from_the_project_')}</p>
         </Section>
 
-        <p className="caption" style={{ marginTop: 40 }}>
-          Approximate — hours are derived from the difference between Tracker Snapshots, not from
-          worklogs. Any breakdown by person or by day is approximate for that reason, and no view
-          ranks or scores people by Unplanned Work.
-        </p>
+        <p className="caption" style={{ marginTop: 40 }}>{t('review.approximate_hours_are_derived_from_the_differenc')}</p>
       </div>
 
       <DispositionRail
@@ -496,7 +492,7 @@ export default async function ReviewPage({
           ticketCount: g.ticketCount,
           hours: hours(g.mh),
           dispositioned: g.dispositioned,
-          ticketIds: g.tickets.map((t) => t.ticketId),
+          ticketIds: g.tickets.map((tk) => tk.ticketId),
         }))}
         leafWps={leafWps.map((w) => ({ id: w.id, label: `${w.wbsCode} ${w.name}` }))}
         explainNotes={r.explainNotes.map((n) => ({ note: n.note, hours: hours(n.mh) }))}
@@ -506,20 +502,10 @@ export default async function ReviewPage({
   );
 }
 
-const COMPONENT_SOURCE: Record<string, string> = {
-  unmapped: 'Tickets in the Connector’s scope with no Mapping to a Work Package.',
-  'non-baselined':
-    'Work Packages that exist in the Current Plan but carry no Baseline hours — for example WPs created by the Plan disposition. Their hours stay Unplanned until a Re-baseline.',
-  'catch-all-overflow':
-    'A Catch-all Work Package is measured as Level of Effort. Hours beyond its Baseline hours are Unplanned Work, and appear only here, so they are never counted twice.',
-};
-
-function healthLabel(key: string): string {
-  return key === 'schedule'
-    ? 'Schedule'
-    : key === 'effort_cost'
-      ? 'Effort / Cost'
-      : 'Unplanned Work';
+function componentSourceKey(key: string): string {
+  if (key === 'non-baselined') return 'non_baselined';
+  if (key === 'catch-all-overflow') return 'catch_all_overflow';
+  return key;
 }
 
 function tz(offsetMinutes: number): string {
@@ -556,66 +542,5 @@ function EvmRow({
       <td className="caption">{formula}</td>
       <td className="caption">{reading}</td>
     </tr>
-  );
-}
-
-function GroupRows({
-  group,
-}: {
-  group: {
-    key: string;
-    label: string;
-    attribute: string;
-    ticketCount: number;
-    mh: Mh;
-    dispositioned: string | null;
-    tickets: { ticketId: string; key: string; title: string; mh: Mh; resolved: boolean; status: string }[];
-  };
-}) {
-  return (
-    <>
-      <tr className="group-row" data-testid={`group-${group.key}`}>
-        <td>
-          <details>
-            <summary>
-              <UnplannedChip>{group.label}</UnplannedChip>
-            </summary>
-            <table className="ledger" style={{ marginTop: 8 }}>
-              <thead>
-                <tr>
-                  <th>Ticket</th>
-                  <th>Title</th>
-                  <th>Status</th>
-                  <th className="num">Hours</th>
-                </tr>
-              </thead>
-              <tbody>
-                {group.tickets.map((t) => (
-                  <tr className="ticket-row" key={t.ticketId}>
-                    <td>{t.key}</td>
-                    <td>{t.title}</td>
-                    <td>{t.status}</td>
-                    <td className="num">{hours(t.mh)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </details>
-        </td>
-        <td className="caption">{group.attribute}</td>
-        <td className="num">{group.ticketCount}</td>
-        <td className="num">
-          {hours(group.mh)}
-          <span className="unit">h</span>
-        </td>
-        <td>
-          {group.dispositioned ? (
-            <span className="tag">{group.dispositioned}</span>
-          ) : (
-            <span className="caption">not dispositioned</span>
-          )}
-        </td>
-      </tr>
-    </>
   );
 }

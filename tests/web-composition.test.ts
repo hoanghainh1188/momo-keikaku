@@ -209,6 +209,7 @@ vi.mock('@momo/db-auth', () => ({
   googleSignIn: spies.googleSignIn,
   requestPasswordReset: spies.requestPasswordReset,
   resetPassword: spies.resetPassword,
+  resetPasswordExpiryHours: () => 1,
   serveAllowlisted: vi.fn(),
   sessionForMiddleware: spies.sessionForMiddleware,
   signInWithPassword: spies.signInWithPassword,

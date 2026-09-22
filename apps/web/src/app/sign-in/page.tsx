@@ -1,3 +1,4 @@
+import { getTranslations } from 'next-intl/server';
 import { googleEnabled } from '@/server/composition';
 import { isGoogleRefusal } from './google-refusal';
 import { GoogleSignIn } from './google-sign-in';
@@ -5,7 +6,10 @@ import { SignInForm } from './sign-in-form';
 
 export const dynamic = 'force-dynamic';
 
-export const metadata = { title: 'Sign in · momo-keikaku' };
+export async function generateMetadata() {
+  const t = await getTranslations('auth.signIn');
+  return { title: t('sign_in_momo_keikaku') };
+}
 
 interface SignInPageProps {
   readonly searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -21,20 +25,18 @@ interface SignInPageProps {
  * one generic message; Better Auth's `error`/`error_description` parameters are never read.
  */
 export default async function SignInPage({ searchParams }: SignInPageProps) {
+  const t = await getTranslations();
   const [google, params] = await Promise.all([googleEnabled(), searchParams]);
   const googleRefused = isGoogleRefusal(params.google);
 
   return (
     <main className="auth-page">
       <section className="auth-sheet" aria-labelledby="sign-in-heading">
-        <p className="auth-brand">
-          momo-keikaku <span>／ 計画</span>
+        <p className="auth-brand">{t('admin.momo_keikaku')}<span>{t('shell.brandSuffix')}</span>
         </p>
-        <h1 id="sign-in-heading">Sign in</h1>
+        <h1 id="sign-in-heading">{t('auth.noAccess.sign_in')}</h1>
         {googleRefused ? (
-          <p className="auth-error auth-error-google" role="alert">
-            Google sign-in did not go through. Try again, or sign in with your email and password.
-          </p>
+          <p className="auth-error auth-error-google" role="alert">{t('auth.signIn.google_sign_in_did_not_go_through_try_again_or_s')}</p>
         ) : null}
         <SignInForm />
         {google ? <GoogleSignIn /> : null}

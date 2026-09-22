@@ -1,8 +1,9 @@
+import { getTranslations } from 'next-intl/server';
 import type { ReactNode } from 'react';
-import type { Role } from '@momo/app';
 import { currentUserIdentity, getProjectHeader, requestContext } from '@/server/composition';
 import { valueOrNotFound } from '@/server/result';
 import { Shell } from '@/components/shell';
+import { formatRoleLabels } from '@/lib/role-labels';
 import { userLabelFromIdentity } from '@/lib/user-chip';
 
 export const dynamic = 'force-dynamic';
@@ -14,6 +15,7 @@ export default async function ProjectLayout({
   children: ReactNode;
   params: Promise<{ projectId: string }>;
 }) {
+  const t = await getTranslations();
   const { projectId } = await params;
   // Resolved once per render (the page's binding shares it through React `cache()`); redirects
   // to /sign-in or /no-access before anything under /p/ renders.
@@ -30,28 +32,13 @@ export default async function ProjectLayout({
       clientName={bundle.meta.clientName}
       snapshotLabel={formatJst(observed)}
       snapshotAgeMinutes={bundle.meta.snapshotAgeMinutes}
-      roleLabel={roleLabel(ctx.roles)}
+      roleLabel={formatRoleLabels(ctx.roles, t)}
       userLabel={userLabel}
       showAuditLog={ctx.roles.includes('tenant_admin')}
     >
       {children}
     </Shell>
   );
-}
-
-const ROLE_LABELS: Readonly<Record<Role, string>> = {
-  tenant_admin: 'Tenant Admin',
-  pm: 'PM',
-  client_viewer: 'Client Viewer',
-  internal_viewer: 'Internal Viewer',
-};
-
-function roleLabel(roles: readonly Role[]): string {
-  // A context with no role is not reachable today — the resolver refuses before a page renders —
-  // but an empty join renders an empty chip, which reads as a broken header rather than as the
-  // absence it is. Say it instead.
-  if (roles.length === 0) return 'No role';
-  return roles.map((role) => ROLE_LABELS[role]).join(' · ');
 }
 
 function formatJst(d: Date): string {

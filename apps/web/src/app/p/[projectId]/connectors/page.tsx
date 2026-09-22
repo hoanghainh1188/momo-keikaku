@@ -1,3 +1,4 @@
+import { getTranslations } from 'next-intl/server';
 import { getProjectReview } from '@/server/composition';
 import { valueOrNotFound } from '@/server/result';
 import { hours } from '@momo/domain/present';
@@ -11,32 +12,47 @@ export default async function ConnectorsPage({
 }: {
   params: Promise<{ projectId: string }>;
 }) {
+  const t = await getTranslations();
   const { projectId } = await params;
   const { bundle, review } = valueOrNotFound(await getProjectReview({ projectId }));
   const c = bundle.meta.connector;
   return (
     <div className="sheet">
-      <h1 className="report-title">Connectors</h1>
-      <div className="report-sub">
-        Connectors are read-only. The offshore team keeps working in Backlog; nothing is asked of
-        them and nothing is ever written back.
-      </div>
-      <Section title="Backlog Connector" id="connector">
+      <h1 className="report-title">{t('connectors.connectors')}</h1>
+      <div className="report-sub">{t('connectors.connectors_are_read_only_the_offshore_team_keeps')}</div>
+      <Section title={t('connectors.backlog_connector')} id="connector">
         <table className="ledger">
           <tbody>
-            <tr><td className="label">Adapter</td><td><code>{c.adapter}</code> — replays recorded Backlog pages from <code>fixtures/backlog/ec-phase2/</code></td></tr>
-            <tr><td className="label">Space</td><td>{c.spaceLabel}</td></tr>
-            <tr><td className="label">Scope</td><td>{c.scope}</td></tr>
-            <tr><td className="label">Hours detection</td><td>Detected from the data, never from the plan name: measurement basis <strong>{review.measurementBasis}</strong></td></tr>
-            <tr><td className="label">Pinned snapshot</td><td>{review.snapshot.id} · {review.snapshot.ticketCount} Tickets · {bundle.meta.snapshotAgeMinutes} min old</td></tr>
-            <tr><td className="label">Opening Balance</td><td>{hours(review.openingBalanceMh)}h — hours the Tickets already carried before momo-keikaku could observe them</td></tr>
+            <tr>
+              <td className="label">{t('connectors.adapter')}</td>
+              <td>
+                <code>{c.adapter}</code>
+                {t('connectors.adapter_replays')}
+                <code>{t('connectors.fixtures_backlog_ec_phase2')}</code>
+              </td>
+            </tr>
+            <tr><td className="label">{t('connectors.space')}</td><td>{c.spaceLabel}</td></tr>
+            <tr><td className="label">{t('connectors.scope')}</td><td>{c.scope}</td></tr>
+            <tr><td className="label">{t('connectors.hours_detection')}</td><td>{t('connectors.detected_from_the_data_never_from_the_plan_name_')}<strong>{review.measurementBasis}</strong></td></tr>
+            <tr>
+              <td className="label">{t('connectors.pinned_snapshot')}</td>
+              <td>
+                {t('connectors.snapshot_row', {
+                  snapshotId: review.snapshot.id,
+                  ticketCount: review.snapshot.ticketCount,
+                  ageMinutes: bundle.meta.snapshotAgeMinutes,
+                })}
+              </td>
+            </tr>
+            <tr>
+              <td className="label">{t('connectors.opening_balance')}</td>
+              <td>
+                {t('connectors.opening_balance_row', { hours: hours(review.openingBalanceMh) })}
+              </td>
+            </tr>
           </tbody>
         </table>
-        <p className="caption" style={{ marginTop: 12 }}>
-          Not in this demo: credential entry and rotation, the scheduled snapshot job (pg-boss),
-          on-demand refresh, and Tracker Account → Resource linking as a UI. The seed replays all
-          six snapshots in one pass.
-        </p>
+        <p className="caption" style={{ marginTop: 12 }}>{t('connectors.not_in_this_demo_credential_entry_and_rotation_t')}</p>
       </Section>
     </div>
   );

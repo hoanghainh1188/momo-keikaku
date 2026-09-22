@@ -1,4 +1,5 @@
 import { attribute, type AttributionResult, type Buckets } from './attribution';
+import { compareNfkcNumeric } from './text/compareNfkc';
 import type { HolidayCalendar, IsoDate, ReportingPeriod } from './calendar';
 import { computeEvm, type EvmResult, type WpMeasure } from './evm';
 import { computeForecast, type ForecastResult } from './forecast';
@@ -185,7 +186,7 @@ export function computeReview(input: ReviewInput): ReviewResult {
         slipped: !done && input.asOf > b.finish,
       };
     })
-    .sort((a, b) => a.wbsCode.localeCompare(b.wbsCode));
+    .sort((a, b) => compareNfkcNumeric(a.wbsCode, b.wbsCode));
 
   const sharePeriod =
     attribution.period.totalMh > 0n
@@ -278,7 +279,7 @@ export function computeReview(input: ReviewInput): ReviewResult {
         nonBaselined: !b,
       };
     })
-    .sort((a, b) => a.wbsCode.localeCompare(b.wbsCode, undefined, { numeric: true }));
+    .sort((a, b) => compareNfkcNumeric(a.wbsCode, b.wbsCode));
 
   // --- FR-23 coverage
   const totalTickets = input.pinnedSnapshot.tickets.length;

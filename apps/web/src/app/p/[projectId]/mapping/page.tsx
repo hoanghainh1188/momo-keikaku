@@ -1,3 +1,4 @@
+import { getTranslations } from 'next-intl/server';
 import { getProjectMapping } from '@/server/composition';
 import { valueOrNotFound } from '@/server/result';
 import { hours, share } from '@momo/domain/present';
@@ -13,6 +14,8 @@ export default async function MappingPage({
 }: {
   params: Promise<{ projectId: string }>;
 }) {
+  const t = await getTranslations();
+  const em = t('common.em_dash');
   const { projectId } = await params;
   // Rows arrive joined to their Work Package labels and ordered (`getProjectMapping`).
   const m = valueOrNotFound(await getProjectMapping({ projectId }));
@@ -20,40 +23,37 @@ export default async function MappingPage({
 
   return (
     <div className="sheet">
-      <h1 className="report-title">Mapping — Work Packages ↔ Tickets</h1>
-      <div className="report-sub">
-        Mappings persist across Tracker Snapshots and Plan edits. Attribution follows the
-        current Mapping, so a remap moves the hours immediately and the ledger itself is never
-        rewritten.
-      </div>
+      <h1 className="report-title">{t('mapping.mapping_work_packages_tickets')}</h1>
+      <div className="report-sub">{t('mapping.mappings_persist_across_tracker_snapshots_and_pl')}</div>
 
-      <Section title="Coverage" id="coverage">
+      <Section title={t('mapping.coverage')} id="coverage">
         <ScopeLedgerBar
           segments={m.scopeLedger}
           openingBalanceMh={m.openingBalanceMh}
           totalMh={m.totalMh}
         />
         <p className="caption" style={{ marginTop: 16 }}>
-          {share(m.coverage.mappedHourShare)} of hours mapped ·{' '}
-          {share(m.coverage.mappedTicketShare)} of Tickets mapped ·{' '}
-          {m.coverage.unmappedTickets} Unmapped Tickets. The share of Tickets and the share of
-          hours are reported separately on purpose.
+          {t('mapping.coverage_summary', {
+            hourShare: share(m.coverage.mappedHourShare),
+            ticketShare: share(m.coverage.mappedTicketShare),
+            unmappedTickets: m.coverage.unmappedTickets,
+          })}
         </p>
       </Section>
 
       <Section
-        title="Mapping Rules"
+        title={t('mapping.mapping_rules')}
         id="rules"
-        intro="Rules are live: on every Tracker Snapshot each Ticket without a manual Mapping is re-evaluated in priority order. A manual Mapping always wins."
+        intro={t('mapping.rules_are_live_on_every_tracker_snapshot_each_ti')}
       >
         <table className="ledger" data-testid="rules-table">
           <thead>
             <tr>
-              <th className="num">Priority</th>
-              <th>Rule</th>
-              <th>Condition</th>
-              <th>Target Work Package</th>
-              <th className="num">Tickets mapped now</th>
+              <th className="num">{t('mapping.priority')}</th>
+              <th>{t('mapping.rule')}</th>
+              <th>{t('mapping.condition')}</th>
+              <th>{t('mapping.target_work_package')}</th>
+              <th className="num">{t('mapping.tickets_mapped_now')}</th>
             </tr>
           </thead>
           <tbody>
@@ -72,49 +72,46 @@ export default async function MappingPage({
             ))}
           </tbody>
         </table>
-        <p className="caption" style={{ marginTop: 8 }}>
-          A rule showing 0 Tickets is not broken: those Tickets already carry a manual Mapping,
-          which a rule never overrides.
-        </p>
+        <p className="caption" style={{ marginTop: 8 }}>{t('mapping.a_rule_showing_0_tickets_is_not_broken_those_tic')}</p>
       </Section>
 
       <Section
-        title="Tickets"
+        title={t('mapping.tickets')}
         id="tickets"
-        intro="The 60 Tickets carrying the most hours. Map, remap or unmap; the Review updates in place."
+        intro={t('mapping.the_60_tickets_carrying_the_most_hours_map_remap')}
       >
         <table className="ledger" data-testid="tickets-table">
           <thead>
             <tr>
-              <th>Ticket</th>
-              <th>Title</th>
-              <th>Category</th>
-              <th>Status</th>
-              <th className="num">Hours</th>
-              <th>Mapped to</th>
-              <th>Source</th>
-              <th>Change</th>
+              <th>{t('mapping.ticket')}</th>
+              <th>{t('mapping.title')}</th>
+              <th>{t('mapping.category')}</th>
+              <th>{t('clientView.status')}</th>
+              <th className="num">{t('mapping.hours')}</th>
+              <th>{t('mapping.mapped_to')}</th>
+              <th>{t('mapping.source')}</th>
+              <th>{t('mapping.change')}</th>
             </tr>
           </thead>
           <tbody>
-            {m.tickets.map((t) => (
-              <tr key={t.trackerIssueId}>
-                <td>{t.key}</td>
-                <td>{t.title}</td>
-                <td>{t.categoryIds.join(', ') || '—'}</td>
-                <td>{t.statusId}</td>
-                <td className="num">{hours(t.mh)}</td>
+            {m.tickets.map((ticket) => (
+              <tr key={ticket.trackerIssueId}>
+                <td>{ticket.key}</td>
+                <td>{ticket.title}</td>
+                <td>{ticket.categoryIds.join(', ') || em}</td>
+                <td>{ticket.statusId}</td>
+                <td className="num">{hours(ticket.mh)}</td>
                 <td>
-                  {t.wpLabel ?? <UnplannedChip>Unmapped</UnplannedChip>}
+                  {ticket.wpLabel ?? <UnplannedChip>{t('mapping.unmapped')}</UnplannedChip>}
                 </td>
                 <td>
-                  <span className="tag">{t.source}</span>
+                  <span className="tag">{ticket.source}</span>
                 </td>
                 <td>
                   <MapTicketForm
                     projectId={projectId}
-                    ticketId={t.trackerIssueId}
-                    currentWpId={t.wpId ?? ''}
+                    ticketId={ticket.trackerIssueId}
+                    currentWpId={ticket.wpId ?? ''}
                     leafWps={leafWps}
                   />
                 </td>
@@ -123,9 +120,7 @@ export default async function MappingPage({
           </tbody>
         </table>
         <p className="caption" style={{ marginTop: 8 }}>
-          <Internal /> Money is never shown on client surfaces. Every Mapping change is recorded
-          with its author and time in the audit log.
-        </p>
+          <Internal />{t('mapping.money_is_never_shown_on_client_surfaces_every_ma')}</p>
       </Section>
     </div>
   );

@@ -27,6 +27,8 @@ import {
 export const tenant = pgTable('tenant', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
+  /** Fixed to JPY once any Rate exists for this Tenant (story 1.9, FR-4 / AD-4). */
+  currency: text('currency').notNull().default('JPY'),
 });
 
 export const department = pgTable('department', {

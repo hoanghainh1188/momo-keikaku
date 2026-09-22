@@ -151,6 +151,12 @@ describe('every use case declares its roles', () => {
             "tenant_admin",
           ],
         },
+        "changeTenantCurrency": {
+          "projectScoped": false,
+          "roles": [
+            "tenant_admin",
+          ],
+        },
         "createDepartment": {
           "projectScoped": false,
           "roles": [

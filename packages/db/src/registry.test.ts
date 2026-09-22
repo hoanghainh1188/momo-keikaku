@@ -155,15 +155,21 @@ describe('the table-class registry is the single source', () => {
       'auth_user',
       'identity_event',
       'session',
+      'tenant',
       'tenant_membership',
       'verification',
     ]);
-    const fullDml = overridden.filter((e) => e.table !== 'tenant_membership' && e.table !== 'identity_event');
+    const fullDml = overridden.filter(
+      (e) => e.table !== 'tenant_membership' && e.table !== 'identity_event' && e.table !== 'tenant',
+    );
     expect(fullDml.map((e) => e.table).sort()).toEqual(['account', 'auth_user', 'session', 'verification']);
     for (const entry of fullDml) {
       expect(appPrivilegesOf(entry), entry.table).toEqual(['SELECT', 'INSERT', 'UPDATE', 'DELETE']);
     }
-    expect(appPrivilegesOf(TABLE_REGISTRY.find((e) => e.table === 'tenant')!)).toEqual(['SELECT']);
+    expect(appPrivilegesOf(TABLE_REGISTRY.find((e) => e.table === 'tenant')!)).toEqual([
+      'SELECT',
+      'UPDATE',
+    ]);
     expect(
       appPrivilegesOf(TABLE_REGISTRY.find((e) => e.table === 'tenant_membership')!),
     ).toEqual(['SELECT', 'UPDATE', 'DELETE']);

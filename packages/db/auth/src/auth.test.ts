@@ -3,7 +3,8 @@ import type { Db } from '@momo/db';
 import { SESSION_UPDATE_AGE_SECONDS, authOptions } from './auth';
 import { SERVED_AUTH_ENDPOINTS } from './bindings';
 import { discoveryUrlOf, verifiedGoogleIdentity, withoutProviderTokens } from './google';
-import { RESET_PASSWORD_TOKEN_EXPIRES_IN_SECONDS, resetLinkOf, resetPasswordMail } from './reset';
+import { buildResetPasswordMail } from '@momo/i18n';
+import { RESET_PASSWORD_TOKEN_EXPIRES_IN_SECONDS, resetLinkOf, resetPasswordExpiryHours } from './reset';
 
 /**
  * The auth configuration, pinned with no database (story 1.4 slice 1). `tests/identity.test.ts`
@@ -12,6 +13,11 @@ import { RESET_PASSWORD_TOKEN_EXPIRES_IN_SECONDS, resetLinkOf, resetPasswordMail
 const NOW = new Date('2026-09-22T08:00:00Z');
 const MAILER = { send: vi.fn(async () => {}) };
 const IDENTITY_EVENTS = { record: vi.fn(async () => {}) };
+
+const RESET_MAIL = {
+  render: ({ locale, to, link }: { locale: string; to: string; link: string }) =>
+    buildResetPasswordMail(locale, { to, link }, resetPasswordExpiryHours()),
+};
 
 const OPTIONS = authOptions({
   db: {} as Db,
@@ -22,6 +28,7 @@ const OPTIONS = authOptions({
   mailer: MAILER,
   now: () => NOW,
   identityEvents: IDENTITY_EVENTS,
+  resetPasswordMail: RESET_MAIL,
 });
 
 describe('the Better Auth options', () => {
@@ -78,6 +85,7 @@ const OPTIONS_INPUT = {
   mailer: MAILER,
   now: () => NOW,
   identityEvents: IDENTITY_EVENTS,
+  resetPasswordMail: RESET_MAIL,
 };
 
 /** An unsigned JWT carrying `claims` — `verifiedGoogleIdentity` only decodes (the plugin verified). */
@@ -275,17 +283,3 @@ describe('resetLinkOf — the product\'s own link', () => {
   });
 });
 
-describe('resetPasswordMail — the one mail copy builder (hardcoded English)', () => {
-  it('carries the address, a fixed subject, and the link in the body', () => {
-    const mail = resetPasswordMail({ to: 'hoang@momo-digital.example', link: 'http://localhost:3101/reset-password?token=x' });
-    expect(mail.to).toBe('hoang@momo-digital.example');
-    expect(mail.subject).toBe('Reset your momo-keikaku password');
-    expect(mail.text).toContain('http://localhost:3101/reset-password?token=x');
-    expect(mail.text).toContain('expires in 1 hour');
-  });
-
-  it('is pure: the same input always answers the same mail', () => {
-    const input = { to: 'a@example.test', link: 'http://localhost:3101/reset-password?token=y' };
-    expect(resetPasswordMail(input)).toEqual(resetPasswordMail(input));
-  });
-});

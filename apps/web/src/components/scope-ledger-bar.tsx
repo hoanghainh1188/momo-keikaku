@@ -1,3 +1,6 @@
+'use client';
+
+import { useTranslations } from 'next-intl';
 import { cssPercent, hours, share, type Mh, type Ratio } from '@momo/domain/present';
 
 /**
@@ -28,21 +31,34 @@ export function ScopeLedgerBar({
   openingBalanceMh: Mh;
   totalMh: Mh;
 }) {
+  const t = useTranslations();
   const visible = segments.filter((s) => s.mh > 0n);
   return (
     <div data-testid="scope-ledger-bar">
-      <div className="label" style={{ marginBottom: 6 }}>
-        Scope ledger — every hour in the Connector&apos;s scope, in one of four buckets
-      </div>
-      <div className="scope-bar" role="img" aria-label={visible
-        .map((s) => `${s.label} ${hours(s.mh)} hours, ${share(s.share)}`)
-        .join('; ')}>
+      <div className="label" style={{ marginBottom: 6 }}>{t('mapping.ledger.scope_ledger_every_hour_in_the_connector_apos_s_')}</div>
+      <div
+        className="scope-bar"
+        role="img"
+        aria-label={visible
+          .map((s) =>
+            t('mapping.ledger.segment_aria', {
+              label: s.label,
+              hours: hours(s.mh),
+              share: share(s.share),
+            }),
+          )
+          .join('; ')}
+      >
         {visible.map((s) => (
           <div
             key={s.key}
             className={`scope-seg ${CLASS[s.key] ?? 'unplanned'}`}
             style={{ width: cssPercent(s.share) }}
-            title={`${s.label}: ${hours(s.mh)}h (${share(s.share)})`}
+            title={t('mapping.ledger.segment_title', {
+              label: s.label,
+              hours: hours(s.mh),
+              share: share(s.share),
+            })}
             data-testid={`scope-seg-${s.key}`}
           />
         ))}
@@ -67,9 +83,10 @@ export function ScopeLedgerBar({
         ))}
       </div>
       <p className="caption" style={{ marginTop: 12 }}>
-        The four buckets are mutually exclusive and sum to {hours(totalMh)}h — nothing in scope
-        is silently excluded. Opening Balances ({hours(openingBalanceMh)}h) sit outside the bar
-        and are reported separately.
+        {t('mapping.ledger.buckets_footnote', {
+          totalHours: hours(totalMh),
+          openingHours: hours(openingBalanceMh),
+        })}
       </p>
     </div>
   );

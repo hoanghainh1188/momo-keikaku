@@ -49,46 +49,28 @@ export function resetLinkOf(baseURL: string, token: string): string {
   return `${baseURL.replace(/\/+$/, '')}/reset-password?token=${encodeURIComponent(token)}`;
 }
 
-export interface ResetPasswordMailInput {
-  readonly to: string;
-  readonly link: string;
-}
-
 export interface ResetPasswordMail {
   readonly to: string;
   readonly subject: string;
   readonly text: string;
 }
 
-/** The lifetime as whole hours, for the mail copy — `RESET_PASSWORD_TOKEN_EXPIRES_IN_SECONDS` is a whole number of hours today; this throws rather than print a fraction if that ever stops being true. */
-function expiryHours(): number {
+/** Whole hours for mail copy — must match `RESET_PASSWORD_TOKEN_EXPIRES_IN_SECONDS`. */
+export function resetPasswordExpiryHours(): number {
   const hours = RESET_PASSWORD_TOKEN_EXPIRES_IN_SECONDS / 3600;
   if (!Number.isInteger(hours)) {
     throw new Error(
-      `RESET_PASSWORD_TOKEN_EXPIRES_IN_SECONDS (${RESET_PASSWORD_TOKEN_EXPIRES_IN_SECONDS}) is not a whole number of hours; resetPasswordMail's copy assumes one.`,
+      `RESET_PASSWORD_TOKEN_EXPIRES_IN_SECONDS (${RESET_PASSWORD_TOKEN_EXPIRES_IN_SECONDS}) is not a whole number of hours; reset mail copy assumes one.`,
     );
   }
   return hours;
 }
 
-/**
- * THE ONE MAIL COPY BUILDER (hardcoded English — `packages/i18n` is empty until story 1.9).
- * Pure: no clock, no environment, no randomness, so a test can assert its exact text. The
- * "expires in …" line reads `RESET_PASSWORD_TOKEN_EXPIRES_IN_SECONDS` — the same constant
- * `resetPasswordTokenExpiresIn` is built from — so the two cannot say different things.
- */
-export function resetPasswordMail({ to, link }: ResetPasswordMailInput): ResetPasswordMail {
-  const hours = expiryHours();
-  return {
-    to,
-    subject: 'Reset your momo-keikaku password',
-    text: [
-      'We received a request to reset your momo-keikaku password.',
-      '',
-      `Reset it here: ${link}`,
-      '',
-      `This link expires in ${hours} hour${hours === 1 ? '' : 's'} and can be used once. If you ` +
-        'did not request this, you can ignore this email — your password will not change.',
-    ].join('\n'),
-  };
+/** Renders reset mail in `auth_user.locale` (story 1.9). Built in the composition root from `@momo/i18n`. */
+export interface ResetPasswordMailRenderer {
+  readonly render: (input: {
+    readonly locale: string;
+    readonly to: string;
+    readonly link: string;
+  }) => ResetPasswordMail;
 }
