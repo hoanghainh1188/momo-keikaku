@@ -5,3 +5,10 @@
 #
 # [agents.bmad-agent-pm]
 # description = "Prefers short, bulleted PRDs over narrative drafts."
+
+# Pinned: the installer-managed _bmad/config.toml does not emit these two
+# values, but render_skill.py requires them (they live in the legacy
+# _bmad/core/config.yaml). Pinning here keeps skill rendering working.
+[core]
+user_name = "Hoanghainh"
+communication_language = "Vietnamese"
