@@ -1,95 +1,55 @@
 /**
  * EVERY use case's role declaration, in one table — what the role gate
- * (`role-declarations.test.ts`) enumerates and snapshots.
+ * (`tests/role-declarations.test.ts`) enumerates and snapshots.
  *
  * Internal to `use-cases/`, like `audit-declarations.ts`: not re-exported from
- * `use-cases/index.ts`, whose exports ARE the enumerated surface. A module that adds a use case
- * spreads its declaration in here; the gate fails, with no database, naming any export that has
- * none. Enforcement is proved by the behavioural half of that gate: every export, called with a
- * viewer-only context and deps that throw, must answer `not_found` without touching a port — so
- * a table entry that never reaches `authorize` cannot pass CI.
+ * `use-cases/index.ts`, whose exports ARE the enumerated surface. The gate fails, with no
+ * database, naming any export that has no declaration. Enforcement is proved by the behavioural
+ * half of that gate: every export, called with a viewer-only context and deps that throw, must
+ * answer `not_found` without touching a port — so a table entry that never reaches `authorize`
+ * cannot pass CI.
+ *
+ * COLOCATED, THEN MERGED — the same convention as `audit-declarations.ts`. Each use-case module
+ * exports the declarations for the use cases it owns, and this file imports and spreads them.
+ *
+ * It used to be the other way round: every declaration was written out here, away from the module
+ * implementing it, while audit declarations were colocated. Two conceptually parallel gates with
+ * opposite answers to "where do I declare this" meant a contributor adding a use case had two
+ * homes to remember and nothing forced them to use both. The audit convention came first (story
+ * 1.3) and this one diverged from it two stories later (1.5), so this is the one that moved.
+ * Epic 1 retrospective, F12.
+ *
+ * `RoleDeclaration` and the three shapes (`ADMIN_ONLY`, `PROJECT_REACH`, `STAFF_RESOURCE`) live in
+ * `../authz/authorize` beside the role sets, so a use-case module can declare its roles without
+ * importing this file — which would be a cycle.
  */
-import type { Role } from '../authz/request-context';
-import { PROJECT_REACH_ROLES, STAFF_RESOURCE_ROLES, TENANT_ADMIN_ROLES } from '../authz/authorize';
+import type { RoleDeclaration } from '../authz/authorize';
+import { GET_CLIENT_VIEW_ROLES } from './get-client-view';
+import { GET_PROJECT_HEADER_ROLES } from './get-project-header';
+import { GET_PROJECT_MAPPING_ROLES } from './get-project-mapping';
+import { GET_PROJECT_REVIEW_ROLES } from './get-project-review';
+import { AUDIT_LOG_READ_ROLES } from './list-audit-log';
+import { MEMBERSHIP_WRITE_ROLES } from './membership-writes';
+import { ORG_WRITE_ROLES } from './org-writes';
+import { PROJECT_WRITE_ROLES } from './project-writes';
+import { RESOURCE_WRITE_ROLES } from './resource-writes';
+import { TENANT_CURRENCY_ROLES } from './tenant-currency';
 
-/** What one use case declares: allowed roles, and whether it names a Project the caller must reach. */
-export interface RoleDeclaration {
-  readonly roles: readonly Role[];
-  /** True when the call names a Project — the helper also checks Project reach. */
-  readonly projectScoped: boolean;
-}
+export type { RoleDeclaration };
 
-const adminOnly = {
-  roles: TENANT_ADMIN_ROLES,
-  projectScoped: false,
-} as const satisfies RoleDeclaration;
-
-const projectReach = {
-  roles: PROJECT_REACH_ROLES,
-  projectScoped: true,
-} as const satisfies RoleDeclaration;
-
-/** Tenant Admin or PM, no Project — Resource create only (story 1.6). */
-const staffResource = {
-  roles: STAFF_RESOURCE_ROLES,
-  projectScoped: false,
-} as const satisfies RoleDeclaration;
-
-/** Project reads and Plan/Mapping writes — `tenant_admin` | `pm` plus Project reach. */
-export const PROJECT_USE_CASE_ROLES = {
-  getProjectHeader: projectReach,
-  getProjectReview: projectReach,
-  getProjectMapping: projectReach,
-  getClientView: projectReach,
-  planTicketsAsWorkPackage: projectReach,
-  mapTickets: projectReach,
-  mapTicket: projectReach,
-  explainTickets: projectReach,
-  markChangeRequestCandidates: projectReach,
-} as const satisfies Readonly<Record<string, RoleDeclaration>>;
-
-/** Organisation writes — `tenant_admin` only, no Project check. */
-export const ORG_USE_CASE_ROLES = {
-  createDepartment: adminOnly,
-  renameDepartment: adminOnly,
-  createProgram: adminOnly,
-  renameProgram: adminOnly,
-  createProject: adminOnly,
-  renameProject: adminOnly,
-  reassignProjectProgram: adminOnly,
-  reassignProjectDepartment: adminOnly,
-} as const satisfies Readonly<Record<string, RoleDeclaration>>;
-
-/** Membership writes — `tenant_admin` only; the lock re-check stays in the writers. */
-export const MEMBERSHIP_USE_CASE_ROLES = {
-  revokeMembership: adminOnly,
-  changeMemberRole: adminOnly,
-  assignMemberProject: adminOnly,
-  unassignMemberProject: adminOnly,
-} as const satisfies Readonly<Record<string, RoleDeclaration>>;
-
-/** Resource / Rate writes (story 1.6): create is Admin|PM; Rate appends are Admin only. */
-export const RESOURCE_USE_CASE_ROLES = {
-  createResource: staffResource,
-  appendResourceRate: adminOnly,
-  appendProjectDefaultRate: adminOnly,
-} as const satisfies Readonly<Record<string, RoleDeclaration>>;
-
-/** Audit-log read (story 1.7) — Tenant Admin only; no Project. */
-export const AUDIT_USE_CASE_ROLES = {
-  listAuditLog: adminOnly,
-} as const satisfies Readonly<Record<string, RoleDeclaration>>;
-
-/** Tenant settings (story 1.9) — currency before any Rate exists. */
-export const TENANT_USE_CASE_ROLES = {
-  changeTenantCurrency: adminOnly,
-} as const satisfies Readonly<Record<string, RoleDeclaration>>;
-
+/**
+ * Spread order matters only for readability — the gate asserts the key set against the exported
+ * surface, and a duplicate key would be a compile error in the module that owns it.
+ */
 export const USE_CASE_ROLES: Readonly<Record<string, RoleDeclaration>> = {
-  ...PROJECT_USE_CASE_ROLES,
-  ...ORG_USE_CASE_ROLES,
-  ...MEMBERSHIP_USE_CASE_ROLES,
-  ...RESOURCE_USE_CASE_ROLES,
-  ...AUDIT_USE_CASE_ROLES,
-  ...TENANT_USE_CASE_ROLES,
+  ...GET_PROJECT_HEADER_ROLES,
+  ...GET_PROJECT_REVIEW_ROLES,
+  ...GET_PROJECT_MAPPING_ROLES,
+  ...GET_CLIENT_VIEW_ROLES,
+  ...PROJECT_WRITE_ROLES,
+  ...ORG_WRITE_ROLES,
+  ...MEMBERSHIP_WRITE_ROLES,
+  ...RESOURCE_WRITE_ROLES,
+  ...AUDIT_LOG_READ_ROLES,
+  ...TENANT_CURRENCY_ROLES,
 };

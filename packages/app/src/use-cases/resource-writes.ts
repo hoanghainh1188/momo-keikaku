@@ -1,3 +1,4 @@
+import { ADMIN_ONLY, STAFF_RESOURCE, type RoleDeclaration } from '../authz/authorize';
 import type { z } from 'zod';
 import { audit, type AuditDeclaration } from '../audit';
 import { STAFF_RESOURCE_ROLES, TENANT_ADMIN_ROLES } from '../authz/authorize';
@@ -132,3 +133,10 @@ export const RESOURCE_WRITE_AUDIT = {
   appendResourceRate: { audited: ['rate.append'] },
   appendProjectDefaultRate: { audited: ['project_default_rate.append'] },
 } as const satisfies Readonly<Record<string, AuditDeclaration>>;
+
+/** Role declarations for the Resource / Rate writes (colocated — see `role-declarations.ts`). */
+export const RESOURCE_WRITE_ROLES = {
+  createResource: STAFF_RESOURCE,
+  appendResourceRate: ADMIN_ONLY,
+  appendProjectDefaultRate: ADMIN_ONLY,
+} as const satisfies Readonly<Record<string, RoleDeclaration>>;

@@ -1,3 +1,4 @@
+import { ADMIN_ONLY, type RoleDeclaration } from '../authz/authorize';
 import type { z } from 'zod';
 import { audit, type AuditDeclaration } from '../audit';
 import { TENANT_ADMIN, TENANT_ADMIN_ROLES } from '../authz/authorize';
@@ -203,3 +204,11 @@ export const MEMBERSHIP_WRITE_AUDIT = {
   assignMemberProject: { audited: ['membership.assign_project'] },
   unassignMemberProject: { audited: ['membership.unassign_project'] },
 } as const satisfies Readonly<Record<string, AuditDeclaration>>;
+
+/** Role declarations for the membership writes (colocated — see `role-declarations.ts`). */
+export const MEMBERSHIP_WRITE_ROLES = {
+  revokeMembership: ADMIN_ONLY,
+  changeMemberRole: ADMIN_ONLY,
+  assignMemberProject: ADMIN_ONLY,
+  unassignMemberProject: ADMIN_ONLY,
+} as const satisfies Readonly<Record<string, RoleDeclaration>>;

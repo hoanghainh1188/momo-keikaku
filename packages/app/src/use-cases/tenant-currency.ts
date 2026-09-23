@@ -1,3 +1,4 @@
+import { ADMIN_ONLY, type RoleDeclaration } from '../authz/authorize';
 import { z } from 'zod';
 import type { Result } from '../result';
 import { authorize, TENANT_ADMIN_ROLES } from '../authz/authorize';
@@ -51,3 +52,8 @@ export const TENANT_CURRENCY_AUDIT = {
       'R0 accepts only JPY and refuses once any Rate exists; that refusal writes nothing, and a probe Tenant already has Rates so the success path never changes a reported figure.',
   },
 } as const;
+
+/** Role declaration for this use case (colocated — see `role-declarations.ts`). */
+export const TENANT_CURRENCY_ROLES = {
+  changeTenantCurrency: ADMIN_ONLY,
+} as const satisfies Readonly<Record<string, RoleDeclaration>>;

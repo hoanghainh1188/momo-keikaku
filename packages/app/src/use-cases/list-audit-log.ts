@@ -1,3 +1,4 @@
+import { ADMIN_ONLY, type RoleDeclaration } from '../authz/authorize';
 /**
  * THE AUDIT-LOG READER (story 1.7, NFR-A1): list (and filter) the Tenant's `audit_log` rows.
  *
@@ -134,3 +135,8 @@ export async function listAuditLog<Handle>(
     }),
   });
 }
+
+/** Role declaration for this use case (colocated — see `role-declarations.ts`). */
+export const AUDIT_LOG_READ_ROLES = {
+  listAuditLog: ADMIN_ONLY,
+} as const satisfies Readonly<Record<string, RoleDeclaration>>;

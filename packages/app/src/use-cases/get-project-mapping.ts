@@ -1,3 +1,4 @@
+import { PROJECT_REACH, type RoleDeclaration } from '../authz/authorize';
 import { compareBigint, mappingHead, type MappingEvent, type Mh, type ReviewResult } from '@momo/domain';
 import type { Result } from '../result';
 import type { ProjectReadDeps, ProjectReview } from '../ports/project-read';
@@ -123,3 +124,8 @@ export async function getProjectMapping<Handle>(
     toProjectMapping(await deps.projectRead.loadReview(deps.handle, tenantId, projectId)),
   );
 }
+
+/** Role declaration for this use case (colocated — see `role-declarations.ts`). */
+export const GET_PROJECT_MAPPING_ROLES = {
+  getProjectMapping: PROJECT_REACH,
+} as const satisfies Readonly<Record<string, RoleDeclaration>>;

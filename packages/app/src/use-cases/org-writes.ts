@@ -1,3 +1,4 @@
+import { ADMIN_ONLY, type RoleDeclaration } from '../authz/authorize';
 import type { z } from 'zod';
 import { projectDate } from '@momo/domain';
 import { audit, type AuditDeclaration } from '../audit';
@@ -373,3 +374,15 @@ export const ORG_WRITE_AUDIT = {
   reassignProjectProgram: { audited: ['project.reassign_program'] },
   reassignProjectDepartment: { audited: ['project.reassign_department'] },
 } as const satisfies Readonly<Record<string, AuditDeclaration>>;
+
+/** Role declarations for the Organisation writes (colocated — see `role-declarations.ts`). */
+export const ORG_WRITE_ROLES = {
+  createDepartment: ADMIN_ONLY,
+  renameDepartment: ADMIN_ONLY,
+  createProgram: ADMIN_ONLY,
+  renameProgram: ADMIN_ONLY,
+  createProject: ADMIN_ONLY,
+  renameProject: ADMIN_ONLY,
+  reassignProjectProgram: ADMIN_ONLY,
+  reassignProjectDepartment: ADMIN_ONLY,
+} as const satisfies Readonly<Record<string, RoleDeclaration>>;

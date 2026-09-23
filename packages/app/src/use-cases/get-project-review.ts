@@ -1,3 +1,4 @@
+import { PROJECT_REACH, type RoleDeclaration } from '../authz/authorize';
 import type { Result } from '../result';
 import type { ProjectReadDeps, ProjectReview } from '../ports/project-read';
 import type { RequestContext } from '../authz/request-context';
@@ -20,3 +21,8 @@ export async function getProjectReview<Handle>(
     deps.projectRead.loadReview(deps.handle, tenantId, projectId),
   );
 }
+
+/** Role declaration for this use case (colocated — see `role-declarations.ts`). */
+export const GET_PROJECT_REVIEW_ROLES = {
+  getProjectReview: PROJECT_REACH,
+} as const satisfies Readonly<Record<string, RoleDeclaration>>;
