@@ -12,3 +12,4 @@ export * from './present';
 // may import — does not carry it (see the header of present/index.ts).
 export * from './present/codec';
 export * from './review';
+export * from './schedule/order';
