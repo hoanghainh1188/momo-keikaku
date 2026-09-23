@@ -1,6 +1,56 @@
-# Handoff — 2026-09-23 (story 2.3 closed: one canonical order)
+# Handoff — 2026-09-23 (story 2.4 closed: the four graph rules as invariants)
 
-**Latest (2026-09-23, late night): story 2.3 merged via PR #58 (`e04d1c9`) and is `done`.**
+**Latest (2026-09-23, late night): story 2.4 merged via PR #60 (`718a4cb`) and is `done`.**
+- **`validate(plan, edges)`** (`packages/domain/src/schedule/validate.ts`) returns the four
+  offence lists separately: `cycles`, `ancestorDescendant`, `summaryEndpoints` and
+  `crossProject`.
+  - Each list is in `compareWp` order, and it never stops at the first offence.
+  - Leafness comes from the plan's own `parentId` links, never the stored `is_leaf`. A re-parent
+    that makes a legal edge illegal, with no edge touched, is therefore caught.
+  - Cycles use Tarjan's algorithm (iterative): one cycle per strongly connected component, the
+    shortest one through its `compareWp`-minimum WP.
+  - It **throws** on caller defects: an edge naming a WP that is not in `plan.wps`, a duplicate
+    WP id, or a loop in the parent links. `hasOffences(result)` is the "any rule broken"
+    predicate.
+- **`checkPlanInvariants(plan, edges)`** (`packages/app/src/schedule/plan-invariants.ts`) is the
+  fence's pre-write guard (founder decisions Q1 → B, Q3). It returns `invalid_input` with
+  `details.dependencies` listing the rule codes `dependency_cycle`, `ancestor_descendant_link`,
+  `summary_endpoint` and `cross_project_link`, in that fixed order. It is not a use case and
+  touches no port.
+- **DB backstops are proved** in `schema-catalog.test.ts`:
+  - a cross-project edge passes the INSERT and is refused at COMMIT with 23503 on
+    `wp_dependency_successor_fk`;
+  - `SS`, `FF` and `SF` are refused with 23514 on `wp_dependency_type_check`.
+- **Carried forward (`deferred-work.md`):**
+  - 2.9's `applyPlanChange` calls the guard on every mutation. The caller contract: supply every
+    WP any edge names (foreign endpoints included), and drop a deleted WP's edges.
+  - 2.5's `recalculate` calls `validate` before the passes and halts (Q4).
+  - The 23503/23514 → `invalid_input` mapping moves to the first writer, 2.9 or 2.10 (Q2).
+- **Next: story 2.5** (the forward pass, 20 h, **never cut**). Things to know before starting:
+  - **Name and shape are fixed by AD-25:** `domain/schedule.recalculate(inputs, prevInputs) →
+    outputs` is pure, and nothing else may be called `recalculate`. 2.5 owns the forward pass,
+    the three leaf states, remaining duration, the "not schedulable yet" block, the summary
+    roll-up and the calendar-range halt. Float and the critical path are 2.6, constraints 2.7,
+    the stored run 2.9.
+  - **Two deferred entries land here.** Call `validate` first and halt when `hasOffences`, naming
+    the edges. Then point `expectShuffleInvariant` (`tests/support/shuffle-invariant.ts`) at
+    `recalculate`'s `outputs` in codec-canonical form, N ≥ 50 shuffles of WPs and edges.
+  - **The calendar is demo-grade.** Working-day maths is in `packages/domain/src/calendar.ts`
+    (`addWorkingDays`, `nextWorkingDay`, `workingDaysBetween`). It only has 2026 JP/VN data and
+    no notion of a version's `range_end`. The AC's "halts rather than guessing" past `range_end`
+    needs a bounded calendar input. Expect an intent-gap question on how much of the calendar
+    2.5 builds and how much 2.12 does.
+  - **Expect a date-convention question too.** Is a finish date inclusive? Where does an FS
+    successor start at lag 0 and at a negative lag? How is a zero-duration WP placed (the
+    milestone target itself is 2.7)? Pin these in the spec's I/O matrix before coding; the
+    golden corpus (2.8) is hand-computed against them.
+  - **Remaining duration** is `ceil(duration × (1 − recorded_pct))`, with a minimum of 1,
+    computed on the `Ratio` form (`packages/domain/src/units.ts`) and never stored.
+- Spec: `spec-2-4-the-four-graph-rules-are-invariants-not-entry-checks.md`.
+
+## Earlier: Handoff — 2026-09-23 (story 2.3 closed: one canonical order)
+
+**2026-09-23, late night: story 2.3 merged via PR #58 (`e04d1c9`) and is `done`.**
 - **`compareWp`** (`packages/domain/src/schedule/order.ts`) is the single total order for WPs:
   1. NFKC first, then split on `.`.
   2. Each segment compares in natural order: ASCII `[0-9]` runs as `BigInt`, other runs by true
