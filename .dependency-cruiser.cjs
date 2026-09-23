@@ -11,9 +11,15 @@
 // sees imports, not calls.
 //
 // THE CARVE-OUTS ARE NAMED PATHS, NOT PATTERNS (AD-1): `apps/web/src/server/composition.ts`,
-// `apps/web`'s composition root, and `packages/db/auth`, the Better Auth binding. A third needs
-// the spine amended first. The composition root is also the one `apps/*` file that may import
-// `packages/adapters` (story 1.3 slice 2, `apps-adapters-only-from-composition-root`) and, since
+// `apps/web`'s composition root; `packages/db/auth`, the Better Auth binding; and
+// `apps/worker/src/index.ts`, the worker's adapter-wiring entry point. A FOURTH needs the spine
+// amended first — and note that the third did not follow that rule: story 1.8 widened
+// `apps-adapters-only-from-composition-root` here before AD-1 named the path, which the Epic 1
+// retrospective found (F4) and the founder ratified on 2026-09-23. Do it in the other order.
+// Those two paths are also the only `apps/*` files that may import `packages/adapters`
+// (story 1.3 slice 2 for the first, story 1.8 for the second,
+// `apps-adapters-only-from-composition-root`; `tests/depcruise-fences.test.ts` probes a second
+// `apps/worker` path, so the grant stays one file rather than the app) and, since
 // story 1.4 slice 1, the one `apps/web` file that may import `packages/db/auth`
 // (`web-db-auth-only-from-composition-root`); `packages/db/auth` is the one unit that may import
 // `better-auth` (`better-auth-only-in-db-auth`).
