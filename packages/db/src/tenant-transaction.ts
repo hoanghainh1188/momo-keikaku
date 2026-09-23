@@ -41,7 +41,7 @@ function writeScopeOn(bound: Bound) {
     org: orgRepositoryOn(bound),
     resources: resourceWriteRepositoryOn(bound),
     membership: membershipWriterOn(bound),
-    audit: auditSinkOn(bound.tx, bound.tenantId),
+    audit: auditSinkOn(bound),
   };
 }
 

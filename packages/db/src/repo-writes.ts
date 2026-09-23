@@ -1,7 +1,8 @@
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import type { Bound } from './bound';
 import { projectNotFound } from './project-not-found';
 import * as s from './schema';
+import { lockWatermark } from './watermark-lock';
 import type { Tx } from './with-tenant';
 
 /**
@@ -32,9 +33,10 @@ import type { Tx } from './with-tenant';
  * what `packages/app`'s `isProjectNotFound` recognises. The rejection is inside the transaction,
  * so nothing is written.
  *
- * TODO(review-adversarial H1/H4): in production these appends must take the per-Project
- * advisory lock before allocating `seq`, and rule evaluation must re-read the Ticket's head
- * inside that lock (watermark discipline). The demo is single-user; not this slice's.
+ * EVERY APPEND TAKES THE PROJECT'S WATERMARK LOCK FIRST (story 1.2 watermark slice, D2):
+ * `mapping_event` and `disposition_event` are append-only and read at a watermark, so each insert
+ * below is preceded by `lockWatermark(bound, { kind: 'project', projectId })`, and `seq` comes
+ * from the identity default the INSERT evaluates after the lock. `watermark-lock.ts` has why.
  */
 
 export interface MapDispositionCommand {
@@ -94,26 +96,6 @@ async function anchorOf(tx: Tx, projectId: string): Promise<Date> {
   return p.demoAnchor;
 }
 
-/**
- * The next `mapping_event.seq`, allocated by the database rather than derived from the rows
- * this Tenant can see.
- *
- * `mapping_event.seq` is a primary key unique across ALL Tenants, while the MAX row-level
- * security lets a caller see is its own Tenant's, so `SELECT MAX(seq) + 1` inside `withTenant`
- * would collide with another Tenant's events. `momo_next_mapping_event_seq()` is a SECURITY
- * DEFINER function generated from the table-class registry, so it reads the true maximum as
- * the table owner.
- *
- * Still not the watermark discipline — that takes `pg_advisory_xact_lock` before allocating,
- * and two concurrent writes can still read the same value here (see the TODO above).
- */
-async function nextSeq(tx: Tx, table: 'mapping_event'): Promise<number> {
-  const res = await tx.execute<{ next: string }>(
-    sql.raw(`SELECT public.momo_next_${table}_seq() AS next`),
-  );
-  return Number(res.rows[0]?.next ?? 1);
-}
-
 async function appendMappings(
   { tx, tenantId }: Bound,
   stamp: WriteStamp,
@@ -121,10 +103,9 @@ async function appendMappings(
   ticketIds: readonly string[],
   wpId: string | null,
 ): Promise<void> {
-  const first = await nextSeq(tx, 'mapping_event');
+  await lockWatermark({ tx, tenantId }, { kind: 'project', projectId });
   await tx.insert(s.mappingEvent).values(
-    ticketIds.map((ticketId, index) => ({
-      seq: first + index,
+    ticketIds.map((ticketId) => ({
       id: `map-${ticketId}-${stamp.at.getTime()}`,
       tenantId,
       projectId,
@@ -149,6 +130,7 @@ async function recordDisposition(
   wpId: string | null,
   note: string | null,
 ): Promise<void> {
+  await lockWatermark({ tx, tenantId }, { kind: 'project', projectId });
   await tx.insert(s.dispositionEvent).values({
     id: `disp-${kind}-${stamp.at.getTime()}`,
     tenantId,
@@ -239,12 +221,12 @@ function recordChangeRequestCandidates(bound: Bound) {
  * Work Package (the use case records it as `mapping.unmap`, keeping the empty string in the
  * payload as it always has).
  */
-function recordManualMapping({ tx, tenantId }: Bound) {
+function recordManualMapping(bound: Bound) {
   return async (stamp: WriteStamp, command: ManualMappingCommand): Promise<void> => {
+    const { tx, tenantId } = bound;
     const { projectId, ticketId, wpId } = command;
-    const seq = await nextSeq(tx, 'mapping_event');
+    await lockWatermark(bound, { kind: 'project', projectId });
     await tx.insert(s.mappingEvent).values({
-      seq,
       id: `map-${ticketId}-${stamp.at.getTime()}`,
       tenantId,
       projectId,

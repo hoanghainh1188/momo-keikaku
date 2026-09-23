@@ -184,7 +184,7 @@ export interface ProbeTenant {
  *   fixture, because a token that already occurred in the demo data would make the
  *   harness's central assertion — "no string carries the other Tenant's token" — report
  *   leaks that are not leaks, or miss ones that are.
- * @param seqOffset the band this Tenant's caller-allocated `seq` values come from. See
+ * @param seqOffset the band this Tenant's fixture-relative `seq` values come from. See
  *   `TenantRowWriteOptions.seqOffset`; the bands must not overlap each other, the demo's,
  *   or `rls.test.ts`'s probe.
  */

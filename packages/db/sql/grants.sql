@@ -113,12 +113,3 @@ GRANT SELECT, UPDATE, DELETE ON public."audit_log" TO "momo_maintenance";
 -- Identity columns need their sequence. USAGE only: no SELECT-and-setval, and no
 -- ownership, so the application role can allocate a value and nothing else.
 GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO "momo_app";
-
--- The caller-allocated `seq` allocators. EXECUTE is revoked from PUBLIC first, because
--- PostgreSQL grants EXECUTE on a new function to PUBLIC by default and these are
--- SECURITY DEFINER: leaving that default would hand every role the owner's read of the
--- whole table, which is the opposite of what they are for.
-REVOKE ALL ON FUNCTION public."momo_next_actuals_ledger_entry_seq"() FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public."momo_next_actuals_ledger_entry_seq"() TO "momo_app";
-REVOKE ALL ON FUNCTION public."momo_next_mapping_event_seq"() FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public."momo_next_mapping_event_seq"() TO "momo_app";

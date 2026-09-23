@@ -75,20 +75,6 @@ export interface TableEntry {
   /** Why this class, in one line. Read by whoever is about to change it. */
   readonly why: string;
   /**
-   * True when the table's `seq` primary key is allocated by the CALLER rather than by a
-   * Postgres identity column.
-   *
-   * It matters for exactly one reason: under row-level security the caller cannot compute
-   * `MAX(seq) + 1`, because the MAX it can see is its own Tenant's. Two Tenants would each
-   * compute the same next value and collide on a globally unique key. The generator emits a
-   * SECURITY DEFINER allocator for each of these, which reads the true maximum as the table
-   * owner; `packages/db/src/sql/generate.ts` has the detail.
-   *
-   * The real fix is the watermark work a later slice owns (`pg_advisory_xact_lock` before
-   * allocation). This field is what keeps the collision from being a live bug until then.
-   */
-  readonly clientAllocatedSeq?: true;
-  /**
    * The application role's privileges on this table when they differ from its class's
    * (`APP_PRIVILEGES`). Read through `appPrivilegesOf`, never directly, so the generator and the
    * catalog assertion cannot disagree about which one applies.
@@ -282,7 +268,6 @@ export const TABLE_REGISTRY: readonly TableEntry[] = [
     class: 'append-only',
     tenantColumn: 'tenant_id',
     why: 'The Actuals Ledger. A correction is a compensating delta, never an edit — that is what makes AC reproducible.',
-    clientAllocatedSeq: true,
   },
   {
     table: 'mapping_rule',
@@ -295,7 +280,6 @@ export const TABLE_REGISTRY: readonly TableEntry[] = [
     class: 'append-only',
     tenantColumn: 'tenant_id',
     why: 'Mapping is an event log; the current Mapping is its head. Editing history would move hours retroactively.',
-    clientAllocatedSeq: true,
   },
   {
     table: 'disposition_event',
@@ -380,12 +364,6 @@ export function appendOnlyGuardOf(entry: TableEntry): boolean {
 
 /** Every table that gets the BEFORE UPDATE OR DELETE / TRUNCATE triggers. */
 export const APPEND_ONLY_GUARDED: readonly TableEntry[] = TABLE_REGISTRY.filter(appendOnlyGuardOf);
-
-/** The append-only tables whose `seq` the caller allocates, and which therefore need the
- *  SECURITY DEFINER allocator: `MAX(seq)` under RLS is the caller's Tenant's maximum. */
-export const CLIENT_ALLOCATED_SEQ: readonly TableEntry[] = TABLE_REGISTRY.filter(
-  (e) => e.clientAllocatedSeq === true,
-);
 
 /** What the application role holds on one table: its entry's override, or its class's grant. */
 export function appPrivilegesOf(entry: TableEntry): readonly string[] {
