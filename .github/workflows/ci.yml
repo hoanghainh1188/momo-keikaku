@@ -60,8 +60,10 @@
 #
 # STORY 1.2 SLICE 4 moved actions.ts's five write actions onto `packages/app` use cases and
 # SWITCHED DEPENDENCY-CRUISER ON, in that order. `pnpm depcruise` (.dependency-cruiser.cjs,
-# no database) fails on any `apps/*` import of `packages/db` or `drizzle-orm` outside the two
-# named carve-outs — `apps/web/src/server/composition.ts` and `packages/db/auth` — and carries
+# no database) fails on any `apps/*` import of `packages/db` or `drizzle-orm` outside the named
+# carve-outs — `apps/web/src/server/composition.ts` and `packages/db/auth`, plus
+# `apps/worker/src/index.ts` for `packages/adapters` only (AD-1 carve-out 3, ratified
+# 2026-09-23) — and carries
 # AD-1's two scheduling edges plus "the composition root never imports the schedule/plan-input
 # repositories" as forward-looking rules. Scope is AC-6's, not all of AD-1: `apps/worker`'s
 # `pg-boss`/`pg` imports stay out (recorded in deferred-work.md). The writes joined the

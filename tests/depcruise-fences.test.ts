@@ -75,7 +75,7 @@ describe('the AD-1 Better Auth carve-out is still visible to the cruiser', () =>
 });
 
 /**
- * Three files written where the rule should and should not fire, cruised once together. They are
+ * Four files written where a rule should and should not fire, cruised once together. They are
  * removed in `afterAll` even if an assertion throws; a stray `__probe` file would fail
  * `pnpm typecheck` loudly, which is the right failure mode should one ever leak.
  */
@@ -83,9 +83,17 @@ const PROBES = {
   support: ['packages/app/src/__probe-test-support.ts', "export { startFakeOidc } from '../../../tests/support/fake-oidc.js';\n"],
   tooling: ['packages/app/src/__probe-tooling.ts', "export { peekTenant } from '../../../scripts/peek.js';\n"],
   carveOut: ['packages/app/src/__probe-carve-out.test.ts', "export { startFakeOidc } from '../../../tests/support/fake-oidc.js';\n"],
+  /**
+   * A SECOND path under `apps/worker`, for a different rule. AD-1 carve-out 3 names exactly
+   * `apps/worker/src/index.ts`, and `apps-adapters-only-from-composition-root` is what holds it
+   * to that one file — a `pathNot` widened to `^apps/worker/` by accident would grant the whole
+   * app and nothing would notice. The rule had no probe at all until the Epic 1 retrospective
+   * named the carve-out (F4 / `reviews/review-adversarial-ad1-worker-carve-out.md` F3).
+   */
+  workerAdapters: ['apps/worker/src/__probe-adapters.ts', "export { productClockOn } from '@momo/adapters';\n"],
 } as const;
 
-describe('no-test-or-tooling-in-source bans reachability, not one edge', () => {
+describe('the import fences fire where they should, and only there', () => {
   let fired: readonly { from: string; to: string; rule: { name: string } }[] = [];
 
   beforeAll(() => {
@@ -111,5 +119,13 @@ describe('no-test-or-tooling-in-source bans reachability, not one edge', () => {
 
   it('leaves an in-package test file alone — it is not application source', () => {
     expect(fired.filter((v) => v.from === PROBES.carveOut[0])).toEqual([]);
+  });
+
+  it('fires on a SECOND apps/worker file importing packages/adapters', () => {
+    // The carve-out is one named path (`apps/worker/src/index.ts`), not the app. Were this to
+    // pass, the gate would be granting `apps/worker/**` and AD-1 carve-out 3 would be fiction.
+    expect(
+      fired.filter((v) => v.from === PROBES.workerAdapters[0]).map((v) => v.rule.name),
+    ).toEqual(['apps-adapters-only-from-composition-root']);
   });
 });
