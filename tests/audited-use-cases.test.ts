@@ -243,6 +243,31 @@ const READ_NAMES = new Set(
   READ_USE_CASES.filter((entry) => entry.kind === 'read').map((entry) => entry.name),
 );
 
+/**
+ * THE USE CASES THIS GATE ACCEPTS AS UNAUDITED — named here, not only in their own module.
+ *
+ * Epic 1 retrospective, deferred-work audit finding A2. `{ unaudited: "reason" }` is a use case's
+ * own declaration, and the gate checked it against nothing: a write that should be on NFR-A1's
+ * list could exempt itself in the file that implements it, with a sentence nobody had to agree
+ * with. The entry recording that judged it safe "because nothing is declared unaudited" — and
+ * `changeTenantCurrency` now declares exactly that, so the cover was gone.
+ *
+ * Exempting a write is now a TWO-KEY decision: the module declares it, and this list — read by
+ * whoever reviews the gate, not by whoever writes the use case — agrees. The list is exact in
+ * both directions: a use case declaring `unaudited` and absent here fails, and an entry here
+ * whose use case no longer declares `unaudited` fails as stale.
+ *
+ * This does not make the gate check NFR-A1's seventeen action groups; that list is prose in the
+ * PRD and matching it mechanically is its own piece of work (still open in `deferred-work.md`).
+ * What it does is stop a use case exempting itself unilaterally.
+ */
+const UNAUDITED_BY_DECISION: Readonly<Record<string, string>> = {
+  changeTenantCurrency:
+    'R0 accepts only JPY, so the success path changes no reported figure, and the refusal writes ' +
+    'nothing. Revisit the moment a second currency is accepted — at which point a currency change ' +
+    'moves every money figure in the Tenant and is squarely on NFR-A1\'s list.',
+};
+
 const DECLARED: readonly (readonly [string, AuditDeclaration])[] = Object.entries(USE_CASE_AUDIT);
 
 function entryOf(name: string): ReadUseCase | undefined {
@@ -259,6 +284,34 @@ describe('every use case that changes anything is classified for audit', () => {
         `${REGISTRY_MODULE}, and have no audit declaration in ${USE_CASE_AUDIT_MODULE}: ` +
         `${unclassified.join(', ')}. Declare each { audited: [actions] } — and call audit.record ` +
         'inside its transaction — or { unaudited: "why it is not on NFR-A1\'s list" }.',
+    ).toEqual([]);
+  });
+
+  it('lets no use case exempt itself from the audit trail (retro A2)', () => {
+    const selfExempted = DECLARED.filter(
+      ([name, declaration]) =>
+        'unaudited' in declaration && !Object.hasOwn(UNAUDITED_BY_DECISION, name),
+    ).map(([name]) => name);
+
+    expect(
+      selfExempted,
+      'these use cases declare themselves unaudited and are not in UNAUDITED_BY_DECISION in this ' +
+        'gate. Either record the action through `audit.record` and declare { audited: [...] }, or ' +
+        "add it here with the reason it is not on NFR-A1's list — a use case may not exempt " +
+        'itself in the file that implements it.',
+    ).toEqual([]);
+  });
+
+  it('keeps no unaudited exemption a use case no longer claims (retro A2)', () => {
+    const declaredUnaudited = new Set(
+      DECLARED.filter(([, d]) => 'unaudited' in d).map(([name]) => name),
+    );
+    const stale = Object.keys(UNAUDITED_BY_DECISION).filter((name) => !declaredUnaudited.has(name));
+
+    expect(
+      stale,
+      'these are exempted in UNAUDITED_BY_DECISION but no longer declare `unaudited` — remove ' +
+        'them, so the list cannot keep quietly excusing a use case that is now audited or gone',
     ).toEqual([]);
   });
 
