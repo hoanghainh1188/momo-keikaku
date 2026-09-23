@@ -57,3 +57,34 @@ export function reachesProject(ctx: RequestContext, projectId: string): boolean 
   if (ctx.roles.includes(TENANT_ADMIN)) return true;
   return ctx.projectIds.includes(projectId);
 }
+
+/**
+ * WHAT ONE USE CASE DECLARES FOR THE ROLE GATE.
+ *
+ * Lives here, beside the role sets, rather than in `use-cases/role-declarations.ts`, so that each
+ * use-case module can declare its own roles without importing the file that aggregates them —
+ * which would be a cycle. Epic 1 retrospective, F12.
+ */
+export interface RoleDeclaration {
+  readonly roles: readonly Role[];
+  /** True when the call names a Project — the helper also checks Project reach. */
+  readonly projectScoped: boolean;
+}
+
+/** Tenant Admin only, no Project: Organisation, membership, Rate, audit-log and Tenant settings. */
+export const ADMIN_ONLY = {
+  roles: TENANT_ADMIN_ROLES,
+  projectScoped: false,
+} as const satisfies RoleDeclaration;
+
+/** Project reads and Plan/Mapping writes — `tenant_admin` | `pm` plus Project reach. */
+export const PROJECT_REACH = {
+  roles: PROJECT_REACH_ROLES,
+  projectScoped: true,
+} as const satisfies RoleDeclaration;
+
+/** Tenant Admin or PM, no Project — Resource create only (story 1.6). */
+export const STAFF_RESOURCE = {
+  roles: STAFF_RESOURCE_ROLES,
+  projectScoped: false,
+} as const satisfies RoleDeclaration;

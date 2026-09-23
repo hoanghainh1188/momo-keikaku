@@ -1,3 +1,4 @@
+import { PROJECT_REACH, type RoleDeclaration } from '../authz/authorize';
 import { audit, type AuditDeclaration } from '../audit';
 import type { Result } from '../result';
 import type { ProjectWriteDeps, ProjectWriteScope } from '../ports/project-write';
@@ -168,3 +169,12 @@ export const PROJECT_WRITE_AUDIT = {
   markChangeRequestCandidates: { audited: ['disposition.cr_candidate'] },
   mapTicket: { audited: ['mapping.map', 'mapping.unmap'] },
 } as const satisfies Readonly<Record<string, AuditDeclaration>>;
+
+/** Role declarations for the Plan/Mapping writes (colocated — see `role-declarations.ts`). */
+export const PROJECT_WRITE_ROLES = {
+  planTicketsAsWorkPackage: PROJECT_REACH,
+  mapTickets: PROJECT_REACH,
+  mapTicket: PROJECT_REACH,
+  explainTickets: PROJECT_REACH,
+  markChangeRequestCandidates: PROJECT_REACH,
+} as const satisfies Readonly<Record<string, RoleDeclaration>>;

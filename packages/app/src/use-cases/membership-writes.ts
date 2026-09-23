@@ -1,6 +1,7 @@
+import { ADMIN_ONLY, type RoleDeclaration } from '../authz/authorize';
 import type { z } from 'zod';
 import { audit, type AuditDeclaration } from '../audit';
-import { authorize, TENANT_ADMIN, TENANT_ADMIN_ROLES } from '../authz/authorize';
+import { TENANT_ADMIN, TENANT_ADMIN_ROLES } from '../authz/authorize';
 import type { RequestContext } from '../authz/request-context';
 import type { WriteStamp } from '../ports/audited-write';
 import type {
@@ -9,7 +10,7 @@ import type {
   MembershipWriteScope,
 } from '../ports/membership-write';
 import type { Result } from '../result';
-import { refuse, runAuditedWrite } from './audited-write';
+import { refuse, runRoleGatedWrite } from './audited-write';
 import {
   assignMemberProjectInputSchema,
   changeMemberRoleInputSchema,
@@ -66,18 +67,6 @@ interface Locked {
  * Runs one membership write: the declared-roles gate first (no parse, no transaction), then the
  * audited write, Clock-stamped. `refuse` inside `work` answers a code, rolled back.
  */
-function runMembershipWrite<Handle, Command>(
-  schema: z.ZodType<Command>,
-  deps: MembershipWriteDeps<Handle>,
-  ctx: RequestContext,
-  input: unknown,
-  work: (scope: MembershipWriteScope, stamp: WriteStamp, command: Command) => Promise<void>,
-): Promise<Result<void>> {
-  const gate = authorize(ctx, { roles: TENANT_ADMIN_ROLES });
-  if (!gate.ok) return Promise.resolve(gate);
-  return runAuditedWrite(schema, deps, ctx, input, { at: async () => deps.clock.now() }, work);
-}
-
 /**
  * Takes the one lock, then checks the caller and the target, in that order (3a, 3b above).
  */
@@ -106,7 +95,13 @@ export async function revokeMembership<Handle>(
   ctx: RequestContext,
   input: RevokeMembershipInput,
 ): Promise<Result<void>> {
-  return runMembershipWrite(revokeMembershipInputSchema, deps, ctx, input, async (scope, stamp, command) => {
+  return runRoleGatedWrite(
+    revokeMembershipInputSchema,
+    TENANT_ADMIN_ROLES,
+    deps,
+    ctx,
+    input,
+    async (scope, stamp, command) => {
     const locked = await lockCallerAndTarget(scope, ctx, command.userId);
     keepAnAdmin(locked);
     await scope.membership.deleteMembership(locked.target.userId);
@@ -126,7 +121,13 @@ export async function changeMemberRole<Handle>(
   ctx: RequestContext,
   input: ChangeMemberRoleInput,
 ): Promise<Result<void>> {
-  return runMembershipWrite(changeMemberRoleInputSchema, deps, ctx, input, async (scope, stamp, command) => {
+  return runRoleGatedWrite(
+    changeMemberRoleInputSchema,
+    TENANT_ADMIN_ROLES,
+    deps,
+    ctx,
+    input,
+    async (scope, stamp, command) => {
     const locked = await lockCallerAndTarget(scope, ctx, command.userId);
     if (command.role !== TENANT_ADMIN) keepAnAdmin(locked);
     if (locked.target.role === command.role) return;
@@ -147,7 +148,13 @@ export async function assignMemberProject<Handle>(
   ctx: RequestContext,
   input: AssignMemberProjectInput,
 ): Promise<Result<void>> {
-  return runMembershipWrite(assignMemberProjectInputSchema, deps, ctx, input, async (scope, stamp, command) => {
+  return runRoleGatedWrite(
+    assignMemberProjectInputSchema,
+    TENANT_ADMIN_ROLES,
+    deps,
+    ctx,
+    input,
+    async (scope, stamp, command) => {
     const { target } = await lockCallerAndTarget(scope, ctx, command.userId);
     const project = (await scope.org.findProject(command.projectId)) ?? refuse('not_found');
     if (target.projectIds.includes(project.id)) return;
@@ -169,7 +176,13 @@ export async function unassignMemberProject<Handle>(
   ctx: RequestContext,
   input: UnassignMemberProjectInput,
 ): Promise<Result<void>> {
-  return runMembershipWrite(unassignMemberProjectInputSchema, deps, ctx, input, async (scope, stamp, command) => {
+  return runRoleGatedWrite(
+    unassignMemberProjectInputSchema,
+    TENANT_ADMIN_ROLES,
+    deps,
+    ctx,
+    input,
+    async (scope, stamp, command) => {
     const { target } = await lockCallerAndTarget(scope, ctx, command.userId);
     if (!target.projectIds.includes(command.projectId)) return;
     const after = target.projectIds.filter((projectId) => projectId !== command.projectId);
@@ -191,3 +204,11 @@ export const MEMBERSHIP_WRITE_AUDIT = {
   assignMemberProject: { audited: ['membership.assign_project'] },
   unassignMemberProject: { audited: ['membership.unassign_project'] },
 } as const satisfies Readonly<Record<string, AuditDeclaration>>;
+
+/** Role declarations for the membership writes (colocated — see `role-declarations.ts`). */
+export const MEMBERSHIP_WRITE_ROLES = {
+  revokeMembership: ADMIN_ONLY,
+  changeMemberRole: ADMIN_ONLY,
+  assignMemberProject: ADMIN_ONLY,
+  unassignMemberProject: ADMIN_ONLY,
+} as const satisfies Readonly<Record<string, RoleDeclaration>>;

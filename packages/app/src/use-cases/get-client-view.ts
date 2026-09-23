@@ -1,3 +1,4 @@
+import { PROJECT_REACH, type RoleDeclaration } from '../authz/authorize';
 import { clientProjection, DEFAULT_VISIBILITY, type ClientOutputs } from '@momo/domain';
 import type { Result } from '../result';
 import type { ProjectReadDeps } from '../ports/project-read';
@@ -37,3 +38,8 @@ export async function getClientView<Handle>(
     };
   });
 }
+
+/** Role declaration for this use case (colocated — see `role-declarations.ts`). */
+export const GET_CLIENT_VIEW_ROLES = {
+  getClientView: PROJECT_REACH,
+} as const satisfies Readonly<Record<string, RoleDeclaration>>;

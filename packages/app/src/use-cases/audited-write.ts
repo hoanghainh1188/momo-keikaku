@@ -9,7 +9,9 @@ import type { z } from 'zod';
 import { refusingNonMembers, type AuditScope } from '../audit';
 import type { AuditedWriteDeps, WriteStamp } from '../ports/audited-write';
 import { fail, ok, type AppError, type AppErrorCode, type Result } from '../result';
-import { auditActorOf, type RequestContext } from '../authz/request-context';
+import { auditActorOf, type RequestContext, type Role } from '../authz/request-context';
+import { authorize } from '../authz/authorize';
+import type { Clock } from '../ports/clock';
 
 /** The offending field names, by zod issue code. Structured, never prose, never a value. */
 export function invalidInputDetails(error: z.ZodError): NonNullable<AppError['details']> {
@@ -103,4 +105,36 @@ export async function runAuditedWrite<Handle, Scope extends AuditScope, Command,
     if (plan.isNotFound?.(error, command)) return fail('not_found');
     throw error;
   }
+}
+
+/**
+ * THE ONE WRAPPER FOR A ROLE-GATED, CLOCK-STAMPED AUDITED WRITE.
+ *
+ * Authorises the caller against `roles`, then runs `runAuditedWrite` stamping the event time from
+ * the deps' Clock. That is the whole of what the Organisation, membership and Resource write
+ * families each used to declare for themselves — `runOrgWrite` (story 1.3), `runMembershipWrite`
+ * (1.4) and `runResourceWrite` (1.6) were three hand-written copies of this function, differing
+ * only in their `Deps`/`Scope` types and, in the third, in taking `roles` as a parameter, which is
+ * the generalisation the other two needed anyway. Epic 1 retrospective, F7.
+ *
+ * ORDER MATTERS AND IS PINNED. The role gate runs BEFORE `runAuditedWrite` parses the command, so
+ * a caller outside the set is answered `not_found` and never `invalid_input` — refusing on the
+ * shape of a command they were not allowed to send would disclose that the command exists.
+ * `audited-write-gate.test.ts` asserts it.
+ *
+ * Project writes do NOT come through here: they stamp from the Project's own anchor rather than
+ * the Clock, and gate on Project reach as well as roles, which is what `runProjectWrite`'s
+ * `WritePlan` carries.
+ */
+export function runRoleGatedWrite<Handle, Scope extends AuditScope, Command, Value = void>(
+  schema: z.ZodType<Command>,
+  roles: readonly Role[],
+  deps: AuditedWriteDeps<Handle, Scope> & { readonly clock: Clock },
+  ctx: RequestContext,
+  input: unknown,
+  work: (scope: Scope, stamp: WriteStamp, command: Command) => Promise<Value>,
+): Promise<Result<Value>> {
+  const gate = authorize(ctx, { roles });
+  if (!gate.ok) return Promise.resolve(gate);
+  return runAuditedWrite(schema, deps, ctx, input, { at: async () => deps.clock.now() }, work);
 }
