@@ -2,7 +2,7 @@
  * `pnpm demo` — one command, clean state to a running demo.
  *
  *   1. start Postgres 18 in docker compose and wait for it to be healthy
- *   2. apply the schema (drizzle-kit push)
+ *   2. apply the schema (drizzle-kit migrate — the AD-30 migration)
  *   3. seed the demo Tenant/Department/Project and replay the fixture Connector
  *   4. start the web app
  *
@@ -82,7 +82,7 @@ run('Starting Postgres (docker compose)', 'docker', [
   '-d',
   '--wait',
 ]);
-run('Applying the schema', 'pnpm', ['exec', 'drizzle-kit', 'push', '--force']);
+run('Applying the schema migrations', 'pnpm', ['db:migrate']);
 // The roles first: `pgboss:migrate` creates `momo_app` (which `db:policies` grants to and
 // which the web app now connects as), and `db:policies` applies the row-level security,
 // the grants and the append-only triggers generated from the table-class registry. Without
@@ -94,8 +94,7 @@ run('Seeding the demo project and replaying the fixture Connector', 'pnpm', ['se
 
 process.stdout.write(
   `\n[1m▸ Starting the web app[0m\n` +
-    `\n  Reconciliation Review  http://localhost:${WEB_PORT}/p/prj-ec2/review` +
-    `\n  Client View preview    http://localhost:${WEB_PORT}/c/prj-ec2\n\n`,
+    `\n  Reconciliation Review  http://localhost:${WEB_PORT}/p/prj-ec2/review\n\n`,
 );
 
 const web = spawn('pnpm', ['--filter', '@momo/web', 'exec', 'next', 'dev', '-p', String(WEB_PORT)], {

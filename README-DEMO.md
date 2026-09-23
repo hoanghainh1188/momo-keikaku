@@ -89,9 +89,10 @@ If the fake is not running when the web app first needs it, the button simply do
 (restart the web app once the fake is up). The issuer must be `https:` unless it is on this
 machine; in production it is Google's, `https://accounts.google.com`.
 
-> **An older local database** (created before story 1.4) still has the `app_user` table, and
-> `drizzle-kit push` stops on an interactive rename prompt for it. Drop it once, then push:
-> `docker exec momo-keikaku-postgres psql -U momo -d momo_keikaku -c 'DROP TABLE IF EXISTS app_user'`.
+> **An older local database** (created with `drizzle-kit push`, before story 2.1) cannot be
+> migrated: the schema now arrives through one migration (AD-30), which expects an empty
+> database. Recreate it once, then run `pnpm demo` again:
+> `docker exec momo-keikaku-postgres sh -c 'dropdb -U momo --force momo_keikaku && createdb -U momo momo_keikaku'`.
 
 That one command starts Postgres 18 in docker compose, applies the schema, creates the
 `momo_migrator`, `momo_app` and `momo_maintenance` roles with the pg-boss schema, applies the
@@ -105,7 +106,6 @@ failing three steps in with a connection error.
 | | |
 |---|---|
 | **Reconciliation Review** (the wedge) | http://localhost:3101/p/prj-ec2/review |
-| **Client View preview** | http://localhost:3101/c/prj-ec2 |
 
 > **Port note.** The web app runs on **3101**, not 3100: on this machine 3100 is held
 > by an unrelated service (`packages/server/dist/index.js`). Override with
@@ -125,24 +125,35 @@ pnpm fixtures:generate   # regenerate the fixture dataset (changes the golden nu
 
 ## What to click
 
+> **No Baseline in the seeded demo (stories 2.1 and 2.2).** A Baseline now pins a
+> `schedule_run`, and there is no scheduler to produce one until Epic 2's engine lands, so the
+> seed writes none. The Review therefore shows **"No Baseline yet"** where the EVM figures,
+> the forecast, the milestones and the divergence table were, colours all three Health
+> Indicators *unavailable*, and counts every mapped hour as non-baselined Unplanned Work (shown,
+> not judged). Coverage, AC and
+> the Unmapped groups are as described below. The EVM figures quoted in steps 1–2 and in *Are
+> the numbers right?* are still pinned, in memory against the fixture's own Baseline, by
+> `packages/db/src/demo-golden.test.ts`. Story 2.2 also removed the spike's Client View and the
+> Plan tab's bar chart.
+
 The demo opens on the **Reconciliation Review** for the week of 2026-09-11 – 2026-09-17,
 pinned to a Tracker Snapshot taken two hours earlier. It is Wednesday evening; Linh is
 preparing Thursday's teirei (UJ-3).
 
-1. **Status.** Three Health Indicators, each carrying the rule that produced its colour.
+1. **Status.** *(needs a Baseline — from Epic 4)* Three Health Indicators, each carrying the rule that produced its colour.
    Schedule ▲ amber (SPI 0.91), Effort/Cost ◆ red (TCPI 1.26 > 1.1), Unplanned Work
    ▲ amber (16.8% of this period's hours). Overall is the worst of the three.
 
-2. **Read the two CPIs side by side.** All-in **0.80**, planned-scope **0.92**. The gap
+2. **Read the two CPIs side by side.** *(needs a Baseline — from Epic 4)* All-in **0.80**, planned-scope **0.92**. The gap
    between them *is* the Unplanned Work — the planned scope is close to plan, the
    overrun is the work outside it. This is the thing no other tool shows.
 
-3. **Unplanned Work → the Scope Ledger Bar.** Every hour the Connector can see, in one
+3. **Unplanned Work → the Scope Ledger Bar.** *(needs a Baseline — from Epic 4)* Every hour the Connector can see, in one
    bar, in four mutually exclusive buckets that sum to the total: mapped to baselined
    WPs (indigo), Catch-all within its Baseline (grey), Catch-all overflow and Unmapped
    Work (violet, hatched). Nothing in scope is silently excluded.
 
-4. **The three components of Unplanned Work.** 166.0h Unmapped, 0.0h on non-baselined
+4. **The three components of Unplanned Work.** *(needs a Baseline — from Epic 4)* 166.0h Unmapped, 0.0h on non-baselined
    WPs, 50.8h of Catch-all overflow. Opening Balances (900.2h — hours the Tickets
    already carried before momo-keikaku could see them) sit outside the bar and are
    excluded from period metrics.
@@ -151,7 +162,7 @@ preparing Thursday's teirei (UJ-3).
    individual Tickets and their hours. "Bug" is the UJ-3 story: 11 bug tickets, 86.7h,
    on a feature the client added verbally.
 
-6. **Work the Disposition rail** (right-hand column). This is the demo's centrepiece:
+6. **Work the Disposition rail** (right-hand column). *(the before/after figures need a Baseline — from Epic 4)* This is the demo's centrepiece:
 
    - **Map** the *Bug* group to `3.2 Checkout flow (guest)` → Unplanned Work drops from
      **216.8h to 130.1h** and the period share from **16.8% to 12.2%** *immediately*,
@@ -165,18 +176,13 @@ preparing Thursday's teirei (UJ-3).
    - **Explain** the *Infrastructure* group with a note. The rail empties: "All Unmapped
      Work has a Disposition."
 
-7. **Plan tab.** The 48-WP WBS with Baseline vs Current Plan effort and dates, and a
-   Gantt-lite: hollow Baseline outline above the solid Current Plan bar, earned progress
-   filling it in ink from the left, milestones as diamonds, the slipped one hollow red.
+7. **Plan tab.** *(the Baseline columns need a Baseline — from Epic 4)* The 48-WP WBS with Baseline vs Current Plan effort, the Baseline dates
+   and each leaf's actual dates (from its latest status event). Planned dates are the
+   scheduler's to derive, from story 2.5 on.
 
 8. **Mapping tab.** Coverage, the two live Mapping Rules, and per-Ticket map/remap/unmap.
    Note the rule showing 0 Tickets — those Tickets already carry a manual Mapping, and a
    rule never overrides one.
-
-9. **Client View** (sidebar, or *Preview client view*). Effort only. No money, no rates,
-   no names, no ticket content — that is enforced by the type the projection returns, not
-   by discipline. The Health Indicators include Unplanned Work, the Explain note appears
-   beneath it, and the page states that the effort carries no earned value.
 
 `pnpm seed` puts everything back if you want to run through it again.
 
@@ -244,7 +250,7 @@ Deliberately out of scope for this demo (from the build brief):
   is no UI to switch with (AD-3).
 - **No pg-boss worker.** Snapshots are replayed once at seed time, not on a schedule.
   There is no on-demand *Refresh snapshot*.
-- **No publishing persistence.** The Client View is a live preview; `published_snapshot`,
+- **No Client View.** The spike's live preview was removed in story 2.2; `published_snapshot`,
   the Visibility Policy UI, supersede/retract and viewer tracking are R1.
 - **No Excel import** (FR-9–11) and **no xlsx export** (FR-38/39). These were the stretch
   items and were not reached.
@@ -287,7 +293,7 @@ DESIGN.md where they differ:
 - One sans family (IBM Plex Sans JP, covering EN and JA) — **no Shippori Mincho**.
 - A neutral near-white ground, with the sheet distinguished by hairline rules rather
   than by warmth — **no warm paper**.
-- A **left sidebar**, collapsible so the Gantt and wide tables can reclaim the width,
+- A **left sidebar**, collapsible so the wide tables can reclaim the width,
   instead of the horizontal Excel-style tab strip. The top bar keeps the project
   switcher and the snapshot pin.
 - Kept from DESIGN.md: the single indigo action colour, Unplanned Work in 藤 violet with
@@ -295,5 +301,4 @@ DESIGN.md where they differ:
   with the unit in muted ink, a formula caption under every metric, charts drawn in the
   same inks as the tables, and the Scope Ledger Bar as the signature element.
 
-Applied to every screen built here: Review, Plan, Mapping, Baselines, Connectors and the
-Client View preview.
+Applied to every screen built here: Review, Plan, Mapping, Baselines and Connectors.

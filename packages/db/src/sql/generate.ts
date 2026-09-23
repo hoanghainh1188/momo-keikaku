@@ -121,7 +121,7 @@ export function generateRlsSql(maintenanceRole: string): string {
       `-- ${entry.table} (${entry.class}): ${entry.why}`,
       `ALTER TABLE ${table} ENABLE ROW LEVEL SECURITY;`,
       // FORCE is why this file exists: without it the policy is skipped for the table's
-      // owner, and the owner is who `drizzle-kit push` and the seed connect as.
+      // owner, and the owner is who `pnpm db:migrate` and the seed connect as.
       `ALTER TABLE ${table} FORCE ROW LEVEL SECURITY;`,
       `DROP POLICY IF EXISTS ${ident(TENANT_POLICY)} ON ${table};`,
       `CREATE POLICY ${ident(TENANT_POLICY)} ON ${table}`,

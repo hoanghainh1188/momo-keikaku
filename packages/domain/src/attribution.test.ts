@@ -51,11 +51,9 @@ const wp = (over: Partial<WorkPackage> & { id: string }): WorkPackage => ({
   isLeaf: true,
   isMilestone: false,
   isCatchAll: false,
-  start: null,
-  finish: null,
   plannedMh: 0n,
-  completedAt: null,
-  milestoneDoneAt: null,
+  actualStart: null,
+  actualFinish: null,
   assignedResourceIds: [],
   ...over,
 });

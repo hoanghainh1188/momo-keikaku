@@ -54,6 +54,24 @@ GRANT SELECT, UPDATE, DELETE ON public."project_default_rate_entry" TO "momo_mai
 -- work_package (mutable-audited)
 GRANT SELECT, INSERT, UPDATE, DELETE ON public."work_package" TO "momo_app";
 
+-- wp_dependency (mutable-audited)
+GRANT SELECT, INSERT, UPDATE, DELETE ON public."wp_dependency" TO "momo_app";
+
+-- wp_status_event (append-only)
+GRANT SELECT, INSERT ON public."wp_status_event" TO "momo_app";
+GRANT SELECT, UPDATE, DELETE ON public."wp_status_event" TO "momo_maintenance";
+
+-- holiday_calendar_version (append-only)
+GRANT SELECT, INSERT ON public."holiday_calendar_version" TO "momo_app";
+GRANT SELECT, UPDATE, DELETE ON public."holiday_calendar_version" TO "momo_maintenance";
+
+-- schedule_run (append-only)
+GRANT SELECT, INSERT ON public."schedule_run" TO "momo_app";
+GRANT SELECT, UPDATE, DELETE ON public."schedule_run" TO "momo_maintenance";
+
+-- wp_schedule (derived)
+GRANT SELECT, INSERT, UPDATE, DELETE ON public."wp_schedule" TO "momo_app";
+
 -- baseline_version (append-only)
 GRANT SELECT, INSERT ON public."baseline_version" TO "momo_app";
 GRANT SELECT, UPDATE, DELETE ON public."baseline_version" TO "momo_maintenance";
@@ -77,12 +95,12 @@ GRANT SELECT, UPDATE, DELETE ON public."ticket_observation" TO "momo_maintenance
 GRANT SELECT, INSERT ON public."actuals_ledger_entry" TO "momo_app";
 GRANT SELECT, UPDATE, DELETE ON public."actuals_ledger_entry" TO "momo_maintenance";
 
+-- mapping_rule (mutable-audited)
+GRANT SELECT, INSERT, UPDATE, DELETE ON public."mapping_rule" TO "momo_app";
+
 -- mapping_event (append-only)
 GRANT SELECT, INSERT ON public."mapping_event" TO "momo_app";
 GRANT SELECT, UPDATE, DELETE ON public."mapping_event" TO "momo_maintenance";
-
--- mapping_rule (mutable-audited)
-GRANT SELECT, INSERT, UPDATE, DELETE ON public."mapping_rule" TO "momo_app";
 
 -- disposition_event (append-only)
 GRANT SELECT, INSERT ON public."disposition_event" TO "momo_app";

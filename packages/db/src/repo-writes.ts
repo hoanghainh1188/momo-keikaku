@@ -200,15 +200,12 @@ function recordPlanDisposition(bound: Bound) {
       projectId,
       wbsCode: `9.${nextIndex}`,
       name,
+      // A leaf: `child_count` defaults to 0, so the generated `is_leaf` is true (AD-25). No
+      // duration and no constraint — the new Work Package is "not schedulable yet".
       parentId: null,
-      isLeaf: true,
       isMilestone: false,
       isCatchAll: false,
-      start: null,
-      finish: null,
       plannedMh: 0n,
-      completedAt: null,
-      milestoneDoneAt: null,
       assignedResourceIds: [],
       deletedAt: null,
     });

@@ -1,7 +1,8 @@
 import { afterAll, describe, expect, it } from 'vitest';
-import { hours, present, share } from '@momo/domain';
+import { hours, share } from '@momo/domain';
 import { DEMO_TENANT_ID, loadReview } from './repo';
 import { closeAllPools, getDb, getPool } from './client';
+import { acquireSeedSuiteLock, releaseSeedSuiteLock } from './seed-suite-lock';
 
 /**
  * The persistence round trip.
@@ -12,6 +13,12 @@ import { closeAllPools, getDb, getPool } from './client';
  * notices. This file removes the human: it runs the same Review through the database
  * (`seed.ts` wrote the rows, drizzle read them back) and asserts the figures are
  * identical to the ones pinned there.
+ *
+ * EXCEPT WHAT THE BASELINE DECIDES (story 2.2). The seed writes no Baseline until Epic 4 (story
+ * 2.1, decision 2-A), so this file pins the NO-BASELINE Review (decision Q1-A): EVM, forecast,
+ * milestones and divergence are null, and every mapped hour is non-baselined Unplanned Work.
+ * Everything the Baseline does not touch — AC, Opening Balances, Coverage, the Unmapped groups —
+ * is still the golden figure, and is asserted as such.
  *
  * That is the only gate covering the ORM, the driver and the server together. Without
  * it a row-mapping regression — a `bigint` column arriving as a string, say — ships
@@ -64,7 +71,18 @@ if (REQUIRE_DB && !reachable) {
   );
 }
 
+// It reads the demo Tenant, which a seed suite TRUNCATEs and rewrites — so it holds the seed-suite
+// lock shared, like a probe suite (`seed-suite-lock.ts`). Without it, its `withTenant` read and a
+// seed's TRUNCATE took their table locks in opposite orders and Postgres broke the cycle by failing
+// the seed (40P01, measured in story 2.1's runs); and a read landing between the TRUNCATE and the
+// reseed would see the load profile's Tenant, not the demo's. An advisory lock is database-wide,
+// so the application role can take it.
+if (reachable) {
+  await acquireSeedSuiteLock(APP_DATABASE_URL!, 'shared');
+}
+
 afterAll(async () => {
+  await releaseSeedSuiteLock();
   if (reachable) await closeAllPools();
 });
 
@@ -78,51 +96,87 @@ describe.skipIf(!reachable)('persistence round trip — the database reproduces 
     expect(review.measurementBasis).toBe('hours');
   });
 
-  it('reports the headline EVM figures in effort hours', async () => {
-    const { review } = await loadReview(db(), DEMO_TENANT_ID);
-    expect(hours(review.evm.bacMh)).toBe('2936.0');
-    expect(hours(review.evm.pvMh)).toBe('1459.8');
-    expect(hours(review.evm.evMh)).toBe('1330.8');
-    expect(hours(review.evm.acMh)).toBe('1661.5');
+  it('returns a no-Baseline Review rather than throwing — EVM, forecast, milestones and divergence are null', async () => {
+    // The seed writes no Baseline (story 2.1, decision 2-A), so the Review is partial by design
+    // (story 2.2, decision Q1-A). `demo-golden.test.ts` keeps the full EVM figures, computed in
+    // memory against the Baseline the fixture carries; this file pins what the database holds.
+    const { bundle, review } = await loadReview(db(), DEMO_TENANT_ID);
+    expect(bundle.baseline).toBeNull();
+    expect(bundle.input.activeBaselineSeq).toBeNull();
+    expect(review.evm).toBeNull();
+    expect(review.money).toBeNull();
+    expect(review.forecast).toBeNull();
+    expect(review.milestones).toBeNull();
+    expect(review.divergence).toBeNull();
+    expect(review.behindPlan).toBe(false);
   });
 
-  it('reports SPI, both CPIs and TCPI', async () => {
+  it('reports AC, Opening Balances and Coverage exactly as the fixture does', async () => {
+    // None of these reads the Baseline, so they are the golden figures unchanged.
     const { review } = await loadReview(db(), DEMO_TENANT_ID);
-    expect(present(review.evm.spi).text).toBe('0.91');
-    expect(present(review.evm.cpiAllIn).text).toBe('0.80');
-    expect(present(review.evm.cpiPlannedScope).text).toBe('0.92');
-    expect(present(review.evm.tcpi).text).toBe('1.26');
+    expect(hours(review.attribution.cumulative.totalMh)).toBe('1661.5');
+    expect(hours(review.openingBalanceMh)).toBe('900.2');
+    expect(hours(review.attribution.period.totalMh)).toBe('172.9');
+    expect(share(review.coverage.mappedHourShare)).toBe('90.0%');
+    expect(share(review.coverage.mappedTicketShare)).toBe('81.0%');
+    expect(review.coverage.unmappedTickets).toBe(22);
+    expect(review.unmappedGroups.map((g) => [g.label, g.ticketCount, hours(g.mh)])).toEqual([
+      ['Bug', 11, '86.7'],
+      ['Feature-Request', 6, '46.7'],
+      ['Infrastructure', 5, '32.6'],
+    ]);
   });
 
-  it('reports the forecast and both finish dates', async () => {
-    const { review } = await loadReview(db(), DEMO_TENANT_ID);
-    expect(present(review.evm.eacMh).text).toBe('3665.6');
-    expect(present(review.evm.etcMh).text).toBe('2004.1');
-    expect(present(review.evm.vacMh).text).toBe('-729.6');
-    expect(review.forecast.forecastFinish).toBe('2026-12-15');
-    expect(review.forecast.baselineFinish).toBe('2026-11-27');
-  });
-
-  it('splits Unplanned Work into all three components', async () => {
+  it('splits Unplanned Work with every mapped hour non-baselined', async () => {
+    // Every ledger entry was ingested with no Baseline active, so a mapped hour is judged
+    // against no Baseline at all: an hour on an ordinary WP is non-baselined Unplanned Work, and
+    // a Catch-all WP's hours are all overflow (its LOE budget is the Baseline's, and there is
+    // none). Unmapped Work is the golden 166.0 h, because it never depended on the Baseline.
     const { review } = await loadReview(db(), DEMO_TENANT_ID);
     const by = Object.fromEntries(review.unplanned.components.map((c) => [c.key, hours(c.mh)]));
     expect(by).toEqual({
       unmapped: '166.0',
-      'non-baselined': '0.0',
-      'catch-all-overflow': '50.8',
+      'non-baselined': '1364.7',
+      'catch-all-overflow': '130.8',
     });
-    expect(hours(review.unplanned.cumulative.unplannedMh)).toBe('216.8');
+    expect(hours(review.unplanned.cumulative.unplannedMh)).toBe('1661.5');
+    expect(Object.fromEntries(review.scopeLedger.map((b) => [b.key, share(b.share)]))).toEqual({
+      'mapped-baselined': '0.0%',
+      'mapped-non-baselined': '82.1%',
+      'catch-all': '0.0%',
+      'catch-all-overflow': '7.9%',
+      unmapped: '10.0%',
+    });
   });
 
-  it('shows Unplanned Work in the amber band for the period', async () => {
+  it('colours every indicator unavailable — the Unplanned share is shown, not judged', async () => {
     const { review } = await loadReview(db(), DEMO_TENANT_ID);
-    expect(share(review.unplanned.sharePeriod!)).toBe('16.8%');
-    expect(share(review.unplanned.shareCumulative!)).toBe('13.0%');
-    expect(hours(review.unplanned.period.unplannedMh)).toBe('29.1');
+    expect(share(review.unplanned.sharePeriod!)).toBe('100.0%');
+    expect(share(review.unplanned.shareCumulative!)).toBe('100.0%');
+    expect(hours(review.unplanned.period.unplannedMh)).toBe('172.9');
+    expect(review.health.indicators.map((i) => [i.key, i.colour])).toEqual([
+      ['schedule', 'unavailable'],
+      ['effort_cost', 'unavailable'],
+      ['unplanned', 'unavailable'],
+    ]);
+    expect(review.health.overall).toBe('unavailable');
+    expect(review.health.overallNote).toBe('Schedule, Effort/Cost, Unplanned Work unavailable');
+  });
+
+  it('reads each WP\'s actual dates from its head status event', async () => {
+    // The two milestones the fixture reached; every other WP has no event, so no actual date.
+    const { bundle } = await loadReview(db(), DEMO_TENANT_ID);
+    const withActuals = bundle.wps
+      .filter((w) => w.actualStart !== null || w.actualFinish !== null)
+      .map((w) => [w.id, w.isMilestone, w.actualStart, w.actualFinish]);
+    expect(withActuals).toEqual([
+      ['wp-M1', true, null, '2026-07-13'],
+      ['wp-M2', true, null, '2026-08-31'],
+    ]);
   });
 
   it('carries effort across the driver as bigint milli-hours, never strings or doubles', async () => {
-    const { review } = await loadReview(db(), DEMO_TENANT_ID);
+    const { bundle, review } = await loadReview(db(), DEMO_TENANT_ID);
     // The regression this file exists to catch. `schema.ts` declares the `*_mh` columns
     // `bigint({ mode: 'bigint' })`, and that mode is what converts Postgres int8 into a JS
     // `bigint` (AD-4) — node-postgres hands back a *string* otherwise, because int8 does not
@@ -131,18 +185,21 @@ describe.skipIf(!reachable)('persistence round trip — the database reproduces 
     // assertions above would not catch on their own; a `number` would be exact here but is
     // not the representation AD-4 decided.
     //
-    // Values are milli-hours, so 2936.0 h reads as 2936000n here.
+    // Values are milli-hours, so 1661.5 h reads as 1661495n here. With no Baseline in the
+    // database there is no BAC, PV or EV to carry (story 2.2); AC and the Opening Balances come
+    // straight off `actuals_ledger_entry.delta_mh`, and the Current Plan off
+    // `work_package.planned_mh`, so those are the int8 columns checked.
     for (const [label, value] of [
-      ['BAC', review.evm.bacMh],
-      ['PV', review.evm.pvMh],
-      ['EV', review.evm.evMh],
-      ['AC', review.evm.acMh],
+      ['AC', review.attribution.cumulative.totalMh],
+      ['Opening Balances', review.openingBalanceMh],
+      ['Unplanned', review.unplanned.cumulative.unplannedMh],
+      ['a Current Plan WP', bundle.wps.find((w) => w.plannedMh > 0n)?.plannedMh],
     ] as const) {
       expect(typeof value, `${label} crossed the driver as ${typeof value}`).toBe('bigint');
     }
     // The integer yen columns are read into bigint too, and money stays integral.
     expect(typeof review.attribution.cumulative.totalJpy).toBe('bigint');
-    expect(review.evm.bacMh).toBe(2936000n);
-    expect(review.evm.acMh).toBe(1661495n);
+    expect(review.attribution.cumulative.totalMh).toBe(1661495n);
+    expect(review.openingBalanceMh).toBe(900_228n);
   });
 });

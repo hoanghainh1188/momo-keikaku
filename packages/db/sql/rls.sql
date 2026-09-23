@@ -102,6 +102,76 @@ CREATE POLICY "maintenance_bypass" ON public."work_package"
   USING (true)
   WITH CHECK (true);
 
+-- wp_dependency (mutable-audited): FS dependency edges with lag (AD-25): a scheduling input, edited through app/schedule's fence and audited. Edges are removed explicitly by the writer (2.10/2.14); the FKs never cascade.
+ALTER TABLE public."wp_dependency" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public."wp_dependency" FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "tenant_isolation" ON public."wp_dependency";
+CREATE POLICY "tenant_isolation" ON public."wp_dependency"
+  FOR ALL
+  USING ("tenant_id" = NULLIF(current_setting('app.tenant_id', true), ''))
+  WITH CHECK ("tenant_id" = NULLIF(current_setting('app.tenant_id', true), ''));
+DROP POLICY IF EXISTS "maintenance_bypass" ON public."wp_dependency";
+CREATE POLICY "maintenance_bypass" ON public."wp_dependency"
+  FOR ALL TO "momo_maintenance"
+  USING (true)
+  WITH CHECK (true);
+
+-- wp_status_event (append-only): The single home of a WP's actual start and actual finish (AD-25). Each row restates the full actual state; the head is the latest seq. A correction is a new row.
+ALTER TABLE public."wp_status_event" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public."wp_status_event" FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "tenant_isolation" ON public."wp_status_event";
+CREATE POLICY "tenant_isolation" ON public."wp_status_event"
+  FOR ALL
+  USING ("tenant_id" = NULLIF(current_setting('app.tenant_id', true), ''))
+  WITH CHECK ("tenant_id" = NULLIF(current_setting('app.tenant_id', true), ''));
+DROP POLICY IF EXISTS "maintenance_bypass" ON public."wp_status_event";
+CREATE POLICY "maintenance_bypass" ON public."wp_status_event"
+  FOR ALL TO "momo_maintenance"
+  USING (true)
+  WITH CHECK (true);
+
+-- holiday_calendar_version (append-only): A resolved non-working-day set over a range (AD-29). A Baseline re-derives against the version it pinned, so a version is never edited.
+ALTER TABLE public."holiday_calendar_version" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public."holiday_calendar_version" FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "tenant_isolation" ON public."holiday_calendar_version";
+CREATE POLICY "tenant_isolation" ON public."holiday_calendar_version"
+  FOR ALL
+  USING ("tenant_id" = NULLIF(current_setting('app.tenant_id', true), ''))
+  WITH CHECK ("tenant_id" = NULLIF(current_setting('app.tenant_id', true), ''));
+DROP POLICY IF EXISTS "maintenance_bypass" ON public."holiday_calendar_version";
+CREATE POLICY "maintenance_bypass" ON public."holiday_calendar_version"
+  FOR ALL TO "momo_maintenance"
+  USING (true)
+  WITH CHECK (true);
+
+-- schedule_run (append-only): One recalculation: fully resolved inputs, outputs, cause and engine version (AD-26). Baselines and Published Snapshots pin it by reference.
+ALTER TABLE public."schedule_run" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public."schedule_run" FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "tenant_isolation" ON public."schedule_run";
+CREATE POLICY "tenant_isolation" ON public."schedule_run"
+  FOR ALL
+  USING ("tenant_id" = NULLIF(current_setting('app.tenant_id', true), ''))
+  WITH CHECK ("tenant_id" = NULLIF(current_setting('app.tenant_id', true), ''));
+DROP POLICY IF EXISTS "maintenance_bypass" ON public."schedule_run";
+CREATE POLICY "maintenance_bypass" ON public."schedule_run"
+  FOR ALL TO "momo_maintenance"
+  USING (true)
+  WITH CHECK (true);
+
+-- wp_schedule (derived): The tree grid's projection of the latest schedule_run (AD-26), rebuilt from it by app/schedule and never pinned by anything.
+ALTER TABLE public."wp_schedule" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public."wp_schedule" FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "tenant_isolation" ON public."wp_schedule";
+CREATE POLICY "tenant_isolation" ON public."wp_schedule"
+  FOR ALL
+  USING ("tenant_id" = NULLIF(current_setting('app.tenant_id', true), ''))
+  WITH CHECK ("tenant_id" = NULLIF(current_setting('app.tenant_id', true), ''));
+DROP POLICY IF EXISTS "maintenance_bypass" ON public."wp_schedule";
+CREATE POLICY "maintenance_bypass" ON public."wp_schedule"
+  FOR ALL TO "momo_maintenance"
+  USING (true)
+  WITH CHECK (true);
+
 -- baseline_version (append-only): A Baseline is a pinned historical fact. Re-baselining appends a version; it never edits one.
 ALTER TABLE public."baseline_version" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public."baseline_version" FORCE ROW LEVEL SECURITY;
@@ -186,20 +256,6 @@ CREATE POLICY "maintenance_bypass" ON public."actuals_ledger_entry"
   USING (true)
   WITH CHECK (true);
 
--- mapping_event (append-only): Mapping is an event log; the current Mapping is its head. Editing history would move hours retroactively.
-ALTER TABLE public."mapping_event" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public."mapping_event" FORCE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "tenant_isolation" ON public."mapping_event";
-CREATE POLICY "tenant_isolation" ON public."mapping_event"
-  FOR ALL
-  USING ("tenant_id" = NULLIF(current_setting('app.tenant_id', true), ''))
-  WITH CHECK ("tenant_id" = NULLIF(current_setting('app.tenant_id', true), ''));
-DROP POLICY IF EXISTS "maintenance_bypass" ON public."mapping_event";
-CREATE POLICY "maintenance_bypass" ON public."mapping_event"
-  FOR ALL TO "momo_maintenance"
-  USING (true)
-  WITH CHECK (true);
-
 -- mapping_rule (mutable-audited): Rules are edited and re-prioritised. The events they produced are append-only.
 ALTER TABLE public."mapping_rule" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public."mapping_rule" FORCE ROW LEVEL SECURITY;
@@ -210,6 +266,20 @@ CREATE POLICY "tenant_isolation" ON public."mapping_rule"
   WITH CHECK ("tenant_id" = NULLIF(current_setting('app.tenant_id', true), ''));
 DROP POLICY IF EXISTS "maintenance_bypass" ON public."mapping_rule";
 CREATE POLICY "maintenance_bypass" ON public."mapping_rule"
+  FOR ALL TO "momo_maintenance"
+  USING (true)
+  WITH CHECK (true);
+
+-- mapping_event (append-only): Mapping is an event log; the current Mapping is its head. Editing history would move hours retroactively.
+ALTER TABLE public."mapping_event" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public."mapping_event" FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "tenant_isolation" ON public."mapping_event";
+CREATE POLICY "tenant_isolation" ON public."mapping_event"
+  FOR ALL
+  USING ("tenant_id" = NULLIF(current_setting('app.tenant_id', true), ''))
+  WITH CHECK ("tenant_id" = NULLIF(current_setting('app.tenant_id', true), ''));
+DROP POLICY IF EXISTS "maintenance_bypass" ON public."mapping_event";
+CREATE POLICY "maintenance_bypass" ON public."mapping_event"
   FOR ALL TO "momo_maintenance"
   USING (true)
   WITH CHECK (true);

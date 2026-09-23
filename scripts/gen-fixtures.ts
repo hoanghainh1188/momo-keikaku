@@ -167,6 +167,12 @@ const MILESTONES: { code: string; name: string; offsetWd: number; doneOffsetWd: 
 ];
 
 // ---------------------------------------------------------------- build the plan
+/**
+ * A Work Package as the generator builds it. `start`/`finish` are the PLANNED dates the Baseline
+ * and the Ticket work windows are drawn from; they are not written onto the WP rows of
+ * `project.json` (story 2.2): a WP carries no planned date, only its actual dates, which the seed
+ * writes as `wp_status_event` rows.
+ */
 interface WpOut {
   id: string;
   wbsCode: string;
@@ -179,8 +185,8 @@ interface WpOut {
   finish: string | null;
   plannedMh: number;
   baselineMh: number;
-  completedAt: string | null;
-  milestoneDoneAt: string | null;
+  actualStart: string | null;
+  actualFinish: string | null;
   assignedResourceIds: string[];
 }
 
@@ -202,8 +208,8 @@ for (const phase of PHASES) {
     finish: null,
     plannedMh: 0,
     baselineMh: 0,
-    completedAt: null,
-    milestoneDoneAt: null,
+    actualStart: null,
+    actualFinish: null,
     assignedResourceIds: [],
   });
   for (const leaf of phase.leaves) {
@@ -222,8 +228,8 @@ for (const phase of PHASES) {
       finish,
       plannedMh: hm(leaf.hours),
       baselineMh: hm(leaf.hours),
-      completedAt: null,
-      milestoneDoneAt: null,
+      actualStart: null,
+      actualFinish: null,
       assignedResourceIds: [res.id],
     });
   }
@@ -242,8 +248,9 @@ for (const ms of MILESTONES) {
     finish: date,
     plannedMh: 0,
     baselineMh: 0,
-    completedAt: null,
-    milestoneDoneAt: ms.doneOffsetWd === null ? null : offsetToDate(ms.doneOffsetWd),
+    actualStart: null,
+    // A milestone reached: its done date is its actual finish.
+    actualFinish: ms.doneOffsetWd === null ? null : offsetToDate(ms.doneOffsetWd),
     assignedResourceIds: [],
   });
 }
@@ -507,7 +514,8 @@ const project = {
   },
   resources: RESOURCES,
   unlinkedAccount: UNLINKED_ACCOUNT,
-  wps,
+  // The WP rows carry no planned dates (story 2.2); the Baseline below keeps them.
+  wps: wps.map(({ start: _start, finish: _finish, ...row }) => row),
   baseline: {
     id: 'bl-1',
     seq: 1,

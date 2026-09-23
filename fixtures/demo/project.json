@@ -82,12 +82,10 @@
    "isLeaf": false,
    "isMilestone": false,
    "isCatchAll": false,
-   "start": null,
-   "finish": null,
    "plannedMh": 0,
    "baselineMh": 0,
-   "completedAt": null,
-   "milestoneDoneAt": null,
+   "actualStart": null,
+   "actualFinish": null,
    "assignedResourceIds": []
   },
   {
@@ -98,12 +96,10 @@
    "isLeaf": true,
    "isMilestone": false,
    "isCatchAll": false,
-   "start": "2026-06-01",
-   "finish": "2026-06-12",
    "plannedMh": 64000,
    "baselineMh": 64000,
-   "completedAt": null,
-   "milestoneDoneAt": null,
+   "actualStart": null,
+   "actualFinish": null,
    "assignedResourceIds": [
     "res-minh"
    ]
@@ -116,12 +112,10 @@
    "isLeaf": true,
    "isMilestone": false,
    "isCatchAll": false,
-   "start": "2026-06-11",
-   "finish": "2026-06-29",
    "plannedMh": 96000,
    "baselineMh": 96000,
-   "completedAt": null,
-   "milestoneDoneAt": null,
+   "actualStart": null,
+   "actualFinish": null,
    "assignedResourceIds": [
     "res-trang"
    ]
@@ -134,12 +128,10 @@
    "isLeaf": true,
    "isMilestone": false,
    "isCatchAll": false,
-   "start": "2026-06-21",
-   "finish": "2026-07-09",
    "plannedMh": 80000,
    "baselineMh": 80000,
-   "completedAt": null,
-   "milestoneDoneAt": null,
+   "actualStart": null,
+   "actualFinish": null,
    "assignedResourceIds": [
     "res-trang"
    ]
@@ -152,12 +144,10 @@
    "isLeaf": true,
    "isMilestone": false,
    "isCatchAll": false,
-   "start": "2026-06-21",
-   "finish": "2026-07-02",
    "plannedMh": 56000,
    "baselineMh": 56000,
-   "completedAt": null,
-   "milestoneDoneAt": null,
+   "actualStart": null,
+   "actualFinish": null,
    "assignedResourceIds": [
     "res-trang"
    ]
@@ -170,12 +160,10 @@
    "isLeaf": true,
    "isMilestone": false,
    "isCatchAll": false,
-   "start": "2026-07-07",
-   "finish": "2026-07-11",
    "plannedMh": 24000,
    "baselineMh": 24000,
-   "completedAt": null,
-   "milestoneDoneAt": null,
+   "actualStart": null,
+   "actualFinish": null,
    "assignedResourceIds": [
     "res-huy"
    ]
@@ -188,12 +176,10 @@
    "isLeaf": false,
    "isMilestone": false,
    "isCatchAll": false,
-   "start": null,
-   "finish": null,
    "plannedMh": 0,
    "baselineMh": 0,
-   "completedAt": null,
-   "milestoneDoneAt": null,
+   "actualStart": null,
+   "actualFinish": null,
    "assignedResourceIds": []
   },
   {
@@ -204,12 +190,10 @@
    "isLeaf": true,
    "isMilestone": false,
    "isCatchAll": false,
-   "start": "2026-07-11",
-   "finish": "2026-07-29",
    "plannedMh": 120000,
    "baselineMh": 120000,
-   "completedAt": null,
-   "milestoneDoneAt": null,
+   "actualStart": null,
+   "actualFinish": null,
    "assignedResourceIds": [
     "res-minh"
    ]
@@ -222,12 +206,10 @@
    "isLeaf": true,
    "isMilestone": false,
    "isCatchAll": false,
-   "start": "2026-07-15",
-   "finish": "2026-08-02",
    "plannedMh": 88000,
    "baselineMh": 88000,
-   "completedAt": null,
-   "milestoneDoneAt": null,
+   "actualStart": null,
+   "actualFinish": null,
    "assignedResourceIds": [
     "res-nga"
    ]
@@ -240,12 +222,10 @@
    "isLeaf": true,
    "isMilestone": false,
    "isCatchAll": false,
-   "start": "2026-07-21",
-   "finish": "2026-08-20",
    "plannedMh": 156400,
    "baselineMh": 136000,
-   "completedAt": null,
-   "milestoneDoneAt": null,
+   "actualStart": null,
+   "actualFinish": null,
    "assignedResourceIds": [
     "res-nga"
    ]
@@ -258,12 +238,10 @@
    "isLeaf": true,
    "isMilestone": false,
    "isCatchAll": false,
-   "start": "2026-07-31",
-   "finish": "2026-08-18",
    "plannedMh": 104000,
    "baselineMh": 104000,
-   "completedAt": null,
-   "milestoneDoneAt": null,
+   "actualStart": null,
+   "actualFinish": null,
    "assignedResourceIds": [
     "res-huy"
    ]
@@ -276,12 +254,10 @@
    "isLeaf": true,
    "isMilestone": false,
    "isCatchAll": false,
-   "start": "2026-08-04",
-   "finish": "2026-08-22",
    "plannedMh": 96000,
    "baselineMh": 96000,
-   "completedAt": null,
-   "milestoneDoneAt": null,
+   "actualStart": null,
+   "actualFinish": null,
    "assignedResourceIds": [
     "res-trang"
    ]
@@ -294,12 +270,10 @@
    "isLeaf": true,
    "isMilestone": false,
    "isCatchAll": false,
-   "start": "2026-08-10",
-   "finish": "2026-08-21",
    "plannedMh": 48000,
    "baselineMh": 48000,
-   "completedAt": null,
-   "milestoneDoneAt": null,
+   "actualStart": null,
+   "actualFinish": null,
    "assignedResourceIds": [
     "res-trang"
    ]
@@ -312,12 +286,10 @@
    "isLeaf": true,
    "isMilestone": false,
    "isCatchAll": false,
-   "start": "2026-08-16",
-   "finish": "2026-08-27",
    "plannedMh": 56000,
    "baselineMh": 56000,
-   "completedAt": null,
-   "milestoneDoneAt": null,
+   "actualStart": null,
+   "actualFinish": null,
    "assignedResourceIds": [
     "res-trang"
    ]
@@ -330,12 +302,10 @@
    "isLeaf": false,
    "isMilestone": false,
    "isCatchAll": false,
-   "start": null,
-   "finish": null,
    "plannedMh": 0,
    "baselineMh": 0,
-   "completedAt": null,
-   "milestoneDoneAt": null,
+   "actualStart": null,
+   "actualFinish": null,
    "assignedResourceIds": []
   },
   {
@@ -346,12 +316,10 @@
    "isLeaf": true,
    "isMilestone": false,
    "isCatchAll": false,
-   "start": "2026-08-20",
-   "finish": "2026-09-07",
    "plannedMh": 112000,
    "baselineMh": 112000,
-   "completedAt": null,
-   "milestoneDoneAt": null,
+   "actualStart": null,
+   "actualFinish": null,
    "assignedResourceIds": [
     "res-minh"
    ]
@@ -364,12 +332,10 @@
    "isLeaf": true,
    "isMilestone": false,
    "isCatchAll": false,
-   "start": "2026-08-25",
-   "finish": "2026-09-29",
    "plannedMh": 147200,
    "baselineMh": 128000,
-   "completedAt": null,
-   "milestoneDoneAt": null,
+   "actualStart": null,
+   "actualFinish": null,
    "assignedResourceIds": [
     "res-duc"
    ]
@@ -382,12 +348,10 @@
    "isLeaf": true,
    "isMilestone": false,
    "isCatchAll": false,
-   "start": "2026-08-31",
-   "finish": "2026-09-18",
    "plannedMh": 96000,
    "baselineMh": 96000,
-   "completedAt": null,
-   "milestoneDoneAt": null,
+   "actualStart": null,
+   "actualFinish": null,
    "assignedResourceIds": [
     "res-duc"
    ]
@@ -400,12 +364,10 @@
    "isLeaf": true,
    "isMilestone": false,
    "isCatchAll": false,
-   "start": "2026-09-04",
-   "finish": "2026-09-22",
    "plannedMh": 72000,
    "baselineMh": 72000,
-   "completedAt": null,
-   "milestoneDoneAt": null,
+   "actualStart": null,
+   "actualFinish": null,
    "assignedResourceIds": [
     "res-trang"
    ]
@@ -418,12 +380,10 @@
    "isLeaf": true,
    "isMilestone": false,
    "isCatchAll": false,
-   "start": "2026-09-08",
-   "finish": "2026-09-19",
    "plannedMh": 56000,
    "baselineMh": 56000,
-   "completedAt": null,
-   "milestoneDoneAt": null,
+   "actualStart": null,
+   "actualFinish": null,
    "assignedResourceIds": [
     "res-nga"
    ]
@@ -436,12 +396,10 @@
    "isLeaf": true,
    "isMilestone": false,
    "isCatchAll": false,
-   "start": "2026-09-12",
-   "finish": "2026-09-23",
    "plannedMh": 40000,
    "baselineMh": 40000,
-   "completedAt": null,
-   "milestoneDoneAt": null,
+   "actualStart": null,
+   "actualFinish": null,
    "assignedResourceIds": [
     "res-duc"
    ]
@@ -454,12 +412,10 @@
    "isLeaf": true,
    "isMilestone": false,
    "isCatchAll": false,
-   "start": "2026-09-18",
-   "finish": "2026-09-29",
    "plannedMh": 64000,
    "baselineMh": 64000,
-   "completedAt": null,
-   "milestoneDoneAt": null,
+   "actualStart": null,
+   "actualFinish": null,
    "assignedResourceIds": [
     "res-minh"
    ]
@@ -472,12 +428,10 @@
    "isLeaf": false,
    "isMilestone": false,
    "isCatchAll": false,
-   "start": null,
-   "finish": null,
    "plannedMh": 0,
    "baselineMh": 0,
-   "completedAt": null,
-   "milestoneDoneAt": null,
+   "actualStart": null,
+   "actualFinish": null,
    "assignedResourceIds": []
   },
   {
@@ -488,12 +442,10 @@
    "isLeaf": true,
    "isMilestone": false,
    "isCatchAll": false,
-   "start": "2026-09-12",
-   "finish": "2026-10-14",
    "plannedMh": 138000,
    "baselineMh": 120000,
-   "completedAt": null,
-   "milestoneDoneAt": null,
+   "actualStart": null,
+   "actualFinish": null,
    "assignedResourceIds": [
     "res-duc"
    ]
@@ -506,12 +458,10 @@
    "isLeaf": true,
    "isMilestone": false,
    "isCatchAll": false,
-   "start": "2026-09-20",
-   "finish": "2026-10-08",
    "plannedMh": 80000,
    "baselineMh": 80000,
-   "completedAt": null,
-   "milestoneDoneAt": null,
+   "actualStart": null,
+   "actualFinish": null,
    "assignedResourceIds": [
     "res-nga"
    ]
@@ -524,12 +474,10 @@
    "isLeaf": true,
    "isMilestone": false,
    "isCatchAll": false,
-   "start": "2026-09-24",
-   "finish": "2026-10-12",
    "plannedMh": 72000,
    "baselineMh": 72000,
-   "completedAt": null,
-   "milestoneDoneAt": null,
+   "actualStart": null,
+   "actualFinish": null,
    "assignedResourceIds": [
     "res-trang"
    ]
@@ -542,12 +490,10 @@
    "isLeaf": true,
    "isMilestone": false,
    "isCatchAll": false,
-   "start": "2026-09-28",
-   "finish": "2026-10-16",
    "plannedMh": 88000,
    "baselineMh": 88000,
-   "completedAt": null,
-   "milestoneDoneAt": null,
+   "actualStart": null,
+   "actualFinish": null,
    "assignedResourceIds": [
     "res-duc"
    ]
@@ -560,12 +506,10 @@
    "isLeaf": true,
    "isMilestone": false,
    "isCatchAll": false,
-   "start": "2026-10-04",
-   "finish": "2026-10-15",
    "plannedMh": 64000,
    "baselineMh": 64000,
-   "completedAt": null,
-   "milestoneDoneAt": null,
+   "actualStart": null,
+   "actualFinish": null,
    "assignedResourceIds": [
     "res-minh"
    ]
@@ -578,12 +522,10 @@
    "isLeaf": true,
    "isMilestone": false,
    "isCatchAll": false,
-   "start": "2026-10-10",
-   "finish": "2026-10-21",
    "plannedMh": 40000,
    "baselineMh": 40000,
-   "completedAt": null,
-   "milestoneDoneAt": null,
+   "actualStart": null,
+   "actualFinish": null,
    "assignedResourceIds": [
     "res-trang"
    ]
@@ -596,12 +538,10 @@
    "isLeaf": false,
    "isMilestone": false,
    "isCatchAll": false,
-   "start": null,
-   "finish": null,
    "plannedMh": 0,
    "baselineMh": 0,
-   "completedAt": null,
-   "milestoneDoneAt": null,
+   "actualStart": null,
+   "actualFinish": null,
    "assignedResourceIds": []
   },
   {
@@ -612,12 +552,10 @@
    "isLeaf": true,
    "isMilestone": false,
    "isCatchAll": false,
-   "start": "2026-09-28",
-   "finish": "2026-10-23",
    "plannedMh": 104000,
    "baselineMh": 104000,
-   "completedAt": null,
-   "milestoneDoneAt": null,
+   "actualStart": null,
+   "actualFinish": null,
    "assignedResourceIds": [
     "res-minh"
    ]
@@ -630,12 +568,10 @@
    "isLeaf": true,
    "isMilestone": false,
    "isCatchAll": false,
-   "start": "2026-10-06",
-   "finish": "2026-10-24",
    "plannedMh": 80000,
    "baselineMh": 80000,
-   "completedAt": null,
-   "milestoneDoneAt": null,
+   "actualStart": null,
+   "actualFinish": null,
    "assignedResourceIds": [
     "res-trang"
    ]
@@ -648,12 +584,10 @@
    "isLeaf": true,
    "isMilestone": false,
    "isCatchAll": false,
-   "start": "2026-10-10",
-   "finish": "2026-10-28",
    "plannedMh": 96000,
    "baselineMh": 96000,
-   "completedAt": null,
-   "milestoneDoneAt": null,
+   "actualStart": null,
+   "actualFinish": null,
    "assignedResourceIds": [
     "res-huy"
    ]
@@ -666,12 +600,10 @@
    "isLeaf": true,
    "isMilestone": false,
    "isCatchAll": false,
-   "start": "2026-10-18",
-   "finish": "2026-10-29",
    "plannedMh": 56000,
    "baselineMh": 56000,
-   "completedAt": null,
-   "milestoneDoneAt": null,
+   "actualStart": null,
+   "actualFinish": null,
    "assignedResourceIds": [
     "res-trang"
    ]
@@ -684,12 +616,10 @@
    "isLeaf": true,
    "isMilestone": false,
    "isCatchAll": false,
-   "start": "2026-10-02",
-   "finish": "2026-10-13",
    "plannedMh": 40000,
    "baselineMh": 40000,
-   "completedAt": null,
-   "milestoneDoneAt": null,
+   "actualStart": null,
+   "actualFinish": null,
    "assignedResourceIds": [
     "res-minh"
    ]
@@ -702,12 +632,10 @@
    "isLeaf": false,
    "isMilestone": false,
    "isCatchAll": false,
-   "start": null,
-   "finish": null,
    "plannedMh": 0,
    "baselineMh": 0,
-   "completedAt": null,
-   "milestoneDoneAt": null,
+   "actualStart": null,
+   "actualFinish": null,
    "assignedResourceIds": []
   },
   {
@@ -718,12 +646,10 @@
    "isLeaf": true,
    "isMilestone": false,
    "isCatchAll": false,
-   "start": "2026-09-24",
-   "finish": "2026-10-12",
    "plannedMh": 72000,
    "baselineMh": 72000,
-   "completedAt": null,
-   "milestoneDoneAt": null,
+   "actualStart": null,
+   "actualFinish": null,
    "assignedResourceIds": [
     "res-minh"
    ]
@@ -736,12 +662,10 @@
    "isLeaf": true,
    "isMilestone": false,
    "isCatchAll": false,
-   "start": "2026-10-14",
-   "finish": "2026-11-01",
    "plannedMh": 128000,
    "baselineMh": 128000,
-   "completedAt": null,
-   "milestoneDoneAt": null,
+   "actualStart": null,
+   "actualFinish": null,
    "assignedResourceIds": [
     "res-duc"
    ]
@@ -754,12 +678,10 @@
    "isLeaf": true,
    "isMilestone": false,
    "isCatchAll": false,
-   "start": "2026-10-26",
-   "finish": "2026-11-13",
    "plannedMh": 96000,
    "baselineMh": 96000,
-   "completedAt": null,
-   "milestoneDoneAt": null,
+   "actualStart": null,
+   "actualFinish": null,
    "assignedResourceIds": [
     "res-huy"
    ]
@@ -772,12 +694,10 @@
    "isLeaf": true,
    "isMilestone": false,
    "isCatchAll": false,
-   "start": "2026-11-07",
-   "finish": "2026-11-25",
    "plannedMh": 80000,
    "baselineMh": 80000,
-   "completedAt": null,
-   "milestoneDoneAt": null,
+   "actualStart": null,
+   "actualFinish": null,
    "assignedResourceIds": [
     "res-trang"
    ]
@@ -790,12 +710,10 @@
    "isLeaf": true,
    "isMilestone": false,
    "isCatchAll": false,
-   "start": "2026-11-03",
-   "finish": "2026-11-14",
    "plannedMh": 56000,
    "baselineMh": 56000,
-   "completedAt": null,
-   "milestoneDoneAt": null,
+   "actualStart": null,
+   "actualFinish": null,
    "assignedResourceIds": [
     "res-trang"
    ]
@@ -808,12 +726,10 @@
    "isLeaf": false,
    "isMilestone": false,
    "isCatchAll": false,
-   "start": null,
-   "finish": null,
    "plannedMh": 0,
    "baselineMh": 0,
-   "completedAt": null,
-   "milestoneDoneAt": null,
+   "actualStart": null,
+   "actualFinish": null,
    "assignedResourceIds": []
   },
   {
@@ -824,12 +740,10 @@
    "isLeaf": true,
    "isMilestone": false,
    "isCatchAll": false,
-   "start": "2026-11-15",
-   "finish": "2026-11-26",
    "plannedMh": 48000,
    "baselineMh": 48000,
-   "completedAt": null,
-   "milestoneDoneAt": null,
+   "actualStart": null,
+   "actualFinish": null,
    "assignedResourceIds": [
     "res-duc"
    ]
@@ -842,12 +756,10 @@
    "isLeaf": true,
    "isMilestone": true,
    "isCatchAll": false,
-   "start": "2026-11-27",
-   "finish": "2026-11-27",
    "plannedMh": 0,
    "baselineMh": 0,
-   "completedAt": null,
-   "milestoneDoneAt": null,
+   "actualStart": null,
+   "actualFinish": null,
    "assignedResourceIds": [
     "res-duc"
    ]
@@ -860,12 +772,10 @@
    "isLeaf": true,
    "isMilestone": false,
    "isCatchAll": true,
-   "start": "2026-07-11",
-   "finish": "2026-10-14",
    "plannedMh": 80000,
    "baselineMh": 80000,
-   "completedAt": null,
-   "milestoneDoneAt": null,
+   "actualStart": null,
+   "actualFinish": null,
    "assignedResourceIds": [
     "res-minh"
    ]
@@ -878,12 +788,10 @@
    "isLeaf": true,
    "isMilestone": true,
    "isCatchAll": false,
-   "start": "2026-07-09",
-   "finish": "2026-07-09",
    "plannedMh": 0,
    "baselineMh": 0,
-   "completedAt": null,
-   "milestoneDoneAt": "2026-07-13",
+   "actualStart": null,
+   "actualFinish": "2026-07-13",
    "assignedResourceIds": []
   },
   {
@@ -894,12 +802,10 @@
    "isLeaf": true,
    "isMilestone": true,
    "isCatchAll": false,
-   "start": "2026-08-23",
-   "finish": "2026-08-23",
    "plannedMh": 0,
    "baselineMh": 0,
-   "completedAt": null,
-   "milestoneDoneAt": "2026-08-31",
+   "actualStart": null,
+   "actualFinish": "2026-08-31",
    "assignedResourceIds": []
   },
   {
@@ -910,12 +816,10 @@
    "isLeaf": true,
    "isMilestone": true,
    "isCatchAll": false,
-   "start": "2026-09-08",
-   "finish": "2026-09-08",
    "plannedMh": 0,
    "baselineMh": 0,
-   "completedAt": null,
-   "milestoneDoneAt": null,
+   "actualStart": null,
+   "actualFinish": null,
    "assignedResourceIds": []
   }
  ],

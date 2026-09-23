@@ -480,7 +480,7 @@ and why thirty-five entries sat open while the work behind them had already ship
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-2-arithmetic-and-codec.md`
   summary: The Review page's own derivations — PV/EV yen, the Unplanned component share, % complete, Gantt progress — are covered only by the manual identical-HTML diff.
   evidence: Review round 1 (V3). `apps/web` has no render test; moving these into `ReviewResult` (already recorded) would put them under `demo-golden.test.ts`.
-  resolved: PARTIAL, 2026-09-21 in `spec-web-present-edge.md`. PV/EV yen and the component shares are now `ReviewResult` fields pinned by `demo-golden.test.ts`. % complete and Gantt progress are still presented in the page (`wholePercent`, `earnedProgress`) and covered by the identical-HTML diff only.
+  resolved: PARTIAL, 2026-09-21 in `spec-web-present-edge.md`. PV/EV yen and the component shares are now `ReviewResult` fields pinned by `demo-golden.test.ts`. % complete and Gantt progress are still presented in the page (`wholePercent`, `earnedProgress`) and covered by the identical-HTML diff only. UPDATE 2026-09-23 in `spec-2-2-the-demo-spike-is-disposed-of-file-by-file.md`: the Gantt half is discharged — the Plan page's Gantt, `gantt.tsx` and `earnedProgress` were removed, so Gantt progress no longer exists. % complete (`wholePercent`) is still presented in the page and remains open.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-web-present-edge.md`
   summary: The ARCHITECTURE-SPINE's AD-1 (and epic-1-context.md's "open decision" paragraph) still describe the `apps/web → packages/domain` edge as undrawn and undecided, though the code, the rule and this log now say `domain/present` only.
@@ -490,6 +490,7 @@ and why thirty-five entries sat open while the work behind them had already ship
 - source_spec: `_bmad-output/implementation-artifacts/spec-web-present-edge.md`
   summary: The cross-tenant harness sanctions one float by KEY NAME: a non-integer number under any key called `fraction` is canonicalised as text instead of being refused by the codec.
   evidence: Found when `getClientView` joined the harness: the client projection carries `earnedProgress`'s layout-geometry `fraction` (slice 5's one sanctioned float), and `canonicalise` serialises through the codec, which refuses floats. The exemption is keyed on the field name, so a float figure that happened to be named `fraction` would pass the harness's multiset comparison. Tightening needs the harness to know the path of the one geometry field, or the projection to carry geometry as an exact Ratio turned into a float only in the component — the latter changes a domain type this spec's Never list held still.
+  resolved: YES, 2026-09-23 in `spec-2-2-the-demo-spike-is-disposed-of-file-by-file.md`. The Client View and `earnedProgress` were removed, and with them the `GEOMETRY_KEY = 'fraction'` carve-out in `tests/cross-tenant.test.ts`: no float is sanctioned in any result, so the codec now refuses every one.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-web-present-edge.md`
   summary: Pages still do plain `bigint` arithmetic of their own — the Plan page's parent roll-up (`rollUp`), the Review page's planned-scope AC (`mappedBaselinedMh + catchAllMh`), the Baselines page's per-version BAC (now a native `reduce`).
@@ -970,6 +971,7 @@ fences and tooling that gate them. Seventeen findings were patched; these ten we
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-9-every-string-is-externalised-and-the-currency-is-fixed.md`
   summary: Automated Japanese +30% layout gate for Project and Client demo surfaces (Review, Plan, Mapping, Connectors, Baselines, `/c/...`).
   evidence: Split from story 1.9 to keep the Epic 1 close under the Build scope budget. Founder chose automated gate (4-A); 1.9 applies that gate to the durable shell only. Those Project/Client pages are the demo spike Epic 2.2 rewrites file-by-file — re-run the gate when their strings land in the final surfaces.
+  resolved: PARTIAL, 2026-09-23 in `spec-2-2-the-demo-spike-is-disposed-of-file-by-file.md`. The `/c/...` surface no longer exists (the route, its page and the Client View use case were removed). The Project surfaces' half is carried by the 2.2 follow-up row at the end of this file.
 
 ## Deferred from: review of spec-1-9-every-string-is-externalised-and-the-currency-is-fixed (2026-09-23)
 
@@ -1005,10 +1007,45 @@ above can see where it went.
   date comparisons, the Baselines page's per-version BAC, the Review page's Schedule Variance note
   contradicting its own SPI note at SV = 0, and the Japanese +30% layout gate for the Project and
   Client surfaces are all in files 2.2 rewrites file by file. They are discharged in 2.2's
-  acceptance rather than carried: a debt row against code that is about to be deleted is noise.
+  acceptance rather than carried: a debt row against code that is about to be deleted is noise. *Discharged 2026-09-23 by story 2.2 (`spec-2-2-the-demo-spike-is-disposed-of-file-by-file.md`): the spike's Gantt, Client View and `c/[projectId]` page are gone, and all 46 spike files have a recorded disposition. By founder decision the page arithmetic (with the SV note) and the Project-surface layout gate were split out rather than done, and are the two follow-up rows at the end of this file.*
 - **The Organisation UI → story 2.17 (new).** Epic 1's narrative claimed it and Epic 1 shipped no
   Organisation screen. The deferral was conditioned on sign-in and roles existing; stories 1.4 and
   1.5 met that condition and nothing revisited it. It sits in Epic 2 because 2.2 rewrites the shell
   and 2.13 … 2.16 build the grid it reuses. Its acceptance also carries retrospective finding F21 —
   `loadProjectBundle` returns every Resource's Rate history for the whole Tenant, which is bounded
   today only because no page renders Rates, and stops being bounded the moment these screens exist.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-1-the-scheduling-schema-lands-in-one-migration.md`
+  summary: `actuals_ledger_entry_baseline_version_fk` is scoped to the Tenant only, so a ledger row can pin another Project's Baseline in the same Tenant.
+  evidence: The ledger row has no `project_id`, so the FK is `(tenant_id, active_baseline_version_seq) → baseline_version(tenant_id, seq)`. The gap predates story 2.1, which added the first FK here. Closing it needs a `project_id` on the ledger, which is an expand/contract migration (review pass 1, #15).
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-1-the-scheduling-schema-lands-in-one-migration.md`
+  summary: No tenant-owned table has an FK to `tenant(id)`, and `tenant_membership`, `session` and `account` have no FKs at all.
+  evidence: Story 2.1 scoped its FKs to "between tenant-owned tables" (AD-3). A row set can hang off a Tenant id that does not exist. Decide this before Epic 8's tenant deletion (review pass 1, #16).
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-1-the-scheduling-schema-lands-in-one-migration.md`
+  summary: CI and `pnpm demo` run `drizzle-kit migrate` as the owner role, not AD-19's `migrator` role, and `db:migrate` runs before `pgboss:migrate` creates that role.
+  evidence: This predates story 2.1: `push` also ran as the owner. The AD-19 ownership model has never been exercised (review pass 1, #17).
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-1-the-scheduling-schema-lands-in-one-migration.md`
+  summary: Decide whether soft-deleted children count toward `work_package.child_count`, and what happens to a soft-deleted leaf's `wp_dependency` edges.
+  evidence: Unverified; severity would be medium. The writer (story 2.10, WP delete and re-parent through the fence) settles it. The `is_leaf` FKs and the leaf-only CHECK both depend on it (review pass 1, #18).
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-1-the-scheduling-schema-lands-in-one-migration.md`
+  summary: Story 2.2 must add a DB test for the head selection of `wp_status_event` in the reshaped `WorkPackage` reader: the highest `seq` per WP wins, and a non-milestone gets no milestone date.
+  evidence: Verification-gap finding, review pass 1, #3. 2.1 only asserts the seeded values, because 2.2 rewrites the reader (`repo.ts` loadBundleInTenant).
+  resolved: YES, 2026-09-23 in `spec-2-2-the-demo-spike-is-disposed-of-file-by-file.md`. `packages/db/src/wp-status-head.test.ts` writes two events for one milestone whose `seq` order disagrees with both insertion order and `at`, plus a head event on a non-milestone leaf, and reads them back through `loadProjectBundle` as the application role: the higher `seq` wins, and the leaf is "marked complete" and never a milestone row. Reversing the reader's `ORDER BY` fails it.
+- source_spec: none
+  summary: Story 2.2 follow-up. The Plan, Baselines and Review pages still do the parent roll-up, the `slipped` and milestone-overdue flags, per-version BAC and planned-scope AC themselves, with `bigint` arithmetic and date comparisons. They should take these computed figures from a use case (AD-1's "tolerated for now" bullet). The Review page's Schedule Variance note should also stop contradicting its SPI note at SV = 0.
+  evidence: Split from story 2.2 by founder decision on 2026-09-23 (scope "1+2 first"), so that the shared 2.1+2.2 PR can go green and merge. This goal is an epics.md AC of story 2.2 and can ship on its own.
+- source_spec: none
+  summary: Story 2.2 follow-up. Extend the Japanese +30% layout gate from the shell to the Project and Client surfaces, with `KNOWN_OVERFLOW` in `packages/i18n/src/shell-layout-gate.test.ts` only shrinking. This includes the visual check that the gate's header comment defers to 2.2.
+  evidence: Split from story 2.2 by founder decision on 2026-09-23 (scope "1+2 first"). This goal is an epics.md AC of story 2.2, it is independent of the schema work, and it can ship on its own.
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-2-the-demo-spike-is-disposed-of-file-by-file.md`
+  summary: The Plan, Review and Baselines pages have no render test. Their no-Baseline states, the `late` flag and the empty-state rows are checked only by typecheck and `next build`.
+  evidence: The gap predates story 2.2; no page ever had a render test. Found in 2.2's review pass 1 (#21). It fits 2.13 (the real Plan surface) or a first Playwright pass.
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-2-the-demo-spike-is-disposed-of-file-by-file.md`
+  summary: The full `pnpm test` is flaky against a shared database. The captured failure is `mapping_event_pkey` 23505, from the client-allocated `seq` with no `pg_advisory_xact_lock` (`packages/db/src/repo-writes.ts:107`). Story 1.2's watermark slice owns the fix, and it should land before, or right after, the shared 2.1+2.2 PR merges.
+  evidence: Observed in 2 of 17 full runs on a fresh `momo_verify` on 2026-09-23. The failing suites were `project-scoped-ids` (23505, captured), and `membership`, `org-writes` and `seed-sequences` (their error text was not captured). Story 2.2 added two probe suites (`wp-status-head`, `baseline-read`), which may raise the concurrency the race needs. Until the fix lands, CI can go red at random; re-run it. Founder decision on 2026-09-23: finish 2.2 and defer this.
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-2-the-demo-spike-is-disposed-of-file-by-file.md`
+  summary: Map database constraint violations (23503/23514, including a deferred FK failing at COMMIT) in `runAuditedWrite` (`packages/app/src/use-cases/audited-write.ts:103`) to `invalid_input` with a named rule code, rather than rethrowing them as a 500. Add a test proving that a COMMIT-time violation leaves no audit row. Stories 2.4, 2.10 and 2.14 must check graph rules app-side before writing; the composite and leaf FKs are only the backstop.
+  evidence: Advanced elicitation on 2026-09-23 (Failure Mode Analysis and Cascading Failure Simulation, P2). A 23503 raised at COMMIT on `wp_dependency_*_fk` travels `tenant-transaction` → `runAuditedWrite` (not a Refusal, not a not-found) → rethrow → Next's default error page. The user would get that page instead of 2.14's under-the-cell rejection naming the offence. Nothing reaches this path today, because no writer of `wp_dependency` exists yet.
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-2-the-demo-spike-is-disposed-of-file-by-file.md`
+  summary: `apps/web` has no `error.tsx` or `global-error.tsx`. Any error thrown from a server component or action (a DB error, the 23505 seq race, a dangling Baseline seq) renders Next's default error page with no product copy and no route back.
+  evidence: Advanced elicitation on 2026-09-23 (P3). `find apps/web/src/app -name error.tsx` finds nothing. This predates 2.2; it fits the shell rework or 2.13.

@@ -33,6 +33,11 @@ export default async function BaselinesPage({
             </tr>
           </thead>
           <tbody>
+            {bundle.input.baselineVersions.length === 0 ? (
+              <tr data-testid="baseline-history-empty">
+                <td colSpan={7} className="caption">{t('baselines.none_recorded')}</td>
+              </tr>
+            ) : null}
             {bundle.input.baselineVersions.map((b) => (
               <tr key={b.id}>
                 <td className="num">{b.seq}</td>
@@ -47,8 +52,12 @@ export default async function BaselinesPage({
           </tbody>
         </table>
         <p className="caption" style={{ marginTop: 12 }}>{t('baselines.whether_an_hour_counts_as_baselined_is_judged_ag')}</p>
-        <p className="caption">
-          {t('baselines.demo_not_wired', { bac: hours(review.evm.bacMh) })}
+        <p className="caption" data-testid="baselines-bac">
+          {review.evm === null ? (
+            <span className="tag">{t('review.no_baseline_yet')}</span>
+          ) : (
+            t('baselines.demo_not_wired', { bac: hours(review.evm.bacMh) })
+          )}
         </p>
       </Section>
     </div>

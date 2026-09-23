@@ -51,7 +51,8 @@ export interface ProjectBundle {
   input: ReviewInput;
   rules: (MappingRule & { currentlyMapped: number })[];
   wps: WorkPackage[];
-  baseline: BaselineVersion;
+  /** The active Baseline — null while the Project has none (story 2.1, decision 2-A). */
+  baseline: BaselineVersion | null;
   resources: Resource[];
 }
 

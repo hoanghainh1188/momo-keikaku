@@ -35,29 +35,14 @@
   },
   "clientView": {
     "slipped": "slipped",
-    "preview_not_published_this_is_exactly_what_a_cli": "Preview — not published · this is exactly what a Client Viewer would see",
     "status": "Status",
     "overall": "Overall",
-    "this_reporting_period": "This reporting period",
-    "from_your_project_manager": "From your project manager",
-    "no_explanatory_note_has_been_attached_for_this_p": "No explanatory note has been attached for this period yet.",
-    "the_unplanned_work_indicator_is_always_counted_i": "The Unplanned Work indicator is always counted in the Health Indicators above. The project manager controls the notes and the level of detail, not whether it counts.",
     "milestones": "Milestones",
     "milestone": "Milestone",
-    "planned_baseline": "Planned (baseline)",
-    "current": "Current",
     "done": "Done",
     "open": "open",
-    "schedule": "Schedule",
     "wbs": "WBS",
-    "work_package": "Work Package",
-    "planned": "Planned",
-    "complete": "Complete",
-    "plan_vs_current": "Plan vs current",
-    "this_report_shows_effort_only_it_contains_no_cos": "This report shows effort only. It contains no cost, no rates, no named staffing and no ticket content. Views of a published report are recorded.",
-    "unplanned_work_title": "計画外作業 — Unplanned Work",
-    "report_sub": "{clientName} · Report as of {asOf} · Effort in 工数 (h)",
-    "back_to_review": "← Back to the PM's Reconciliation Review"
+    "work_package": "Work Package"
   },
   "auth": {
     "forgotPassword": {
@@ -130,6 +115,7 @@
     "active": "Active",
     "whether_an_hour_counts_as_baselined_is_judged_ag": "Whether an hour counts as baselined is judged against the Baseline version active when its ledger entry was recorded, so a Re-baseline never erases Unplanned history. The active Baseline is selected by sequence, never by comparing timestamps.",
     "active_tag": "active",
+    "none_recorded": "No Baseline has been recorded yet.",
     "demo_not_wired": "Not in this demo: Set Baseline / Re-baseline actions and version comparison (FR-16). BAC today is {bac}h."
   },
   "connectors": {
@@ -189,7 +175,7 @@
   "plan": {
     "tree_schedule": "Tree & schedule",
     "plan_work_breakdown_structure": "Plan — Work Breakdown Structure",
-    "current_plan_solid_indigo_against_the_active_bas": "Current Plan (solid indigo) against the active Baseline (hollow outline). The Baseline is never edited: plan changes go to the Current Plan, and the Baseline moves only through an explicit, reasoned Re-baseline.",
+    "the_baseline_is_never_edited": "The Baseline is never edited: plan changes go to the Current Plan, and the Baseline moves only through an explicit, reasoned Re-baseline.",
     "active_baseline": "Active Baseline",
     "wbs": "WBS",
     "work_package": "Work Package",
@@ -197,13 +183,12 @@
     "current_plan_h": "Current plan h",
     "actual_h": "Actual h",
     "baseline_dates": "Baseline dates",
-    "current_dates": "Current dates",
+    "actual_dates": "Actual dates",
     "catch_all_loe": "catch-all · LOE",
     "milestone": "milestone",
     "non_baselined": "non-baselined",
-    "summary_rows_roll_up_effort_and_dates_from_their": "Summary rows roll up effort and dates from their children. Earned progress fills the Current Plan bar in ink from the left. Milestones are diamonds; a slipped milestone is drawn as a hollow red diamond.",
-    "baseline_recorded": "recorded {date} — \"{reason}\" · BAC {bac}h over {leafCount} baselined leaf Work Packages.",
-    "gantt_column_header": "Baseline vs Current {from} → {to}"
+    "summary_rows_roll_up_effort": "Summary rows roll up effort from their children. Actual dates are a leaf Work Package's own, from its latest status event.",
+    "baseline_recorded": "recorded {date} — \"{reason}\" · BAC {bac}h over {leafCount} baselined leaf Work Packages."
   },
   "review": {
     "status": "Status",
@@ -227,7 +212,6 @@
     "pinned_to_tracker_snapshot": "Pinned to Tracker Snapshot",
     "mapping": "Mapping",
     "plan": "Plan",
-    "preview_client_view": "Preview client view",
     "overall": "Overall",
     "the_three_components_of_unplanned_work_cumulativ": "The three components of Unplanned Work (cumulative)",
     "component": "Component",
@@ -275,13 +259,13 @@
     "wbs": "WBS",
     "milestone": "Milestone",
     "baseline_date": "Baseline date",
-    "current_date": "Current date",
     "done": "Done",
     "open": "open",
     "divergence_by_work_package_baseline_vs_current_p": "Divergence by Work Package — Baseline vs Current Plan vs actual",
     "work_package": "Work Package",
     "baseline_finish": "Baseline finish",
-    "current_finish": "Current finish",
+    "actual_finish": "Actual finish",
+    "no_baseline_yet": "No Baseline yet — EVM, SPI, CPI and the forecast appear once a Baseline is recorded. Coverage and actual hours do not need one. The Unplanned Work split is shown for information and is not judged until a Baseline is recorded, because until then every mapped hour counts as non-baselined.",
     "baseline_h": "Baseline h",
     "ev_h": "EV h",
     "ac_h": "AC h",
@@ -400,12 +384,10 @@
   },
   "shell": {
     "the_tracker_snapshot_this_view_is_pinned_to": "The Tracker Snapshot this view is pinned to",
-    "client_view_preview": "Client View preview",
     "project_surfaces": "Project surfaces",
     "momo_keikaku": "momo-keikaku",
     "project": "Project",
     "client": "Client",
-    "client_view": "Client View",
     "signOut": {
       "button": "Sign out"
     },
@@ -413,9 +395,6 @@
     "snapshotPinTitle": "The Tracker Snapshot this view is pinned to",
     "snapshotLabel": "Snapshot {label} · {age}",
     "projectSection": "Project",
-    "clientSection": "Client",
-    "clientView": "Client View",
-    "clientViewTitle": "Client View preview",
     "collapse": "« Collapse",
     "expand": "»",
     "surfaces": {
@@ -459,12 +438,5 @@
     "em_dash": "—",
     "unit_hours": "h",
     "percent_symbol": "%"
-  },
-  "gantt": {
-    "milestone_title": "Milestone {date}",
-    "milestone_slipped": "Milestone {date} — slipped",
-    "baseline_bar_title": "Baseline {start} → {finish}",
-    "current_bar_title": "Current Plan {start} → {finish}",
-    "earned_bar_title": "Earned {percent}%"
   }
 }

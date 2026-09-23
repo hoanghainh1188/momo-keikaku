@@ -126,6 +126,13 @@ export function percentComplete(
   return { pct, basis, lowEvidence };
 }
 
+/**
+ * FR-30: "the PM marked the WP complete" is an actual finish on a WP that is not a milestone. A
+ * milestone's actual finish is its done date, which lifts no cap.
+ */
+export const isMarkedComplete = (wp: WorkPackage): boolean =>
+  !wp.isMilestone && wp.actualFinish !== null;
+
 export function computeEvm(input: EvmInput): EvmResult {
   const wpById = new Map(input.wps.map((w) => [w.id, w]));
   const perWp: WpMeasure[] = [];
@@ -144,7 +151,7 @@ export function computeEvm(input: EvmInput): EvmResult {
             basis: 'loe' as const,
             lowEvidence: false,
           }
-        : percentComplete(tickets, b.baselineMh, wp.completedAt !== null);
+        : percentComplete(tickets, b.baselineMh, isMarkedComplete(wp));
     perWp.push({
       wpId: b.wpId,
       wbsCode: wp.wbsCode,

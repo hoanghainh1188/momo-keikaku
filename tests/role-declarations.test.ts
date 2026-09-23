@@ -78,7 +78,6 @@ const WELL_FORMED_INPUT: Readonly<Record<string, unknown>> = {
   getProjectHeader: { projectId: UNREACHED_PROJECT },
   getProjectReview: { projectId: UNREACHED_PROJECT },
   getProjectMapping: { projectId: UNREACHED_PROJECT },
-  getClientView: { projectId: UNREACHED_PROJECT },
   mapTickets: { projectId: UNREACHED_PROJECT, wpId: 'wp-1', ticketIds: ['tkt-1'] },
   planTicketsAsWorkPackage: { projectId: UNREACHED_PROJECT, name: 'New work', ticketIds: ['tkt-1'] },
   explainTickets: { projectId: UNREACHED_PROJECT, note: 'Client asked for it.', ticketIds: ['tkt-1'] },
@@ -183,13 +182,6 @@ describe('every use case declares its roles', () => {
           ],
         },
         "explainTickets": {
-          "projectScoped": true,
-          "roles": [
-            "tenant_admin",
-            "pm",
-          ],
-        },
-        "getClientView": {
           "projectScoped": true,
           "roles": [
             "tenant_admin",

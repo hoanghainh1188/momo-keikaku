@@ -94,20 +94,6 @@ export function Shell({
             </Link>
           );
         })}
-        <div className="sect" style={{ marginTop: 24 }}>
-          {t('shell.clientSection')}
-        </div>
-        <Link
-          href={`/c/${projectId}`}
-          className="navitem"
-          aria-current={pathname?.startsWith(`/c/${projectId}`) ? 'page' : undefined}
-          title={t('shell.clientViewTitle')}
-        >
-          <span className="glyph" aria-hidden>
-            ◻
-          </span>
-          <span className="navlabel">{t('shell.clientView')}</span>
-        </Link>
         <button
           type="button"
           className="collapse-btn"

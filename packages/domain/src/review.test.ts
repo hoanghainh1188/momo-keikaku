@@ -17,11 +17,9 @@ const wp: WorkPackage = {
   isLeaf: true,
   isMilestone: false,
   isCatchAll: false,
-  start: '2026-06-01',
-  finish: '2026-12-01',
   plannedMh: hoursToMh(200),
-  completedAt: null,
-  milestoneDoneAt: null,
+  actualStart: null,
+  actualFinish: null,
   assignedResourceIds: [],
 };
 
@@ -106,5 +104,104 @@ describe('computeReview with no Unplanned Work', () => {
     expect(r.unplanned.cumulative.unplannedMh).toBe(0n);
     expect(r.unplanned.components).toHaveLength(3);
     expect(r.unplanned.components.map((c) => c.share)).toEqual([null, null, null]);
+  });
+});
+
+describe('computeReview with no Baseline (story 2.2, decision Q1-A)', () => {
+  // What the seeded demo looks like until Epic 4: no Baseline version, and every ledger entry
+  // ingested with no Baseline active.
+  const noBaseline: ReviewInput = {
+    ...input,
+    baselineVersions: [],
+    activeBaselineSeq: null,
+    ledger: input.ledger.map((e) => ({ ...e, activeBaselineVersionSeq: null })),
+  };
+
+  it('does not throw, and leaves every Baseline-derived figure null', () => {
+    const r = computeReview(noBaseline);
+    expect(r.evm).toBeNull();
+    expect(r.money).toBeNull();
+    expect(r.forecast).toBeNull();
+    expect(r.milestones).toBeNull();
+    expect(r.divergence).toBeNull();
+    expect(r.behindPlan).toBe(false);
+  });
+
+  it('still computes Coverage, AC and the Unplanned split — every mapped hour is non-baselined', () => {
+    const r = computeReview(noBaseline);
+    expect(r.attribution.cumulative.totalMh).toBe(hoursToMh(30));
+    expect(r.attribution.cumulative.mappedBaselinedMh).toBe(0n);
+    expect(r.attribution.cumulative.mappedNonBaselinedMh).toBe(hoursToMh(30));
+    expect(r.unplanned.cumulative.unplannedMh).toBe(hoursToMh(30));
+    expect(r.unplanned.components.find((c) => c.key === 'non-baselined')?.mh).toBe(hoursToMh(30));
+    expect(r.coverage.unmappedTickets).toBe(0);
+    expect(r.coverage.mappedTicketShare).toEqual({ num: 1n, den: 1n });
+  });
+
+  it('marks all three indicators unavailable, so Overall is never red for want of a Baseline', () => {
+    const r = computeReview(noBaseline);
+    expect(r.health.indicators.map((i) => [i.key, i.colour])).toEqual([
+      ['schedule', 'unavailable'],
+      ['effort_cost', 'unavailable'],
+      ['unplanned', 'unavailable'],
+    ]);
+    expect(r.health.overall).toBe('unavailable');
+    expect(r.health.indicators.map((i) => i.rule)).toEqual([
+      'Unavailable — no Baseline yet',
+      'Unavailable — no Baseline yet',
+      'Unavailable — no Baseline yet',
+    ]);
+  });
+
+  it('still throws for a Baseline seq that names no version — an inconsistent input, not a missing Baseline', () => {
+    expect(() => computeReview({ ...noBaseline, activeBaselineSeq: 7 })).toThrow(
+      'no baseline version with seq 7',
+    );
+  });
+});
+
+describe('computeReview divergence carries the WP\'s actual dates', () => {
+  it('a WP with actual dates carries them in its divergence row', () => {
+    const r = computeReview({
+      ...input,
+      wps: [{ ...wp, actualStart: '2026-06-02', actualFinish: '2026-09-10' }],
+    });
+    expect(r.divergence).toEqual([
+      expect.objectContaining({ wpId: 'WP-B', actualStart: '2026-06-02', actualFinish: '2026-09-10' }),
+    ]);
+  });
+});
+
+describe('computeReview milestones read the head actual finish', () => {
+  const milestone: WorkPackage = {
+    ...wp,
+    id: 'WP-M',
+    wbsCode: '2',
+    name: 'Sign-off',
+    isMilestone: true,
+    plannedMh: 0n,
+  };
+  const withMilestone = (actualFinish: string | null): ReviewInput => ({
+    ...input,
+    wps: [wp, { ...milestone, actualFinish }],
+    baselineVersions: [
+      {
+        ...input.baselineVersions[0]!,
+        wps: [
+          ...input.baselineVersions[0]!.wps,
+          { wpId: 'WP-M', start: '2026-09-01', finish: '2026-09-01', baselineMh: 0n, isMilestone: true },
+        ],
+      },
+    ],
+  });
+
+  it('a milestone with an actual finish is done, not slipped', () => {
+    const [row] = computeReview(withMilestone('2026-09-03')).milestones!;
+    expect(row).toMatchObject({ name: 'Sign-off', doneDate: '2026-09-03', slipped: false });
+  });
+
+  it('a milestone past its Baseline date with no actual finish has slipped', () => {
+    const [row] = computeReview(withMilestone(null)).milestones!;
+    expect(row).toMatchObject({ doneDate: null, slipped: true });
   });
 });

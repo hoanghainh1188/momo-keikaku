@@ -1,4 +1,4 @@
-import { divRoundHalfEven, reduce, ZERO, type Jpy, type Metric, type Mh, type Ratio } from '../units';
+import { divRoundHalfEven, reduce, type Jpy, type Metric, type Mh, type Ratio } from '../units';
 
 /**
  * `@momo/domain/present` is the ONE domain module `apps/web` may import (AD-1, decided
@@ -75,22 +75,13 @@ export function thresholdText(r: Ratio): string {
 }
 
 /**
- * A ratio as a JS number, for LAYOUT GEOMETRY ONLY (a bar's width, a Gantt fill). It is the
+ * A ratio as a JS number, for LAYOUT GEOMETRY ONLY (a bar's width). It is the
  * one place a ratio becomes a float, and no figure a person reads is ever derived from it.
  */
 export const geometryFraction = (r: Ratio): number => Number(r.num) / Number(r.den);
 
 /** A ratio as a CSS percentage length, for layout geometry only (see `geometryFraction`). */
 export const cssPercent = (r: Ratio): string => `${geometryFraction(r) * 100}%`;
-
-/**
- * Earned progress for a Gantt bar: its fill (geometry only) and its whole-percentage label. A
- * missing ratio (a Work Package with no measure — a parent, a milestone) presents as zero.
- */
-export function earnedProgress(r: Ratio | undefined): { fraction: number; label: string } {
-  const exact = r ?? ZERO;
-  return { fraction: geometryFraction(exact), label: wholePercent(exact) };
-}
 
 export interface PresentedMetric {
   text: string;

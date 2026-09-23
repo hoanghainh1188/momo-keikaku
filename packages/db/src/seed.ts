@@ -37,7 +37,7 @@ import { encode } from '@momo/domain';
 import { sql } from 'drizzle-orm';
 import type { Db } from './client';
 import { actorOf, DEMO_USERS } from './demo-identities';
-import { buildDemoState, mhFromJson, type DemoState } from './fixtures';
+import { buildDemoState, type DemoState } from './fixtures';
 import * as s from './schema';
 import { tenantMembership } from './schema-membership';
 import { MAINTENANCE_SETTING } from './table-classes';
@@ -45,8 +45,9 @@ import { withTenant, type Tx } from './with-tenant';
 
 /**
  * Every table the reseed empties, children first. It must name every table in `TABLE_REGISTRY`:
- * there are no foreign keys, so `CASCADE` reaches nothing and a table left off keeps its rows
- * across a reseed. `registry.test.ts` holds it to the registry.
+ * `CASCADE` reaches a table only through a foreign key that references it, so a table left off
+ * with nothing pointing at it keeps its rows across a reseed. `registry.test.ts` holds it to the
+ * registry.
  */
 export const TRUNCATE_ORDER: readonly string[] = [
   'audit_log',
@@ -59,6 +60,11 @@ export const TRUNCATE_ORDER: readonly string[] = [
   'connector',
   'baseline_wp',
   'baseline_version',
+  'wp_schedule',
+  'schedule_run',
+  'holiday_calendar_version',
+  'wp_status_event',
+  'wp_dependency',
   'work_package',
   'rate_entry',
   'project_default_rate_entry',
@@ -110,7 +116,7 @@ export interface TenantRowWriteOptions {
    * the two tables `table-classes.ts` marks `clientAllocatedSeq`. Their `seq` is a global
    * primary key with no identity default, so two Tenants seeded from the same fixture both
    * start at 1 and collide. The demo seed passes `0`. Also added to fixture-relative identity
-   * `seq` values (`baseline_version`, Rates, …) so a reseed no longer depends on
+   * `seq` values (Rates, snapshots, audit) so a reseed no longer depends on
    * `RESTART IDENTITY` (story 1.8).
    */
   readonly seqOffset: number;
@@ -122,8 +128,8 @@ export interface TenantRowWriteOptions {
    */
   readonly passwordHash?: string;
   /**
-   * When set, stamps `demo_anchor`, Baseline `recordedAt`, Rate `effectiveFrom`, member
-   * timestamps and the seed audit `at` from this Clock (AD-15). Structural — `packages/db`
+   * When set, stamps `demo_anchor`, member timestamps, the seed's `wp_status_event.at` and the
+   * seed audit `at` from this Clock (AD-15). Structural — `packages/db`
    * never imports `@momo/adapters`. Probes omit it and keep the fixture anchor.
    */
   readonly clock?: { readonly now: () => Date };
@@ -152,14 +158,10 @@ export function fixtureRelativeSeq(fixtureValue: number, offset: number): number
 
 export interface TenantRowWriteResult {
   readonly tenantId: string;
-  /**
-   * The `baseline_version.seq` Postgres actually allocated, which is what every ledger row
-   * was written against. Not the fixture's `1`: see `writeTenantRows`.
-   */
-  readonly activeBaselineSeq: number;
   readonly counts: {
     readonly wps: number;
-    readonly baselineWps: number;
+    /** `wp_status_event` rows: one per WP the fixture records an actual finish for. */
+    readonly statusEvents: number;
     readonly snapshots: number;
     readonly ledgerEntries: number;
     readonly mappingEvents: number;
@@ -173,11 +175,19 @@ export interface TenantRowWriteResult {
  * only caller that owns the whole database. This function assumes `tx` is already inside
  * `withTenant(state.fixture.tenant.id)`.
  *
- * SEQUENCE VALUES ARE FIXTURE-RELATIVE (story 1.8). Identity columns
- * (`baseline_version`, Rates, snapshots, audit) are written with `OVERRIDING SYSTEM VALUE`
- * at `fixtureSeq + seqOffset`, so a reseed after leftover probe rows does not depend on
- * `RESTART IDENTITY`. A `fixtureSeq → allocatedSeq` map translates every ledger
- * `activeBaselineVersionSeq` (multi-baseline ready).
+ * SEQUENCE VALUES ARE FIXTURE-RELATIVE (story 1.8). Identity columns (Rates, snapshots,
+ * audit) are written with `OVERRIDING SYSTEM VALUE` at `fixtureSeq + seqOffset`, so a reseed
+ * after leftover probe rows does not depend on `RESTART IDENTITY`.
+ *
+ * NO BASELINE (story 2.1, founder decision 2-A). A Baseline pins a `schedule_run` by foreign key
+ * (AD-26), and there is no engine yet to produce one, so the writer records none — and every
+ * ledger entry's `active_baseline_version_seq` is null, which is what AD-7 writes when no Baseline
+ * was committed before the snapshot. The demo has no Baseline and no EVM until Epic 4. The
+ * `DemoState`'s Baseline versions are read by nothing here.
+ *
+ * THE FOREIGN KEYS DECIDE THE ORDER (story 2.1): every row is written after the rows it
+ * references — Project before its Work Packages, a Work Package before the Mapping Rules and
+ * events that name it, a Tracker Snapshot before its observations and ledger entries.
  */
 export async function writeTenantRows(
   tx: Tx,
@@ -269,6 +279,21 @@ export async function writeTenantRows(
       yenPerHour: f.project.defaultRateYenPerHour,
     });
 
+  // `is_leaf` is generated from `child_count` (AD-25), so the writer states the count and the
+  // database derives the flag. The fixture's own `isLeaf` must agree with its parentage; a
+  // disagreement would silently turn a summary into a leaf, so it is refused instead.
+  const childCounts = childCountsOf(state.wps);
+  const disagreeing = state.wps.filter((w) => w.isLeaf !== ((childCounts.get(w.id) ?? 0) === 0));
+  if (disagreeing.length > 0) {
+    throw new Error(
+      `writeTenantRows: these Work Packages' isLeaf disagrees with their children: ` +
+        disagreeing.map((w) => w.id).join(', '),
+    );
+  }
+  // Scheduling inputs (duration, constraint) are left at their defaults — null and `asap` — and
+  // the Project's three schedule settings null: no Work Package is schedulable until Epic 2's
+  // stories write them through `app/schedule`'s fence. The fixture's planned `start`/`finish`
+  // have no column any more (AD-30) and are not written anywhere.
   await tx.insert(s.workPackage).values(
     state.wps.map((w) => ({
       id: w.id,
@@ -277,78 +302,37 @@ export async function writeTenantRows(
       wbsCode: w.wbsCode,
       name: w.name,
       parentId: w.parentId,
-      isLeaf: w.isLeaf,
+      childCount: childCounts.get(w.id) ?? 0,
       isMilestone: w.isMilestone,
       isCatchAll: w.isCatchAll,
-      start: w.start,
-      finish: w.finish,
       plannedMh: w.plannedMh,
-      completedAt: w.completedAt ? new Date(w.completedAt) : null,
-      milestoneDoneAt: w.milestoneDoneAt,
       assignedResourceIds: w.assignedResourceIds,
       deletedAt: null,
     })),
   );
 
-  // Multi-baseline map: insert every version the state carries, in seq order, with
-  // fixture-relative identity values; translate ledger references through the map.
-  const baselineSeqMap = new Map<number, number>();
-  const versions = [...state.baselineVersions].sort((a, b) => a.seq - b.seq);
-  if (versions.length === 0) {
-    throw new Error('writeTenantRows requires at least one Baseline version in state');
-  }
-  for (const version of versions) {
-    const [bv] = await tx
-      .insert(s.baselineVersion)
-      .overridingSystemValue()
-      .values({
-        seq: fixtureRelativeSeq(version.seq, options.seqOffset),
-        id: version.id,
-        tenantId,
-        projectId: f.project.id,
-        reason: version.reason,
-        recordedAt: options.clock ? stamp : new Date(version.recordedAt),
-        actor: actorOf(own(DEMO_USERS.linh.id)),
-      })
-      .returning({ seq: s.baselineVersion.seq });
-    // Allocated value must equal the fixture-relative stamp (OVERRIDING SYSTEM VALUE).
-    baselineSeqMap.set(version.seq, Number(bv!.seq));
-  }
-  const activeBaselineSeq = baselineSeqMap.get(
-    Math.max(...versions.map((v) => v.seq)),
-  )!;
-
-  const referenced = [
-    ...new Set(
-      state.ledger
-        .map((e) => e.activeBaselineVersionSeq)
-        .filter((seq): seq is number => seq !== null),
-    ),
-  ].sort((a, b) => a - b);
-  for (const fixtureBaselineSeq of referenced) {
-    if (!baselineSeqMap.has(fixtureBaselineSeq)) {
-      throw new Error(
-        `ledger references Baseline fixture seq ${fixtureBaselineSeq}, which was not inserted. ` +
-          `Known fixture seqs: ${[...baselineSeqMap.keys()].join(', ') || '(none)'}.`,
-      );
-    }
-  }
-
-  const activeFixtureSeq = Math.max(...versions.map((v) => v.seq));
-  const baselineWps = versions.find((v) => v.seq === activeFixtureSeq)!.wps;
-
-  await tx.insert(s.baselineWp).values(
-    baselineWps.map((b, i) => ({
-      id: own(projectOnly ? `blwp-${f.project.id}-${i}` : `blwp-${i}`),
-      tenantId,
-      baselineVersionSeq: activeBaselineSeq,
-      wpId: b.wpId,
-      start: b.start,
-      finish: b.finish,
-      baselineMh: typeof b.baselineMh === 'bigint' ? b.baselineMh : mhFromJson(b.baselineMh),
-      isMilestone: b.isMilestone,
-    })),
+  // Actual dates live in `wp_status_event` alone (AD-25). A fixture WP with any actual date
+  // becomes one event restating its whole actual state `(actualStart, actualFinish)`; a WP with
+  // neither gets no event, so its head reads as no actual dates at all.
+  const statusEvents = state.wps.flatMap((w) =>
+    w.actualStart === null && w.actualFinish === null
+      ? []
+      : [
+          {
+            tenantId,
+            projectId: f.project.id,
+            wpId: w.id,
+            actualStart: w.actualStart,
+            actualFinish: w.actualFinish,
+            source: 'seed',
+            actor: actorOf(own(DEMO_USERS.linh.id)),
+            at: stamp,
+          },
+        ],
   );
+  if (statusEvents.length > 0) {
+    await tx.insert(s.wpStatusEvent).values(statusEvents);
+  }
 
   const connectorId = own(projectOnly ? `con-fixture-${f.project.id}` : 'con-fixture-ec2');
   await tx.insert(s.connector).values({
@@ -452,10 +436,8 @@ export async function writeTenantRows(
           windowStart: e.windowStart ? new Date(e.windowStart) : null,
           windowEnd: new Date(e.windowEnd),
           assigneeAccountId: e.assigneeAccountId,
-          activeBaselineVersionSeq:
-            e.activeBaselineVersionSeq === null
-              ? null
-              : baselineSeqMap.get(e.activeBaselineVersionSeq)!,
+          // No Baseline is written (decision 2-A), so none was active for any entry.
+          activeBaselineVersionSeq: null,
           snapshotId: snapshotOfEntry(e.windowEnd),
         })),
       ),
@@ -507,15 +489,23 @@ export async function writeTenantRows(
 
   return {
     tenantId,
-    activeBaselineSeq,
     counts: {
       wps: state.wps.length,
-      baselineWps: baselineWps.length,
+      statusEvents: statusEvents.length,
       snapshots: state.snapshots.length,
       ledgerEntries: state.ledger.length,
       mappingEvents: state.mappingEvents.length,
     },
   };
+}
+
+/** How many Work Packages name each Work Package as their parent (`work_package.child_count`). */
+function childCountsOf(wps: readonly { readonly parentId: string | null }[]): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const w of wps) {
+    if (w.parentId !== null) counts.set(w.parentId, (counts.get(w.parentId) ?? 0) + 1);
+  }
+  return counts;
 }
 
 /**
@@ -579,7 +569,7 @@ export interface SeedOptions {
   /** The scrypt hash of `SEED_DEMO_PASSWORD`, computed by `scripts/seed.ts` via `@momo/db-auth`. */
   readonly demoPasswordHash: string;
   /**
-   * Product Clock (AD-15). Stamps Baseline / Rates / `demo_anchor` / seed audit. Injected by
+   * Product Clock (AD-15). Stamps `demo_anchor` / member and event times / seed audit. Injected by
    * `scripts/seed.ts` — `packages/db` never imports `@momo/adapters`.
    */
   readonly clock: { readonly now: () => Date };
@@ -621,7 +611,7 @@ async function seedInTenant(tx: Tx, state: DemoState, options: SeedOptions): Pro
   });
 
   console.log(
-    `seeded (demo): ${written.counts.wps} WPs, ${written.counts.baselineWps} baseline WPs, ` +
+    `seeded (demo): ${written.counts.wps} WPs, ${written.counts.statusEvents} actual-date events, ` +
       `${written.counts.snapshots} snapshots, ${written.counts.ledgerEntries} ledger entries, ` +
       `${written.counts.mappingEvents} mapping events`,
   );
@@ -708,7 +698,6 @@ async function truncateForReseed(tx: Tx): Promise<void> {
 const IDENTITY_SEQ_TABLES = [
   'rate_entry',
   'project_default_rate_entry',
-  'baseline_version',
   'tracker_snapshot',
   'disposition_event',
   'audit_log',

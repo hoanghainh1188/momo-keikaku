@@ -33,9 +33,9 @@ describe('the session gate', () => {
     expect(seen[0]?.get('cookie')).toBe('momo.session_token=x');
   });
 
-  it('redirects to /sign-in when there is no session — /c/ included — and still forwards the cookie deletion', async () => {
+  it('redirects to /sign-in when there is no session and still forwards the cookie deletion', async () => {
     const cleared = 'momo.session_token=; Max-Age=0; Path=/';
-    for (const path of ['/', '/p/prj-ec2/plan', '/c/prj-ec2']) {
+    for (const path of ['/', '/p/prj-ec2/plan', '/admin/audit']) {
       const { gate } = gateAnswering({ signedIn: false, setCookies: [cleared] });
       const response = await gate(request(path));
       expect(response.status, path).toBe(307);
@@ -100,7 +100,7 @@ describe('the middleware wiring', () => {
     const table: readonly (readonly [string, boolean])[] = [
       ['/', false],
       ['/p/x/review', false],
-      ['/c/x', false],
+      ['/admin/x', false],
       ['/sign-inx', false],
       ['/sign-in/x', false],
       ['/no-access/x', false],

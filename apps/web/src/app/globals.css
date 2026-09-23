@@ -26,7 +26,6 @@
   /* plan semantics */
   --baseline: #6e7580;
   --current-plan: #1f3a5f;
-  --earned: #17181b;
 
   /* Unplanned Work 藤 — information, never alarm */
   --unplanned: #6b4e9b;
@@ -657,45 +656,6 @@ textarea {
   width: 100%;
 }
 
-/* ---------------------------------------------------------------- gantt */
-.gantt-track {
-  position: relative;
-  height: 18px;
-  background: var(--sheet);
-  min-width: 160px;
-}
-.gantt-baseline {
-  position: absolute;
-  top: 1px;
-  height: 6px;
-  border: 1px solid var(--baseline);
-  background: transparent;
-}
-.gantt-current {
-  position: absolute;
-  top: 9px;
-  height: 8px;
-  background: var(--current-plan);
-}
-.gantt-earned {
-  position: absolute;
-  top: 9px;
-  height: 8px;
-  background: var(--earned);
-}
-.gantt-milestone {
-  position: absolute;
-  top: 3px;
-  width: 9px;
-  height: 9px;
-  background: var(--ink);
-  transform: rotate(45deg);
-}
-.gantt-milestone.slipped {
-  background: transparent;
-  border: 1.5px solid var(--health-red);
-}
-
 /* ---------------------------------------------------------------- misc */
 .banner {
   border: 1px solid var(--rule-strong);
@@ -715,21 +675,6 @@ textarea {
   gap: 8px;
   font-size: 12px;
   color: var(--ink-muted);
-}
-.preview-band {
-  background: var(--primary);
-  color: var(--on-primary);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  padding: 5px 12px;
-}
-.client-sheet {
-  max-width: 960px;
-  margin: 0 auto;
-  background: var(--sheet);
-  border: 1px solid var(--rule);
 }
 details > summary {
   cursor: pointer;

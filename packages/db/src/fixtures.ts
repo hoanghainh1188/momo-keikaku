@@ -200,11 +200,9 @@ export function buildDemoState(anchorIso?: string): DemoState {
     isLeaf: w.isLeaf,
     isMilestone: w.isMilestone,
     isCatchAll: w.isCatchAll,
-    start: w.start,
-    finish: w.finish,
     plannedMh: mhFromJson(w.plannedMh),
-    completedAt: w.completedAt,
-    milestoneDoneAt: w.milestoneDoneAt,
+    actualStart: w.actualStart,
+    actualFinish: w.actualFinish,
     assignedResourceIds: w.assignedResourceIds,
   }));
 

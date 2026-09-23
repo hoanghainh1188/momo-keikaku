@@ -16,7 +16,6 @@ function prefixFor(rel) {
   if (rel.startsWith('app/no-access/')) return 'auth.noAccess';
   if (rel.startsWith('app/admin/audit/')) return 'admin.audit';
   if (rel.startsWith('app/admin/')) return 'admin';
-  if (rel.startsWith('app/c/')) return 'clientView';
   if (rel.startsWith('app/p/') && rel.includes('/review/')) return 'review';
   if (rel.startsWith('app/p/') && rel.includes('/plan/')) return 'plan';
   if (rel.startsWith('app/p/') && rel.includes('/mapping/')) return 'mapping';
@@ -31,7 +30,6 @@ function prefixFor(rel) {
   if (rel.startsWith('components/disposition-rail')) return 'review.disposition';
   if (rel.startsWith('components/map-ticket-form')) return 'mapping.form';
   if (rel.startsWith('components/scope-ledger-bar')) return 'mapping.ledger';
-  if (rel.startsWith('components/gantt')) return 'gantt';
   return 'common';
 }
 

@@ -20,7 +20,7 @@ import { pgTable, primaryKey, text } from 'drizzle-orm/pg-core';
  * writes a query `FROM` or `JOIN` it. The application role holds SELECT, UPDATE and DELETE — no
  * INSERT: adding a user to a Tenant is invitation work, never a request's side effect.
  *
- * No foreign keys, per the demo deviation in `schema.ts`.
+ * No foreign keys: it is a `global` bridge, outside AD-3's tenant-owned FK set (story 2.1).
  */
 export const tenantMembership = pgTable(
   'tenant_membership',

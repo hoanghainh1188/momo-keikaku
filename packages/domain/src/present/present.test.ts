@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { ratio, unavailable, ZERO } from '../units';
+import { ratio, unavailable } from '../units';
 import {
   cssPercent,
-  earnedProgress,
   hours,
   hoursSigned,
   present,
@@ -70,17 +69,6 @@ describe('present (AD-4: the only rounding site, from the exact value, half-even
   });
 });
 
-describe('earnedProgress', () => {
-  it('presents a missing ratio exactly as the Plan page rendered `?? ZERO` before', () => {
-    expect(earnedProgress(undefined)).toEqual({ fraction: 0, label: '0' });
-    expect(earnedProgress(undefined)).toEqual(earnedProgress(ZERO));
-  });
-
-  it('presents a ratio as its geometry fraction and whole-percentage label', () => {
-    expect(earnedProgress(ratio(3n, 8n))).toEqual({ fraction: 0.375, label: '38' });
-  });
-});
-
 describe('@momo/domain/present, the one domain module apps/web may import (AD-1)', () => {
   it('exports exactly these runtime values — a new one is a deliberate edit, never a computing helper', async () => {
     // `.dependency-cruiser.cjs` (web-to-domain-present-only) allows pages this file and nothing
@@ -89,7 +77,6 @@ describe('@momo/domain/present, the one domain module apps/web may import (AD-1)
     // absent on purpose; types are erased and do not appear.
     expect(Object.keys(await import('./index')).sort()).toEqual([
       'cssPercent',
-      'earnedProgress',
       'geometryFraction',
       'hours',
       'hoursSigned',

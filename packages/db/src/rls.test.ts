@@ -123,7 +123,7 @@ async function refusalCode(work: Promise<unknown>): Promise<string | undefined> 
  *      (SQLSTATE MOMO1) until `app.maintenance` is set — and then succeeds. Two distinct
  *      SQLSTATEs, so neither half can be mistaken for the other.
  *
- * Requires a database prepared by `drizzle-kit push`, `pnpm pgboss:migrate` and
+ * Requires a database prepared by `pnpm db:migrate`, `pnpm pgboss:migrate` and
  * `pnpm db:policies`, and seeded. Set REQUIRE_DB=1 (CI does) to turn an unreachable
  * database into a failure instead of a skip.
  */
@@ -147,6 +147,8 @@ const DEPARTMENT_B = 'dep-rls-probe';
  * predicate on every table; these two make at least one of the money tables observable too.
  */
 const CONNECTOR_B = 'con-rls-probe';
+const PROJECT_B = 'prj-rls-probe';
+const SNAPSHOT_B = 'snap-rls-probe';
 const LEDGER_B_SEQ = 9_000_001;
 
 if (REQUIRE_DB && !(OWNER_DATABASE_URL && APP_DATABASE_URL)) {
@@ -215,18 +217,34 @@ beforeAll(async () => {
       TENANT_B,
       'Probe department',
     ]);
+    // Story 2.1's composite foreign keys: the Connector needs its Project, and the ledger entry
+    // its Connector and its Tracker Snapshot — each in tenant B.
+    await client.query(
+      `INSERT INTO project (id, tenant_id, department_id, name, client_name, contract_type,
+         tz_offset_minutes, teirei_weekday, default_rate_jpy, eac_method, calendar_jp,
+         calendar_vn, demo_anchor)
+       VALUES ($1, $2, $3, 'Probe project', 'Probe client', '請負', 540, 1, 0, 'typical',
+         true, false, now())`,
+      [PROJECT_B, TENANT_B, DEPARTMENT_B],
+    );
     await client.query(
       `INSERT INTO connector (id, tenant_id, project_id, adapter, scope, space_label)
-       VALUES ($1, $2, 'prj-rls-probe', 'fixture', 'probe', 'probe')`,
-      [CONNECTOR_B, TENANT_B],
+       VALUES ($1, $2, $3, 'fixture', 'probe', 'probe')`,
+      [CONNECTOR_B, TENANT_B, PROJECT_B],
+    );
+    await client.query(
+      `INSERT INTO tracker_snapshot (id, tenant_id, connector_id, observed_at, measurement_basis,
+         ticket_count)
+       VALUES ($1, $2, $3, now(), 'hours', 1)`,
+      [SNAPSHOT_B, TENANT_B, CONNECTOR_B],
     );
     // Money. `deltaMh` is what AC is summed from, so a policy that leaked this table would
     // show one Tenant another's cost.
     await client.query(
       `INSERT INTO actuals_ledger_entry
          (seq, id, tenant_id, connector_id, ticket_id, kind, delta_mh, window_end, snapshot_id)
-       VALUES ($1, 'led-rls-probe', $2, $3, 'TKT-PROBE', 'delta', 4242, now(), 'snap-rls-probe')`,
-      [LEDGER_B_SEQ, TENANT_B, CONNECTOR_B],
+       VALUES ($1, 'led-rls-probe', $2, $3, 'TKT-PROBE', 'delta', 4242, now(), $4)`,
+      [LEDGER_B_SEQ, TENANT_B, CONNECTOR_B, SNAPSHOT_B],
     );
   });
 }, 30_000);
@@ -242,7 +260,9 @@ async function removeTenantB(client: pg.Client): Promise<void> {
   await client.query(`SELECT set_config('app.maintenance', 'on', false)`);
   try {
     await client.query('DELETE FROM actuals_ledger_entry WHERE tenant_id = $1', [TENANT_B]);
+    await client.query('DELETE FROM tracker_snapshot WHERE tenant_id = $1', [TENANT_B]);
     await client.query('DELETE FROM connector WHERE tenant_id = $1', [TENANT_B]);
+    await client.query('DELETE FROM project WHERE tenant_id = $1', [TENANT_B]);
     await client.query('DELETE FROM department WHERE tenant_id = $1', [TENANT_B]);
     await client.query('DELETE FROM tenant WHERE id = $1', [TENANT_B]);
   } finally {
@@ -376,7 +396,7 @@ describe.skipIf(!reachable)('FORCE row-level security and the policy are on ever
       withoutForce,
       `these tenant-owned tables lack ENABLE or FORCE ROW LEVEL SECURITY: ${withoutForce.join(', ')}. ` +
         'Without FORCE the policy is skipped for the table owner, which is who the seed and ' +
-        '`drizzle-kit push` connect as. Run `pnpm db:policies`.',
+        '`pnpm db:migrate` connect as. Run `pnpm db:policies`.',
     ).toEqual([]);
     expect(
       withoutPolicy,
@@ -396,7 +416,7 @@ describe.skipIf(!reachable)('FORCE row-level security and the policy are on ever
     const identity = TABLE_REGISTRY.filter((entry) => entry.class === 'global').map((e) => e.table);
     for (const table of identity) {
       const flag = flags.find((row) => row.relname === table);
-      expect(flag, `${table} does not exist — run drizzle-kit push`).toBeDefined();
+      expect(flag, `${table} does not exist — run pnpm db:migrate`).toBeDefined();
       expect(flag!.relrowsecurity, `${table} has row-level security switched on`).toBe(false);
       expect(
         policies.filter((row) => row.tablename === table).map((row) => row.policyname),

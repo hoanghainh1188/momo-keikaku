@@ -53,7 +53,8 @@ export interface ProjectBundle {
   input: ReviewInput;
   rules: (MappingRule & { currentlyMapped: number })[];
   wps: WorkPackage[];
-  baseline: BaselineVersion;
+  /** The active Baseline — null while the Project has none (story 2.1, decision 2-A). */
+  baseline: BaselineVersion | null;
   resources: Resource[];
 }
 
@@ -86,6 +87,19 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
     .where(eq(s.workPackage.projectId, projectId))
     .orderBy(asc(s.workPackage.wbsCode));
 
+  // Actual dates have one home, `wp_status_event` (AD-25): each row restates a WP's whole actual
+  // state, so the head — the highest `seq` per WP — is the state. Read ascending and let the last
+  // row per WP win. A WP carries no planned date: nothing computes one until the scheduler (2.5,
+  // 2.9), and every planned date the domain reads today is the active Baseline's.
+  const statusRows = await tx
+    .select()
+    .from(s.wpStatusEvent)
+    .where(eq(s.wpStatusEvent.projectId, projectId))
+    .orderBy(asc(s.wpStatusEvent.seq));
+  const actualsOf = new Map(
+    statusRows.map((e) => [e.wpId, { actualStart: e.actualStart, actualFinish: e.actualFinish }]),
+  );
+
   const wps: WorkPackage[] = wpRows.map((w) => ({
     id: w.id,
     wbsCode: w.wbsCode,
@@ -94,11 +108,9 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
     isLeaf: w.isLeaf,
     isMilestone: w.isMilestone,
     isCatchAll: w.isCatchAll,
-    start: w.start,
-    finish: w.finish,
     plannedMh: w.plannedMh,
-    completedAt: w.completedAt ? w.completedAt.toISOString() : null,
-    milestoneDoneAt: w.milestoneDoneAt,
+    actualStart: actualsOf.get(w.id)?.actualStart ?? null,
+    actualFinish: actualsOf.get(w.id)?.actualFinish ?? null,
     assignedResourceIds: w.assignedResourceIds,
   }));
 
@@ -124,7 +136,13 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
         isMilestone: x.isMilestone,
       })),
   }));
-  const activeBaselineSeq = Math.max(...baselineVersions.map((b) => b.seq));
+  // The active Baseline is the latest committed version BY SEQUENCE (AD-7); null when there is
+  // none, which is the seeded demo's state until Epic 4 (decision 2-A).
+  const activeBaseline = baselineVersions.reduce<BaselineVersion | null>(
+    (latest, b) => (latest === null || b.seq > latest.seq ? b : latest),
+    null,
+  );
+  const activeBaselineSeq = activeBaseline?.seq ?? null;
 
   const resRows = await tx.select().from(s.resource).where(eq(s.resource.tenantId, p.tenantId));
   const rateRows = await tx.select().from(s.rateEntry).orderBy(asc(s.rateEntry.seq));
@@ -283,13 +301,13 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
       snapshotAgeMinutes: Math.round(
         (new Date(anchor).getTime() - latestSnap.observedAt.getTime()) / 60_000,
       ),
-      baselineReason: baselineVersions.at(-1)?.reason ?? '',
-      baselineRecordedAt: baselineVersions.at(-1)?.recordedAt ?? '',
+      baselineReason: activeBaseline?.reason ?? '',
+      baselineRecordedAt: activeBaseline?.recordedAt ?? '',
     },
     input,
     rules,
     wps,
-    baseline: baselineVersions.find((b) => b.seq === activeBaselineSeq)!,
+    baseline: activeBaseline,
     resources,
   };
 }

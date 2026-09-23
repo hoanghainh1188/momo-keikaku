@@ -9,13 +9,6 @@ const dir = path.join(process.cwd(), 'packages/i18n/src/messages');
 const enPath = path.join(dir, 'en.json');
 const en = JSON.parse(fs.readFileSync(enPath, 'utf8'));
 
-Object.assign(en.clientView, {
-  unplanned_work_title: '計画外作業 — Unplanned Work',
-  report_sub:
-    '{clientName} · Report as of {asOf} · Effort in 工数 (h)',
-  back_to_review: "← Back to the PM's Reconciliation Review",
-});
-
 Object.assign(en.plan, {
   baseline_recorded:
     'recorded {date} — "{reason}" · BAC {bac}h over {leafCount} baselined leaf Work Packages.',
@@ -51,12 +44,6 @@ Object.assign(en.mapping, {
 
 Object.assign(en.shell, {
   nav_aria_project_surfaces: 'Project surfaces',
-});
-
-if (!en.gantt) en.gantt = {};
-Object.assign(en.gantt, {
-  milestone_title: 'Milestone {date}',
-  milestone_slipped: 'Milestone {date} — slipped',
 });
 
 Object.assign(en.common, {

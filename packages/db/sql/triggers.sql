@@ -64,6 +64,36 @@ CREATE TRIGGER "append_only_truncate_guard"
   BEFORE TRUNCATE ON public."project_default_rate_entry"
   FOR EACH STATEMENT EXECUTE FUNCTION public."momo_append_only_truncate_guard"();
 
+-- wp_status_event: The single home of a WP's actual start and actual finish (AD-25). Each row restates the full actual state; the head is the latest seq. A correction is a new row.
+DROP TRIGGER IF EXISTS "append_only_guard" ON public."wp_status_event";
+CREATE TRIGGER "append_only_guard"
+  BEFORE UPDATE OR DELETE ON public."wp_status_event"
+  FOR EACH ROW EXECUTE FUNCTION public."momo_append_only_guard"();
+DROP TRIGGER IF EXISTS "append_only_truncate_guard" ON public."wp_status_event";
+CREATE TRIGGER "append_only_truncate_guard"
+  BEFORE TRUNCATE ON public."wp_status_event"
+  FOR EACH STATEMENT EXECUTE FUNCTION public."momo_append_only_truncate_guard"();
+
+-- holiday_calendar_version: A resolved non-working-day set over a range (AD-29). A Baseline re-derives against the version it pinned, so a version is never edited.
+DROP TRIGGER IF EXISTS "append_only_guard" ON public."holiday_calendar_version";
+CREATE TRIGGER "append_only_guard"
+  BEFORE UPDATE OR DELETE ON public."holiday_calendar_version"
+  FOR EACH ROW EXECUTE FUNCTION public."momo_append_only_guard"();
+DROP TRIGGER IF EXISTS "append_only_truncate_guard" ON public."holiday_calendar_version";
+CREATE TRIGGER "append_only_truncate_guard"
+  BEFORE TRUNCATE ON public."holiday_calendar_version"
+  FOR EACH STATEMENT EXECUTE FUNCTION public."momo_append_only_truncate_guard"();
+
+-- schedule_run: One recalculation: fully resolved inputs, outputs, cause and engine version (AD-26). Baselines and Published Snapshots pin it by reference.
+DROP TRIGGER IF EXISTS "append_only_guard" ON public."schedule_run";
+CREATE TRIGGER "append_only_guard"
+  BEFORE UPDATE OR DELETE ON public."schedule_run"
+  FOR EACH ROW EXECUTE FUNCTION public."momo_append_only_guard"();
+DROP TRIGGER IF EXISTS "append_only_truncate_guard" ON public."schedule_run";
+CREATE TRIGGER "append_only_truncate_guard"
+  BEFORE TRUNCATE ON public."schedule_run"
+  FOR EACH STATEMENT EXECUTE FUNCTION public."momo_append_only_truncate_guard"();
+
 -- baseline_version: A Baseline is a pinned historical fact. Re-baselining appends a version; it never edits one.
 DROP TRIGGER IF EXISTS "append_only_guard" ON public."baseline_version";
 CREATE TRIGGER "append_only_guard"

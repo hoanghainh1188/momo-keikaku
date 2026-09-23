@@ -84,7 +84,7 @@ describe('resolveRequestContext', () => {
 
   it('signs out, and DELETES the session, when the active Tenant has no matching membership', async () => {
     // The tampered case: `session.active_tenant_id` edited to a Tenant the user does not belong
-    // to. Nothing under /p/ or /c/ may render, and the session gets no second request.
+    // to. Nothing under /p/ may render, and the session gets no second request.
     const f = fake({ session: sessionIn('ten-foreign'), memberships: [PM_IN_A] });
     expect(await resolveRequestContext(f.deps, HEADERS)).toEqual({ status: 'signed_out' });
     expect(f.ended).toEqual(['tok-1']);

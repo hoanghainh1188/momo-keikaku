@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { sql } from 'drizzle-orm';
-import { hours, present, stringify } from '@momo/domain';
+import { hours, share, stringify } from '@momo/domain';
 import type { AppError } from '../packages/app/src/result';
 import { getProjectReview } from '../packages/app/src/use-cases';
 import { closeAllPools, getDb, getPool, schema, type Db } from '../packages/db/src/client';
@@ -54,8 +54,9 @@ import { pmContextFor } from './request-context';
  *      registry entry fails NAMING IT — with no database, which is the point: the gap is
  *      caught on a laptop with nothing running.
  *   2. THE RELABELLING IS FAITHFUL. A probe Tenant is a bijectively relabelled copy of the
- *      demo dataset, and the Review computed over it reproduces the pinned golden figures
- *      (2936.0 / 1661.5 / 0.91). Without this, every isolation assertion below could agree
+ *      demo dataset, and the Review computed over it reproduces the pinned figures (AC
+ *      1661.5 h, Opening Balances 900.2 h and the no-Baseline Unplanned split — story 2.2; there
+ *      is no Baseline, so no BAC or SPI). Without this, every isolation assertion below could agree
  *      perfectly about the wrong data.
  *   3. ISOLATION HOLDS, GENERICALLY. Every registry entry is invoked against both probe
  *      Tenants as the RESTRICTED role, and the whole result graph — including `Map` keys
@@ -102,7 +103,7 @@ import { pmContextFor } from './request-context';
  * own — it wires `packages/db`'s repository into `packages/app`'s port, on the restricted
  * role's handle — which is why it lives in `tests/`, outside every layer.
  *
- * Requires a database prepared by `drizzle-kit push`, `pnpm pgboss:migrate` and
+ * Requires a database prepared by `pnpm db:migrate`, `pnpm pgboss:migrate` and
  * `pnpm db:policies`, and seeded. Set REQUIRE_DB=1 (CI does) to turn an unreachable
  * database into a failure instead of a skip. The pure gate above runs either way.
  */
@@ -364,9 +365,6 @@ function numberCensus(graph: unknown): (number | bigint)[] {
 
 const PROBE_PLACEHOLDER = '<probe>';
 
-/** The key of the one sanctioned float, `present`'s `earnedProgress(...).fraction`. */
-const GEOMETRY_KEY = 'fraction';
-
 function sortBySerialisation(items: unknown[]): unknown[] {
   // Keys precomputed: `sort` with a stringifying comparator serialises the same element
   // O(log n) times, and these arrays carry whole Ticket observations.
@@ -393,11 +391,9 @@ function canonicalise(node: unknown, token: string, key: string | null): unknown
   if (typeof node === 'string') return node.replaceAll(token, PROBE_PLACEHOLDER);
   if (typeof node === 'number') {
     if (key !== null && ALLOCATED_SEQ_KEYS.has(key)) return '<seq>';
-    // The ONE sanctioned float in any result (AD-4): `earnedProgress`'s layout-geometry
-    // `fraction`, which the Client View's schedule carries so the Gantt can draw its fill. It
-    // is compared as its exact decimal text, because the codec below refuses every float —
-    // which is what keeps a float creeping back into a figure loud, under any other key.
-    if (key === GEOMETRY_KEY && !Number.isInteger(node)) return `<geometry ${String(node)}>`;
+    // No float is sanctioned in any result (AD-4): the codec below refuses every one, which is
+    // what keeps a float creeping into a figure loud. (The one carve-out, a layout-geometry
+    // fraction in the Client View's schedule, went with the Client View in story 2.2.)
     return node;
   }
   if (typeof node !== 'object') return node;
@@ -692,29 +688,37 @@ describe.skipIf(!reachable)('the cross-tenant harness, driven against two probe 
       );
       if (!result.ok) throw new Error(`getProjectReview answered ${result.error.code}`);
       const { review } = result.value;
-      expect(hours(review.evm.bacMh), 'BAC over the relabelled copy').toBe('2936.0');
-      expect(hours(review.evm.acMh), 'AC over the relabelled copy').toBe('1661.5');
-      expect(present(review.evm.spi).text, 'SPI over the relabelled copy').toBe('0.91');
+      // No Baseline in the database until Epic 4 (story 2.1, decision 2-A), so the Review is the
+      // no-Baseline one (story 2.2, decision Q1-A) — the same figures `db-round-trip.test.ts`
+      // pins against the demo Tenant. BAC and SPI need a Baseline and are null here; what a
+      // relabelling could still damage is carried by AC, the Opening Balances (the
+      // `opening_balance` vocabulary) and the Unplanned split (the Mapping sources).
+      expect(review.evm, 'the probe, like the demo, has no Baseline').toBeNull();
+      // With no Baseline every indicator is unavailable, Unplanned Work included (Q1-A as amended).
+      expect(review.health.indicators.map((i) => i.colour)).toEqual([
+        'unavailable',
+        'unavailable',
+        'unavailable',
+      ]);
+      expect(review.health.overall).toBe('unavailable');
+      expect(hours(review.attribution.cumulative.totalMh), 'AC over the relabelled copy').toBe('1661.5');
+      expect(hours(review.openingBalanceMh), 'Opening Balances over the relabelled copy').toBe('900.2');
       expect(review.measurementBasis).toBe('hours');
-      // The Unplanned split as well as the headline three. BAC, AC and SPI are all
-      // order-free sums that survive a surprising amount of damage: measured on
-      // 2026-09-21, a writer that stamped the WRONG active Baseline sequence on the
-      // probe's ledger — which reclassifies every mapped hour as Unplanned Work — left all
-      // three unmoved. These are the figures that see it.
       const components = Object.fromEntries(
         review.unplanned.components.map((component) => [component.key, hours(component.mh)]),
       );
       expect(components, 'the Unplanned split over the relabelled copy').toEqual({
         unmapped: '166.0',
-        'non-baselined': '0.0',
-        'catch-all-overflow': '50.8',
+        'non-baselined': '1364.7',
+        'catch-all-overflow': '130.8',
       });
-      expect(hours(review.unplanned.cumulative.unplannedMh)).toBe('216.8');
+      expect(hours(review.unplanned.cumulative.unplannedMh)).toBe('1661.5');
+      expect(share(review.coverage.mappedHourShare), 'Coverage over the relabelled copy').toBe('90.0%');
       // The numeric census sees the bigint figures, not only the counts: without this, a
       // census that skipped `bigint` would compare two lists of counts and call it faithful.
       const census = numberCensus(review);
-      expect(census, 'the census carries BAC').toContain(2_936_000n);
       expect(census, 'the census carries AC').toContain(1_661_495n);
+      expect(census, 'the census carries the Opening Balances').toContain(900_228n);
     });
 
     it('carries the demo Tenant alongside it, unchanged', async () => {
@@ -728,8 +732,9 @@ describe.skipIf(!reachable)('the cross-tenant harness, driven against two probe 
       );
       if (!result.ok) throw new Error(`getProjectReview answered ${result.error.code}`);
       const { review } = result.value;
-      expect(hours(review.evm.bacMh)).toBe('2936.0');
-      expect(hours(review.evm.acMh)).toBe('1661.5');
+      expect(review.evm).toBeNull();
+      expect(hours(review.attribution.cumulative.totalMh)).toBe('1661.5');
+      expect(hours(review.openingBalanceMh)).toBe('900.2');
     });
   });
 

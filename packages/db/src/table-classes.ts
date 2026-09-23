@@ -23,11 +23,12 @@
  *
  * `tenantColumn` is the second, independent axis. A table is *tenant-owned* when it
  * carries one, and a tenant-owned table gets ENABLE + FORCE row-level security and the
- * isolation policy. 17 of the 24 tables today are tenant-owned. `tenant` itself is not — it is
+ * isolation policy. 22 of the 29 tables today are tenant-owned. `tenant` itself is not — it is
  * the table the column points at — so it is `global`, which is the class for rows that exist
  * before any tenant is resolved. Story 1.4 slice 1 put the four Better Auth tables and the
  * tenant-membership bridge in that class beside it; slice 4 adds `identity_event`. Story 1.6
- * adds `project_default_rate_entry`.
+ * adds `project_default_rate_entry`. Story 2.1 (AD-30) adds the scheduling slice: `wp_dependency`,
+ * `wp_status_event`, `holiday_calendar_version`, `schedule_run` and `wp_schedule`.
  *
  * THREE PER-ENTRY PROPERTIES, each stated where it applies rather than by a new class:
  *
@@ -107,13 +108,18 @@ export interface TableEntry {
 }
 
 /**
- * The 23 tables of this release (story 1.3 slice 2 added `program`; story 1.4 slice 1 removed
- * `app_user` and added the four Better Auth tables and `tenant_membership`; slice 4 adds
- * `identity_event`), in dependency order.
+ * The 29 tables of this release (story 1.3 slice 2 added `program`; story 1.4 slice 1 removed
+ * `app_user` and added the four Better Auth tables and `tenant_membership`; slice 4 added
+ * `identity_event`; story 1.6 `project_default_rate_entry`; story 2.1 the five scheduling tables),
+ * in DEPENDENCY ORDER: every table comes after each table its foreign keys reference, so this order
+ * is an insert order and its reverse is a delete order (`probe-tenants.ts` deletes by it). Story
+ * 2.1's composite foreign keys made that load-bearing: `schedule_run` before `baseline_version`,
+ * `mapping_rule` before `mapping_event`.
  *
- * Nine are insert-only today and are classed `append-only` accordingly:
- * baseline_version, baseline_wp, tracker_snapshot, ticket_observation,
- * actuals_ledger_entry, mapping_event, rate_entry, disposition_event, audit_log.
+ * Thirteen are insert-only and are classed `append-only` accordingly:
+ * rate_entry, project_default_rate_entry, wp_status_event, holiday_calendar_version,
+ * schedule_run, baseline_version, baseline_wp, tracker_snapshot, ticket_observation,
+ * actuals_ledger_entry, mapping_event, disposition_event, audit_log.
  */
 export const TABLE_REGISTRY: readonly TableEntry[] = [
   {
@@ -212,6 +218,36 @@ export const TABLE_REGISTRY: readonly TableEntry[] = [
     why: 'The Current Plan is edited. Deletion is soft (`deleted_at`) so the Baseline still resolves it.',
   },
   {
+    table: 'wp_dependency',
+    class: 'mutable-audited',
+    tenantColumn: 'tenant_id',
+    why: 'FS dependency edges with lag (AD-25): a scheduling input, edited through app/schedule\'s fence and audited. Edges are removed explicitly by the writer (2.10/2.14); the FKs never cascade.',
+  },
+  {
+    table: 'wp_status_event',
+    class: 'append-only',
+    tenantColumn: 'tenant_id',
+    why: 'The single home of a WP\'s actual start and actual finish (AD-25). Each row restates the full actual state; the head is the latest seq. A correction is a new row.',
+  },
+  {
+    table: 'holiday_calendar_version',
+    class: 'append-only',
+    tenantColumn: 'tenant_id',
+    why: 'A resolved non-working-day set over a range (AD-29). A Baseline re-derives against the version it pinned, so a version is never edited.',
+  },
+  {
+    table: 'schedule_run',
+    class: 'append-only',
+    tenantColumn: 'tenant_id',
+    why: 'One recalculation: fully resolved inputs, outputs, cause and engine version (AD-26). Baselines and Published Snapshots pin it by reference.',
+  },
+  {
+    table: 'wp_schedule',
+    class: 'derived',
+    tenantColumn: 'tenant_id',
+    why: 'The tree grid\'s projection of the latest schedule_run (AD-26), rebuilt from it by app/schedule and never pinned by anything.',
+  },
+  {
     table: 'baseline_version',
     class: 'append-only',
     tenantColumn: 'tenant_id',
@@ -249,17 +285,17 @@ export const TABLE_REGISTRY: readonly TableEntry[] = [
     clientAllocatedSeq: true,
   },
   {
+    table: 'mapping_rule',
+    class: 'mutable-audited',
+    tenantColumn: 'tenant_id',
+    why: 'Rules are edited and re-prioritised. The events they produced are append-only.',
+  },
+  {
     table: 'mapping_event',
     class: 'append-only',
     tenantColumn: 'tenant_id',
     why: 'Mapping is an event log; the current Mapping is its head. Editing history would move hours retroactively.',
     clientAllocatedSeq: true,
-  },
-  {
-    table: 'mapping_rule',
-    class: 'mutable-audited',
-    tenantColumn: 'tenant_id',
-    why: 'Rules are edited and re-prioritised. The events they produced are append-only.',
   },
   {
     table: 'disposition_event',

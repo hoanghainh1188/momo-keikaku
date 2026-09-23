@@ -16,7 +16,8 @@ export interface HealthIndicator {
 }
 
 export interface HealthInput {
-  evm: EvmResult;
+  /** Null while the Project has no Baseline: Schedule and Effort/Cost are then unavailable. */
+  evm: EvmResult | null;
   thresholds: ProjectConfig['thresholds'];
   /** FR-31: the Reporting Period's Unplanned share, excluding Opening Balances */
   unplannedSharePeriod: Ratio | null;
@@ -62,7 +63,9 @@ export function computeHealth(input: HealthInput): {
 
   // --- Schedule: SPI + milestones
   let schedule: HealthIndicator;
-  if (evm.spi.kind === 'value') {
+  if (evm === null) {
+    schedule = { key: 'schedule', colour: 'unavailable', driver: '—', rule: NO_BASELINE_RULE };
+  } else if (evm.spi.kind === 'value') {
     let colour = ratioColour(evm.spi.value, t);
     let rule = `${colour === 'green' ? 'Green' : colour === 'amber' ? 'Amber' : 'Red'} because SPI ${fmt(evm.spi)} ${ruleText(evm.spi.value, t)}`;
     if (input.slippedMilestones.length > 0 && colour === 'green') {
@@ -81,7 +84,9 @@ export function computeHealth(input: HealthInput): {
 
   // --- Effort/Cost: all-in CPI + TCPI. TCPI crossing is red whatever the CPI.
   let effort: HealthIndicator;
-  if (evm.cpiAllIn.kind === 'value') {
+  if (evm === null) {
+    effort = { key: 'effort_cost', colour: 'unavailable', driver: '—', rule: NO_BASELINE_RULE };
+  } else if (evm.cpiAllIn.kind === 'value') {
     let colour = ratioColour(evm.cpiAllIn.value, t);
     let rule = `${cap(colour)} because CPI (all-in) ${fmt(evm.cpiAllIn)} ${ruleText(evm.cpiAllIn.value, t)}`;
     const tcpiCrossed =
@@ -107,7 +112,11 @@ export function computeHealth(input: HealthInput): {
 
   // --- Unplanned Work: the Reporting Period's share
   let unplanned: HealthIndicator;
-  if (input.unplannedSharePeriod === null) {
+  if (evm === null) {
+    // With no Baseline every mapped hour is non-baselined, so the share would judge the missing
+    // Baseline rather than the work (story 2.2, Q1-A as amended): shown, not coloured.
+    unplanned = { key: 'unplanned', colour: 'unavailable', driver: '—', rule: NO_BASELINE_RULE };
+  } else if (input.unplannedSharePeriod === null) {
     unplanned = {
       key: 'unplanned',
       colour: 'unavailable',
@@ -148,6 +157,8 @@ export function computeHealth(input: HealthInput): {
         : null,
   };
 }
+
+const NO_BASELINE_RULE = 'Unavailable — no Baseline yet';
 
 const label = (k: HealthIndicator['key']) =>
   k === 'schedule' ? 'Schedule' : k === 'effort_cost' ? 'Effort/Cost' : 'Unplanned Work';

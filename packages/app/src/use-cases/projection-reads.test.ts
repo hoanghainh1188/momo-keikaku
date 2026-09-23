@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ratio } from '@momo/domain';
 import type { ProjectReadDeps, ProjectReview } from '../ports/project-read';
-import { getClientView, getProjectMapping } from '.';
+import { getProjectMapping } from '.';
 import { MAPPING_TICKET_LIMIT } from './get-project-mapping';
 import type { RequestContext } from '../authz/request-context';
 
@@ -11,15 +11,15 @@ function ctxOf(tenantId: string): RequestContext {
 }
 
 /**
- * The two reads that PROJECT the Review for one page — the Client View and the Mapping surface
- * — against a fake port: no database, no environment.
+ * The read that PROJECTS the Review for one page — the Mapping surface — against a fake port:
+ * no database, no environment.
  *
- * They exist so that no page computes from the domain (AD-1's web → domain/present edge): the
- * Client View page used to call `clientProjection` itself, the Mapping page `mappingHead` and a
- * `compareBigint` sort. What is pinned here is what moved: the Tenant comes from the context,
- * the projection is the default-visibility one, the Mapping rows arrive joined and ordered —
+ * It exists so that no page computes from the domain (AD-1's web → domain/present edge): the
+ * Mapping page used to call `mappingHead` and a `compareBigint` sort. What is pinned here is
+ * what moved: the Tenant comes from the context, the Mapping rows arrive joined and ordered —
  * and the shared contract (`not_found`, `invalid_input`, anything else propagates). The
- * cross-tenant harness proves the same reads end to end against row-level security.
+ * cross-tenant harness proves the same read end to end against row-level security. (The Client
+ * View's projection read was removed with the Client View, story 2.2.)
  */
 
 const HANDLE = { marker: 'handle' };
@@ -42,15 +42,13 @@ const ticket = (trackerIssueId: string, categoryIds: string[] = []) => ({
 });
 
 /**
- * A Review carrying just the fields the two projections read. `t-3` has the most hours and is
+ * A Review carrying just the fields the projection reads. `t-3` has the most hours and is
  * mapped by a rule; `t-1` and `t-2` tie, so snapshot order must decide; `t-4` is mapped to a
  * Work Package the surface does not list (a parent), so its id stands in for a label; `t-5`
  * was never mapped.
  */
 const REVIEW = {
   bundle: {
-    project: { name: 'Project Name' },
-    meta: { clientName: 'Client Name' },
     wps: [
       wp('wp-1', '1.1', 'Design'),
       wp('wp-2', '1.2', 'Build'),
@@ -74,31 +72,6 @@ const REVIEW = {
     },
   },
   review: {
-    snapshot: { observedAt: '2026-09-17T00:00:00Z' },
-    health: {
-      overall: 'amber',
-      indicators: [{ key: 'effort_cost', colour: 'amber', driver: 'CPI 0.89', rule: 'rule' }],
-    },
-    unplanned: {
-      sharePeriod: ratio(1n, 4n),
-      period: { unplannedMh: 12_340n },
-      components: [{ key: 'unmapped', label: 'Unmapped Work', mh: 1n, jpy: 0n, share: null }],
-    },
-    explainNotes: [{ note: 'A note.', ticketCount: 1, mh: 1n }],
-    milestones: [],
-    divergence: [
-      {
-        wbsCode: '1.1',
-        name: 'Design',
-        baselineStart: null,
-        baselineFinish: null,
-        currentStart: null,
-        currentFinish: null,
-        pctComplete: ratio(3n, 8n),
-      },
-      { wbsCode: '1.1.1', name: 'Too deep', pctComplete: ratio(1n, 1n) },
-    ],
-    evm: { spi: { kind: 'value', value: ratio(91n, 100n), unit: 'ratio' }, evMh: 1n },
     attribution: {
       cumulative: { totalMh: 99_000n },
       hoursByTicket: new Map([
@@ -139,32 +112,6 @@ function fakeDeps(behave: (projectId: string) => ProjectReview | Error) {
   };
   return { deps, calls };
 }
-
-describe('getClientView', () => {
-  it('projects the Review with the default visibility, for the context\'s Tenant', async () => {
-    const { deps, calls } = fakeDeps(() => REVIEW);
-    const result = await getClientView(deps, ctxOf('ten-a'), { projectId: 'prj-1' });
-
-    expect(calls).toEqual([{ handle: HANDLE, tenantId: 'ten-a', projectId: 'prj-1' }]);
-    if (!result.ok) throw new Error(`answered ${result.error.code}`);
-    const { clientName, projection } = result.value;
-    expect(clientName).toBe('Client Name');
-    expect(projection.projectName).toBe('Project Name');
-    expect(projection.unplanned).toEqual({
-      sharePeriod: '25.0%',
-      hours: '12.3',
-      statement: expect.any(String),
-      notes: ['A note.'],
-      // DEFAULT_VISIBILITY: the breakdown and the EVM detail stay hidden.
-      breakdown: null,
-    });
-    expect(projection.evm).toBeNull();
-    // WBS level 2 at most, and progress presented — never the exact Ratio.
-    expect(projection.schedule).toEqual([
-      expect.objectContaining({ wbsCode: '1.1', progress: { fraction: 0.375, label: '38' } }),
-    ]);
-  });
-});
 
 describe('getProjectMapping', () => {
   it('joins and orders the Mapping surface\'s rows, for the context\'s Tenant', async () => {
@@ -224,7 +171,6 @@ const notFoundError = (projectId: string) =>
   new Error(`project ${projectId} not found — run \`pnpm demo\` to seed`);
 
 describe.each([
-  { name: 'getClientView', run: getClientView },
   { name: 'getProjectMapping', run: getProjectMapping },
 ] as const)('$name, the shared read contract', ({ run }) => {
   it('answers not_found — never a throw — for a Project the Tenant cannot see', async () => {
