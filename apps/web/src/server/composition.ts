@@ -61,7 +61,6 @@ import {
   appendResourceRate as appendResourceRateUseCase,
   explainTickets as explainTicketsUseCase,
   googleProvider,
-  getClientView as getClientViewUseCase,
   getProjectHeader as getProjectHeaderUseCase,
   getProjectMapping as getProjectMappingUseCase,
   getProjectReview as getProjectReviewUseCase,
@@ -414,12 +413,6 @@ export async function getProjectReview(input: ProjectInput, ctx?: RequestContext
 export async function getProjectMapping(input: ProjectInput, ctx?: RequestContext) {
   const context = ctx ?? (await requestContext());
   return getProjectMappingUseCase(projectReadDeps(), context, input);
-}
-
-/** The client projection, default visibility. See `packages/app`'s `getClientView`. */
-export async function getClientView(input: ProjectInput, ctx?: RequestContext) {
-  const context = ctx ?? (await requestContext());
-  return getClientViewUseCase(projectReadDeps(), context, input);
 }
 
 /**

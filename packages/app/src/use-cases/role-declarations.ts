@@ -24,7 +24,6 @@
  * importing this file — which would be a cycle.
  */
 import type { RoleDeclaration } from '../authz/authorize';
-import { GET_CLIENT_VIEW_ROLES } from './get-client-view';
 import { GET_PROJECT_HEADER_ROLES } from './get-project-header';
 import { GET_PROJECT_MAPPING_ROLES } from './get-project-mapping';
 import { GET_PROJECT_REVIEW_ROLES } from './get-project-review';
@@ -45,7 +44,6 @@ export const USE_CASE_ROLES: Readonly<Record<string, RoleDeclaration>> = {
   ...GET_PROJECT_HEADER_ROLES,
   ...GET_PROJECT_REVIEW_ROLES,
   ...GET_PROJECT_MAPPING_ROLES,
-  ...GET_CLIENT_VIEW_ROLES,
   ...PROJECT_WRITE_ROLES,
   ...ORG_WRITE_ROLES,
   ...MEMBERSHIP_WRITE_ROLES,

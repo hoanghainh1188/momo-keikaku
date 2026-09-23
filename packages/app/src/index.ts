@@ -5,7 +5,7 @@
 // Story 1.2 slice 3 brings the first use cases: the two project reads, the port they depend
 // on, and the `Result` they return. Slice 4 adds the five project writes and their port. The
 // web → domain/present edge (2026-09-21) adds the Client View and Mapping reads, so no page
-// computes from the domain.
+// computes from the domain. Story 2.2 removes the Client View read with the demo spike's page.
 // Story 1.3 slice 1 adds the audit mechanism (`./audit`) and the tenant transaction the writes
 // run in; slice 2 generalises the write deps (`AuditedWriteDeps`, `WriteDeps`), adds the Clock and
 // id ports, and the eight organisation writes. Story 1.4 slice 1 adds the `RequestContext` and
@@ -90,7 +90,6 @@ export type {
   AuditLogRow,
 } from './ports/audit-log-read';
 export type { MembershipReader, MembershipRecord } from './ports/membership';
-export type { ClientView } from './use-cases/get-client-view';
 export type {
   MappingRuleRow,
   MappingTicketRow,

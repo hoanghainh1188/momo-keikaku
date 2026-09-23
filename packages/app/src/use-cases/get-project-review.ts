@@ -6,7 +6,8 @@ import { runProjectRead, type ProjectInput } from './project-input';
 
 /**
  * The Project bundle and the Reconciliation Review computed over it — what the Review, Plan,
- * Mapping, Baselines, Connectors and Client View pages render.
+ * Mapping, Baselines and Connectors pages render. With no Baseline the Review is partial, not
+ * an error (story 2.2, decision Q1-A): its EVM, forecast, milestones and divergence are null.
  *
  * Same contract as `getProjectHeader`: `not_found` for a Project that does not exist or is
  * another Tenant's, `invalid_input` for an empty or absent `projectId`, and every other

@@ -26,6 +26,15 @@ export default async function ReviewPage({
   const leafWps = bundle.wps.filter((w) => w.isLeaf && !w.isMilestone);
 
   const overall = r.health.overall;
+  // Story 2.2 (decision Q1-A): with no Baseline these are null, and each block that needs them
+  // shows the "No Baseline yet" state instead. Coverage, AC and Unplanned Work always render.
+  const { evm, forecast, milestones, divergence } = r;
+  const evmMoney = r.money;
+  const noBaseline = (section: string) => (
+    <p className="caption" data-testid={`no-baseline-${section}`}>
+      <span className="tag">{t('review.no_baseline_yet')}</span>
+    </p>
+  );
 
   return (
     <div className="layout-review">
@@ -53,7 +62,6 @@ export default async function ReviewPage({
           <div className="btn-row">
             <Link className="btn" href={`/p/${projectId}/mapping`}>{t('review.mapping')}</Link>
             <Link className="btn" href={`/p/${projectId}/plan`}>{t('review.plan')}</Link>
-            <Link className="btn primary" href={`/c/${projectId}`}>{t('review.preview_client_view')}</Link>
           </div>
         </header>
 
@@ -81,31 +89,36 @@ export default async function ReviewPage({
             ))}
           </div>
 
+          {evm === null ? noBaseline('status') : null}
           <div className="metric-row" style={{ marginTop: 24 }}>
-            <MetricCell
-              xl
-              label={t('review.spi')}
-              metric={r.evm.spi}
-              formula={t('review.metrics.formula_spi')}
-              note={`${hours(r.evm.evMh)}h ÷ ${hours(r.evm.pvMh)}h — ${t(r.behindPlan ? 'review.metrics.behind_plan' : 'review.metrics.on_or_ahead_of_plan')}`}
-              testId="m-spi"
-            />
-            <MetricCell
-              xl
-              label={t('review.cpi_all_in')}
-              metric={r.evm.cpiAllIn}
-              formula={t('review.metrics.formula_cpi_all_in')}
-              note={t('review.metrics.note_cpi_all_in', { ev: hours(r.evm.evMh), ac: hours(r.evm.acMh) })}
-              testId="m-cpi-allin"
-            />
-            <MetricCell
-              xl
-              label={t('review.cpi_planned_scope')}
-              metric={r.evm.cpiPlannedScope}
-              formula={t('review.metrics.formula_cpi_planned')}
-              note={t('review.metrics.note_cpi_gap')}
-              testId="m-cpi-planned"
-            />
+            {evm === null ? null : (
+              <>
+                <MetricCell
+                  xl
+                  label={t('review.spi')}
+                  metric={evm.spi}
+                  formula={t('review.metrics.formula_spi')}
+                  note={`${hours(evm.evMh)}h ÷ ${hours(evm.pvMh)}h — ${t(r.behindPlan ? 'review.metrics.behind_plan' : 'review.metrics.on_or_ahead_of_plan')}`}
+                  testId="m-spi"
+                />
+                <MetricCell
+                  xl
+                  label={t('review.cpi_all_in')}
+                  metric={evm.cpiAllIn}
+                  formula={t('review.metrics.formula_cpi_all_in')}
+                  note={t('review.metrics.note_cpi_all_in', { ev: hours(evm.evMh), ac: hours(evm.acMh) })}
+                  testId="m-cpi-allin"
+                />
+                <MetricCell
+                  xl
+                  label={t('review.cpi_planned_scope')}
+                  metric={evm.cpiPlannedScope}
+                  formula={t('review.metrics.formula_cpi_planned')}
+                  note={t('review.metrics.note_cpi_gap')}
+                  testId="m-cpi-planned"
+                />
+              </>
+            )}
             <MetricCell
               xl
               tone="unplanned"
@@ -223,123 +236,127 @@ export default async function ReviewPage({
         </Section>
 
         <Section title={t('review.ahead_behind')} id="ahead-behind">
-          <div className="metric-row">
-            <MetricCell
-              label={t('review.sv_schedule_variance')}
-              metric={{ text: hoursSigned(r.evm.svMh), unit: 'h' }}
-              formula={t('review.metrics.formula_sv')}
-              note={t(r.evm.svMh < 0n ? 'review.metrics.behind_plan_cap' : 'review.metrics.ahead_of_plan')}
-              testId="m-sv"
-            />
-            <MetricCell
-              label={t('review.spi')}
-              metric={r.evm.spi}
-              formula={t('review.metrics.formula_spi')}
-            />
-            <MetricCell
-              label={t('review.forecast_finish')}
-              metric={{ text: r.forecast.forecastFinish ?? em }}
-              formula={t('review.metrics.formula_forecast_finish')}
-              note={t('review.metrics.note_forecast_finish', {
-                baselineFinish: r.forecast.baselineFinish ?? em,
-                note: r.forecast.note,
-              })}
-              testId="m-forecast-finish"
-            />
-          </div>
+          {evm === null || forecast === null || milestones === null || divergence === null ? (
+            noBaseline('ahead-behind')
+          ) : (
+            <>
+              <div className="metric-row">
+                <MetricCell
+                  label={t('review.sv_schedule_variance')}
+                  metric={{ text: hoursSigned(evm.svMh), unit: 'h' }}
+                  formula={t('review.metrics.formula_sv')}
+                  note={t(evm.svMh < 0n ? 'review.metrics.behind_plan_cap' : 'review.metrics.ahead_of_plan')}
+                  testId="m-sv"
+                />
+                <MetricCell
+                  label={t('review.spi')}
+                  metric={evm.spi}
+                  formula={t('review.metrics.formula_spi')}
+                />
+                <MetricCell
+                  label={t('review.forecast_finish')}
+                  metric={{ text: forecast.forecastFinish ?? em }}
+                  formula={t('review.metrics.formula_forecast_finish')}
+                  note={t('review.metrics.note_forecast_finish', {
+                    baselineFinish: forecast.baselineFinish ?? em,
+                    note: forecast.note,
+                  })}
+                  testId="m-forecast-finish"
+                />
+              </div>
 
-          <h3 className="label" style={{ marginTop: 32 }}>{t('clientView.milestones')}</h3>
-          <table className="ledger" data-testid="milestones">
-            <thead>
-              <tr>
-                <th>{t('clientView.wbs')}</th>
-                <th>{t('clientView.milestone')}</th>
-                <th>{t('review.baseline_date')}</th>
-                <th>{t('review.current_date')}</th>
-                <th>{t('clientView.done')}</th>
-                <th>{t('clientView.status')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {r.milestones.map((m) => (
-                <tr key={m.wbsCode}>
-                  <td>{m.wbsCode}</td>
-                  <td>{m.name}</td>
-                  <td>{m.baselineDate}</td>
-                  <td>{m.currentDate ?? em}</td>
-                  <td>{m.doneDate ?? em}</td>
-                  <td>
-                    {m.doneDate ? (
-                      <span className="tag done">{t('clientView.done')}</span>
-                    ) : m.slipped ? (
-                      <HealthBadge colour="amber" label={t('clientView.slipped')} />
-                    ) : (
-                      <span className="tag">{t('clientView.open')}</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-          <h3 className="label" style={{ marginTop: 32 }}>{t('review.divergence_by_work_package_baseline_vs_current_p')}</h3>
-          <table className="ledger" data-testid="divergence">
-            <thead>
-              <tr>
-                <th>{t('clientView.wbs')}</th>
-                <th>{t('clientView.work_package')}</th>
-                <th>{t('review.baseline_finish')}</th>
-                <th>{t('review.current_finish')}</th>
-                <th className="num">{t('plan.baseline_h')}</th>
-                <th className="num">{t('review.ev_h')}</th>
-                <th className="num">{t('review.ac_h')}</th>
-                <th className="num">{t('common.percent_symbol')}</th>
-                <th>{t('review.basis')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {r.divergence
-                .filter((d) => d.acMh !== 0n || d.baselineMh > 0n)
-                .map((d) => (
-                  <tr key={d.wpId}>
-                    <td>{d.wbsCode}</td>
-                    <td>
-                      {d.name}{' '}
-                      {d.isCatchAll ? <span className="tag">{t('plan.catch_all_loe')}</span> : null}
-                      {d.nonBaselined ? (
-                        <span className="tag unplanned">{t('plan.non_baselined')}</span>
-                      ) : null}
-                    </td>
-                    <td>{d.baselineFinish ?? em}</td>
-                    <td
-                      style={
-                        d.baselineFinish && d.currentFinish && d.currentFinish > d.baselineFinish
-                          ? { color: 'var(--health-amber)' }
-                          : undefined
-                      }
-                    >
-                      {d.currentFinish ?? em}
-                    </td>
-                    <td className="num">{hours(d.baselineMh)}</td>
-                    <td className="num">{hours(d.evMh)}</td>
-                    <td className="num">{hours(d.acMh)}</td>
-                    <td className="num">{wholePercent(d.pctComplete)}%</td>
-                    <td>
-                      <span className="tag">{d.pctBasis}</span>
-                      {d.lowEvidence && d.baselineMh > 0n ? (
-                        <span className="tag">{t('review.low_evidence')}</span>
-                      ) : null}
-                    </td>
+              <h3 className="label" style={{ marginTop: 32 }}>{t('clientView.milestones')}</h3>
+              <table className="ledger" data-testid="milestones">
+                <thead>
+                  <tr>
+                    <th>{t('clientView.wbs')}</th>
+                    <th>{t('clientView.milestone')}</th>
+                    <th>{t('review.baseline_date')}</th>
+                    <th>{t('clientView.done')}</th>
+                    <th>{t('clientView.status')}</th>
                   </tr>
-                ))}
-            </tbody>
-          </table>
-          <p className="caption" style={{ marginTop: 8 }}>
-            {t('review.divergence.footnote', {
-              leafCount: leafWps.length,
-              baselineCount: bundle.baseline.wps.length,
-            })}
-          </p>
+                </thead>
+                <tbody>
+                  {milestones.map((m) => (
+                    <tr key={m.wbsCode}>
+                      <td>{m.wbsCode}</td>
+                      <td>{m.name}</td>
+                      <td>{m.baselineDate}</td>
+                      <td>{m.doneDate ?? em}</td>
+                      <td>
+                        {m.doneDate ? (
+                          <span className="tag done">{t('clientView.done')}</span>
+                        ) : m.slipped ? (
+                          <HealthBadge colour="amber" label={t('clientView.slipped')} />
+                        ) : (
+                          <span className="tag">{t('clientView.open')}</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              <h3 className="label" style={{ marginTop: 32 }}>{t('review.divergence_by_work_package_baseline_vs_current_p')}</h3>
+              <table className="ledger" data-testid="divergence">
+                <thead>
+                  <tr>
+                    <th>{t('clientView.wbs')}</th>
+                    <th>{t('clientView.work_package')}</th>
+                    <th>{t('review.baseline_finish')}</th>
+                    <th>{t('review.actual_finish')}</th>
+                    <th className="num">{t('plan.baseline_h')}</th>
+                    <th className="num">{t('review.ev_h')}</th>
+                    <th className="num">{t('review.ac_h')}</th>
+                    <th className="num">{t('common.percent_symbol')}</th>
+                    <th>{t('review.basis')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {divergence
+                    .filter((d) => d.acMh !== 0n || d.baselineMh > 0n)
+                    .map((d) => (
+                      <tr key={d.wpId}>
+                        <td>{d.wbsCode}</td>
+                        <td>
+                          {d.name}{' '}
+                          {d.isCatchAll ? <span className="tag">{t('plan.catch_all_loe')}</span> : null}
+                          {d.nonBaselined ? (
+                            <span className="tag unplanned">{t('plan.non_baselined')}</span>
+                          ) : null}
+                        </td>
+                        <td>{d.baselineFinish ?? em}</td>
+                        <td
+                          style={
+                            d.baselineFinish && d.actualFinish && d.actualFinish > d.baselineFinish
+                              ? { color: 'var(--health-amber)' }
+                              : undefined
+                          }
+                        >
+                          {d.actualFinish ?? em}
+                        </td>
+                        <td className="num">{hours(d.baselineMh)}</td>
+                        <td className="num">{hours(d.evMh)}</td>
+                        <td className="num">{hours(d.acMh)}</td>
+                        <td className="num">{wholePercent(d.pctComplete)}%</td>
+                        <td>
+                          <span className="tag">{d.pctBasis}</span>
+                          {d.lowEvidence && d.baselineMh > 0n ? (
+                            <span className="tag">{t('review.low_evidence')}</span>
+                          ) : null}
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+              <p className="caption" style={{ marginTop: 8 }}>
+                {t('review.divergence.footnote', {
+                  leafCount: leafWps.length,
+                  baselineCount: bundle.baseline?.wps.length ?? 0,
+                })}
+              </p>
+            </>
+          )}
         </Section>
 
         <Section
@@ -347,6 +364,7 @@ export default async function ReviewPage({
           id="effort-cost"
           intro={t('review.measured_in_effort_hours_the_money_column_is_der')}
         >
+          {evm === null ? noBaseline('effort-cost') : null}
           <table className="ledger" data-testid="evm-table">
             <thead>
               <tr>
@@ -359,36 +377,42 @@ export default async function ReviewPage({
               </tr>
             </thead>
             <tbody>
-              <EvmRow
-                name={t('review.evm.pv.name')}
-                value={`${hours(r.evm.pvMh)}h`}
-                money={money(r.money.pvJpy)}
-                formula={t('review.evm.pv.formula')}
-                reading={t('review.evm.pv.reading')}
-              />
-              <EvmRow
-                name={t('review.evm.ev.name')}
-                value={`${hours(r.evm.evMh)}h`}
-                money={money(r.money.evJpy)}
-                formula={t('review.evm.ev.formula')}
-                reading={t('review.evm.ev.reading')}
-                testId="evm-ev"
-              />
+              {evm === null || evmMoney === null ? null : (
+                <>
+                  <EvmRow
+                    name={t('review.evm.pv.name')}
+                    value={`${hours(evm.pvMh)}h`}
+                    money={money(evmMoney.pvJpy)}
+                    formula={t('review.evm.pv.formula')}
+                    reading={t('review.evm.pv.reading')}
+                  />
+                  <EvmRow
+                    name={t('review.evm.ev.name')}
+                    value={`${hours(evm.evMh)}h`}
+                    money={money(evmMoney.evJpy)}
+                    formula={t('review.evm.ev.formula')}
+                    reading={t('review.evm.ev.reading')}
+                    testId="evm-ev"
+                  />
+                </>
+              )}
               <EvmRow
                 name={t('review.evm.ac.name')}
-                value={`${hours(r.evm.acMh)}h`}
+                value={`${hours(r.attribution.cumulative.totalMh)}h`}
                 money={money(r.attribution.cumulative.totalJpy)}
                 formula={t('review.evm.ac.formula')}
                 reading={t('review.evm.ac.reading')}
                 testId="evm-ac"
               />
-              <EvmRow
-                name={t('review.evm.planned_scope.name')}
-                value={`${hours(r.attribution.cumulative.mappedBaselinedMh + r.attribution.cumulative.catchAllMh)}h`}
-                money=""
-                formula={t('review.evm.planned_scope.formula')}
-                reading={t('review.evm.planned_scope.reading')}
-              />
+              {evm === null ? null : (
+                <EvmRow
+                  name={t('review.evm.planned_scope.name')}
+                  value={`${hours(r.attribution.cumulative.mappedBaselinedMh + r.attribution.cumulative.catchAllMh)}h`}
+                  money=""
+                  formula={t('review.evm.planned_scope.formula')}
+                  reading={t('review.evm.planned_scope.reading')}
+                />
+              )}
               <EvmRow
                 name={t('review.evm.unplanned_line.name')}
                 value={`${hours(r.attribution.cumulative.unplannedMh)}h`}
@@ -398,49 +422,53 @@ export default async function ReviewPage({
                 unplanned
                 testId="evm-unplanned-line"
               />
-              <EvmRow
-                name={t('review.evm.cv.name')}
-                value={r.evm.cvMh.kind === 'value' ? `${hoursSigned(r.evm.cvMh.value)}h` : em}
-                money=""
-                formula={t('review.evm.cv.formula')}
-                reading={t('review.evm.cv.reading')}
-              />
-              <EvmRow
-                name={t('review.evm.sv.name')}
-                value={`${hoursSigned(r.evm.svMh)}h`}
-                money=""
-                formula={t('review.evm.sv.formula')}
-                reading={t('review.evm.sv.reading')}
-              />
-              <EvmRow
-                name={t('review.evm.cpi_all_in.name')}
-                value={present(r.evm.cpiAllIn).text}
-                money=""
-                formula={t('review.evm.cpi_all_in.formula')}
-                reading={t('review.evm.cpi_all_in.reading')}
-              />
-              <EvmRow
-                name={t('review.evm.cpi_planned.name')}
-                value={present(r.evm.cpiPlannedScope).text}
-                money=""
-                formula={t('review.evm.cpi_planned.formula')}
-                reading={t('review.evm.cpi_planned.reading')}
-              />
-              <EvmRow
-                name={t('review.evm.tcpi.name')}
-                value={present(r.evm.tcpi).text}
-                money=""
-                formula={t('review.evm.tcpi.formula')}
-                reading={t('review.evm.tcpi.reading')}
-                testId="evm-tcpi"
-              />
-              <EvmRow
-                name={t('review.evm.bac.name')}
-                value={`${hours(r.evm.bacMh)}h`}
-                money=""
-                formula={t('review.evm.bac.formula')}
-                reading={t('review.evm.bac.reading')}
-              />
+              {evm === null ? null : (
+                <>
+                  <EvmRow
+                    name={t('review.evm.cv.name')}
+                    value={evm.cvMh.kind === 'value' ? `${hoursSigned(evm.cvMh.value)}h` : em}
+                    money=""
+                    formula={t('review.evm.cv.formula')}
+                    reading={t('review.evm.cv.reading')}
+                  />
+                  <EvmRow
+                    name={t('review.evm.sv.name')}
+                    value={`${hoursSigned(evm.svMh)}h`}
+                    money=""
+                    formula={t('review.evm.sv.formula')}
+                    reading={t('review.evm.sv.reading')}
+                  />
+                  <EvmRow
+                    name={t('review.evm.cpi_all_in.name')}
+                    value={present(evm.cpiAllIn).text}
+                    money=""
+                    formula={t('review.evm.cpi_all_in.formula')}
+                    reading={t('review.evm.cpi_all_in.reading')}
+                  />
+                  <EvmRow
+                    name={t('review.evm.cpi_planned.name')}
+                    value={present(evm.cpiPlannedScope).text}
+                    money=""
+                    formula={t('review.evm.cpi_planned.formula')}
+                    reading={t('review.evm.cpi_planned.reading')}
+                  />
+                  <EvmRow
+                    name={t('review.evm.tcpi.name')}
+                    value={present(evm.tcpi).text}
+                    money=""
+                    formula={t('review.evm.tcpi.formula')}
+                    reading={t('review.evm.tcpi.reading')}
+                    testId="evm-tcpi"
+                  />
+                  <EvmRow
+                    name={t('review.evm.bac.name')}
+                    value={`${hours(evm.bacMh)}h`}
+                    money=""
+                    formula={t('review.evm.bac.formula')}
+                    reading={t('review.evm.bac.reading')}
+                  />
+                </>
+              )}
             </tbody>
           </table>
           <p className="caption" style={{ marginTop: 8 }}>
@@ -451,34 +479,40 @@ export default async function ReviewPage({
         </Section>
 
         <Section title={t('review.forecast')} id="forecast">
-          <div className="metric-row">
-            <MetricCell
-              label={t('review.eac_typical')}
-              metric={r.evm.eacMh}
-              formula={t('review.metrics.formula_eac')}
-              note={t('review.metrics.note_eac')}
-              testId="m-eac"
-            />
-            <MetricCell
-              label={t('review.etc')}
-              metric={r.evm.etcMh}
-              formula={t('review.metrics.formula_etc')}
-              testId="m-etc"
-            />
-            <MetricCell
-              label={t('review.vac')}
-              metric={r.evm.vacMh}
-              formula={t('review.metrics.formula_vac')}
-              note={t('review.metrics.note_vac')}
-              testId="m-vac"
-            />
-            <MetricCell
-              label={t('review.forecast_finish')}
-              metric={{ text: r.forecast.forecastFinish ?? em }}
-              formula={t('review.metrics.formula_forecast_trend')}
-            />
-          </div>
-          <p className="caption" style={{ marginTop: 16 }}>{t('review.the_effort_forecast_is_the_eac_from_the_project_')}</p>
+          {evm === null || forecast === null ? (
+            noBaseline('forecast')
+          ) : (
+            <>
+              <div className="metric-row">
+                <MetricCell
+                  label={t('review.eac_typical')}
+                  metric={evm.eacMh}
+                  formula={t('review.metrics.formula_eac')}
+                  note={t('review.metrics.note_eac')}
+                  testId="m-eac"
+                />
+                <MetricCell
+                  label={t('review.etc')}
+                  metric={evm.etcMh}
+                  formula={t('review.metrics.formula_etc')}
+                  testId="m-etc"
+                />
+                <MetricCell
+                  label={t('review.vac')}
+                  metric={evm.vacMh}
+                  formula={t('review.metrics.formula_vac')}
+                  note={t('review.metrics.note_vac')}
+                  testId="m-vac"
+                />
+                <MetricCell
+                  label={t('review.forecast_finish')}
+                  metric={{ text: forecast.forecastFinish ?? em }}
+                  formula={t('review.metrics.formula_forecast_trend')}
+                />
+              </div>
+              <p className="caption" style={{ marginTop: 16 }}>{t('review.the_effort_forecast_is_the_eac_from_the_project_')}</p>
+            </>
+          )}
         </Section>
 
         <p className="caption" style={{ marginTop: 40 }}>{t('review.approximate_hours_are_derived_from_the_differenc')}</p>

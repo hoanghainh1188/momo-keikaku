@@ -62,7 +62,6 @@ export async function explainTickets(formData: FormData): Promise<void> {
   const ctx = await requestContext();
   if (!writeLanded(await explainTicketsUseCase(input, ctx))) return;
   revalidatePath(`/p/${input.projectId}/review`);
-  revalidatePath(`/c/${input.projectId}`);
 }
 
 /** FR-29 *Change Request candidate*: collects the Tickets into a list. */

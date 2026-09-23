@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildCalendar } from './calendar';
-import { computeEvm, percentComplete, plannedValue } from './evm';
+import { computeEvm, isMarkedComplete, percentComplete, plannedValue, type EvmResult } from './evm';
 import { computeHealth } from './health';
 import { DEFAULT_THRESHOLDS, type BaselineVersion, type TicketObservation, type WorkPackage } from './types';
 import { hoursToMh, ratio, type Ratio } from './units';
@@ -22,11 +22,9 @@ const wp = (over: Partial<WorkPackage> & { id: string }): WorkPackage => ({
   isLeaf: true,
   isMilestone: false,
   isCatchAll: false,
-  start: null,
-  finish: null,
   plannedMh: 0n,
-  completedAt: null,
-  milestoneDoneAt: null,
+  actualStart: null,
+  actualFinish: null,
   assignedResourceIds: [],
   ...over,
 });
@@ -103,6 +101,68 @@ describe('percentComplete (FR-30: never derived from burned effort)', () => {
   it('reports no evidence when nothing is mapped', () => {
     const r = percentComplete([], hoursToMh(20), false);
     expect(r).toEqual({ pct: ratio(0n, 1n), basis: 'no-evidence', lowEvidence: true });
+  });
+});
+
+describe('computeEvm — an actual finish lifts the 99% cap only on a non-milestone leaf', () => {
+  // Every mapped Ticket resolved: 100% of the estimate, which the cap holds at 99% until the PM
+  // marks the WP complete — now an actual finish on its head status event (story 2.2).
+  const baseline: BaselineVersion = {
+    seq: 1,
+    id: 'bl-1',
+    reason: 'cap',
+    recordedAt: '2026-06-01T00:00:00.000Z',
+    wps: [
+      { wpId: 'WP-1', start: '2026-06-01', finish: '2026-06-12', baselineMh: hoursToMh(100), isMilestone: false },
+      { wpId: 'WP-M', start: '2026-06-12', finish: '2026-06-12', baselineMh: hoursToMh(100), isMilestone: true },
+    ],
+  };
+  const allResolved = (prefix: string) =>
+    [1, 2, 3, 4].map((n) => ticket(`${prefix}${n}`, 25, true));
+  const measure = (wps: WorkPackage[]) =>
+    computeEvm({
+      asOf: '2026-06-05',
+      calendar: cal,
+      baseline,
+      wps,
+      mappedTicketsByWp: new Map([
+        ['WP-1', allResolved('a')],
+        ['WP-M', allResolved('m')],
+      ]),
+      acByWp: new Map(),
+      unplannedAcMh: 0n,
+      totalAcMh: hoursToMh(10),
+      plannedScopeAcMh: hoursToMh(10),
+      measurementBasis: 'hours',
+    }).perWp;
+  const done = '2026-06-05';
+
+  it('caps both at 99% with no actual finish', () => {
+    const [leaf, milestone] = measure([wp({ id: 'WP-1' }), wp({ id: 'WP-M', isMilestone: true })]);
+    expect(leaf!.pctComplete).toEqual(ratio(99n, 100n));
+    expect(milestone!.pctComplete).toEqual(ratio(99n, 100n));
+  });
+
+  it('reads a marked-complete leaf as 100%, EV = its Baseline effort; a done milestone stays capped', () => {
+    const [leaf, milestone] = measure([
+      wp({ id: 'WP-1', actualFinish: done }),
+      wp({ id: 'WP-M', isMilestone: true, actualFinish: done }),
+    ]);
+    expect(leaf!.pctComplete).toEqual(ratio(hoursToMh(100), hoursToMh(100)));
+    expect(leaf!.evMh).toBe(hoursToMh(100));
+    expect(milestone!.pctComplete).toEqual(ratio(99n, 100n));
+    expect(milestone!.evMh).toBe(hoursToMh(99));
+  });
+});
+
+describe('isMarkedComplete (story 2.2: read off the head actual finish)', () => {
+  it('is an actual finish on a WP that is not a milestone', () => {
+    expect(isMarkedComplete(wp({ id: 'a', actualFinish: '2026-09-01' }))).toBe(true);
+    expect(isMarkedComplete(wp({ id: 'b', actualStart: '2026-08-01' }))).toBe(false);
+  });
+
+  it('is never a milestone: its actual finish is "done", which lifts no cap', () => {
+    expect(isMarkedComplete(wp({ id: 'm', isMilestone: true, actualFinish: '2026-09-01' }))).toBe(false);
   });
 });
 
@@ -264,7 +324,7 @@ describe('FR-31 threshold edges', () => {
       vacMh: { kind: 'value', value: 0n, unit: 'mh' },
       tcpi: { kind: 'value', value: ratio(1n, 1n), unit: 'ratio' },
       bacExhausted: false,
-    }) as Parameters<typeof computeHealth>[0]['evm'];
+    }) as EvmResult;
 
   it('treats 0.95 as green and 0.85 as amber', () => {
     expect(

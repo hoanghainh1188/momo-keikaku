@@ -482,12 +482,12 @@ describe.skipIf(!reachable)('the I/O matrix of story 2.1, against the migrated s
 // What the seed wrote into `wp_status_event`, the single home of actual dates (AD-25).
 
 describe.skipIf(!reachable)('the demo seed\'s actual dates (story 2.1)', () => {
-  it('records exactly one wp_status_event per fixture milestone reached, with its done date', async () => {
+  it('records exactly one wp_status_event per fixture WP with actual dates, restating them', async () => {
     const state = buildDemoState();
     const tenantId = state.fixture.tenant.id;
     const expected = state.wps
-      .filter((w) => w.milestoneDoneAt !== null)
-      .map((w) => ({ wp_id: w.id, actual_finish: w.milestoneDoneAt }))
+      .filter((w) => w.actualStart !== null || w.actualFinish !== null)
+      .map((w) => ({ wp_id: w.id, actual_start: w.actualStart, actual_finish: w.actualFinish }))
       .sort((a, b) => a.wp_id.localeCompare(b.wp_id));
     expect(expected.length, 'the fixture must carry reached milestones').toBeGreaterThan(0);
 
@@ -495,8 +495,13 @@ describe.skipIf(!reachable)('the demo seed\'s actual dates (story 2.1)', () => {
       await client.query('BEGIN');
       try {
         await setTenant(client, tenantId);
-        const { rows } = await client.query<{ wp_id: string; actual_finish: string }>(
-          `SELECT wp_id, to_char(actual_finish, 'YYYY-MM-DD') AS actual_finish
+        const { rows } = await client.query<{
+          wp_id: string;
+          actual_start: string | null;
+          actual_finish: string | null;
+        }>(
+          `SELECT wp_id, to_char(actual_start, 'YYYY-MM-DD') AS actual_start,
+                  to_char(actual_finish, 'YYYY-MM-DD') AS actual_finish
              FROM wp_status_event WHERE tenant_id = $1 ORDER BY wp_id`,
           [tenantId],
         );

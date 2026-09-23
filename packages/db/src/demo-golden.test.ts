@@ -1,9 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   checkLedgerInvariant,
-  clientProjection,
   computeReview,
-  DEFAULT_VISIBILITY,
   hours,
   present,
   share,
@@ -21,6 +19,12 @@ import { asOfDate, buildDemoState, currentPeriod } from './fixtures';
  *
  * Regenerating the fixtures (`pnpm tsx scripts/gen-fixtures.ts`) will change these
  * numbers; update them deliberately, never to make the suite pass.
+ *
+ * IN MEMORY, WITH THE FIXTURE'S BASELINE. The seeded database holds no Baseline until Epic 4
+ * (story 2.1, decision 2-A), so `db-round-trip.test.ts` pins the no-Baseline Review; this file
+ * keeps the full EVM figures, from the Baseline the fixture carries in memory. Story 2.2 moved
+ * the planned dates off the Work Packages and onto that Baseline alone, and none of these
+ * figures moved with them.
  */
 function review() {
   const state = buildDemoState();
@@ -43,8 +47,17 @@ function review() {
   };
 }
 
+/** The Baseline-derived part of the Review, which the fixture's in-memory Baseline makes present. */
+function baselineDerived<T>(value: T | null, what: string): T {
+  if (value === null) throw new Error(`the in-memory demo Review has no ${what}, but its Baseline is active`);
+  return value;
+}
+
 describe('demo dataset — golden EVM figures', () => {
   const { state, result: r } = review();
+  const evm = baselineDerived(r.evm, 'EVM');
+  const forecast = baselineDerived(r.forecast, 'forecast');
+  const milestones = baselineDerived(r.milestones, 'milestones');
 
   it('pins the Review to the latest of six weekly Tracker Snapshots', () => {
     expect(state.snapshots).toHaveLength(6);
@@ -58,31 +71,31 @@ describe('demo dataset — golden EVM figures', () => {
   });
 
   it('carries effort as exact bigint milli-hours and ratios unreduced (AD-4)', () => {
-    expect(r.evm.bacMh).toBe(2_936_000n);
-    expect(r.evm.acMh).toBe(1_661_495n);
-    expect(r.evm.spi.kind === 'value' && r.evm.spi.value).toEqual({ num: r.evm.evMh, den: r.evm.pvMh });
+    expect(evm.bacMh).toBe(2_936_000n);
+    expect(evm.acMh).toBe(1_661_495n);
+    expect(evm.spi.kind === 'value' && evm.spi.value).toEqual({ num: evm.evMh, den: evm.pvMh });
   });
 
   it('reports the headline EVM figures in effort hours', () => {
-    expect(hours(r.evm.bacMh)).toBe('2936.0');
-    expect(hours(r.evm.pvMh)).toBe('1459.8');
-    expect(hours(r.evm.evMh)).toBe('1330.8');
-    expect(hours(r.evm.acMh)).toBe('1661.5');
+    expect(hours(evm.bacMh)).toBe('2936.0');
+    expect(hours(evm.pvMh)).toBe('1459.8');
+    expect(hours(evm.evMh)).toBe('1330.8');
+    expect(hours(evm.acMh)).toBe('1661.5');
   });
 
   it('reports SPI, both CPIs and TCPI', () => {
-    expect(present(r.evm.spi).text).toBe('0.91');
-    expect(present(r.evm.cpiAllIn).text).toBe('0.80');
-    expect(present(r.evm.cpiPlannedScope).text).toBe('0.92');
-    expect(present(r.evm.tcpi).text).toBe('1.26');
+    expect(present(evm.spi).text).toBe('0.91');
+    expect(present(evm.cpiAllIn).text).toBe('0.80');
+    expect(present(evm.cpiPlannedScope).text).toBe('0.92');
+    expect(present(evm.tcpi).text).toBe('1.26');
   });
 
   it('reports the forecast', () => {
-    expect(present(r.evm.eacMh).text).toBe('3665.6');
-    expect(present(r.evm.etcMh).text).toBe('2004.1');
-    expect(present(r.evm.vacMh).text).toBe('-729.6');
-    expect(r.forecast.forecastFinish).toBe('2026-12-15');
-    expect(r.forecast.baselineFinish).toBe('2026-11-27');
+    expect(present(evm.eacMh).text).toBe('3665.6');
+    expect(present(evm.etcMh).text).toBe('2004.1');
+    expect(present(evm.vacMh).text).toBe('-729.6');
+    expect(forecast.forecastFinish).toBe('2026-12-15');
+    expect(forecast.baselineFinish).toBe('2026-11-27');
   });
 
   it('splits Unplanned Work into all three of its components', () => {
@@ -162,7 +175,7 @@ describe('demo dataset — golden EVM figures', () => {
   });
 
   it('flags the slipped milestone that keeps Schedule out of green', () => {
-    expect(r.milestones.filter((m) => m.slipped).map((m) => m.name)).toEqual([
+    expect(milestones.filter((m) => m.slipped).map((m) => m.name)).toEqual([
       'Checkout feature complete',
     ]);
   });
@@ -171,48 +184,5 @@ describe('demo dataset — golden EVM figures', () => {
     const check = checkLedgerInvariant(state.ledger, state.snapshots[state.snapshots.length - 1]!);
     expect(check.violations).toEqual([]);
     expect(check.ok).toBe(true);
-  });
-});
-
-describe('client projection (FR-34 / AD-12)', () => {
-  const { result } = review();
-  const c = clientProjection(result, 'EC phase 2', DEFAULT_VISIBILITY);
-
-  it('shows the same Health Indicators and Unplanned Work share as the PM Review', () => {
-    expect(c.overall).toBe('red');
-    expect(c.unplanned.sharePeriod).toBe('16.8%');
-    expect(c.unplanned.hours).toBe('29.1');
-  });
-
-  it('carries no money, rates, people, Tracker Accounts or Ticket content', () => {
-    // No exact quantity at all: a `bigint` (milli-hours, yen) or a `Ratio` (whose num/den are
-    // milli-hours) is a magnitude the client is not shown, even when no field names money.
-    const exact: string[] = [];
-    const walk = (node: unknown, path: string): void => {
-      if (typeof node === 'bigint') exact.push(`${path} is a bigint`);
-      else if (node !== null && typeof node === 'object') {
-        if ('num' in node && 'den' in node) exact.push(`${path} is a Ratio`);
-        for (const [k, v] of Object.entries(node)) walk(v, `${path}.${k}`);
-      }
-    };
-    walk(c, '$');
-    expect(exact).toEqual([]);
-    const serialised = JSON.stringify(c);
-    expect(serialised).not.toMatch(/¥/);
-    expect(serialised).not.toMatch(/yenPerHour|jpy|Jpy/);
-    // no Ticket keys, no assignee account ids, no resource names
-    expect(serialised).not.toMatch(/EC2-\d+/);
-    expect(serialised).not.toMatch(/bk-\d+/);
-    expect(serialised).not.toMatch(/Nguyen|Tran|Le Thu|Pham|Vo Gia|Do Hong/);
-  });
-
-  it('hides the optional sections by default but never the Unplanned Work indicator', () => {
-    expect(c.unplanned.breakdown).toBeNull();
-    expect(c.evm).toBeNull();
-    expect(c.indicators.find((i) => i.key === 'unplanned')).toBeDefined();
-  });
-
-  it('shows the schedule only to WBS level 2', () => {
-    expect(c.schedule.every((s) => s.wbsCode.split('.').length <= 2)).toBe(true);
   });
 });

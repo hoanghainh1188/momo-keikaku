@@ -214,8 +214,8 @@ export interface ReadUseCase {
  * Everything a Project bundle must carry, read out of the fixture.
  *
  * The two bundle reads (`getProjectHeader`, `getProjectReview`) return the same bundle, so
- * both declare this. A read that legitimately returns less declares its own, as the Client
- * View and the Mapping surface do below — which is the point of putting it on
+ * both declare this. A read that legitimately returns less declares its own, as the Mapping
+ * surface does below — which is the point of putting it on
  * the entry rather than in the harness: "this use case returns less" becomes a statement
  * somebody writes down, not a gap nobody notices.
  *
@@ -260,30 +260,6 @@ export function projectBundleLabels(state: DemoState): string[] {
         m.actor,
         ...(m.wpId === null ? [] : [m.wpId]),
       ]),
-    ]),
-  ];
-}
-
-/**
- * What the Client View must carry: the client's and the Project's names, the Milestones, and
- * the Schedule to WBS level 2 — read out of the fixture as the projection selects them.
- *
- * Deliberately NOT `projectBundleLabels`: the projection is FR-34's client-safe type, with no
- * Resource, Tracker Account, Ticket, Rule or Rate, so requiring those would be requiring a
- * leak. The Milestone and Schedule rows come from the ACTIVE Baseline and the Current Plan's
- * leaves, the same selection `computeReview` and `clientProjection` make.
- */
-export function clientViewLabels(state: DemoState): string[] {
-  const baseline = state.baselineVersions.find((b) => b.seq === state.activeBaselineSeq);
-  const milestoneIds = new Set(baseline?.wps.filter((b) => b.isMilestone).map((b) => b.wpId));
-  return [
-    ...new Set([
-      state.fixture.project.name,
-      state.fixture.project.clientName,
-      ...state.wps.filter((w) => milestoneIds.has(w.id)).map((w) => w.name),
-      ...state.wps
-        .filter((w) => w.isLeaf && w.wbsCode.split('.').length <= 2)
-        .flatMap((w) => [w.wbsCode, w.name]),
     ]),
   ];
 }
@@ -355,26 +331,6 @@ export const READ_USE_CASES: readonly ReadUseCase[] = [
         { projectId: target.projectId },
       ),
     mustSurface: projectBundleLabels,
-  },
-  {
-    name: 'getClientView',
-    kind: 'read',
-    why:
-      'The Client View preview (apps/web c/[projectId]): repo.ts loadReview, then the ' +
-      'client projection with the default visibility. Driven on its own because the ' +
-      'projection is what a client would see, so a foreign or demo string reaching it is the ' +
-      'leak that matters most, and because its not_found is what the page\'s 404 rests on.',
-    invoke: (deps, target) =>
-      readSurface.getClientView(
-        deps,
-        contextOf(target),
-        { projectId: target.projectId },
-      ),
-    mustSurface: clientViewLabels,
-    // The projection is FR-34's client-safe subset: names, Milestones and the WBS-level-2
-    // Schedule — no Resource, Ticket, Rule or Account. The demo result carries 84 labelled
-    // strings (measured 2026-09-21), against the 100 a bundle read clears many times over.
-    minimumLabels: 50,
   },
   {
     name: 'getProjectMapping',

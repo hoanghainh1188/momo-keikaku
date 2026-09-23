@@ -667,11 +667,11 @@ describe.each(MEMBERSHIP_CASES)('the $binding membership binding', ({ call, writ
 
 /**
  * The read bindings, the same way: each must reach the read port as the demo Tenant, on the
- * restricted handle, and run ITS use case. The two projection reads (the web → domain/present
- * edge moved the Client View's projection and the Mapping join off the pages) both load the
- * Review, so a binding pointed at the other one would still typecheck — the value's shape is
- * what tells them apart. The Review is the demo fixture computed through the domain, no
- * database; the bundle carries the fields the projections read.
+ * restricted handle, and run ITS use case. The Review read and the Mapping projection (the
+ * web → domain/present edge moved the Mapping join off the page) both load the Review, so a
+ * binding pointed at the other one would still typecheck — the value's shape is what tells
+ * them apart. The Review is the demo fixture computed through the domain, no database; the
+ * bundle carries the fields the projection reads.
  */
 function demoReview(): ProjectReview {
   const state = buildDemoState();
@@ -692,7 +692,6 @@ function demoReview(): ProjectReview {
   };
   const bundle = {
     project: state.project,
-    meta: { clientName: 'Demo Client' },
     input,
     wps: state.wps,
     rules: state.fixture.mappingRules.map((rule) => ({ ...rule, currentlyMapped: 0 })),
@@ -719,16 +718,6 @@ const READ_CASES: readonly {
     call: () => composition.getProjectReview({ projectId: 'prj-ec2' }),
     port: 'loadReview',
     check: (value) => expect(value).toBe(REVIEW),
-  },
-  {
-    binding: 'getClientView',
-    call: () => composition.getClientView({ projectId: 'prj-ec2' }),
-    port: 'loadReview',
-    check: (value) =>
-      expect(value).toMatchObject({
-        clientName: 'Demo Client',
-        projection: { projectName: REVIEW.bundle.project.name, evm: null },
-      }),
   },
   {
     binding: 'getProjectMapping',
@@ -840,7 +829,7 @@ describe('the request context the bindings run with', () => {
   it('redirects a signed-in user with no membership to /no-access', async () => {
     spies.membershipsOf.mockResolvedValueOnce([]);
     spies.session.activeTenantId = null;
-    expect(await redirectTarget(() => composition.getClientView({ projectId: 'prj-ec2' }))).toBe('/no-access');
+    expect(await redirectTarget(() => composition.getProjectMapping({ projectId: 'prj-ec2' }))).toBe('/no-access');
     reachedNothing();
   });
 

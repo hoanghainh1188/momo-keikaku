@@ -1,7 +1,7 @@
 import { attribute, type AttributionResult, type Buckets } from './attribution';
 import { compareNfkcNumeric } from './text/compareNfkc';
 import type { HolidayCalendar, IsoDate, ReportingPeriod } from './calendar';
-import { computeEvm, type EvmResult, type WpMeasure } from './evm';
+import { computeEvm, FORMULA_VERSION, type EvmResult, type WpMeasure } from './evm';
 import { computeForecast, type ForecastResult } from './forecast';
 import { computeHealth, isBehindPlan, type HealthColour, type HealthIndicator } from './health';
 import { mappingHead, type MappingHeadEntry } from './mapping';
@@ -35,7 +35,8 @@ export interface ReviewInput {
   calendar: HolidayCalendar;
   wps: WorkPackage[];
   baselineVersions: BaselineVersion[];
-  activeBaselineSeq: number;
+  /** Null while the Project has no Baseline (story 2.2, decision Q1-A): the Review is then partial. */
+  activeBaselineSeq: number | null;
   ledger: LedgerEntry[];
   mappingEvents: MappingEvent[];
   pinnedSnapshot: SnapshotRead & { snapshotId: string };
@@ -68,7 +69,7 @@ export interface MilestoneRow {
   wbsCode: string;
   name: string;
   baselineDate: IsoDate;
-  currentDate: IsoDate | null;
+  /** The milestone's actual finish (its head `wp_status_event`). */
   doneDate: IsoDate | null;
   slipped: boolean;
 }
@@ -79,8 +80,9 @@ export interface DivergenceRow {
   name: string;
   baselineStart: IsoDate | null;
   baselineFinish: IsoDate | null;
-  currentStart: IsoDate | null;
-  currentFinish: IsoDate | null;
+  /** The WP's actual dates (its head `wp_status_event`); a WP carries no planned date. */
+  actualStart: IsoDate | null;
+  actualFinish: IsoDate | null;
   baselineMh: Mh;
   plannedMh: Mh;
   acMh: Mh;
@@ -92,19 +94,29 @@ export interface DivergenceRow {
   nonBaselined: boolean;
 }
 
+/**
+ * A Reconciliation Review. With no active Baseline (story 2.2, decision Q1-A) it is PARTIAL, not
+ * an error: `evm`, `money`, `forecast`, `milestones` and `divergence` are null, Schedule and
+ * Effort/Cost are unavailable, and Coverage, AC and the Unplanned split still compute — every
+ * mapped hour then counts as non-baselined Unplanned Work, because no ledger entry was ingested
+ * under a Baseline.
+ */
 export interface ReviewResult {
   formulaVersion: string;
   snapshot: { id: string; observedAt: string; ticketCount: number };
   measurementBasis: 'hours' | 'count';
-  evm: EvmResult;
+  /** Null while the Project has no Baseline. */
+  evm: EvmResult | null;
   /**
    * PV and EV in money, at the Project default Rate (`costOf`, half-even per figure). AC's money
    * is `attribution.cumulative.totalJpy`, at the per-Resource Rate in force on each hour's date.
+   * Null while the Project has no Baseline.
    */
-  money: { pvJpy: Jpy; evJpy: Jpy };
+  money: { pvJpy: Jpy; evJpy: Jpy } | null;
   /** SPI strictly below 1, compared exactly (`isBehindPlan`); false while SPI is unavailable. */
   behindPlan: boolean;
-  forecast: ForecastResult;
+  /** Null while the Project has no Baseline. */
+  forecast: ForecastResult | null;
   health: { indicators: HealthIndicator[]; overall: HealthColour; overallNote: string | null };
   attribution: AttributionResult;
   unplanned: {
@@ -117,8 +129,10 @@ export interface ReviewResult {
   };
   scopeLedger: { key: string; label: string; mh: Mh; share: Ratio }[];
   unmappedGroups: UnmappedGroup[];
-  milestones: MilestoneRow[];
-  divergence: DivergenceRow[];
+  /** Null while the Project has no Baseline: a milestone's slip is judged against it. */
+  milestones: MilestoneRow[] | null;
+  /** Null while the Project has no Baseline. */
+  divergence: DivergenceRow[] | null;
   coverage: { mappedTicketShare: Ratio; mappedHourShare: Ratio; unmappedTickets: number };
   dispositions: DispositionEvent[];
   explainNotes: { note: string; ticketCount: number; mh: Mh }[];
@@ -127,8 +141,7 @@ export interface ReviewResult {
 
 export function computeReview(input: ReviewInput): ReviewResult {
   const head = mappingHead(input.mappingEvents);
-  const baseline = input.baselineVersions.find((b) => b.seq === input.activeBaselineSeq);
-  if (!baseline) throw new Error(`no baseline version with seq ${input.activeBaselineSeq}`);
+  const baseline = activeBaseline(input);
 
   const attribution = attribute({
     entries: input.ledger,
@@ -155,38 +168,23 @@ export function computeReview(input: ReviewInput): ReviewResult {
   const plannedScopeAcMh =
     attribution.cumulative.mappedBaselinedMh + attribution.cumulative.catchAllMh;
 
-  const evm = computeEvm({
-    asOf: input.asOf,
-    calendar: input.calendar,
-    baseline,
-    wps: input.wps,
-    mappedTicketsByWp,
-    acByWp: attribution.acByWp,
-    unplannedAcMh: attribution.cumulative.unplannedMh,
-    totalAcMh: attribution.cumulative.totalMh,
-    plannedScopeAcMh,
-    measurementBasis,
-  });
+  const evm =
+    baseline === null
+      ? null
+      : computeEvm({
+          asOf: input.asOf,
+          calendar: input.calendar,
+          baseline,
+          wps: input.wps,
+          mappedTicketsByWp,
+          acByWp: attribution.acByWp,
+          unplannedAcMh: attribution.cumulative.unplannedMh,
+          totalAcMh: attribution.cumulative.totalMh,
+          plannedScopeAcMh,
+          measurementBasis,
+        });
 
-  const wpById = new Map(input.wps.map((w) => [w.id, w]));
-  const baselineWpById = new Map(baseline.wps.map((b) => [b.wpId, b]));
-
-  // FR-31: milestone slip
-  const milestones: MilestoneRow[] = baseline.wps
-    .filter((b) => b.isMilestone)
-    .map((b) => {
-      const wp = wpById.get(b.wpId);
-      const done = wp?.milestoneDoneAt ?? null;
-      return {
-        wbsCode: wp?.wbsCode ?? '',
-        name: wp?.name ?? '',
-        baselineDate: b.finish,
-        currentDate: wp?.finish ?? null,
-        doneDate: done,
-        slipped: !done && input.asOf > b.finish,
-      };
-    })
-    .sort((a, b) => compareNfkcNumeric(a.wbsCode, b.wbsCode));
+  const milestones = baseline === null ? null : milestoneRows(baseline, input.wps, input.asOf);
 
   const sharePeriod =
     attribution.period.totalMh > 0n
@@ -202,13 +200,16 @@ export function computeReview(input: ReviewInput): ReviewResult {
     thresholds: input.project.thresholds,
     unplannedSharePeriod: sharePeriod,
     unplannedShareCumulative: shareCumulative,
-    slippedMilestones: milestones
+    slippedMilestones: (milestones ?? [])
       .filter((m) => m.slipped)
       .map((m) => ({ wbsCode: m.wbsCode, name: m.name, baselineDate: m.baselineDate })),
     measurementBasis,
   });
 
-  const forecast = computeForecast(evm, baseline, input.asOf, input.calendar);
+  const forecast =
+    baseline === null || evm === null
+      ? null
+      : computeForecast(evm, baseline, input.asOf, input.calendar);
 
   // --- FR-28: Unmapped Work grouped by Tracker attribute, expandable to Tickets
   const dispositionByTicket = new Map<string, DispositionKind>();
@@ -253,33 +254,10 @@ export function computeReview(input: ReviewInput): ReviewResult {
   }
   const unmappedGroups = [...groups.values()].sort((a, b) => compareBigint(b.mh, a.mh));
 
-  // --- Divergence by WP (Baseline vs Current Plan vs actual)
-  const perWpById = new Map(evm.perWp.map((w) => [w.wpId, w]));
-  const divergence: DivergenceRow[] = input.wps
-    .filter((w) => w.isLeaf)
-    .map((w) => {
-      const b = baselineWpById.get(w.id);
-      const m = perWpById.get(w.id);
-      return {
-        wpId: w.id,
-        wbsCode: w.wbsCode,
-        name: w.name,
-        baselineStart: b?.start ?? null,
-        baselineFinish: b?.finish ?? null,
-        currentStart: w.start,
-        currentFinish: w.finish,
-        baselineMh: b?.baselineMh ?? 0n,
-        plannedMh: w.plannedMh,
-        acMh: attribution.acByWp.get(w.id) ?? 0n,
-        evMh: m?.evMh ?? 0n,
-        pctComplete: m?.pctComplete ?? ZERO,
-        pctBasis: m?.pctBasis ?? 'no-evidence',
-        lowEvidence: m?.lowEvidence ?? true,
-        isCatchAll: w.isCatchAll,
-        nonBaselined: !b,
-      };
-    })
-    .sort((a, b) => compareNfkcNumeric(a.wbsCode, b.wbsCode));
+  const divergence =
+    baseline === null || evm === null
+      ? null
+      : divergenceRows(baseline, evm, input.wps, attribution.acByWp);
 
   // --- FR-23 coverage
   const totalTickets = input.pinnedSnapshot.tickets.length;
@@ -320,7 +298,7 @@ export function computeReview(input: ReviewInput): ReviewResult {
     }));
 
   return {
-    formulaVersion: input.formulaVersion ?? evm.formulaVersion,
+    formulaVersion: input.formulaVersion ?? FORMULA_VERSION,
     snapshot: {
       id: input.pinnedSnapshot.snapshotId,
       observedAt: input.pinnedSnapshot.observedAt,
@@ -328,11 +306,14 @@ export function computeReview(input: ReviewInput): ReviewResult {
     },
     measurementBasis,
     evm,
-    money: {
-      pvJpy: costOf(evm.pvMh, input.project.defaultRateYenPerHour),
-      evJpy: costOf(evm.evMh, input.project.defaultRateYenPerHour),
-    },
-    behindPlan: isBehindPlan(evm.spi),
+    money:
+      evm === null
+        ? null
+        : {
+            pvJpy: costOf(evm.pvMh, input.project.defaultRateYenPerHour),
+            evJpy: costOf(evm.evMh, input.project.defaultRateYenPerHour),
+          },
+    behindPlan: evm !== null && isBehindPlan(evm.spi),
     forecast,
     health,
     attribution,
@@ -369,6 +350,76 @@ export function computeReview(input: ReviewInput): ReviewResult {
     explainNotes,
     openingBalanceMh: attribution.openingBalanceMh,
   };
+}
+
+/**
+ * The active Baseline, or null when the Project has none. A seq naming no version is an
+ * inconsistent input, not a missing Baseline, and still throws.
+ */
+function activeBaseline(input: ReviewInput): BaselineVersion | null {
+  if (input.activeBaselineSeq === null) return null;
+  const baseline = input.baselineVersions.find((b) => b.seq === input.activeBaselineSeq);
+  if (!baseline) throw new Error(`no baseline version with seq ${input.activeBaselineSeq}`);
+  return baseline;
+}
+
+/** FR-31: milestone slip, judged against the Baseline date; done is the actual finish. */
+function milestoneRows(
+  baseline: BaselineVersion,
+  wps: readonly WorkPackage[],
+  asOf: IsoDate,
+): MilestoneRow[] {
+  const wpById = new Map(wps.map((w) => [w.id, w]));
+  return baseline.wps
+    .filter((b) => b.isMilestone)
+    .map((b) => {
+      const wp = wpById.get(b.wpId);
+      const done = wp?.isMilestone ? wp.actualFinish : null;
+      return {
+        wbsCode: wp?.wbsCode ?? '',
+        name: wp?.name ?? '',
+        baselineDate: b.finish,
+        doneDate: done,
+        slipped: !done && asOf > b.finish,
+      };
+    })
+    .sort((a, b) => compareNfkcNumeric(a.wbsCode, b.wbsCode));
+}
+
+/** Divergence by WP: the Baseline against the Current Plan's effort and the actual dates. */
+function divergenceRows(
+  baseline: BaselineVersion,
+  evm: EvmResult,
+  wps: readonly WorkPackage[],
+  acByWp: ReadonlyMap<string, Mh>,
+): DivergenceRow[] {
+  const baselineWpById = new Map(baseline.wps.map((b) => [b.wpId, b]));
+  const perWpById = new Map(evm.perWp.map((w) => [w.wpId, w]));
+  return wps
+    .filter((w) => w.isLeaf)
+    .map((w) => {
+      const b = baselineWpById.get(w.id);
+      const m = perWpById.get(w.id);
+      return {
+        wpId: w.id,
+        wbsCode: w.wbsCode,
+        name: w.name,
+        baselineStart: b?.start ?? null,
+        baselineFinish: b?.finish ?? null,
+        actualStart: w.actualStart,
+        actualFinish: w.actualFinish,
+        baselineMh: b?.baselineMh ?? 0n,
+        plannedMh: w.plannedMh,
+        acMh: acByWp.get(w.id) ?? 0n,
+        evMh: m?.evMh ?? 0n,
+        pctComplete: m?.pctComplete ?? ZERO,
+        pctBasis: m?.pctBasis ?? 'no-evidence',
+        lowEvidence: m?.lowEvidence ?? true,
+        isCatchAll: w.isCatchAll,
+        nonBaselined: !b,
+      };
+    })
+    .sort((a, b) => compareNfkcNumeric(a.wbsCode, b.wbsCode));
 }
 
 export type { MappingHeadEntry };

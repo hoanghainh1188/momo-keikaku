@@ -74,11 +74,17 @@ export interface WorkPackage {
   isLeaf: boolean;
   isMilestone: boolean;
   isCatchAll: boolean;
-  start: IsoDate | null;
-  finish: IsoDate | null;
   plannedMh: Mh; // Current Plan
-  completedAt: string | null;
-  milestoneDoneAt: IsoDate | null;
+  /**
+   * AD-25: the WP's actual dates, read from its head `wp_status_event` (the highest `seq`). A WP
+   * carries no planned date: planned dates are the scheduler's output, and every planned date the
+   * domain reads today comes from the active Baseline's `baseline_wp` rows.
+   *
+   * `actualFinish` on a leaf that is not a milestone is "marked complete" (it lifts FR-30's 99%
+   * cap); on a milestone it is "milestone done".
+   */
+  actualStart: IsoDate | null;
+  actualFinish: IsoDate | null;
   assignedResourceIds: string[];
 }
 

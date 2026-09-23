@@ -94,8 +94,7 @@ run('Seeding the demo project and replaying the fixture Connector', 'pnpm', ['se
 
 process.stdout.write(
   `\n[1m▸ Starting the web app[0m\n` +
-    `\n  Reconciliation Review  http://localhost:${WEB_PORT}/p/prj-ec2/review` +
-    `\n  Client View preview    http://localhost:${WEB_PORT}/c/prj-ec2\n\n`,
+    `\n  Reconciliation Review  http://localhost:${WEB_PORT}/p/prj-ec2/review\n\n`,
 );
 
 const web = spawn('pnpm', ['--filter', '@momo/web', 'exec', 'next', 'dev', '-p', String(WEB_PORT)], {

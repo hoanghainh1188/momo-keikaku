@@ -5,8 +5,7 @@ import { NextResponse, type NextRequest } from 'next/server';
  * it with a `Request` and a fake session check — no composition root, no Better Auth, no database.
  *
  * Every route but `/sign-in`, `/no-access`, `/forgot-password`, `/reset-password` and
- * `/api/auth/*` requires a session — `/c/` included,
- * because the Client View is a PM/Admin preview until OQ-8. For those routes it:
+ * `/api/auth/*` requires a session. For those routes it:
  *
  *   * asks the session check, which also SLIDES the session (Better Auth pushes its expiry forward
  *     when it is older than `updateAge`) and returns the `Set-Cookie` that carries the new

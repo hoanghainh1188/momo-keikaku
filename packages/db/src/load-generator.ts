@@ -99,11 +99,9 @@ export function generateLoadFixture(seed: number = LOAD_FIXTURE_SEED): LoadFixtu
         isLeaf: false,
         isMilestone: false,
         isCatchAll: false,
-        start: null,
-        finish: null,
         plannedMh: 0n,
-        completedAt: null,
-        milestoneDoneAt: null,
+        actualStart: null,
+        actualFinish: null,
         assignedResourceIds: [],
       });
 
@@ -124,11 +122,9 @@ export function generateLoadFixture(seed: number = LOAD_FIXTURE_SEED): LoadFixtu
           isLeaf: true,
           isMilestone: false,
           isCatchAll: leaf === LEAVES_PER_PHASE && phase === PHASE_COUNT,
-          start,
-          finish,
           plannedMh: mhFromJson(plannedMh),
-          completedAt: null,
-          milestoneDoneAt: null,
+          actualStart: null,
+          actualFinish: null,
           assignedResourceIds: [res.id],
         });
         baselineWps.push({
@@ -188,7 +184,7 @@ export function loadFixtureFingerprint(shape: LoadFixtureShape): string {
     lines.push(`prj:${p.id}:${p.name}`);
     for (const w of p.wps) {
       lines.push(
-        `wp:${w.id}:${w.wbsCode}:${w.parentId ?? ''}:${w.isLeaf ? 1 : 0}:${w.plannedMh.toString()}:${w.assignedResourceIds.join(',')}:${w.start ?? ''}:${w.finish ?? ''}`,
+        `wp:${w.id}:${w.wbsCode}:${w.parentId ?? ''}:${w.isLeaf ? 1 : 0}:${w.plannedMh.toString()}:${w.assignedResourceIds.join(',')}:${w.actualStart ?? ''}:${w.actualFinish ?? ''}`,
       );
     }
     lines.push(`bl:${p.baseline.id}:${p.baseline.seq}`);

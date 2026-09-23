@@ -311,27 +311,25 @@ export async function writeTenantRows(
     })),
   );
 
-  // Actual dates live in `wp_status_event` alone (AD-25). The fixture records an actual finish as
-  // `completedAt` (a WP marked complete) or `milestoneDoneAt` (a milestone reached); each becomes
-  // one event restating the WP's whole actual state. No actual start is invented: the fixture
-  // never recorded one.
-  const statusEvents = state.wps.flatMap((w) => {
-    const actualFinish = w.milestoneDoneAt ?? (w.completedAt ? w.completedAt.slice(0, 10) : null);
-    return actualFinish === null
+  // Actual dates live in `wp_status_event` alone (AD-25). A fixture WP with any actual date
+  // becomes one event restating its whole actual state `(actualStart, actualFinish)`; a WP with
+  // neither gets no event, so its head reads as no actual dates at all.
+  const statusEvents = state.wps.flatMap((w) =>
+    w.actualStart === null && w.actualFinish === null
       ? []
       : [
           {
             tenantId,
             projectId: f.project.id,
             wpId: w.id,
-            actualStart: null,
-            actualFinish,
+            actualStart: w.actualStart,
+            actualFinish: w.actualFinish,
             source: 'seed',
             actor: actorOf(own(DEMO_USERS.linh.id)),
             at: stamp,
           },
-        ];
-  });
+        ],
+  );
   if (statusEvents.length > 0) {
     await tx.insert(s.wpStatusEvent).values(statusEvents);
   }

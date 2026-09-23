@@ -1,13 +1,18 @@
 import { getTranslations } from 'next-intl/server';
 import { getProjectReview } from '@/server/composition';
 import { valueOrNotFound } from '@/server/result';
-import { earnedProgress, hours, type Mh } from '@momo/domain/present';
+import { hours, type Mh } from '@momo/domain/present';
 import { Section } from '@/components/ui';
-import { GanttRow, ganttScale } from '@/components/gantt';
 
 export const dynamic = 'force-dynamic';
 
-/** FR-5, FR-7: the Current Plan as a tree grid with Baseline vs Current bars. */
+/**
+ * FR-5, FR-7: the Current Plan as a tree grid against the active Baseline.
+ *
+ * A Work Package carries no planned date (story 2.2): its dates here are the Baseline's and its
+ * actual dates. The scheduler's derived dates, and the tree grid that shows them, arrive with
+ * stories 2.5–2.13.
+ */
 export default async function PlanPage({
   params,
 }: {
@@ -18,64 +23,57 @@ export default async function PlanPage({
   const { projectId } = await params;
   const { bundle, review: r } = valueOrNotFound(await getProjectReview({ projectId }));
 
-  const baselineByWp = new Map(bundle.baseline.wps.map((b) => [b.wpId, b]));
+  const baseline = bundle.baseline;
+  const baselineByWp = new Map((baseline?.wps ?? []).map((b) => [b.wpId, b]));
   const acByWp = r.attribution.acByWp;
-  const evByWp = new Map(r.evm.perWp.map((w) => [w.wpId, w]));
 
-  // roll-ups (FR-5): summary WP effort and dates come from the children
+  // roll-ups (FR-5): summary WP effort comes from the children
   const children = new Map<string, typeof bundle.wps>();
   for (const w of bundle.wps) {
     if (!w.parentId) continue;
     children.set(w.parentId, [...(children.get(w.parentId) ?? []), w]);
   }
-  const rollUp = (id: string): { mh: Mh; baselineMh: Mh; acMh: Mh; start: string | null; finish: string | null } => {
+  const rollUp = (id: string): { mh: Mh; baselineMh: Mh; acMh: Mh } => {
     const kids = children.get(id) ?? [];
     let mh = 0n;
     let baselineMh = 0n;
     let acMh = 0n;
-    let start: string | null = null;
-    let finish: string | null = null;
     for (const k of kids) {
       const sub = k.isLeaf
         ? {
             mh: k.plannedMh,
             baselineMh: baselineByWp.get(k.id)?.baselineMh ?? 0n,
             acMh: acByWp.get(k.id) ?? 0n,
-            start: k.start,
-            finish: k.finish,
           }
         : rollUp(k.id);
       mh += sub.mh;
       baselineMh += sub.baselineMh;
       acMh += sub.acMh;
-      if (sub.start && (!start || sub.start < start)) start = sub.start;
-      if (sub.finish && (!finish || sub.finish > finish)) finish = sub.finish;
     }
-    return { mh, baselineMh, acMh, start, finish };
+    return { mh, baselineMh, acMh };
   };
-
-  const allDates = bundle.wps
-    .flatMap((w) => [w.start, w.finish])
-    .concat(bundle.baseline.wps.flatMap((b) => [b.start, b.finish]))
-    .filter((d): d is string => Boolean(d))
-    .sort();
-  const scale = ganttScale(allDates[0]!, allDates[allDates.length - 1]!);
 
   const roots = bundle.wps.filter((w) => !w.parentId);
 
   return (
     <div className="sheet">
       <h1 className="report-title">{t('plan.plan_work_breakdown_structure')}</h1>
-      <div className="report-sub">{t('plan.current_plan_solid_indigo_against_the_active_bas')}</div>
-      <div className="report-sub" style={{ marginTop: 8 }}>
-        {t('plan.active_baseline')}
-        <strong>{bundle.baseline.id}</strong>{' '}
-        {t('plan.baseline_recorded', {
-          date: bundle.meta.baselineRecordedAt.slice(0, 10),
-          reason: bundle.meta.baselineReason,
-          bac: hours(r.evm.bacMh),
-          leafCount: bundle.baseline.wps.filter((b) => b.baselineMh > 0n).length,
-        })}
+      <div className="report-sub">{t('plan.the_baseline_is_never_edited')}</div>
+      <div className="report-sub" style={{ marginTop: 8 }} data-testid="active-baseline">
+        {baseline === null || r.evm === null ? (
+          <span className="tag">{t('review.no_baseline_yet')}</span>
+        ) : (
+          <>
+            {t('plan.active_baseline')}
+            <strong>{baseline.id}</strong>{' '}
+            {t('plan.baseline_recorded', {
+              date: bundle.meta.baselineRecordedAt.slice(0, 10),
+              reason: bundle.meta.baselineReason,
+              bac: hours(r.evm.bacMh),
+              leafCount: baseline.wps.filter((b) => b.baselineMh > 0n).length,
+            })}
+          </>
+        )}
       </div>
 
       <Section title={t('plan.tree_schedule')} id="wbs">
@@ -88,10 +86,7 @@ export default async function PlanPage({
               <th className="num">{t('plan.current_plan_h')}</th>
               <th className="num">{t('plan.actual_h')}</th>
               <th>{t('plan.baseline_dates')}</th>
-              <th>{t('plan.current_dates')}</th>
-              <th style={{ width: '32%' }}>
-                {t('plan.gantt_column_header', { from: scale.from, to: scale.to })}
-              </th>
+              <th>{t('plan.actual_dates')}</th>
             </tr>
           </thead>
           <tbody>
@@ -104,11 +99,15 @@ export default async function PlanPage({
                 const baselineMh = agg ? agg.baselineMh : (b?.baselineMh ?? 0n);
                 const plannedMh = agg ? agg.mh : w.plannedMh;
                 const acMh = agg ? agg.acMh : (acByWp.get(w.id) ?? 0n);
-                const start = agg ? agg.start : w.start;
-                const finish = agg ? agg.finish : w.finish;
-                const ev = evByWp.get(w.id);
-                const slipped =
-                  b && finish && finish > b.finish ? true : false;
+                // A leaf's actual dates; a summary's would be a roll-up, which is the scheduler's.
+                const actualStart = isSummary ? null : w.actualStart;
+                const actualFinish = isSummary ? null : w.actualFinish;
+                // Late: finished after the Baseline finish, or a milestone not reached by it.
+                const late = Boolean(
+                  b &&
+                    ((actualFinish && actualFinish > b.finish) ||
+                      (w.isMilestone && !actualFinish && bundle.input.asOf > b.finish)),
+                );
                 return (
                   <tr key={w.id} data-testid={`wp-${w.wbsCode}`}>
                     <td style={{ fontWeight: isSummary ? 600 : 400 }}>{w.wbsCode}</td>
@@ -129,22 +128,8 @@ export default async function PlanPage({
                     <td className="caption">
                       {b ? `${b.start} → ${b.finish}` : em}
                     </td>
-                    <td className="caption" style={slipped ? { color: 'var(--health-amber)' } : undefined}>
-                      {start && finish ? `${start} → ${finish}` : em}
-                    </td>
-                    <td>
-                      <GanttRow
-                        scale={scale}
-                        baseline={b ? { start: b.start, finish: b.finish } : null}
-                        current={start && finish ? { start, finish } : null}
-                        earned={earnedProgress(ev?.pctComplete)}
-                        isMilestone={w.isMilestone}
-                        slipped={
-                          w.isMilestone && b
-                            ? !w.milestoneDoneAt && bundle.input.asOf > b.finish
-                            : slipped
-                        }
-                      />
+                    <td className="caption" style={late ? { color: 'var(--health-amber)' } : undefined}>
+                      {actualStart || actualFinish ? `${actualStart ?? em} → ${actualFinish ?? em}` : em}
                     </td>
                   </tr>
                 );
@@ -152,7 +137,7 @@ export default async function PlanPage({
             })}
           </tbody>
         </table>
-        <p className="caption" style={{ marginTop: 12 }}>{t('plan.summary_rows_roll_up_effort_and_dates_from_their')}</p>
+        <p className="caption" style={{ marginTop: 12 }}>{t('plan.summary_rows_roll_up_effort')}</p>
       </Section>
     </div>
   );
