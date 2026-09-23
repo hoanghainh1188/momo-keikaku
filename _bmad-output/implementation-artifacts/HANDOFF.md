@@ -1,10 +1,52 @@
-# Handoff — 2026-09-23 (story 1.9 merged)
+# Handoff — 2026-09-23 (stories 2.1 + 2.2 merged)
 
-State at `main` (PR #43, `acbefa6`). **Story 1.9 (every string externalised; currency fixed) is
-`done` — implemented, code-reviewed, CI green, merged.** Epic 1's shippable story line
-**1.3–1.9 is complete.** Next: optional Epic 1 retrospective, then **Epic 2 story 2.1**.
+State at `main` (PR #52, `005798a`). **Stories 2.1 (the scheduling schema lands in one
+migration) and 2.2 (the demo spike is disposed of) are `done`.** Both were implemented,
+reviewed and walked through by the founder, and merged with CI green (1028/1028 tests).
+Epic 2 is `in-progress`. Next: story 1.2's watermark slice (it is now the cause of flaky tests),
+story 1.1 slice B3 (now unblocked), and the next build story, **2.3**.
 
-**Latest (2026-09-23): story 1.9 merged via PR #43.** `@momo/i18n` with identically keyed
+**Latest (2026-09-23): stories 2.1 and 2.2 merged together via PR #52 (founder decision 1-A:
+one branch, one PR, so `main` never went red).**
+- **Migrations replace `push`.** The schema now arrives through **one** migration,
+  `packages/db/drizzle/0000_scheduling_schema.sql`, applied by `pnpm db:migrate` (AD-19/AD-30).
+  **The expand/contract exemption is spent**: every migration from `0001` onward is expand/contract.
+- **Hand-written clauses.** `MATCH FULL` and the `DEFERRABLE INITIALLY DEFERRED` leaf FKs on
+  `wp_dependency` are written by hand. `packages/db/src/schema-catalog.test.ts` pins them against
+  `pg_constraint`/`pg_attribute`, and a CI "Migration drift" step fails when `schema.ts` and the
+  committed migration diverge.
+- **Foreign keys.** 34 composite FKs, each `tenant_id`-led and NO ACTION. The seven with a
+  nullable member are MATCH SIMPLE (decision 3-A; the list is `FK_MATCH_SIMPLE` in `schema.ts`).
+- **New tables.** `wp_dependency`, `wp_status_event` (the only home of actual dates),
+  `holiday_calendar_version`, `schedule_run` and `wp_schedule`.
+- **`work_package`.** It gains `duration_days`, `constraint_type`, `constraint_date`, `child_count`
+  and a STORED `is_leaf`, and loses its four date columns. `baseline_version` points at
+  `schedule_run`.
+- **The seed writes no Baseline** (decision 2-A), so the demo has no Baseline until Epic 4.
+  `computeReview` handles a missing Baseline: EVM, forecast and milestone divergence are null, and
+  all three health indicators are `unavailable` (amended Q1-A). Coverage, AC and the Unplanned
+  split still compute. `demo-golden` keeps the full EVM figures in memory from the fixture Baseline.
+- **Domain type.** `WorkPackage` has no planned dates; `actualStart`/`actualFinish` come from
+  the head `wp_status_event`.
+- **Removed.** `gantt.tsx`, `client-view.ts`, the `c/[projectId]` page and `getClientView`, and
+  everything that existed only for them. The 46-file disposition table is in the 2.2 spec.
+- **`pnpm db:migrate` guard.** It refuses a database created by `push` and prints the recreate
+  command.
+- **Deferred** (in `deferred-work.md`):
+  - two goals split out of 2.2: moving page arithmetic into use cases (plus the SV note fix), and
+    extending the +30% layout gate;
+  - constraint errors should become `AppError` rather than a 500 — including a deferred FK failing
+    at COMMIT — and 2.4/2.10/2.14 must check graph rules app-side before writing;
+  - no web `error.tsx`;
+  - no page render tests;
+  - the ledger→Baseline FK is Tenant-scoped only;
+  - no FKs to `tenant(id)`;
+  - migrations run as the owner, not `migrator`;
+  - `child_count` semantics under soft delete.
+- Specs: `spec-2-1-the-scheduling-schema-lands-in-one-migration.md` and
+  `spec-2-2-the-demo-spike-is-disposed-of-file-by-file.md`, each with a review triage log.
+
+**Previous (2026-09-23): story 1.9 merged via PR #43.** `@momo/i18n` with identically keyed
 `en`/`ja` catalogs (ja = English mirror), `t` / `renderMail` / `buildResetPasswordMail`; next-intl
 on web with R0 UI forced to English; password-reset mail rendered from catalog in
 `auth_user.locale`; use-case `messageKey` mapped at the web edge; `domain/text.compareNfkc` (+
@@ -164,6 +206,11 @@ needs `E` ≥ **28.6**.
   At plan velocity Epic 1 (156 h) closes 2026-10-17. If `E` < 28.6, re-derive
   the R0 date and bring it back to §8.1 **before story 2.1's migration is
   written** — 2.1 spends the expand/contract exemption once.
+  **⚠ Not run (found 2026-09-23).** Epic 1 closed and story 2.1's migration was
+  written and merged (PR #52), but neither the Epic 1 retrospective nor PRD §13
+  records an `E` reading. The 2.1 half of the gate has passed unexamined; the
+  `E` measurement is still owed. Take it before Epic 2 goes further, and bring
+  any date change to §8.1.
 - **Monthly from 2026-11-01**: append one line to PRD §13 with the stories
   closed and hours worked. Any two consecutive months both below 28.6 fire the
   §8.3 cut order at item 0.
@@ -353,22 +400,35 @@ that are blocked below — do not treat those as the next build target.
 Optional but useful before Epic 2: capture lessons, open action items, and whether any
 Correct Course is needed. Status key: `epic-1-retrospective: optional`.
 
-### 3. Story 1.2's watermark slice — blocked
+### 3. Stories 2.1 + 2.2 — DONE on `main` (PR #52, `005798a`)
 
-Advisory locks before `seq` allocation. Needs Epic 2 and Epic 5's writers.
+See "Latest" at the top. After pulling `main`, recreate the local database once (see
+Environment notes): `pnpm db:migrate` refuses a database created by `push`.
 
-### 4. Story 1.1 slice B3 — blocked
+### 4. The velocity checkpoint — owed
 
-`pnpm dev` in one command. Blocked on **story 2.1's migration**.
+The `E` reading that "Where the plan stands" requires at Epic 1 close was never taken. Take it
+before Epic 2 goes much further.
 
-### 5. Next build story: **2.1** — the scheduling schema lands in one migration
+### 5. Story 1.2's watermark slice — now the priority fix
 
-Start with `bmad-build` for story 2.1 (fresh context). That unblocks 1.1 B3 and begins Epic 2
-(plan that re-dates itself). Story 2.2 will dispose the demo spike file-by-file and is where the
-deferred Project/Client +30% layout gate should re-run.
+Take `pg_advisory_xact_lock` before allocating `seq`. **It is now the cause of flaky tests.** A
+full `pnpm test` failed 2 of 17 local runs with `mapping_event_pkey` 23505 from
+`packages/db/src/repo-writes.ts:107`, and `membership`, `org-writes` and `seed-sequences` failed
+in the same runs. If CI goes red in those suites, re-run it. Epic 2's writers (2.9, 2.10) need the
+per-Project lock anyway, so it no longer waits on Epic 5.
 
-Operator note after pulling `main`: run `drizzle-kit push` (or the usual local prepare) so
-`tenant.currency` exists before exercising currency paths.
+### 6. Story 1.1 slice B3 — unblocked
+
+`pnpm dev` in one command. It was blocked on story 2.1's migration, which has now landed.
+
+### 7. Next build story: **2.3** — one canonical order for everything the scheduler reports
+
+Start `bmad-build` for story 2.3 in a fresh context. The engine chain (2.3 → 2.4 → 2.5 → 2.6 →
+2.7) is pure and needs no database. Two goals split out of 2.2 are waiting in `deferred-work.md`,
+each small enough to be a story of its own:
+- moving the pages' arithmetic into use cases, plus the SV note fix;
+- the +30% Project layout gate.
 
 What story 1.3 left, in `deferred-work.md`: the Program-within-Department rule is held by use
 cases and row locks, with no foreign key and no concurrency test; `audit_log.at` for project
@@ -480,9 +540,17 @@ than NFR-A1's list; CI never runs `next build` (it passed locally for story 1.4 
   seed password in use is `momo-demo-2026`; sign in as
   `linh@momo-digital.example` or `hoang@momo-digital.example`. Re-seeding
   truncates `session`, so everyone is signed out.
-- A database created before story 1.4 needs `DROP TABLE IF EXISTS app_user`
-  before `drizzle-kit push`, which otherwise stops on an interactive rename
-  prompt. README-DEMO.md has the full steps.
+- **Since story 2.1 the schema arrives by migration, not `push`.** `pnpm db:migrate` refuses a
+  database created by `drizzle-kit push`, which means any database from before 2.1. Recreate it
+  once:
+  `docker exec momo-keikaku-postgres sh -c 'dropdb -U momo --force momo_keikaku && createdb -U momo momo_keikaku'`,
+  then `pnpm demo`, or run the prepare steps below. Never run `drizzle-kit push` against a
+  migrated database: it can reconcile away the hand-written `MATCH FULL` and `DEFERRABLE` clauses.
+- **Verify the way CI does.** Run `pnpm seed`, not `tsx scripts/seed.ts`. `pnpm seed` loads
+  `apps/web/.env.development` (`CLOCK_MODE=fixture`). Without it the seed stamps `demo_anchor` from
+  the wall clock, the current Reporting Period comes out empty, and `db-round-trip` fails for no
+  real reason. A throwaway database (for example `momo_verify` in the same container) keeps
+  verification off the working database.
 - `.claude/launch.json` starts the web app on 3101 for the agent harness. It
   reads `apps/web/.env.local` (gitignored) for the database URLs and the Better
   Auth pair; create it if it is missing.
@@ -492,7 +560,7 @@ than NFR-A1's list; CI never runs `next build` (it passed locally for story 1.4 
   pnpm 12.4.2.
 - If Postgres is not answering on 55433, Docker Desktop may be stopped: start it,
   then `pnpm db:up`. After a schema change, re-run the prepare steps
-  (`drizzle-kit push --force`, `pnpm db:policies`, `pnpm seed`).
+  (`pnpm db:migrate`, `pnpm pgboss:migrate`, `pnpm db:policies`, `pnpm seed`).
 - A PreToolUse hook blocks `git commit` in any Bash command that also contains
   an `-n` flag (it reads it as `--no-verify`); run `grep -n`/`sed -n` separately.
 - **The local clone goes stale**: work lands via PRs merged from other
