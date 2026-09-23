@@ -357,6 +357,40 @@ async function removeMatrixTenants(client: pg.Client): Promise<void> {
   }
 }
 
+interface Refusal {
+  readonly code: string;
+  /** The constraint PostgreSQL names on the error, when it names one. */
+  readonly constraint: string | undefined;
+}
+
+/** The SQLSTATE and constraint of a rejected statement, or undefined when it was not rejected. */
+async function refusal(work: Promise<unknown>): Promise<Refusal | undefined> {
+  try {
+    await work;
+    return undefined;
+  } catch (error) {
+    const { code, constraint } = error as { code?: unknown; constraint?: unknown };
+    return {
+      code: typeof code === 'string' ? code : 'not-a-pg-error',
+      constraint: typeof constraint === 'string' ? constraint : undefined,
+    };
+  }
+}
+
+/** Like `refusedInRolledBackTx`, but also names the constraint that fired. */
+async function refusalInRolledBackTx(
+  work: (client: pg.Client) => Promise<unknown>,
+): Promise<Refusal | undefined> {
+  return asOwner(async (client) => {
+    await client.query('BEGIN');
+    try {
+      return await refusal(work(client));
+    } finally {
+      await client.query('ROLLBACK');
+    }
+  });
+}
+
 /** Runs `work` in a transaction that is always rolled back, returning its refusal code. */
 async function refusedInRolledBackTx(
   work: (client: pg.Client) => Promise<unknown>,
@@ -475,6 +509,94 @@ describe.skipIf(!reachable)('the I/O matrix of story 2.1, against the migrated s
       );
     });
     expect(code).toBe('23514');
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Story 2.4: the database backstops of FR-6a's graph rules (AR-45, AR-62). The app-side guard
+// (`app/schedule.checkPlanInvariants`) is the check; these prove what is left if it is bypassed.
+
+/** A second Project in a Tenant `writeTenantShell` already wrote, inside the caller's transaction. */
+async function writeSecondProject(client: pg.Client, tenantId: string): Promise<string> {
+  const projectId = `${tenantId}-prj-2`;
+  await client.query(
+    `INSERT INTO project (id, tenant_id, department_id, name, client_name, contract_type,
+       tz_offset_minutes, teirei_weekday, default_rate_jpy, eac_method, calendar_jp, calendar_vn,
+       demo_anchor)
+     VALUES ($1, $2, $3, $1, 'client', '請負', 540, 1, 0, 'typical', true, false,
+       '2026-09-16T09:00:00Z')`,
+    [projectId, tenantId, `${tenantId}-dep`],
+  );
+  return projectId;
+}
+
+describe.skipIf(!reachable)('the database backstops of the four graph rules (story 2.4)', () => {
+  beforeAll(async () => {
+    await asOwner(removeMatrixTenants);
+  });
+
+  it('refuses a cross-project dependency at COMMIT, on a wp_dependency leaf FK (23503)', async () => {
+    const outcome = await asOwner(async (client) => {
+      await client.query('BEGIN');
+      // Setup stays outside the try, so a failure here is not read as "the FK is not deferred".
+      const projectId = await writeTenantShell(client, TENANT_X);
+      const otherProjectId = await writeSecondProject(client, TENANT_X);
+      await writeWp(client, TENANT_X, projectId, 'wp-cat-here');
+      await writeWp(client, TENANT_X, otherProjectId, 'wp-cat-there');
+      try {
+        // One `project_id` for both ends: the successor is looked up in the wrong Project.
+        await client.query(
+          `INSERT INTO wp_dependency (tenant_id, project_id, predecessor_wp_id, successor_wp_id)
+           VALUES ($1, $2, 'wp-cat-here', 'wp-cat-there')`,
+          [TENANT_X, projectId],
+        );
+      } catch (error) {
+        await client.query('ROLLBACK');
+        return { statement: (error as { code?: string }).code ?? 'unknown', commit: undefined };
+      }
+      return { statement: undefined, commit: await refusal(client.query('COMMIT')) };
+    });
+    await asOwner(removeMatrixTenants);
+    expect(outcome.statement, 'the insert itself was refused — the FK is not deferred').toBeUndefined();
+    expect(outcome.commit?.code).toBe('23503');
+    // The predecessor is in the edge's Project; only the successor's lookup can fail.
+    expect(outcome.commit?.constraint).toBe('wp_dependency_successor_fk');
+  });
+
+  for (const type of ['SS', 'FF', 'SF']) {
+    it(`refuses dependency type ${type} on wp_dependency_type_check (23514)`, async () => {
+      const outcome = await refusalInRolledBackTx(async (client) => {
+        const projectId = await writeTenantShell(client, TENANT_X);
+        await writeWp(client, TENANT_X, projectId, 'wp-cat-p');
+        await writeWp(client, TENANT_X, projectId, 'wp-cat-s');
+        await client.query(
+          `INSERT INTO wp_dependency (tenant_id, project_id, predecessor_wp_id, successor_wp_id, type)
+           VALUES ($1, $2, 'wp-cat-p', 'wp-cat-s', $3)`,
+          [TENANT_X, projectId, type],
+        );
+      });
+      expect(outcome).toEqual({ code: '23514', constraint: 'wp_dependency_type_check' });
+    });
+  }
+
+  it('keeps `type` a plain text column whose only CHECK is wp_dependency_type_check, so widening is one CHECK', async () => {
+    const { column, checks } = await asOwner(async (client) => {
+      const column = await client.query<{ data_type: string }>(
+        `SELECT data_type FROM information_schema.columns
+          WHERE table_schema = 'public' AND table_name = 'wp_dependency' AND column_name = 'type'`,
+      );
+      const checks = await client.query<{ conname: string }>(
+        `SELECT con.conname
+           FROM pg_constraint con
+           JOIN pg_attribute att ON att.attrelid = con.conrelid AND att.attnum = ANY (con.conkey)
+          WHERE con.conrelid = 'public.wp_dependency'::regclass AND con.contype = 'c'
+            AND att.attname = 'type'
+          ORDER BY con.conname`,
+      );
+      return { column: column.rows, checks: checks.rows.map((row) => row.conname) };
+    });
+    expect(column).toEqual([{ data_type: 'text' }]);
+    expect(checks).toEqual(['wp_dependency_type_check']);
   });
 });
 

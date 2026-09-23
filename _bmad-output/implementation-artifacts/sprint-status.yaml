@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 09-20-2026 16:55
-last_updated: 09-23-2026 20:50
+last_updated: 09-23-2026 21:34
 project: momo-keikaku
 project_key: NOKEY
 tracking_system: file-system
@@ -51,7 +51,7 @@ development_status:
   2-1-the-scheduling-schema-lands-in-one-migration: done
   2-2-the-demo-spike-is-disposed-of-file-by-file: done
   2-3-one-canonical-order-for-everything-the-scheduler-reports: done
-  2-4-the-four-graph-rules-are-invariants-not-entry-checks: backlog
+  2-4-the-four-graph-rules-are-invariants-not-entry-checks: review
   2-5-the-forward-pass-a-slip-moves-the-tasks-that-depend-on-it: backlog
   2-6-the-backward-pass-float-and-the-critical-path: backlog
   2-7-constraints-are-soft-reported-and-stay-on-their-own-work-pac: backlog
