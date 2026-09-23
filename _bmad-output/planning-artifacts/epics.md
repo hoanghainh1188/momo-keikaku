@@ -764,7 +764,7 @@ So that R1's Japanese Client View is a translation job rather than a refactor.
 
 A PM can build a Plan by hand and have it schedule itself: durations, finish-to-start dependencies with lag, three constraint types, a Project start, an optional Project finish and a Data Date, over a JP and VN working-day calendar with a dated version history. **A slipped task moves the tasks that depend on it.** Float and the critical path are always current, negative Float shows as a negative number against a Project finish the PM set, and every constraint violation, out-of-sequence link and un-schedulable WP is listed with the chain behind it. The tree grid is the single scheduling surface.
 
-*Sixteen stories — the largest count in the plan, and that is the point: this capability has no line of code today, and OQ-11 asks for the engine and its surface to be sized separately. Stories 2.1 … 2.12 are the engine and its plumbing; **2.13 … 2.16 are the plan surface OQ-11 names**, so sprint planning can total them on their own. FRs: FR-5, FR-6a, FR-6b, FR-7 (tree grid only), FR-8, FR-14, FR-43.*
+*Seventeen stories — the largest count in the plan, and that is the point: this capability has no line of code today, and OQ-11 asks for the engine and its surface to be sized separately. Stories 2.1 … 2.12 are the engine and its plumbing; **2.13 … 2.16 are the plan surface OQ-11 names**, so sprint planning can total them on their own. **2.17 is not scheduling at all** — it is the Organisation UI Epic 1 claimed and did not ship, placed here because it reuses 2.2's shell and 2.13 … 2.16's grid, and it should be totalled separately again. FRs: FR-5, FR-6a, FR-6b, FR-7 (tree grid only), FR-8, FR-14, FR-43 — plus the screen half of FR-1 and FR-2, which story 2.17 carries because Epic 1 delivered their use cases and no surface.*
 
 **Two story boundaries are deliberately the §8.3 cut lines**, so that a cut is a story removed rather than a story rewritten:
 
@@ -811,6 +811,12 @@ So that no story can quietly write a column that was supposed to be gone, and th
 **When** the migration runs
 **Then** it is **deleted, not migrated**, because it pinned outputs with no inputs behind them and migrating it would fabricate inputs it never had (AR-59)
 
+**Given** that story 1.2's criterion — *"every foreign key between tenant-owned tables is composite and includes `tenant_id`"* — was never implemented, and the schema carries **no foreign keys at all** (measured by the Epic 1 retrospective's deferred-work audit, 2026-09-23: zero `references(` in `schema.ts` and `schema-membership.ts`, zero `REFERENCES` in the generated SQL)
+**When** this migration runs
+**Then** it adds those foreign keys for the tables that already exist, not only for the ones it creates: each one **composite, including `tenant_id`, and `MATCH FULL`**, against a `UNIQUE (tenant_id, id)` target added in the same change where one is missing
+**And** the relationships the audit named as unprotected are covered explicitly — `project → department`, `project → program` (nullable, so `MATCH FULL` is what stops a half-set pair), `program → department`, `work_package → project`, `baseline_wp → work_package`, `rate_entry → resource`, and `mapping_event → work_package`, which `packages/db/src/seed.ts` writes today with no ownership check at all
+**And** the founder's decision of 2026-09-23 is recorded here: the criterion stands rather than being dropped, and **story 2.1 is where it is paid**, because AD-30 makes this the single pre-production migration and afterwards adding a foreign key is a change to the migration policy rather than a migration (AR-59, and story 1.2's criterion above)
+
 **Given** this migration
 **When** the next migration is written, whenever that is
 **Then** AD-19's expand/contract discipline binds it: add nullable, backfill through the `maintenance` path, switch reads, drop later. **The exemption is spent here and is not available again** (AR-34, AR-59)
@@ -855,6 +861,11 @@ So that nothing survives from the overnight spike by accident, and §4.E-3 of th
 **Given** that §4.E-3 of the sprint change proposal counts 43 TypeScript files
 **When** the reconciliation is checked
 **Then** it covers **46**, all added on 2026-09-20, and records that the difference is the three `*.test.ts` files the proposal's count appears to have excluded (measured baseline)
+
+**Given** the deferred-work rows that exist only because of these files
+**When** the disposal is complete
+**Then** they are discharged here rather than carried, and the ledger rows are closed naming this story — the Plan page's parent roll-up and its `slipped` and milestone-overdue flags, the Baselines page's per-version BAC and the Review page's planned-scope AC all stop doing `bigint` arithmetic and date comparisons in the page and take computed figures from a use case (AD-1's tolerated-for-now bullet); the Review page's Schedule Variance note stops contradicting its own SPI note at SV = 0; and the Japanese +30% layout gate extends from the shell to these surfaces, with `KNOWN_OVERFLOW` in `packages/i18n/src/shell-layout-gate.test.ts` shrinking rather than growing
+**And** the entries were carried only because the code was about to be rewritten, which is now (Epic 1 retrospective, deferred-work audit, 2026-09-23)
 
 **Given** the disposal
 **When** it is complete
@@ -1437,6 +1448,45 @@ So that a missed date comes with the chain that caused it instead of a badge nob
 **Given** a structural edit that left an illegal edge
 **When** the Plan renders
 **Then** a band at the top reads "This plan cannot be scheduled. 2 dependencies are invalid." with the offending edges named and each one's fix, and the grid shows **the last good schedule with every derived date marked stale** — never a guess, never blanks (UX-DR23, FR-6a, **Core**)
+### Story 2.17: The Tenant Admin can see and run the organisation
+
+As a Tenant Admin,
+I want screens for the Departments, Programs, Projects, Resources and Rates I own,
+So that "a Tenant Admin can stand up the organisation" is true of something a person can use, not only of a use case.
+
+*Added 2026-09-23 by founder decision, after the Epic 1 retrospective found that Epic 1's narrative claimed this and Epic 1 shipped no Organisation screen at all. The deferral was made in story 1.3 on the condition that sign-in and roles exist first; stories 1.4 and 1.5 met that condition and nothing revisited it. It sits in Epic 2 rather than as a tenth Epic 1 story because story 2.2 rewrites the shell and 2.13 … 2.16 build the grid surfaces this reuses — building it before them would mean building it twice.*
+
+**Acceptance Criteria:**
+
+**Given** the eight organisation writes Epic 1 shipped as use cases
+**When** a Tenant Admin opens the Organisation screens
+**Then** each one is reachable from a screen — create and rename a Department, a Program and a Project, and reassign a Project's Program or owning Department — through the same audited use cases, with no new write path (FR-1, AD-14)
+
+**Given** that Epic 1 shipped **no read use case** for Departments, Programs, Projects or Resources
+**When** these screens are built
+**Then** the reads they need are added to `packages/app`'s use-case surface, registered in the cross-tenant harness like every other read, and the tables they reach leave `UNREACHED_TENANT_OWNED_TABLES` in the same change — `program` is still declared unreached today (NFR-S1, AR-26)
+
+**Given** Resources and their dated Rate history (story 1.6)
+**When** an Admin opens a Resource
+**Then** the Rate history is listed in effective-date order and a new Rate is appended through `appendResourceRate`, never edited in place, and the Project default Rate through `appendProjectDefaultRate` (FR-2, AR-6)
+
+**Given** a PM rather than a Tenant Admin
+**When** they reach any of these screens
+**Then** they are refused with `not_found`, through the declared-roles gate and not through a check written into the page (AD-12, story 1.5)
+
+**Given** the Rates a Project's Resources carry
+**When** the screens render them
+**Then** a PM who reaches one Project does not receive every Resource's Rate history for the whole Tenant — `loadProjectBundle`'s unscoped reads of `resource` and `rate_entry` are narrowed to the Project before any screen shows a Rate (Epic 1 retrospective F21, which is bounded today only because no page renders Rates)
+
+**Given** invitation
+**When** the scope of this story is checked
+**Then** it is **out of scope** and stays so: the application role holds no INSERT on `tenant_membership` — *"adding a user is invitation work"* (`packages/db/src/table-classes.ts`) — R0 creates its users and their memberships through the seed, and no FR asks for invitations in R0 (§8.1)
+
+**Given** these screens
+**When** they are cut
+**Then** they are **Comfort** in the §8.3 sense — R0 can be demonstrated on the seeded organisation — but cutting them means Epic 1's narrative must be corrected a second time rather than fulfilled
+
+
 ## Epic 3: The client's Excel WBS becomes a live plan in one session
 
 A PM can upload a real client .xlsx, choose the sheet and header row, map columns with header-based suggestions in English and Japanese, and see every row in a mandatory preview before anything is written — with its level, the duration derived from an imported start/finish pair, the dependencies and constraints read, the progress read, which of the three scheduling states each row will arrive in, and the dates the scheduler will produce. A mid-flight project therefore arrives mid-flight. A later version of the same file re-imports as a diff that separates input changes from the date movement they caused.
