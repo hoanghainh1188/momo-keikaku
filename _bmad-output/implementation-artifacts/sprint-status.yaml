@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 09-20-2026 16:55
-last_updated: 09-23-2026 10:15
+last_updated: 09-23-2026 12:29
 project: momo-keikaku
 project_key: NOKEY
 tracking_system: file-system
@@ -47,8 +47,8 @@ development_status:
   1-9-every-string-is-externalised-and-the-currency-is-fixed: done
   epic-1-retrospective: done
 
-  epic-2: backlog
-  2-1-the-scheduling-schema-lands-in-one-migration: backlog
+  epic-2: in-progress
+  2-1-the-scheduling-schema-lands-in-one-migration: review
   2-2-the-demo-spike-is-disposed-of-file-by-file: backlog
   2-3-one-canonical-order-for-everything-the-scheduler-reports: backlog
   2-4-the-four-graph-rules-are-invariants-not-entry-checks: backlog

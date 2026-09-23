@@ -366,10 +366,10 @@ jobs:
         if: always()
         run: pnpm depcruise
 
-      # The round-trip tests need something to read. `push` applies schema.ts through
-      # drizzle-kit rather than a migration, which is correct while Epic 2's single
-      # pre-production migration does not exist yet; switch this to `drizzle-kit
-      # migrate` when it does.
+      # The round-trip tests need something to read. `db:migrate` applies the migrations in
+      # packages/db/drizzle through `drizzle-kit migrate` (AD-19) — today exactly one, story 2.1's
+      # AD-30 migration, whose hand-written MATCH FULL / DEFERRABLE clauses a `push` from schema.ts
+      # would silently lose. `schema-catalog.test.ts` asserts them against the catalogue.
       #
       # `pgboss:migrate` is the owner-role step: it creates the `migrator` and `app` roles,
       # installs pg-boss's schema from the SQL pg-boss itself generates, and grants the app
@@ -378,7 +378,7 @@ jobs:
       #
       # `db:policies` is story 1.2's step and is the reason this order matters. It applies
       # the row-level security, the grants and the append-only triggers GENERATED from
-      # packages/db/src/table-classes.ts, so it must run after `drizzle-kit push` (the
+      # packages/db/src/table-classes.ts, so it must run after `db:migrate` (the
       # tables have to exist) and after `pgboss:migrate` (the application role it grants to
       # has to exist). The seed runs last, because it is the first thing that exercises the
       # policies it now writes under.
@@ -390,12 +390,26 @@ jobs:
       - name: Prepare database (schema + roles + RLS/grants/triggers + seed)
         if: always()
         run: |
-          pnpm exec drizzle-kit push --force
+          pnpm db:migrate
           pnpm pgboss:migrate
           pnpm pgboss:migrate
           pnpm db:policies
           pnpm db:policies
           pnpm seed
+
+      # The drift gate (story 2.1). CI applies the committed SQL in packages/db/drizzle, while the
+      # code is typed from schema.ts, so the two can diverge with every other step green. A
+      # regeneration from schema.ts must produce nothing new.
+      - name: Migration drift (schema.ts vs packages/db/drizzle)
+        if: always()
+        run: |
+          pnpm exec drizzle-kit generate
+          drift="$(git status --porcelain packages/db/drizzle)"
+          if [ "$drift" != "" ]; then
+            echo "$drift"
+            echo "::error::packages/db/drizzle is out of step with packages/db/src/schema.ts. Regenerate the migration with drizzle-kit generate (keep it one file, 0000), re-apply the hand edits its header lists, and commit it."
+            exit 1
+          fi
 
       # THE GATE THAT TYPECHECKING IS NOT. `tsc` reads neither `next.config.ts` nor
       # `apps/web/package.json`, so `transpilePackages`, the app's own dependencies and the

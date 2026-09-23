@@ -235,11 +235,10 @@ export function projectBundleLabels(state: DemoState): string[] {
       f.project.id,
       f.project.name,
       f.project.clientName,
-      f.baseline.id,
-      f.baseline.reason,
+      // No Baseline id or reason: the seed writes no Baseline (story 2.1, decision 2-A), so no
+      // bundle can carry one until Epic 4 records Baselines against a schedule_run.
       ...f.resources.flatMap((r) => [r.id, r.name, r.accountId]),
       ...f.wps.flatMap((w) => [w.id, w.wbsCode, w.name]),
-      ...f.baseline.wps.map((b) => b.wpId),
       ...f.mappingRules.flatMap((r) => [r.id, r.name]),
       ...(latest ? [latest.snapshotId] : []),
       ...(latest?.tickets ?? []).flatMap((t) => [
@@ -769,5 +768,32 @@ export const UNREACHED_TENANT_OWNED_TABLES: readonly UnreachedTable[] = [
       'reads project.default_rate_jpy. History is loaded only for a pinned lookup (Epic 5\'s ' +
       'Published Snapshot). No dedicated Rate read this story — the day one lands, this entry ' +
       'comes out or the reach assertion fails.',
+  },
+  {
+    table: 'wp_dependency',
+    why:
+      'Created by story 2.1\'s migration (AD-30) with no writer and no reader yet: edges are ' +
+      'written through app/schedule\'s fence (2.10, 2.14) and read by the tree grid and the ' +
+      'recalculation (2.9, 2.13). The first read use case over it must remove this entry.',
+  },
+  {
+    table: 'holiday_calendar_version',
+    why:
+      'Created by story 2.1 (AD-29) with no writer and no reader yet: versions are published by ' +
+      'app/calendar (2.12) and resolved into a schedule_run by 2.9. The first read of it removes ' +
+      'this entry.',
+  },
+  {
+    table: 'schedule_run',
+    why:
+      'Created by story 2.1 (AD-26) with no writer and no reader yet: app/schedule appends runs ' +
+      '(2.9) and the schedule strip and exception rail read them (2.15, 2.16). The first read of ' +
+      'it removes this entry.',
+  },
+  {
+    table: 'wp_schedule',
+    why:
+      'Created by story 2.1 (AD-26) with no writer and no reader yet: app/schedule rebuilds it ' +
+      '(2.9) and the tree grid reads it (2.13). The first read of it removes this entry.',
   },
 ] as const;

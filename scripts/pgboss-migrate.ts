@@ -24,13 +24,13 @@
  *      it, the property this whole split exists to establish.
  *
  * Why a script and not a module under `packages/`: it is a migration step, run beside
- * `drizzle-kit push` and `pnpm seed`, and `scripts/` is deliberately outside the clock/env
+ * `pnpm db:migrate` and `pnpm seed`, and `scripts/` is deliberately outside the clock/env
  * fence (see eslint.config.js) because it is tooling rather than application code. It still
  * takes its configuration from `packages/app/src/config.ts` rather than reading the
  * environment itself, so a missing key fails here naming the key, the same way it does in
  * the worker.
  *
- * Run: `pnpm pgboss:migrate` (CI's prepare step does, after `drizzle-kit push`).
+ * Run: `pnpm pgboss:migrate` (CI's prepare step does, after `pnpm db:migrate`).
  */
 import { pathToFileURL } from 'node:url';
 import pg from 'pg';

@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { getTableConfig } from 'drizzle-orm/pg-core';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import * as schemaModule from './schema';
@@ -65,20 +66,21 @@ describe('the table-class registry is the single source', () => {
   });
 
   it('is what the reseed truncates, table for table', () => {
-    // No foreign keys, so `TRUNCATE … CASCADE` covers nothing the list leaves out: a table
-    // missing here would keep its rows across `pnpm seed`, silently.
+    // `TRUNCATE … CASCADE` would now reach a child through its foreign key, but only a child —
+    // a table missing here with no referencing parent would keep its rows across `pnpm seed`.
     expect([...TRUNCATE_ORDER].sort()).toEqual([...REGISTERED_TABLES].sort());
     expect(new Set(TRUNCATE_ORDER).size, 'a table is truncated twice').toBe(TRUNCATE_ORDER.length);
   });
 
-  it('holds the 24 tables of this release, 17 of them tenant-owned', () => {
+  it('holds the 29 tables of this release, 22 of them tenant-owned', () => {
     // Pinned as numbers as well as names: a future change that removes a table and adds
     // another keeps the name lists agreeing with `schema.ts` while silently changing what
     // this story was reasoned about. Story 1.4 slice 1: `app_user` out; the four Better Auth
     // tables and the tenant-membership bridge in, all `global`. Slice 4 adds `identity_event`,
     // also `global`. Story 1.6 adds `project_default_rate_entry` (tenant-owned, append-only).
-    expect(TABLE_REGISTRY).toHaveLength(24);
-    expect(TENANT_OWNED).toHaveLength(17);
+    // Story 2.1 (AD-30) adds the five scheduling tables, all tenant-owned.
+    expect(TABLE_REGISTRY).toHaveLength(29);
+    expect(TENANT_OWNED).toHaveLength(22);
     expect(TABLE_REGISTRY.filter((e) => e.tenantColumn === null).map((e) => e.table)).toEqual([
       'tenant',
       'auth_user',
@@ -101,7 +103,7 @@ describe('the table-class registry is the single source', () => {
     expect(TENANT_BRIDGES[0]!.tenantColumn).toBeNull();
   });
 
-  it('classes the ten insert-only tables append-only', () => {
+  it('classes the thirteen insert-only tables append-only', () => {
     expect(APPEND_ONLY.map((e) => e.table).sort()).toEqual(
       [
         'actuals_ledger_entry',
@@ -109,13 +111,43 @@ describe('the table-class registry is the single source', () => {
         'baseline_version',
         'baseline_wp',
         'disposition_event',
+        'holiday_calendar_version',
         'mapping_event',
         'project_default_rate_entry',
         'rate_entry',
+        'schedule_run',
         'ticket_observation',
         'tracker_snapshot',
+        'wp_status_event',
       ].sort(),
     );
+  });
+
+  it('classes the scheduling slice as AD-21 decides (story 2.1)', () => {
+    const classOf = (table: string) => TABLE_REGISTRY.find((e) => e.table === table)?.class;
+    expect(classOf('wp_dependency')).toBe('mutable-audited');
+    expect(classOf('wp_status_event')).toBe('append-only');
+    expect(classOf('holiday_calendar_version')).toBe('append-only');
+    expect(classOf('schedule_run')).toBe('append-only');
+    expect(classOf('wp_schedule')).toBe('derived');
+  });
+
+  it('lists every table after each table its foreign keys reference', () => {
+    // The registry's order is an insert order and its reverse is `probe-tenants.ts`'s delete
+    // order. With story 2.1's composite foreign keys, a parent listed after its child makes the
+    // probe cleanup fail on 23503 — so the order is read off the Drizzle foreign keys and checked.
+    const position = new Map(TABLE_REGISTRY.map((e, index) => [e.table, index]));
+    const misordered: string[] = [];
+    for (const table of [...Object.values(schemaModule.schemaTables), tenantMembership]) {
+      const { name, foreignKeys } = getTableConfig(table);
+      for (const fk of foreignKeys) {
+        const parent = getTableConfig(fk.reference().foreignTable).name;
+        if (parent !== name && position.get(parent)! > position.get(name)!) {
+          misordered.push(`${name} → ${parent}`);
+        }
+      }
+    }
+    expect(misordered, 'these tables are registered before a table they reference').toEqual([]);
   });
 
   it('never grants the application role UPDATE or DELETE on an append-only table', () => {

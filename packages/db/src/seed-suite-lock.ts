@@ -7,7 +7,7 @@
  * One advisory lock, serialising the whole-database seed suites against every suite that writes
  * probe Tenants. Epic 1 retrospective, finding F1.
  *
- * WHY THIS EXISTS. `seed()` is a whole-database operation: it TRUNCATEs all 24 registered tables
+ * WHY THIS EXISTS. `seed()` is a whole-database operation: it TRUNCATEs every registered table
  * CASCADE, rewinds the shared identity sequences to its own `MAX(seq)`, and refuses through
  * `assertSingleTenantDatabase` when it finds more than one Tenant. vitest runs test FILES in
  * parallel worker threads against one Postgres, so those three things ran beside a dozen suites

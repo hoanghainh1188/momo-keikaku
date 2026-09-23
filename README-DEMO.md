@@ -89,9 +89,10 @@ If the fake is not running when the web app first needs it, the button simply do
 (restart the web app once the fake is up). The issuer must be `https:` unless it is on this
 machine; in production it is Google's, `https://accounts.google.com`.
 
-> **An older local database** (created before story 1.4) still has the `app_user` table, and
-> `drizzle-kit push` stops on an interactive rename prompt for it. Drop it once, then push:
-> `docker exec momo-keikaku-postgres psql -U momo -d momo_keikaku -c 'DROP TABLE IF EXISTS app_user'`.
+> **An older local database** (created with `drizzle-kit push`, before story 2.1) cannot be
+> migrated: the schema now arrives through one migration (AD-30), which expects an empty
+> database. Recreate it once, then run `pnpm demo` again:
+> `docker exec momo-keikaku-postgres sh -c 'dropdb -U momo --force momo_keikaku && createdb -U momo momo_keikaku'`.
 
 That one command starts Postgres 18 in docker compose, applies the schema, creates the
 `momo_migrator`, `momo_app` and `momo_maintenance` roles with the pg-boss schema, applies the

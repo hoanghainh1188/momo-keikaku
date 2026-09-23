@@ -24,7 +24,7 @@
  *
  * Why the owning connection: ENABLE/FORCE ROW LEVEL SECURITY, CREATE POLICY and
  * CREATE TRIGGER are owner privileges, and the tables are owned by the role
- * `drizzle-kit push` created them as. Run it after `drizzle-kit push` and after
+ * `pnpm db:migrate` created them as. Run it after `pnpm db:migrate` and after
  * `pnpm pgboss:migrate` (which creates the application role this grants to).
  */
 import { mkdirSync, writeFileSync } from 'node:fs';

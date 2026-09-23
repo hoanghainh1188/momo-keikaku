@@ -1012,3 +1012,19 @@ above can see where it went.
   and 2.13 … 2.16 build the grid it reuses. Its acceptance also carries retrospective finding F21 —
   `loadProjectBundle` returns every Resource's Rate history for the whole Tenant, which is bounded
   today only because no page renders Rates, and stops being bounded the moment these screens exist.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-1-the-scheduling-schema-lands-in-one-migration.md`
+  summary: `actuals_ledger_entry_baseline_version_fk` is scoped to the Tenant only, so a ledger row can pin another Project's Baseline in the same Tenant.
+  evidence: The ledger row has no `project_id`, so the FK is `(tenant_id, active_baseline_version_seq) → baseline_version(tenant_id, seq)`. The gap predates story 2.1, which added the first FK here. Closing it needs a `project_id` on the ledger, which is an expand/contract migration (review pass 1, #15).
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-1-the-scheduling-schema-lands-in-one-migration.md`
+  summary: No tenant-owned table has an FK to `tenant(id)`, and `tenant_membership`, `session` and `account` have no FKs at all.
+  evidence: Story 2.1 scoped its FKs to "between tenant-owned tables" (AD-3). A row set can hang off a Tenant id that does not exist. Decide this before Epic 8's tenant deletion (review pass 1, #16).
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-1-the-scheduling-schema-lands-in-one-migration.md`
+  summary: CI and `pnpm demo` run `drizzle-kit migrate` as the owner role, not AD-19's `migrator` role, and `db:migrate` runs before `pgboss:migrate` creates that role.
+  evidence: This predates story 2.1: `push` also ran as the owner. The AD-19 ownership model has never been exercised (review pass 1, #17).
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-1-the-scheduling-schema-lands-in-one-migration.md`
+  summary: Decide whether soft-deleted children count toward `work_package.child_count`, and what happens to a soft-deleted leaf's `wp_dependency` edges.
+  evidence: Unverified; severity would be medium. The writer (story 2.10, WP delete and re-parent through the fence) settles it. The `is_leaf` FKs and the leaf-only CHECK both depend on it (review pass 1, #18).
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-1-the-scheduling-schema-lands-in-one-migration.md`
+  summary: Story 2.2 must add a DB test for the head selection of `wp_status_event` in the reshaped `WorkPackage` reader: the highest `seq` per WP wins, and a non-milestone gets no milestone date.
+  evidence: Verification-gap finding, review pass 1, #3. 2.1 only asserts the seeded values, because 2.2 rewrites the reader (`repo.ts` loadBundleInTenant).

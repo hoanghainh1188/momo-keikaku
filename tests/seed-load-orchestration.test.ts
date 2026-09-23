@@ -169,11 +169,16 @@ describe.skipIf(!reachable)('seed load orchestration (story 1.8)', () => {
 
     expect((await demoAnchor())!.toISOString(), 'anchor restored').toBe(before!.toISOString());
 
-    const [baseline] = await owner()
-      .select({ recordedAt: schema.baselineVersion.recordedAt })
-      .from(schema.baselineVersion);
-    expect(baseline!.recordedAt.toISOString(), 'Baseline recordedAt restored with it').toBe(
-      before!.toISOString(),
-    );
+    // The seed writes no Baseline any more (story 2.1, decision 2-A); the actual-date events are
+    // what it still stamps from the Clock besides the anchor.
+    const events = await owner()
+      .select({ at: schema.wpStatusEvent.at })
+      .from(schema.wpStatusEvent);
+    expect(events.length, 'the demo seed records its milestones\' actual finishes').toBeGreaterThan(0);
+    for (const event of events) {
+      expect(event.at.toISOString(), 'actual-date event time restored with it').toBe(
+        before!.toISOString(),
+      );
+    }
   });
 });

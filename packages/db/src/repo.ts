@@ -86,21 +86,42 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
     .where(eq(s.workPackage.projectId, projectId))
     .orderBy(asc(s.workPackage.wbsCode));
 
-  const wps: WorkPackage[] = wpRows.map((w) => ({
-    id: w.id,
-    wbsCode: w.wbsCode,
-    name: w.name,
-    parentId: w.parentId,
-    isLeaf: w.isLeaf,
-    isMilestone: w.isMilestone,
-    isCatchAll: w.isCatchAll,
-    start: w.start,
-    finish: w.finish,
-    plannedMh: w.plannedMh,
-    completedAt: w.completedAt ? w.completedAt.toISOString() : null,
-    milestoneDoneAt: w.milestoneDoneAt,
-    assignedResourceIds: w.assignedResourceIds,
-  }));
+  // Actual dates have one home, `wp_status_event` (AD-25): each row restates a WP's whole actual
+  // state, so the head — the highest `seq` per WP — is the state. Read ascending and let the last
+  // row per WP win.
+  const statusRows = await tx
+    .select()
+    .from(s.wpStatusEvent)
+    .where(eq(s.wpStatusEvent.projectId, projectId))
+    .orderBy(asc(s.wpStatusEvent.seq));
+  const actualFinishOf = new Map<string, string | null>(
+    statusRows.map((e) => [e.wpId, e.actualFinish]),
+  );
+
+  // STORY 2.1 → 2.2 SEAM. The domain's `WorkPackage` still has the spike's shape. Planned
+  // `start`/`finish` have no column any more (AD-30) and nothing computes them until the scheduler
+  // (2.5, 2.9), so they read as null; "marked complete" and "milestone done" are the head event's
+  // actual finish. Story 2.2 reshapes the type and its readers.
+  const wps: WorkPackage[] = wpRows.map((w) => {
+    const actualFinish = actualFinishOf.get(w.id) ?? null;
+    return {
+      id: w.id,
+      wbsCode: w.wbsCode,
+      name: w.name,
+      parentId: w.parentId,
+      isLeaf: w.isLeaf,
+      isMilestone: w.isMilestone,
+      isCatchAll: w.isCatchAll,
+      start: null,
+      finish: null,
+      plannedMh: w.plannedMh,
+      // A milestone's actual finish is its done date, not a "marked complete": the spike kept
+      // `completedAt` null for milestones, and `evm.ts` lifts the 99% cap on it.
+      completedAt: w.isMilestone ? null : actualFinish,
+      milestoneDoneAt: w.isMilestone ? actualFinish : null,
+      assignedResourceIds: w.assignedResourceIds,
+    };
+  });
 
   const bvRows = await tx
     .select()

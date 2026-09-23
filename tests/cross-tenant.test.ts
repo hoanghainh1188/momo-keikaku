@@ -102,7 +102,7 @@ import { pmContextFor } from './request-context';
  * own — it wires `packages/db`'s repository into `packages/app`'s port, on the restricted
  * role's handle — which is why it lives in `tests/`, outside every layer.
  *
- * Requires a database prepared by `drizzle-kit push`, `pnpm pgboss:migrate` and
+ * Requires a database prepared by `pnpm db:migrate`, `pnpm pgboss:migrate` and
  * `pnpm db:policies`, and seeded. Set REQUIRE_DB=1 (CI does) to turn an unreachable
  * database into a failure instead of a skip. The pure gate above runs either way.
  */

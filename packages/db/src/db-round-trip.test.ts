@@ -2,6 +2,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { hours, present, share } from '@momo/domain';
 import { DEMO_TENANT_ID, loadReview } from './repo';
 import { closeAllPools, getDb, getPool } from './client';
+import { acquireSeedSuiteLock, releaseSeedSuiteLock } from './seed-suite-lock';
 
 /**
  * The persistence round trip.
@@ -64,7 +65,18 @@ if (REQUIRE_DB && !reachable) {
   );
 }
 
+// It reads the demo Tenant, which a seed suite TRUNCATEs and rewrites — so it holds the seed-suite
+// lock shared, like a probe suite (`seed-suite-lock.ts`). Without it, its `withTenant` read and a
+// seed's TRUNCATE took their table locks in opposite orders and Postgres broke the cycle by failing
+// the seed (40P01, measured in story 2.1's runs); and a read landing between the TRUNCATE and the
+// reseed would see the load profile's Tenant, not the demo's. An advisory lock is database-wide,
+// so the application role can take it.
+if (reachable) {
+  await acquireSeedSuiteLock(APP_DATABASE_URL!, 'shared');
+}
+
 afterAll(async () => {
+  await releaseSeedSuiteLock();
   if (reachable) await closeAllPools();
 });
 
