@@ -1,6 +1,6 @@
 import type { z } from 'zod';
 import { audit, type AuditDeclaration } from '../audit';
-import { authorize, STAFF_RESOURCE_ROLES, TENANT_ADMIN_ROLES } from '../authz/authorize';
+import { STAFF_RESOURCE_ROLES, TENANT_ADMIN_ROLES } from '../authz/authorize';
 import type { RequestContext } from '../authz/request-context';
 import type {
   ResourceWriteDeps,
@@ -8,7 +8,7 @@ import type {
 } from '../ports/resource-write';
 import type { WriteStamp } from '../ports/audited-write';
 import type { Result } from '../result';
-import { refuse, runAuditedWrite } from './audited-write';
+import { refuse, runRoleGatedWrite } from './audited-write';
 import {
   appendProjectDefaultRateInputSchema,
   appendResourceRateInputSchema,
@@ -36,26 +36,13 @@ export interface CreatedResource {
   readonly id: string;
 }
 
-function runResourceWrite<Handle, Command, Value = void>(
-  schema: z.ZodType<Command>,
-  roles: readonly ('tenant_admin' | 'pm')[],
-  deps: ResourceWriteDeps<Handle>,
-  ctx: RequestContext,
-  input: unknown,
-  work: (scope: ResourceWriteScope, stamp: WriteStamp, command: Command) => Promise<Value>,
-): Promise<Result<Value>> {
-  const gate = authorize(ctx, { roles });
-  if (!gate.ok) return Promise.resolve(gate);
-  return runAuditedWrite(schema, deps, ctx, input, { at: async () => deps.clock.now() }, work);
-}
-
 /** FR-12: a new Resource in an own Department — no Rate row. */
 export async function createResource<Handle>(
   deps: ResourceWriteDeps<Handle>,
   ctx: RequestContext,
   input: CreateResourceInput,
 ): Promise<Result<CreatedResource>> {
-  return runResourceWrite(
+  return runRoleGatedWrite(
     createResourceInputSchema,
     STAFF_RESOURCE_ROLES,
     deps,
@@ -87,7 +74,7 @@ export async function appendResourceRate<Handle>(
   ctx: RequestContext,
   input: AppendResourceRateInput,
 ): Promise<Result<void>> {
-  return runResourceWrite(
+  return runRoleGatedWrite(
     appendResourceRateInputSchema,
     TENANT_ADMIN_ROLES,
     deps,
@@ -118,7 +105,7 @@ export async function appendProjectDefaultRate<Handle>(
   ctx: RequestContext,
   input: AppendProjectDefaultRateInput,
 ): Promise<Result<void>> {
-  return runResourceWrite(
+  return runRoleGatedWrite(
     appendProjectDefaultRateInputSchema,
     TENANT_ADMIN_ROLES,
     deps,

@@ -7,7 +7,7 @@ import type { NewProjectRow, OrgRepository, OrgWriteDeps, OrgWriteScope } from '
 import type { WriteDeps } from '../ports/write-deps';
 import type { WriteStamp } from '../ports/audited-write';
 import type { Result } from '../result';
-import { refuse, runAuditedWrite } from './audited-write';
+import { refuse, runAuditedWrite, runRoleGatedWrite } from './audited-write';
 import {
   createDepartmentInputSchema,
   createProgramInputSchema,
@@ -92,18 +92,6 @@ export interface Created {
 }
 
 /** Runs one org write: `tenant_admin` first, then the Clock stamps it; `refuse` inside `work` answers a code, rolled back. */
-function runOrgWrite<Handle, Command, Value = void>(
-  schema: z.ZodType<Command>,
-  deps: OrgWriteDeps<Handle>,
-  ctx: RequestContext,
-  input: unknown,
-  work: (scope: OrgWriteScope, stamp: WriteStamp, command: Command) => Promise<Value>,
-): Promise<Result<Value>> {
-  const gate = authorize(ctx, { roles: TENANT_ADMIN_ROLES });
-  if (!gate.ok) return Promise.resolve(gate);
-  return runAuditedWrite(schema, deps, ctx, input, { at: async () => deps.clock.now() }, work);
-}
-
 async function visibleDepartment(org: OrgRepository, departmentId: string) {
   return (await org.findDepartment(departmentId)) ?? refuse('not_found');
 }
@@ -147,7 +135,13 @@ export async function createDepartment<Handle>(
   ctx: RequestContext,
   input: CreateDepartmentInput,
 ): Promise<Result<Created>> {
-  return runOrgWrite(createDepartmentInputSchema, deps, ctx, input, async (scope, stamp, command) => {
+  return runRoleGatedWrite(
+    createDepartmentInputSchema,
+    TENANT_ADMIN_ROLES,
+    deps,
+    ctx,
+    input,
+    async (scope, stamp, command) => {
     const id = deps.ids.next();
     await scope.org.insertDepartment({ id, name: command.name });
     await audit.record(scope, stamp, 'department.create', id, { name: command.name });
@@ -161,7 +155,13 @@ export async function renameDepartment<Handle>(
   ctx: RequestContext,
   input: RenameDepartmentInput,
 ): Promise<Result<void>> {
-  return runOrgWrite(renameDepartmentInputSchema, deps, ctx, input, async (scope, stamp, command) => {
+  return runRoleGatedWrite(
+    renameDepartmentInputSchema,
+    TENANT_ADMIN_ROLES,
+    deps,
+    ctx,
+    input,
+    async (scope, stamp, command) => {
     const department = await visibleDepartment(scope.org, command.departmentId);
     await scope.org.renameDepartment({ id: department.id, name: command.name });
     await audit.record(scope, stamp, 'department.rename', department.id, {
@@ -177,7 +177,13 @@ export async function createProgram<Handle>(
   ctx: RequestContext,
   input: CreateProgramInput,
 ): Promise<Result<Created>> {
-  return runOrgWrite(createProgramInputSchema, deps, ctx, input, async (scope, stamp, command) => {
+  return runRoleGatedWrite(
+    createProgramInputSchema,
+    TENANT_ADMIN_ROLES,
+    deps,
+    ctx,
+    input,
+    async (scope, stamp, command) => {
     const department = await visibleDepartment(scope.org, command.departmentId);
     const id = deps.ids.next();
     await scope.org.insertProgram({ id, departmentId: department.id, name: command.name });
@@ -195,7 +201,13 @@ export async function renameProgram<Handle>(
   ctx: RequestContext,
   input: RenameProgramInput,
 ): Promise<Result<void>> {
-  return runOrgWrite(renameProgramInputSchema, deps, ctx, input, async (scope, stamp, command) => {
+  return runRoleGatedWrite(
+    renameProgramInputSchema,
+    TENANT_ADMIN_ROLES,
+    deps,
+    ctx,
+    input,
+    async (scope, stamp, command) => {
     const program = await visibleProgram(scope.org, command.programId);
     await scope.org.renameProgram({ id: program.id, name: command.name });
     await audit.record(scope, stamp, 'program.rename', program.id, {
@@ -271,7 +283,13 @@ export async function renameProject<Handle>(
   ctx: RequestContext,
   input: RenameProjectInput,
 ): Promise<Result<void>> {
-  return runOrgWrite(renameProjectInputSchema, deps, ctx, input, async (scope, stamp, command) => {
+  return runRoleGatedWrite(
+    renameProjectInputSchema,
+    TENANT_ADMIN_ROLES,
+    deps,
+    ctx,
+    input,
+    async (scope, stamp, command) => {
     const project = await visibleProject(scope.org, command.projectId);
     await scope.org.renameProject({ id: project.id, name: command.name });
     await audit.record(scope, stamp, 'project.rename', project.id, {
@@ -294,8 +312,9 @@ export async function reassignProjectProgram<Handle>(
   ctx: RequestContext,
   input: ReassignProjectProgramInput,
 ): Promise<Result<void>> {
-  return runOrgWrite(
+  return runRoleGatedWrite(
     reassignProjectProgramInputSchema,
+    TENANT_ADMIN_ROLES,
     deps,
     ctx,
     input,
@@ -321,8 +340,9 @@ export async function reassignProjectDepartment<Handle>(
   ctx: RequestContext,
   input: ReassignProjectDepartmentInput,
 ): Promise<Result<void>> {
-  return runOrgWrite(
+  return runRoleGatedWrite(
     reassignProjectDepartmentInputSchema,
+    TENANT_ADMIN_ROLES,
     deps,
     ctx,
     input,
