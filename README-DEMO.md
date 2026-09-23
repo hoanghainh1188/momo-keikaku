@@ -12,47 +12,61 @@ quietly absorbed.
 
 ```bash
 pnpm install
-
-# Both are required. There is no localhost default any more: story 1.2 removed the
-# hardcoded fallback from packages/db and drizzle.config.ts, because on a machine where
-# that database happened to exist a missing key connected *successfully, to the wrong
-# place*. Anything that connects now fails naming the key it was not given.
-#
-# DATABASE_URL      the OWNING role — DDL, the seed's TRUNCATE, CREATE POLICY, CREATE ROLE.
-# APP_DATABASE_URL  the restricted role the web app and the worker connect as: a non-owner
-#                   without BYPASSRLS, so row-level security actually applies to it.
-export DATABASE_URL=postgres://momo:momo@localhost:55433/momo_keikaku
-export APP_DATABASE_URL=postgres://momo_app:momo_app@localhost:55433/momo_keikaku
-
-# Sign-in (story 1.4). SEED_DEMO_PASSWORD is required by `pnpm seed`: it becomes the password
-# of the two demo users, and must be at least 8 characters. The web app needs the Better Auth
-# pair (put them in apps/web/.env.local too, since `next dev` reads that file).
-# SESSION_IDLE_TIMEOUT_HOURS is optional: DIGITS ONLY, 1 to 720, default 8 — `0x8`, `8.0` and
-# ` 8 ` are each refused by name rather than read as 8.
-export SEED_DEMO_PASSWORD=choose-a-demo-password
-export BETTER_AUTH_SECRET=a-local-secret-of-at-least-32-characters
-export BETTER_AUTH_URL=http://localhost:3101
-# export SESSION_IDLE_TIMEOUT_HOURS=8
-
-# Password reset (story 1.4 slice 4). MAILER defaults to `console`: every reset mail is written to
-# THIS TERMINAL (the one `pnpm demo`/`pnpm dev` runs in) instead of actually being sent — there is
-# no real mail transport until `mailer-ses` (Epic 8). `ses` is accepted here too, but every route
-# (sign-in included) starts answering 500 on its first request until that adapter lands — not a
-# failure to start, since it is only reached when a request first needs the auth instance.
-# export MAILER=console
-
-pnpm demo
+pnpm dev
 ```
 
-Every page asks you to sign in first. Sign in as **`linh@momo-digital.example`** (the PM) or
-**`hoang@momo-digital.example`** (the Tenant Admin), with the `SEED_DEMO_PASSWORD` you set.
+That is the whole of it: no key has to be exported by hand. `pnpm demo` is the same command
+under its old name; `pnpm dev:web` is the old web-only `next dev`.
+
+**Where the keys come from.** On the first run there is no root `.env.local`, so `pnpm dev`
+writes one (gitignored, mode 600) and says so. It holds:
+
+| Key | Value |
+|---|---|
+| `DATABASE_URL` | `postgres://momo:momo@localhost:55433/momo_keikaku` — the OWNING role: DDL, the seed's TRUNCATE, CREATE POLICY, CREATE ROLE |
+| `APP_DATABASE_URL` | `postgres://momo_app:momo_app@localhost:55433/momo_keikaku` — the restricted role the web app and the worker connect as: a non-owner without BYPASSRLS, so row-level security actually applies to it |
+| `BETTER_AUTH_SECRET` | 48 random characters from `node:crypto` |
+| `SEED_DEMO_PASSWORD` | a random password for the two demo users |
+| `BETTER_AUTH_URL` | `http://localhost:<port>` |
+
+Later runs read that file and never rewrite it; delete it to generate new values. `pnpm seed`, `pnpm db:migrate`,
+`pnpm db:policies` and `pnpm pgboss:migrate` read it too (`--env-file-if-exists`), so they work on
+their own without exports. A key exported
+in the shell wins over the file, so `export SEED_DEMO_PASSWORD=…` still works. The application
+itself has no defaults for any of these: `packages/app/src/config.ts` still refuses a missing
+key by name, and `pnpm dev` is what hands the values to its children. Optional keys can go in the
+same file or the shell: `SESSION_IDLE_TIMEOUT_HOURS` (DIGITS ONLY, 1 to 720, default 8 — `0x8`,
+`8.0` and ` 8 ` are each refused by name rather than read as 8) and `MAILER` (default `console`:
+every reset mail is written to THIS TERMINAL instead of being sent — there is no real mail
+transport until `mailer-ses` (Epic 8). `ses` is accepted too, but every route starts answering 500
+on its first request until that adapter lands).
+
+**What it does**, in order, stopping and naming the step if one fails: starts Postgres 18 in docker
+compose and waits for it to be healthy; applies the schema (`db:migrate`); creates the
+`momo_migrator`, `momo_app` and `momo_maintenance` roles with the pg-boss schema
+(`pgboss:migrate`); applies the row-level security, grants and append-only triggers generated
+from the table-class registry (`db:policies`); seeds the demo project and replays the `fixture`
+Connector's six weekly Tracker Snapshots into the Actuals Ledger — **only when the database holds
+no Tenant yet**; then runs the web app and the worker together. Their output is prefixed
+`[web]` / `[worker]`. One Ctrl-C stops both (a second one kills them), and if either exits, the
+other is stopped too and `pnpm dev` fails naming it.
+
+**Resetting.** A restart keeps your data: the seed is skipped once a Tenant exists, and
+`docker compose -f infra/docker-compose.yml down` keeps the volume. To go back to the demo data,
+run `pnpm seed` (TRUNCATE and reseed). To start from nothing, run
+`docker compose -f infra/docker-compose.yml down -v`, and the next `pnpm dev` seeds again.
+
+Every page asks you to sign in first. `pnpm dev` prints the sign-in line on every run: sign in as
+**`linh@momo-digital.example`** (the PM) or **`hoang@momo-digital.example`** (the Tenant Admin),
+with the `SEED_DEMO_PASSWORD` it shows. If you change that password after the database was
+seeded, run `pnpm seed` so the demo users get the new one.
 
 ### Forgot your password?
 
 `/sign-in` has a "Forgot your password?" link to `/forgot-password`. Enter a seeded user's
 email; the page always says the same thing ("if that email has an account…") whether or not it
 does. With `MAILER=console` (the default), the mail — including the reset link — is written to
-**this terminal** (the one running `pnpm demo`/`pnpm dev`), never actually sent anywhere. Copy the
+**this terminal** (the one running `pnpm dev`, lines prefixed `[web]`), never actually sent anywhere. Copy the
 `/reset-password?token=…` link out of it, open it, set a new password, and sign in with that
 instead of the old one. The link expires in 1 hour and works once.
 
@@ -91,17 +105,11 @@ machine; in production it is Google's, `https://accounts.google.com`.
 
 > **An older local database** (created with `drizzle-kit push`, before story 2.1) cannot be
 > migrated: the schema now arrives through one migration (AD-30), which expects an empty
-> database. Recreate it once, then run `pnpm demo` again:
+> database. Recreate it once, then run `pnpm dev` again:
 > `docker exec momo-keikaku-postgres sh -c 'dropdb -U momo --force momo_keikaku && createdb -U momo momo_keikaku'`.
 
-That one command starts Postgres 18 in docker compose, applies the schema, creates the
-`momo_migrator`, `momo_app` and `momo_maintenance` roles with the pg-boss schema, applies the
-row-level security, grants and append-only triggers generated from the table-class registry,
-seeds the demo project, replays the `fixture` Connector's six weekly Tracker Snapshots into
-the Actuals Ledger, and starts the web app.
-
-`pnpm demo` checks for both variables first and names whichever is missing, rather than
-failing three steps in with a connection error.
+`pnpm dev` checks for every key first and names whichever is missing, rather than failing
+three steps in with a connection error.
 
 | | |
 |---|---|
@@ -109,15 +117,17 @@ failing three steps in with a connection error.
 
 > **Port note.** The web app runs on **3101**, not 3100: on this machine 3100 is held
 > by an unrelated service (`packages/server/dist/index.js`). Override with
-> `PORT=3xxx pnpm demo`. Postgres is published on host port **55433**, also to avoid a
-> Postgres container that is already running here.
+> `PORT=3xxx pnpm dev`. The first run writes its port into `BETTER_AUTH_URL` in `.env.local`, so
+> on a later run with another port, export `BETTER_AUTH_URL=http://localhost:3xxx` as well
+> (`pnpm dev` warns when the two disagree). Postgres is published on host port **55433**, also
+> to avoid a Postgres container that is already running here.
 
 Other commands:
 
 ```bash
 pnpm test                # 46 vitest cases over the pure domain core
 pnpm seed                # re-seed, restoring the demo to its as-shipped state
-pnpm db:down             # stop Postgres and delete its volume
+docker compose -f infra/docker-compose.yml down -v   # stop Postgres and delete its volume
 pnpm fixtures:generate   # regenerate the fixture dataset (changes the golden numbers)
 ```
 

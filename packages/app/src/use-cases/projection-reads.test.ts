@@ -168,7 +168,7 @@ describe('getProjectMapping', () => {
 
 /** packages/db's wording for an invisible Project, verbatim (repo.ts). */
 const notFoundError = (projectId: string) =>
-  new Error(`project ${projectId} not found — run \`pnpm demo\` to seed`);
+  new Error(`project ${projectId} not found — run \`pnpm seed\` to seed`);
 
 describe.each([
   { name: 'getProjectMapping', run: getProjectMapping },
