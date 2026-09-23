@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 09-20-2026 16:55
-last_updated: 09-23-2026 05:45
+last_updated: 09-23-2026 06:18
 project: momo-keikaku
 project_key: NOKEY
 tracking_system: file-system
@@ -45,7 +45,7 @@ development_status:
   1-7-the-tenant-admin-can-read-the-audit-log: done
   1-8-a-load-fixture-worth-measuring-against: done
   1-9-every-string-is-externalised-and-the-currency-is-fixed: done
-  epic-1-retrospective: optional
+  epic-1-retrospective: done
 
   epic-2: backlog
   2-1-the-scheduling-schema-lands-in-one-migration: backlog
@@ -128,3 +128,68 @@ development_status:
   8-4-backups-exist-and-the-restore-is-written-down: backlog
   8-5-a-tenant-s-data-can-be-deleted-within-30-days: backlog
   epic-8-retrospective: optional
+action_items:
+  - id: "epic-1-retro-item-1-test-suite-race"
+    epic: 1
+    action: "Fix the test-suite race against a shared database: have the probe-tenant
+      harness take SEED_SUITE_LOCK shared while the seed takes it exclusive, and add
+      a regression test that runs the suite against a database already holding a probe
+      Tenant (retro F1)"
+    owner: "dev"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-1-retro-2026-09-23.md"
+  - id: "epic-1-retro-item-2-audited-write-wrapper"
+    epic: 1
+    action: "Extract one generic audited-write wrapper and delete runOrgWrite / runMembershipWrite
+      / runResourceWrite, which are three copies of the same function (retro F7)"
+    owner: "dev"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-1-retro-2026-09-23.md"
+  - id: "epic-1-retro-item-3-declaration-convention"
+    epic: 1
+    action: "Collapse the two use-case declaration conventions into one: audit declarations
+      are colocated and merged, role declarations are centralised. Pick one and write
+      it into the architecture spine (retro F12)"
+    owner: "dev"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-1-retro-2026-09-23.md"
+  - id: "epic-1-retro-item-4-nfkc-comparator"
+    epic: 1
+    action: "Route product-text sorts through compareNfkc semantics: drop localeCompare
+      with sensitivity base from compareNfkcNumeric so distinct strings never compare
+      equal, and add a mixed-width/kana test case (retro F24)"
+    owner: "dev"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-1-retro-2026-09-23.md"
+  - id: "epic-1-retro-item-5-layout-gate-tautology"
+    epic: 1
+    action: "Make the +30% Japanese layout gate actually inflate strings instead of
+      capping ja.length against en.length times 1.3 over a byte-identical catalog,
+      where it can never fail (retro F23)"
+    owner: "dev"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-1-retro-2026-09-23.md"
+  - id: "epic-1-retro-item-6-triage-deferred-work"
+    epic: 1
+    action: "Triage the 157 open deferred-work entries and decide their disposition
+      before story 2.1 (retro F15, open question 1)"
+    owner: "founder"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-1-retro-2026-09-23.md"
+  - id: "epic-1-retro-item-7-reconcile-ad1"
+    epic: 1
+    action: "Reconcile AD-1 in ARCHITECTURE-SPINE.md with the gate as enforced: the
+      second composition root at apps/worker/src/index.ts, the rule renamed no-test-or-tooling-in-source,
+      and its widening to tests and scripts. Resolve first whether the worker carve-out
+      was decided or drifted (retro F4, open question 5)"
+    owner: "founder"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-1-retro-2026-09-23.md"
+  - id: "epic-1-retro-item-8-organisation-ui"
+    epic: 1
+    action: "Decide the Organisation UI: its deferral was conditioned on sign-in and
+      roles existing, and both now do. Either schedule it or amend the epic narrative
+      at epics.md:453 (retro open question 6)"
+    owner: "founder"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-1-retro-2026-09-23.md"
