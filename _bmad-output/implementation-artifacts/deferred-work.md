@@ -986,3 +986,29 @@ fences and tooling that gate them. Seventeen findings were patched; these ten we
 - source_spec: `_bmad-output/implementation-artifacts/epic-1-retro-2026-09-23.md`
   summary: The layout gate is character arithmetic, not rendering, and charges a full-width kana the same 8px as a Latin character.
   evidence: `PX_PER_CHAR = 8` is calibrated for Latin at 14px; a full-width Japanese glyph is nearer a full em, so the gate understates real Japanese width by roughly half. It also models no font, no wrapping and no line breaks, so a long paragraph is measured as one line. Correcting the width model would move every budget at once and needs the real surfaces to calibrate against — the visual check belongs with story 2.2's Project/Client gate, where actual rendering is available.
+
+
+## Scheduled into Epic 2 by founder decision (2026-09-23)
+
+Three of the Epic 1 retrospective's recommendations were taken, and the rows behind them now have
+a story rather than a place in this ledger. Recorded here so a reader who arrives at an open row
+above can see where it went.
+
+- **Composite foreign keys → story 2.1.** Story 1.2's criterion ("every foreign key between
+  tenant-owned tables is composite and includes `tenant_id`") was never implemented and the schema
+  carries none at all. The founder decided the criterion stands and that 2.1 pays it, because AD-30
+  makes 2.1 the single pre-production migration: afterwards, adding a foreign key is a change to
+  the migration policy rather than a migration. Story 2.1's acceptance now names the relationships
+  the audit found unprotected, including `mapping_event → work_package`, which `seed.ts` writes
+  with no ownership check.
+- **The demo-spike rows → story 2.2.** The Plan and Review pages' inline `bigint` arithmetic and
+  date comparisons, the Baselines page's per-version BAC, the Review page's Schedule Variance note
+  contradicting its own SPI note at SV = 0, and the Japanese +30% layout gate for the Project and
+  Client surfaces are all in files 2.2 rewrites file by file. They are discharged in 2.2's
+  acceptance rather than carried: a debt row against code that is about to be deleted is noise.
+- **The Organisation UI → story 2.17 (new).** Epic 1's narrative claimed it and Epic 1 shipped no
+  Organisation screen. The deferral was conditioned on sign-in and roles existing; stories 1.4 and
+  1.5 met that condition and nothing revisited it. It sits in Epic 2 because 2.2 rewrites the shell
+  and 2.13 … 2.16 build the grid it reuses. Its acceptance also carries retrospective finding F21 —
+  `loadProjectBundle` returns every Resource's Rate history for the whole Tenant, which is bounded
+  today only because no page renders Rates, and stops being bounded the moment these screens exist.
