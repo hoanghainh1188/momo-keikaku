@@ -1028,3 +1028,9 @@ above can see where it went.
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-1-the-scheduling-schema-lands-in-one-migration.md`
   summary: Story 2.2 must add a DB test for the head selection of `wp_status_event` in the reshaped `WorkPackage` reader: the highest `seq` per WP wins, and a non-milestone gets no milestone date.
   evidence: Verification-gap finding, review pass 1, #3. 2.1 only asserts the seeded values, because 2.2 rewrites the reader (`repo.ts` loadBundleInTenant).
+- source_spec: none
+  summary: Story 2.2 follow-up. The Plan, Baselines and Review pages still do the parent roll-up, the `slipped` and milestone-overdue flags, per-version BAC and planned-scope AC themselves, with `bigint` arithmetic and date comparisons. They should take these computed figures from a use case (AD-1's "tolerated for now" bullet). The Review page's Schedule Variance note should also stop contradicting its SPI note at SV = 0.
+  evidence: Split from story 2.2 by founder decision on 2026-09-23 (scope "1+2 first"), so that the shared 2.1+2.2 PR can go green and merge. This goal is an epics.md AC of story 2.2 and can ship on its own.
+- source_spec: none
+  summary: Story 2.2 follow-up. Extend the Japanese +30% layout gate from the shell to the Project and Client surfaces, with `KNOWN_OVERFLOW` in `packages/i18n/src/shell-layout-gate.test.ts` only shrinking. This includes the visual check that the gate's header comment defers to 2.2.
+  evidence: Split from story 2.2 by founder decision on 2026-09-23 (scope "1+2 first"). This goal is an epics.md AC of story 2.2, it is independent of the schema work, and it can ship on its own.
