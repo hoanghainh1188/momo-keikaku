@@ -3,6 +3,7 @@ import { periodOf } from './calendar';
 import { computeReview, type ReviewInput } from './review';
 import { DEFAULT_THRESHOLDS, type WorkPackage } from './types';
 import { hoursToMh } from './units';
+import { expectShuffleInvariant } from '../../../tests/support/shuffle-invariant';
 
 /**
  * `computeReview` on a Project with NO Unplanned Work: every hour is on a baselined Work
@@ -203,5 +204,86 @@ describe('computeReview milestones read the head actual finish', () => {
   it('a milestone past its Baseline date with no actual finish has slipped', () => {
     const [row] = computeReview(withMilestone(null)).milestones!;
     expect(row).toMatchObject({ doneDate: null, slipped: true });
+  });
+});
+
+/**
+ * Story 2.3 (Q2-A): the milestone and Divergence rows come back in `compareWp` order (AD-28), not
+ * input order. The `1.2`/`1.02` pair ties on the integer and its ids run AGAINST the old code-point
+ * order (which put `1.02` first), so the id tie-break is visible; `1a` checks the natural order.
+ */
+describe('computeReview orders milestone and Divergence rows by compareWp', () => {
+  const shapes: readonly (readonly [string, string])[] = [
+    // [id suffix, wbsCode]
+    ['a', '1.10'],
+    ['b', '1.2'],
+    ['z', '1.02'],
+    ['c', '1a'],
+  ];
+  const milestones: WorkPackage[] = shapes.map(([suffix, wbsCode]) => ({
+    ...wp,
+    id: `m-${suffix}`,
+    wbsCode,
+    name: `m-${suffix}`,
+    // Not leaves, so the Divergence rows below are exactly the leaf set.
+    isLeaf: false,
+    isMilestone: true,
+    plannedMh: 0n,
+  }));
+  const leaves: WorkPackage[] = shapes.map(([suffix, wbsCode]) => ({
+    ...wp,
+    id: `l-${suffix}`,
+    wbsCode,
+    name: `l-${suffix}`,
+  }));
+  const allWps: readonly WorkPackage[] = [...milestones, wp, ...leaves];
+
+  /** The Baseline rows follow the WP order handed in, so a shuffle reorders both lists. */
+  const reviewOf = (wps: readonly WorkPackage[]) =>
+    computeReview({
+      ...input,
+      wps: [...wps],
+      baselineVersions: [
+        {
+          ...input.baselineVersions[0]!,
+          wps: wps.map((w) => ({
+            wpId: w.id,
+            start: '2026-09-01',
+            finish: '2026-09-01',
+            baselineMh: w.isMilestone ? 0n : hoursToMh(200),
+            isMilestone: w.isMilestone,
+          })),
+        },
+      ],
+    });
+
+  const ordering = (wps: readonly WorkPackage[]) => {
+    const r = reviewOf(wps);
+    return {
+      milestones: r.milestones!.map((m) => [m.name, m.wbsCode]),
+      divergence: r.divergence!.map((d) => [d.wpId, d.wbsCode]),
+    };
+  };
+
+  it('returns the exact compareWp sequences', () => {
+    expect(ordering(allWps)).toEqual({
+      milestones: [
+        ['m-b', '1.2'],
+        ['m-z', '1.02'],
+        ['m-a', '1.10'],
+        ['m-c', '1a'],
+      ],
+      divergence: [
+        ['WP-B', '1.1'],
+        ['l-b', '1.2'],
+        ['l-z', '1.02'],
+        ['l-a', '1.10'],
+        ['l-c', '1a'],
+      ],
+    });
+  });
+
+  it('is stable over shuffled input.wps', () => {
+    expectShuffleInvariant(ordering, allWps, 50);
   });
 });

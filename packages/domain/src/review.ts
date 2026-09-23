@@ -1,10 +1,10 @@
 import { attribute, type AttributionResult, type Buckets } from './attribution';
-import { compareNfkcNumeric } from './text/compareNfkc';
 import type { HolidayCalendar, IsoDate, ReportingPeriod } from './calendar';
 import { computeEvm, FORMULA_VERSION, type EvmResult, type WpMeasure } from './evm';
 import { computeForecast, type ForecastResult } from './forecast';
 import { computeHealth, isBehindPlan, type HealthColour, type HealthIndicator } from './health';
 import { mappingHead, type MappingHeadEntry } from './mapping';
+import { compareWp } from './schedule/order';
 import type {
   BaselineVersion,
   LedgerEntry,
@@ -370,20 +370,23 @@ function milestoneRows(
   asOf: IsoDate,
 ): MilestoneRow[] {
   const wpById = new Map(wps.map((w) => [w.id, w]));
+  // Sorted with the row's `wpId` in hand (AD-28's tie-break), which `MilestoneRow` does not carry.
   return baseline.wps
     .filter((b) => b.isMilestone)
     .map((b) => {
       const wp = wpById.get(b.wpId);
       const done = wp?.isMilestone ? wp.actualFinish : null;
-      return {
+      const row: MilestoneRow = {
         wbsCode: wp?.wbsCode ?? '',
         name: wp?.name ?? '',
         baselineDate: b.finish,
         doneDate: done,
         slipped: !done && asOf > b.finish,
       };
+      return { key: { id: b.wpId, wbsCode: row.wbsCode }, row };
     })
-    .sort((a, b) => compareNfkcNumeric(a.wbsCode, b.wbsCode));
+    .sort((a, b) => compareWp(a.key, b.key))
+    .map(({ row }) => row);
 }
 
 /** Divergence by WP: the Baseline against the Current Plan's effort and the actual dates. */
@@ -419,7 +422,9 @@ function divergenceRows(
         nonBaselined: !b,
       };
     })
-    .sort((a, b) => compareNfkcNumeric(a.wbsCode, b.wbsCode));
+    .sort((a, b) =>
+      compareWp({ id: a.wpId, wbsCode: a.wbsCode }, { id: b.wpId, wbsCode: b.wbsCode }),
+    );
 }
 
 export type { MappingHeadEntry };
