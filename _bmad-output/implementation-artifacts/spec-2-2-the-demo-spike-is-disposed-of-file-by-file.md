@@ -175,6 +175,8 @@ Three facts are recorded as the story requires:
 
 - **Orchestrator re-verification (2026-09-23).** Ran on a fresh `momo_verify` with the CI prepare sequence, including `pnpm seed` (this loads `.env.development`, which sets `CLOCK_MODE=fixture`). Typecheck (root and web), lint and depcruise pass; `drizzle-kit generate` finds no drift. `pnpm test` passed 1017/1017, twice. A seed run through bare `tsx scripts/seed.ts` stamps `demo_anchor` from the wall clock and empties the current Reporting Period, so it is not the CI path. The matrix row "Removed route → 404" had no covering test, so the orchestrator added `apps/web/src/app/removed-routes.test.ts`. It pins that no `c` segment exists and that no top-level dynamic, catch-all or group segment could capture `/c/<id>`.
 
+- **Post-review elicitation (2026-09-23, founder-approved P1).** `pnpm db:migrate` now runs `scripts/db-migrate.ts`, which refuses a push-created database: one with tables in `public` and no `drizzle.__drizzle_migrations`. The refusal names the recreate command from README-DEMO, and `scripts/db-migrate.test.ts` pins the decision. Exercised against the real pre-2.1 `momo_keikaku` database (24 tables, refused), a fresh database (applied), and a re-run (no-op). P2 (constraint errors → `AppError`) and P3 (no web error boundary) went to `deferred-work.md`.
+
 ## Spec Change Log
 
 ## Review Triage Log
