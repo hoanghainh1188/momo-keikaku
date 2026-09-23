@@ -1,4 +1,37 @@
-# Handoff — 2026-09-23 (Epic 1 closed: `pnpm dev` in one command, checkpoint taken)
+# Handoff — 2026-09-23 (story 2.3 closed: one canonical order)
+
+**Latest (2026-09-23, late night): story 2.3 merged via PR #58 (`e04d1c9`) and is `done`.**
+- **`compareWp`** (`packages/domain/src/schedule/order.ts`) is the single total order for WPs:
+  1. NFKC first, then split on `.`.
+  2. Each segment compares in natural order: ASCII `[0-9]` runs as `BigInt`, other runs by true
+     code point, a digit run before a non-digit run.
+  3. Fewer runs or segments sort first once the shared ones tie.
+  4. Then the lowercase `wp_id`, then the raw `wp_id`.
+
+  Result: `3` < `3a` < `3b` < `4` < `10`, and it never returns 0 for two distinct WPs.
+- **`canonicalWps`** is the one place the order is applied (AD-26's `inputs.wps` plus an
+  id → index map).
+- **Review page:** its milestone and Divergence rows sort through `compareWp`.
+  `compareNfkcNumeric` is deleted, and `compareNfkc` now compares true code points, not UTF-16
+  code units.
+- **AD-28 was amended (founder decision T-A).** Its literal step 2 was intransitive for mixed
+  segments (`2` < `10` < `1a` < `2`). AD-28, AR-55, story 2.3's AC and `epic-2-context.md` were
+  updated after two adversarial review rounds; the details are in the spec's Implementation Notes.
+- **Carried forward (`deferred-work.md`).** AC 4 at engine level: point
+  `tests/support/shuffle-invariant.ts` (`expectShuffleInvariant`) at `recalculate` in 2.5 and at
+  the stored run in 2.9.
+- **Next: story 2.4** (the four graph rules as invariants, 12 h). Things to know before starting:
+  - Its "the fence calls `validate` on every mutation and `recalculate` calls it" criterion has
+    no fence (`app/schedule.applyPlanChange`, 2.9) or `recalculate` (2.5) to attach to yet.
+    Expect an intent-gap question on that, as 2.3 had for its AC 4.
+  - The cross-project FK (`MATCH FULL`) and `CHECK (type = 'FS')` already landed with 2.1's
+    migration (`schema-catalog.test.ts` pins them), so 2.4 likely only proves them.
+  - `deferred-work.md` asks 2.4/2.10/2.14 to check graph rules app-side before writing, and to
+    turn constraint errors into `AppError` rather than a 500.
+  - A rejected cycle is reported rotated to its `compareWp`-minimum WP.
+- Spec: `spec-2-3-one-canonical-order-for-everything-the-scheduler-reports.md`.
+
+## Earlier: Handoff — 2026-09-23 (Epic 1 closed: `pnpm dev` in one command, checkpoint taken)
 
 **Latest (2026-09-23, night): story 1.1 slice B3 merged via PR #56 (`0350e5b`). Story 1.1 and
 Epic 1 are `done`.** `pnpm dev` (with `pnpm demo` as an alias) takes a clean clone through compose,
