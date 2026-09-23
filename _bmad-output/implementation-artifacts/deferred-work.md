@@ -3,10 +3,26 @@
 Goals split out of a Build intent. Each entry is a goal that was in scope when the
 work started and was deliberately deferred, with the evidence for the split.
 
+## The `resolved:` field
+
+An entry with no `resolved:` line is OPEN. An entry with one starts with exactly one
+of four words, so the ledger can be counted without reading it:
+
+- `YES` — done. What follows is the evidence a reader needs to accept that.
+- `PARTIAL` — some of it landed; the line says which half remains. Counts as OPEN.
+- `NO` — checked and deliberately not done. Counts as OPEN.
+- `OBSOLETE` — the entry no longer describes anything real. Counts as CLOSED, and the
+  line says what removed it.
+
+That vocabulary was imposed on 2026-09-23. Before then five spellings were in use
+(`YES`, `PARTIAL`, `MOSTLY`, `DONE`, and a bare date), which is why the Epic 1
+retrospective could not count the ledger without hand-classifying nine entries (F16),
+and why thirty-five entries sat open while the work behind them had already shipped.
+
 - source_spec: none
   summary: Story 1.1 slice B — the one-command local run and the workspace substrate: the five missing workspace units (apps/worker, packages/app, packages/db/auth, packages/adapters, packages/i18n), packages/app/config's zod fail-boot schema, the Clock port with the ESLint bans on Date.now()/new Date()/process.env, pg-boss installed and migrated by the migrator role with the app role on DML grants and auto-migration disabled, and `pnpm dev` bringing Postgres, migrations, RLS/grants/triggers, the seed, web and worker up in one command.
   evidence: Split from story 1.1 on 2026-09-20 at the Build multi-goal gate. Slice A (four major version upgrades — pnpm 9.15.0 to 12.4.2, TypeScript 5.7 to 6.0.3, vitest 2 to 5.0.1, drizzle-orm 0.38 to 0.45.2, plus pinning the Postgres image to 18.6) is independently shippable against the current 43-file codebase and is gated by the CI added in PR #6, so upgrade breakage surfaces on code that already exists rather than on top of five new packages. Founder chose the split. Note the one honest cost: story 1.1's final acceptance criterion spans both slices — its first half (a fresh install and typecheck succeed under pnpm 12 and TypeScript 6) is accepted in slice A, while its second half (apps/worker, packages/db and packages/adapters declaring "types": ["node"]) cannot be accepted until those packages exist in slice B. Slice A therefore closes with that criterion deliberately partial.
-  resolved: PARTIAL, 2026-09-20. Slice B1 (`spec-1-1-workspace-skeleton.md`) landed the five workspace units, packages/app/config's fail-boot zod schema and the Clock port with the ESLint bans, and closed the second half of story 1.1's final criterion — packages/db, packages/adapters and apps/worker all declare "types": ["node"] now. pg-boss on separated roles and `pnpm dev` remain, split out as the B2 and B3 entries below.
+  resolved: OBSOLETE, superseding the earlier partial — 2026-09-23 by the Epic 1 retrospective's deferred-work audit (retro action item 6). A parent entry whose own text says the remainder was split into the B2 and B3 entries below. B2 is closed and B3 is open; carrying this as well triple-counts `pnpm dev`. EARLIER: PARTIAL, 2026-09-20. Slice B1 (`spec-1-1-workspace-skeleton.md`) landed the five workspace units, packages/app/config's fail-boot zod schema and the Clock port with the ESLint bans, and closed the second half of story 1.1's final criterion — packages/db, packages/adapters and apps/worker all declare "types": ["node"] now. pg-boss on separated roles and `pnpm dev` remain, split out as the B2 and B3 entries below.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-1-version-upgrades.md`
   summary: Move apps/web from the Next 15 line (currently resolving 15.5.25) to the decided Next 16.3.5. React needs nothing: ^19.0.0 already resolves 19.3.0, which is the decided version.
@@ -15,6 +31,7 @@ work started and was deliberately deferred, with the evidence for the split.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-1-version-upgrades.md`
   summary: Nothing in the verification path ever executes a database query, so the drizzle-orm 0.38→0.45 and pg 8.13→8.23 majors plus the Postgres 18.6 pin are covered only by tsc.
   evidence: Real and verified. All three test files compute from JSON fixtures through the pure domain core; a repo-wide grep of test files for drizzle, pg, getDb, loadReview and @momo/db returns nothing, and CI has no services: postgres block. A row-mapping or DDL difference would ship with all three gates green and surface as wrong money figures on the Review page. Not a defect today — drizzle-kit 0.31.10 was hand-run and still emits all four CREATE INDEX statements from schema.ts, and peek-db.ts reads figures correctly through repo.ts. The fix is a Postgres service in CI plus a round-trip test that seeds and reads back the golden figures, which is the first DB test this repo would have; CI's own header says to add the service when the first test needs one.
+  resolved: YES, 2026-09-23 by the Epic 1 retrospective's deferred-work audit (retro action item 6). A Postgres 18.6 service and the full prepare sequence run in CI (`.github/workflows/ci.yml`), and `packages/db/src/db-round-trip.test.ts` reads the golden figures back through drizzle + pg — exactly the fix this entry prescribed.
   
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-1-version-upgrades.md`
   summary: packages/db still owes a per-package "types": ["node"] declaration, and neither slice A nor the recorded slice B deferral names it.
@@ -24,6 +41,7 @@ work started and was deliberately deferred, with the evidence for the split.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-1-version-upgrades.md`
   summary: Node 24.21.0 is pinned only inside CI — no engines field, no .nvmrc, no .node-version — so local runs use whatever Node the developer has.
   evidence: Verified absent. This box runs 24.13.0 while CI now pins 24.21.0, which is exactly the drift class this slice exists to close. Deliberately not patched: adding engines.node: "24.21.0" would break installs on the founder's current Node, so the choice between an exact pin, a range, and an .nvmrc-only convention is a decision rather than a one-line fix. Pair it with the pnpm engines pin at the same time.
+  resolved: YES, 2026-09-23 by the Epic 1 retrospective's deferred-work audit (retro action item 6). `.nvmrc` holds 24.21.0 and CI reads it via `node-version-file`. The `engines` question was decided against deliberately (commit `f3f114b`), which is the decision this entry was waiting for.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-1-version-upgrades.md`
   summary: vitest went 2→5 with no coverage configuration, so the project's 80% coverage floor is neither measurable nor gated.
@@ -32,6 +50,7 @@ work started and was deliberately deferred, with the evidence for the split.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-1-version-upgrades.md`
   summary: apps/web is typechecked but never built, and @types/node just crossed a major under it.
   evidence: CI runs tsc --noEmit for apps/web and never next build. The lockfile now resolves next@15.5.25(@types/node@24.13.6), so Next's typings sit on Node 24 types rather than Node 22. The typecheck gate covers types, not a production build, and this gap became load-bearing with this change. Adding next build to CI is new scope.
+  resolved: YES, 2026-09-23 by the Epic 1 retrospective's deferred-work audit (retro action item 6). CI runs `pnpm --filter @momo/web build`. (The step inherits the job env, so it does not prove the composition root reads no configuration — that residue is its own entry.)
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-1-version-upgrades.md`
   summary: Root tsconfig.json duplicates tsconfig.base.json instead of extending it, and apps/web/tsconfig.json redeclares paths and loses the base's @momo/domain/* and @momo/db/* wildcards.
@@ -58,7 +77,7 @@ work started and was deliberately deferred, with the evidence for the split.
 - source_spec: none
   summary: Story 1.1 slice B2 — apps/worker and pg-boss on separated database roles: the migrator (owner) role installs and migrates pg-boss's schema during migrate, and the application role starts pg-boss with auto-migration disabled holding only DML grants on that schema.
   evidence: Split from slice B on 2026-09-20 at the Build multi-goal gate, after the founder chose to land the workspace skeleton (B1) first. Independently shippable once B1 exists, and substantial in its own right: pg-boss is not installed, and the migrator/application/maintenance role split does not exist in the database at all. It is database and ops work rather than application layering, so folding it into B1 would mix two debugging surfaces in one PR — the same reasoning that split slice A from slice B.
-  resolved: PARTIAL, 2026-09-20 in `spec-1-1-pgboss-roles.md`. pg-boss 12.33.2 is installed; `scripts/pgboss-migrate.ts` (`pnpm pgboss:migrate`) creates the `momo_migrator` (NOLOGIN owner) and `momo_app` (LOGIN, restricted) roles idempotently, installs/migrates the `pgboss` schema from pg-boss's own generated plan SQL as the owner, and grants the app role USAGE plus DML and nothing else; `apps/worker` constructs pg-boss with `migrate: false`/`createSchema: false` and is gated by `apps/worker/src/worker-round-trip.test.ts`. The `maintenance` role named in this entry's summary was NOT created — it belongs to the append-only exception path, which is story 1.2's (see the new entry below).
+  resolved: YES, superseding the earlier partial — 2026-09-23 by the Epic 1 retrospective's deferred-work audit (retro action item 6). The single residue this entry's PARTIAL named — the `maintenance` role — now exists: created by `scripts/db-policies.ts` through the shared `ensureRole`, with its policy and grants emitted by `sql/generate.ts`. EARLIER: PARTIAL, 2026-09-20 in `spec-1-1-pgboss-roles.md`. pg-boss 12.33.2 is installed; `scripts/pgboss-migrate.ts` (`pnpm pgboss:migrate`) creates the `momo_migrator` (NOLOGIN owner) and `momo_app` (LOGIN, restricted) roles idempotently, installs/migrates the `pgboss` schema from pg-boss's own generated plan SQL as the owner, and grants the app role USAGE plus DML and nothing else; `apps/worker` constructs pg-boss with `migrate: false`/`createSchema: false` and is gated by `apps/worker/src/worker-round-trip.test.ts`. The `maintenance` role named in this entry's summary was NOT created — it belongs to the append-only exception path, which is story 1.2's (see the new entry below).
 
 - source_spec: none
   summary: Story 1.1 slice B3 — `pnpm dev` bringing Postgres, migrations, the RLS/grants/trigger SQL, the seed, web and worker up in one command.
@@ -91,6 +110,7 @@ work started and was deliberately deferred, with the evidence for the split.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-1-workspace-skeleton.md`
   summary: packages/db/src/client.ts still falls back to a hardcoded 'postgres://momo:momo@localhost:55433/momo_keikaku' when DATABASE_URL is unset, so a missing key silently connects to a dev database instead of failing the way packages/app/src/config.ts promises.
   evidence: Confirmed at client.ts:18. It contradicts config.ts's own header for the only key the repo has, on the only path that actually connects. Deliberately not patched: the fallback predates this slice, and removing it breaks `pnpm demo`, which relies on the default rather than setting the variable. Dropping it is a decision about local developer ergonomics and pairs naturally with story 1.2's getDb(connectionString) refactor. drizzle.config.ts:8 carries the identical default and must move with it.
+  resolved: YES, 2026-09-23 by the Epic 1 retrospective's deferred-work audit (retro action item 6). `packages/db/src/client.ts` takes the connection string as an argument behind `assertConnectionString`, which throws naming both keys. The literal survives only in that file's comment explaining the removal, and in a test fixture.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-1-workspace-skeleton.md`
   summary: packages/app/src/config.ts parses eagerly at module load and the barrel re-exports the parsed value, so importing @momo/app for any reason requires DATABASE_URL.
@@ -122,6 +142,7 @@ work started and was deliberately deferred, with the evidence for the split.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-1-pgboss-roles.md`
   summary: The `maintenance` role is still absent. Slice B2 created only `momo_migrator` and `momo_app`; ARCHITECTURE-SPINE.md's append-only enforcement names a third role with an explicit maintenance flag as the only path allowed to UPDATE or DELETE an append-only table.
   evidence: Confirmed by `pg_roles` after the migrator step — three roles exist (`momo`, `momo_migrator`, `momo_app`) and none is a maintenance role. Deliberately out of scope: the spec's Never excludes the table-class registry, `grants.sql` and the triggers, and the maintenance role has nothing to be an exception to until the append-only triggers exist. Natural home is story 1.2, beside the generated grant SQL.
+  resolved: YES, 2026-09-23 by the Epic 1 retrospective's deferred-work audit (retro action item 6). `scripts/db-policies.ts` creates `CANONICAL_MAINTENANCE_ROLE` through `pgboss-migrate.ts`'s exported `ensureRole`, and the append-only triggers refuse until `app.maintenance` is set (`rls.test.ts`).
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-1-pgboss-roles.md`
   summary: `pg-boss` is pinned exactly in two manifests (root `package.json` for the migrator script, `apps/worker/package.json` for the runner) with nothing enforcing lockstep, extending the same problem already recorded for `drizzle-orm`/`pg` across three.
@@ -143,6 +164,7 @@ work started and was deliberately deferred, with the evidence for the split.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-1-pgboss-roles.md`
   summary: The worker writes to `console` directly. There is no logger port, so a runner that is meant to be operated has no structured output, no levels and no redaction — and the security floor requires that no tracker credential reach logs.
   evidence: Confirmed at `apps/worker/src/index.ts`, which uses `console.error`/`console.warn`/`console.log` for pg-boss's `error` and `warning` events and for its own lifecycle lines. Harmless today (the worker runs nothing and handles no credentials), and a logger port is a decision no story has taken yet. It stops being harmless in Epic 5, when the Connector's jobs carry tracker credentials into exactly those event payloads.
+  resolved: YES, 2026-09-23 by the Epic 1 retrospective's deferred-work audit (retro action item 6). `apps/worker/src/index.ts` logs through `createLogger` (pino, AD-16 redaction) with zero `console.` calls. NOTE: the `LoggerPort` abstraction was declined on purpose (`packages/app/src/logger.ts`: "can wait until more call sites exist") — the harm is closed, the port is not owed.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-1-pgboss-roles.md`
   summary: `pnpm test` still silently skips the worker round trip when APP_DATABASE_URL is unset, which is every local run that has not exported it.
@@ -177,6 +199,7 @@ work started and was deliberately deferred, with the evidence for the split.
 - source_spec: none
   summary: "CLOSED 2026-09-21 by `spec-1-2-cross-tenant-harness.md`. Story 1.2 slice — the cross-tenant harness that enumerates every read use case (AC 4 and 5, discharging NFR-S1)."
   evidence: Split from story 1.2 on 2026-09-20 at the Build multi-goal gate. AC 4 requires the harness to enumerate the read use cases mechanically rather than list them by hand, so a new one is covered the day it is written — which means it needs the use cases to exist as an enumerable surface, i.e. it follows the apps/web rewiring rather than preceding it. AC 5 states that this harness IS the automated test NFR-S1 demands, so NFR-S1 is not discharged until this lands, however green the RLS machinery looks before it. CLOSED — and the sequencing argument above was reversed at approval on 2026-09-21. The harness landed BEFORE the apps/web rewiring, against `packages/db/src/repo.ts` as the read surface, because all eight apps/web files and `scripts/peek-db.ts` already reach data through exactly two functions there, so the surface was already mechanically enumerable; and because a harness that exists before the rewiring is what guards it. `packages/db/src/read-use-cases.ts` holds the registry and is one import away from pointing at `packages/app`. NFR-S1 is discharged: 21 assertions in `packages/db/src/cross-tenant.test.ts`, fifteen sabotages watched to fail.
+  resolved: YES, 2026-09-23 by the Epic 1 retrospective's deferred-work audit (retro action item 6). The entry's own summary already said CLOSED but it carried no `resolved:` field, so it counted as open. The harness is live (`tests/read-use-cases.ts`, `tests/cross-tenant.test.ts`). Ledger hygiene, not work.
 
 - source_spec: none
   summary: Story 1.2 slice — rewire the eight apps/web files onto packages/app use cases, then switch dependency-cruiser on (AC 6).
@@ -212,6 +235,7 @@ work started and was deliberately deferred, with the evidence for the split.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-2-rls-and-withtenant.md`
   summary: `seed.ts`'s `TRUNCATE_ORDER` is a second hand-maintained list of all 17 table names, and nothing ties it to the registry.
   evidence: Verified — `packages/db/src/seed.ts` hardcodes the 17 names in dependency order while `table-classes.ts` holds the same 17. A table added to the registry and not to `TRUNCATE_ORDER` leaves rows behind across a re-seed, which reads as a stale fixture rather than as a missing line. Deriving it from the registry needs dependency ordering the registry does not carry (`CASCADE` makes order mostly irrelevant, but not the `RESTART IDENTITY` semantics), so it is a small design question rather than a rename. The cheap half — a test asserting the two lists hold the same set — is worth doing on its own.
+  resolved: YES, 2026-09-23 by the Epic 1 retrospective's deferred-work audit (retro action item 6). `packages/db/src/registry.test.ts` asserts `TRUNCATE_ORDER` set-equals `REGISTERED_TABLES` with no duplicate. Order is cosmetic: `CASCADE` covers it and `RESTART IDENTITY` is gone.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-2-rls-and-withtenant.md`
   summary: The checked-in `packages/db/sql/grants.sql` renders the canonical role names, while `pnpm db:policies` renders the name parsed out of APP_DATABASE_URL — so with a differently-named application role the checked-in file is not what is applied.
@@ -234,6 +258,7 @@ work started and was deliberately deferred, with the evidence for the split.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-2-rls-and-withtenant.md`
   summary: seed.ts's TRUNCATE_ORDER is a second hand-maintained list of tables beside the registry.
   evidence: Confirmed duplication. The registry already names all 17 tables with their classes, so the truncate order could be derived from it — or at least asserted against it, the way the registry is asserted against the catalog. Left because the ordering carries foreign-key knowledge the registry does not model yet.
+  resolved: YES, 2026-09-23 by the Epic 1 retrospective's deferred-work audit (retro action item 6). Same assertion as the entry above closes this one (`registry.test.ts`).
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-2-rls-and-withtenant.md`
   summary: The migration scripts still assume DATABASE_URL names a superuser, and neither states nor checks it.
@@ -246,6 +271,7 @@ work started and was deliberately deferred, with the evidence for the split.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-2-rls-and-withtenant.md`
   summary: apps/web has no automated test at all, so its move onto the restricted role rests on a hand-run check.
   evidence: Confirmed: vitest.config.ts collects nothing under apps/web, so none of the five server actions and none of the six routes are covered. The role move was verified by running the app and reading pg_stat_activity. The next slice's rewiring onto use cases is what makes this testable without a browser, which is why it waits.
+  resolved: YES, 2026-09-23 by the Epic 1 retrospective's deferred-work audit (retro action item 6). `apps/web/src` now holds nine test files, and `tests/web-composition.test.ts` asserts `getDb(APP_URL)` on both the read and write paths — the restricted-role claim no longer rests on a hand-run check. (The thin-action and page-render half is its own entry and stays open.)
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-2-rls-and-withtenant.md`
   summary: A percent-encoded role name in APP_DATABASE_URL would break the grants assertion's grantee comparison.
@@ -298,7 +324,7 @@ work started and was deliberately deferred, with the evidence for the split.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-2-cross-tenant-harness.md`
   summary: The mechanical coverage gate enumerates one module, so a read added anywhere but the read surface ships with no isolation cover and no red build — and two such reads already exist in `apps/web/src/app/actions.ts`.
   evidence: Found by the verification-gap review on 2026-09-21 and confirmed at the lines. `anchorOf` issues `tx.select().from(s.project)` (actions.ts:115) and `planTickets` issues `tx.select().from(s.workPackage)` (actions.ts:151), both reached through the barrel's `schema`/`withTenant` exports rather than through `repo.ts`. They are helpers inside WRITE actions, so the read-use-case surface really is the two functions in `repo.ts` and the acceptance criterion holds — but `readSurfaceFunctionNames()` cannot see them, `source-discipline.test.ts`'s bare-handle regex does not match `webDb()`/`tx`, there is no dependency-cruiser, and `apps/web` has no test at all. Demonstrated: adding a third read to `actions.ts` leaves every assertion in `cross-tenant.test.ts` green. The real fix is a second, structural gate — enumerate the modules that import `schema`/`withTenant` from `@momo/db` outside the read surface and require each to be declared with a reason, the way `UNREACHED_TENANT_OWNED_TABLES` declares what is not reached (`source-discipline.test.ts` already walks `git ls-files`, so the scan mechanism exists). It belongs with the slice that moves `actions.ts` onto `packages/app` use cases, because that slice is what makes those two reads enumerable rather than incidental. Until then the claim in `read-use-cases.ts` is narrowed to say so.
-  resolved: MOSTLY, 2026-09-21 in `spec-1-2-web-write-use-cases.md`. The two reads named here (`anchorOf`, `planTickets`'s Work Package select) moved into `packages/db/src/repo-writes.ts`, inside write use cases the harness now enumerates and drives. And the class of bug — an `apps/*` file reaching `schema`/`withTenant` directly — is now a red build: `pnpm depcruise` forbids any `apps/*` import of `packages/db` outside the composition root. What remains open is the neighbouring gap from the slice-3 review: a use case exported from the `@momo/app` barrel rather than `use-cases/index.ts` still escapes the enumeration.
+  resolved: YES, superseding the earlier partial — 2026-09-23 by the Epic 1 retrospective's deferred-work audit (retro action item 6). Both named reads moved into `packages/db/src/repo-writes.ts` (`anchorOf`, `workPackageInProject`); `apps/web/src/app/actions.ts` imports no `@momo/db`, and `pnpm depcruise` is green over 234 modules. The barrel-escape residue is its own entry and stays open. EARLIER: MOSTLY, 2026-09-21 in `spec-1-2-web-write-use-cases.md`. The two reads named here (`anchorOf`, `planTickets`'s Work Package select) moved into `packages/db/src/repo-writes.ts`, inside write use cases the harness now enumerates and drives. And the class of bug — an `apps/*` file reaching `schema`/`withTenant` directly — is now a red build: `pnpm depcruise` forbids any `apps/*` import of `packages/db` outside the composition root. What remains open is the neighbouring gap from the slice-3 review: a use case exported from the `@momo/app` barrel rather than `use-cases/index.ts` still escapes the enumeration.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-2-cross-tenant-harness.md`
   summary: `PRESERVED_VOCABULARY` has no staleness gate, so a typo'd entry or one for a value the fixture no longer holds is undetectable.
@@ -325,6 +351,7 @@ work started and was deliberately deferred, with the evidence for the split.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-2-web-read-use-cases.md`
   summary: A SECOND import carve-out now exists beside `packages/db/auth`: `apps/web/src/server/composition.ts` is the one file under `apps/web` permitted to import `@momo/db`.
   evidence: Decided at approval on 2026-09-21 and recorded here as the spec requires. ARCHITECTURE-SPINE.md calls `packages/db/auth` "the single carve-out"; that sentence is now wrong and should be amended when the spine is next touched. The composition root builds the restricted-role handle, hands `loadProjectBundle`/`loadReview` to `packages/app`'s `ProjectReadPort` (structural match checked by a `satisfies` at that line — watched to fail with TS2322 when the port and the repository drift), and constructs `{ tenantId }`. The next slice's dependency-cruiser rule should allow this exact path and nothing matching a pattern. The harness (`tests/cross-tenant.test.ts`) is a composition root of its own for the same reason, and lives outside every package so the rule set needs no second ignore.
+  resolved: YES, 2026-09-23 by the Epic 1 retrospective's deferred-work audit (retro action item 6). AD-1 records the carve-out as a named path and `apps-not-to-db`'s `pathNot` is that exact path.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-2-web-read-use-cases.md`
   summary: Two `apps/web` files still import `@momo/db`, not one — `actions.ts` is out of scope and keeps its `@momo/db` and `drizzle-orm` imports until the writes move.
@@ -363,6 +390,7 @@ work started and was deliberately deferred, with the evidence for the split.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-2-web-read-use-cases.md`
   summary: ARCHITECTURE-SPINE.md:81 still says AD-1 has "One carve-out" (`packages/db/auth`); `apps/web/src/server/composition.ts` is now a second.
   evidence: Measured 2026-09-21. It is a planning document: amending it invalidates the cached epic-1 context and is a planning decision, so it waits for the human rather than being edited by a build run. The carve-out itself is recorded in the entry above. RESOLVED 2026-09-21 (after PR #16): AD-1 now names two carve-outs, the second being `apps/web/src/server/composition.ts`, one named file; the human approved recording it at walkthrough, and the wording was narrowed after adversarial review (`reviews/review-adversarial-ad1-carve-out.md`).
+  resolved: YES, 2026-09-23 by the Epic 1 retrospective's deferred-work audit (retro action item 6). The spine no longer says "One carve-out". This entry already carried its own resolution in prose; it lacked the machine-readable field, which is the ledger-hygiene problem the retrospective raised separately (F16).
 
 - source_spec: `spec-1-2-web-write-use-cases.md`
   summary: The Plan Disposition's Work Package id is `wp-new-<anchor ms>`, a GLOBAL primary key — so a second Plan on the same Project fails, and a Plan whose id collides with another Tenant's row is an existence oracle across Tenants.
@@ -375,6 +403,7 @@ work started and was deliberately deferred, with the evidence for the split.
 - source_spec: `spec-1-2-web-write-use-cases.md`
   summary: A write against a Project that does not exist used to land rows; it now answers `not_found` and lands nothing. Behaviour change, intended.
   evidence: Measured 2026-09-21 on a worktree of the baseline commit: POSTing the Map form with `projectId=prj-nope` wrote a `disposition_event` and `audit_log` row for a Project that does not exist, stamped with the WALL-CLOCK time (`anchorOf`'s `new Date()` fallback). The same POST on this slice writes nothing. The spec asked for exactly this (an invisible Project answers `not_found`); recorded so nobody reads the diff as a regression. The web action treats `not_found` as the early return it always used for an unusable form — no error is shown to the user.
+  resolved: OBSOLETE, 2026-09-23 by the Epic 1 retrospective's deferred-work audit (retro action item 6). This is a changelog note ("behaviour change, intended"), not deferred work — there is nothing to do. The behaviour it records is now pinned by `tests/cross-tenant-writes.test.ts`.
 
 - source_spec: `spec-1-2-web-write-use-cases.md`
   summary: `apps/web` no longer declares `pg`, while `next.config.ts` still lists it in `serverExternalPackages`; at runtime it resolves through `@momo/db`'s own dependency.
@@ -387,10 +416,12 @@ work started and was deliberately deferred, with the evidence for the split.
 - source_spec: `spec-1-2-web-write-use-cases.md`
   summary: `.dependency-cruiser.cjs` resolves every module under `apps/` and `packages/` through `apps/web/tsconfig.json`.
   evidence: One `tsConfig` per run is what dependency-cruiser takes. `apps/web`'s tsconfig extends the base, so it resolves every `@momo/*` path the base does plus `@/…`; `apps/worker` uses the base's paths and no alias of its own, so today nothing resolves wrongly (measured: 103 modules, the composition root's edge lands on `packages/db/src/index.ts`, `drizzle-orm` lands in `node_modules/.pnpm/…`). If `apps/worker` ever gains a `@/` alias pointing elsewhere, give it its own depcruise run or a root tsconfig that states both. Note also that a RELATIVE `tsConfig.fileName` makes dependency-cruiser resolve `extends` against the wrong directory (measured: it looked for `apps/web/tsconfig.base.json`), hence the absolute path. UPDATE 2026-09-21 (review round 1 of spec-1-2-web-write-use-cases): no longer true — resolution now goes through a root `tsconfig.depcruise.json`, because `apps/web/tsconfig.json`'s `@/*` path, having no `baseUrl`, resolved against the repo root and no `@/…` import had ever resolved; `not-to-unresolvable` now fails on that class.
+  resolved: OBSOLETE, 2026-09-23 by the Epic 1 retrospective's deferred-work audit (retro action item 6). Resolution no longer runs through `apps/web/tsconfig.json`: dependency-cruiser resolves via the root `tsconfig.depcruise.json`, and `not-to-unresolvable` is green across all 234 modules.
 
 - source_spec: `spec-1-2-web-write-use-cases.md`
   summary: ARCHITECTURE-SPINE.md AD-1's "Until story 1.2's writes slice lands …" bullet is now stale: both tracked violations it lists are gone and the dependency-cruiser rule it promises is on.
   evidence: Measured 2026-09-21 against this slice. It is a planning document, and editing it invalidates the cached epic-1 context, so it waits for the human rather than being edited by a build — same treatment as the earlier "One carve-out" entry. RESOLVED 2026-09-21 (docs PR after #18): the bullet is replaced by what the gate enforces and what it does not, reviewed adversarially (`reviews/review-adversarial-ad1-gate-on.md`); the same change narrowed `.dependency-cruiser.cjs` to the carve-outs as written (Drizzle forbidden to the composition root too; `packages/db/auth` for `apps/web` only).
+  resolved: YES, 2026-09-23 by the Epic 1 retrospective's deferred-work audit (retro action item 6). AD-1's stale bullet was replaced by the enumerated "what the gate enforces today" list, which matches the config rule for rule. Prose resolution was already recorded here; the field was missing.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-2-web-write-use-cases.md`
   summary: The dependency-cruiser gate enforces only `apps/*` → `packages/db`/Drizzle and the scheduling edges; the package-level directions AD-1 draws (`packages/db` ↛ `packages/app`, `packages/app` ↛ `packages/db`, `packages/domain` → `zod` only) are unenforced.
@@ -411,6 +442,7 @@ work started and was deliberately deferred, with the evidence for the split.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-2-web-write-use-cases.md`
   summary: CI never runs `next build`/`next start`, so removing `pg`/`drizzle-orm` from `apps/web/package.json` is verified by a hand run only.
   evidence: Review round 1 (V2). Vitest resolves `@momo/db` through an alias, not Next's server-external resolution, so a later hoisting or standalone-trace change that leaves `pg` unresolvable ships green. Close with a `next build` CI step or the Epic 8 image.
+  resolved: YES, 2026-09-23 by the Epic 1 retrospective's deferred-work audit (retro action item 6). CI runs `pnpm --filter @momo/web build`, which is the closure condition this entry stated.
 
 - source_spec: `_bmad-output/planning-artifacts/architecture/architecture-momo-keikaku-2026-09-20/ARCHITECTURE-SPINE.md`
   summary: Eight `apps/web` files import `packages/domain` directly (`hours`, `hoursSigned`, `share`, `yen`, `present`, `Metric`, `clientProjection`, `DEFAULT_VISIBILITY`, `mappingHead`), an edge AD-1's diagram does not draw, and the dependency-cruiser gate does not forbid it.
@@ -420,6 +452,7 @@ work started and was deliberately deferred, with the evidence for the split.
 - source_spec: `_bmad-output/planning-artifacts/architecture/architecture-momo-keikaku-2026-09-20/ARCHITECTURE-SPINE.md`
   summary: "Nothing outside `tests/` imports from it" (AD-1) is unenforced: `pnpm depcruise` cruises `apps/` and `packages/` only.
   evidence: Found by the same review. Nothing violates it today. Add a rule forbidding `^(apps|packages)/` → `^tests/`, which needs no change to the cruise scope because the edge's origin is cruised.
+  resolved: YES, 2026-09-23 by the Epic 1 retrospective's deferred-work audit (retro action item 6). The rule exists and is wider than asked: `no-test-or-tooling-in-source` bans `^(apps|packages)/` → `^(tests|scripts)/`, probed by `tests/depcruise-fences.test.ts`. Its two deliberate carve-outs (in-package `*.test.ts`, `scripts/` as an origin) are stated in the rule.
 
 - source_spec: `_bmad-output/planning-artifacts/architecture/architecture-momo-keikaku-2026-09-20/ARCHITECTURE-SPINE.md`
   summary: The remaining edges of AD-1's diagram have no dependency-cruiser rule: nothing imports `apps/*`, `packages/i18n` imports nothing from the workspace, `apps/*` do not import `packages/adapters`, `packages/adapters` does not import `packages/db`.
@@ -452,6 +485,7 @@ work started and was deliberately deferred, with the evidence for the split.
 - source_spec: `_bmad-output/implementation-artifacts/spec-web-present-edge.md`
   summary: The ARCHITECTURE-SPINE's AD-1 (and epic-1-context.md's "open decision" paragraph) still describe the `apps/web → packages/domain` edge as undrawn and undecided, though the code, the rule and this log now say `domain/present` only.
   evidence: The spec's Never list forbade the spine edit in this build ("the AD-1 amendment follows separately"). The amendment should draw the arrow to `domain/present` alone, name the codec as excluded, and add `web-to-domain-present-only` to "what the dependency-cruiser gate enforces now".
+  resolved: YES, 2026-09-23 by the Epic 1 retrospective's deferred-work audit (retro action item 6). AD-1 carries the decision, the diagram has the dotted presentation arrow, the gate enforces present-only, and `epic-1-context.md` was regenerated. Nothing still calls the edge undecided.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-web-present-edge.md`
   summary: The cross-tenant harness sanctions one float by KEY NAME: a non-integer number under any key called `fraction` is canonicalised as text instead of being refused by the codec.
@@ -476,18 +510,18 @@ work started and was deliberately deferred, with the evidence for the split.
 - source_spec: none
   summary: Story 1.3 slice 2 — the organisation hierarchy: the `program` table (`mutable_audited`), and use cases to create, rename and reassign Departments, Programs and Projects (Program only within the Project's owning Department; moving a Project between Programs changes only roll-up), each audited with the previous value through slice 1's mechanism.
   evidence: Split from story 1.3 at the Build multi-goal gate on 2026-09-21, the founder choosing the audit mechanism first so the hierarchy is written on it rather than beside it. No Organisation UI in 1.3 either (decided the same day): the admin surface waits for sign-in and roles (1.4/1.5).
-  resolved: 2026-09-21 in `spec-1-3-organisation-hierarchy.md`. `program` (`mutable-audited`) and `project.program_id` exist; the eight organisation writes (create/rename Department, Program, Project; reassign a Project's Program or owning Department) are audited use cases on slice 1's mechanism, each recording the previous value, with the Program-within-Department rule checked inside the transaction. Still not done, as decided: PM assignment (entry below) and any Organisation UI.
+  resolved: YES, 2026-09-21 in `spec-1-3-organisation-hierarchy.md`. `program` (`mutable-audited`) and `project.program_id` exist; the eight organisation writes (create/rename Department, Program, Project; reassign a Project's Program or owning Department) are audited use cases on slice 1's mechanism, each recording the previous value, with the Program-within-Department rule checked inside the transaction. Still not done, as decided: PM assignment (entry below) and any Organisation UI.
 
 - source_spec: none
   summary: FR-1's "assign PMs to Projects" is not done in story 1.3; it belongs with `tenant_membership` (story 1.4's table, `project_ids`) and role reach (1.5).
   evidence: Decided by the founder on 2026-09-21: identity and membership do not exist before 1.4, and an interim `project_pm` table on the legacy `app_user` would be rewritten when 1.4 replaces it. The assignment is audited (NFR-A1 "role changes") when it lands.
-  resolved: 2026-09-21 in `spec-1-4-revocation-and-membership.md` — `assignMemberProject` / `unassignMemberProject` write `tenant_membership.project_ids`, audited. What a PM can then REACH through those Projects is still story 1.5's.
+  resolved: YES, 2026-09-21 in `spec-1-4-revocation-and-membership.md` — `assignMemberProject` / `unassignMemberProject` write `tenant_membership.project_ids`, audited. What a PM can then REACH through those Projects is still story 1.5's.
   resolved: YES, 2026-09-22 in `spec-1-5-roles-decide-what-each-person-can-reach.md` — Project reach for PM/`tenant_admin` via `authorize` / `reachesProject`.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-3-audit-mechanism.md`
   summary: The audit gate drives each audited use case with ONE input (its registry entry's `invokeWrite`), so an action chosen on a branch is covered by the gate only on that branch — `mapTicket`'s unmap (`mapping.unmap`) is proved by the unit test and the write harness's unmap case, not by the gate.
   evidence: Found building the gate. The gate asserts "exactly one record, of a declared action" per invocation, which a branch that skips `audit.record` would pass unless the gate drives that branch. Fix when a second branching write lands: let a registry entry carry several write inputs and drive each, requiring every declared action to be seen at least once.
-  resolved: 2026-09-21 in `spec-1-3-organisation-hierarchy.md`. A registry entry may carry `moreWrites` beside `invokeWrite`; the gate drives every input and requires each declared action to be recorded by at least one of them. `mapTicket`'s unmap is now driven by the gate.
+  resolved: YES, 2026-09-21 in `spec-1-3-organisation-hierarchy.md`. A registry entry may carry `moreWrites` beside `invokeWrite`; the gate drives every input and requires each declared action to be recorded by at least one of them. `mapTicket`'s unmap is now driven by the gate.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-3-audit-mechanism.md`
   summary: The gate proves the audit contract against a FAKE transaction; only the five writes' DB-level rollback tests (`tests/cross-tenant-writes.test.ts`) prove Postgres really rolls the record back — and those loop over the registry's writes, so a new write gets them automatically only if it is driven through the same `inTenantTransaction`.
@@ -501,16 +535,17 @@ work started and was deliberately deferred, with the evidence for the split.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-3-audit-mechanism.md`
   summary: The transaction port and the audited-use-case gate are built around the project write scope; story 1.3 slice 2's organisation writes need a different scope and a matching fake.
   evidence: Review round 1 (B5). `inTenantTransaction` builds only a `ProjectWriteScope`, and the gate's `drive()` fakes only that. Generalise both when slice 2 adds its first write: a scope per repository family, composed, and a registry entry that supplies its own fake.
-  resolved: 2026-09-21 in `spec-1-3-organisation-hierarchy.md`. `packages/app` has a generic `AuditedWriteDeps<Handle, Scope>` and `runAuditedWrite` (the project writes' `runProjectWrite` is a thin wrapper, rows unchanged); `WriteDeps`/`WriteScope` compose every repository family. `packages/db`'s `inTenantTransaction` (now `tenant-transaction.ts`) builds one scope carrying the project write repository, the org repository and the audit sink on one `withTenant`. The gate fakes each repository family (`FAKE_FAMILIES`) over the whole scope rather than one project-shaped fake — a per-family fake in the gate rather than a per-entry one, since every write of a family shares it.
+  resolved: YES, 2026-09-21 in `spec-1-3-organisation-hierarchy.md`. `packages/app` has a generic `AuditedWriteDeps<Handle, Scope>` and `runAuditedWrite` (the project writes' `runProjectWrite` is a thin wrapper, rows unchanged); `WriteDeps`/`WriteScope` compose every repository family. `packages/db`'s `inTenantTransaction` (now `tenant-transaction.ts`) builds one scope carrying the project write repository, the org repository and the audit sink on one `withTenant`. The gate fakes each repository family (`FAKE_FAMILIES`) over the whole scope rather than one project-shaped fake — a per-family fake in the gate rather than a per-entry one, since every write of a family shares it.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-3-audit-mechanism.md`
   summary: The audited-use-case gate drives each use case with one input, so `mapTicket`'s unmap branch (`mapping.unmap`) is not driven by the gate.
   evidence: Review round 1 (E2), and recorded by the implementation. Covered by the unit test and the harness's unmap test. Fix: a registry entry may supply several inputs, and the gate requires every declared action to be seen at least once.
-  resolved: 2026-09-21 in `spec-1-3-organisation-hierarchy.md` — the same change as the entry above (`moreWrites`).
+  resolved: YES, 2026-09-21 in `spec-1-3-organisation-hierarchy.md` — the same change as the entry above (`moreWrites`).
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-3-organisation-hierarchy.md`
   summary: ARCHITECTURE-SPINE.md's AD-1 does not yet draw the `apps/web/src/server/composition.ts → packages/adapters` edge the code, the `apps-adapters-only-from-composition-root` rule and this slice now rely on.
   evidence: The founder's 2026-09-21 decision recorded in the spec says AD-1 "is amended (separately, reviewed)" to let the composition root import `packages/adapters` for the Clock and the id port. This build did not edit the spine; the amendment should add the edge to the composition-root carve-out paragraph and the new rule to "what the dependency-cruiser gate enforces now", and go through the adversarial review the earlier AD-1 amendments had. RESOLVED 2026-09-21: AD-1 amended in the same branch, two rounds of adversarial review (`reviews/review-adversarial-ad1-adapters.md`).
+  resolved: YES, 2026-09-23 by the Epic 1 retrospective's deferred-work audit (retro action item 6). The diagram has the `composition root only` arrow to `packages/adapters` and AD-1 names it; the adversarial review this entry promised exists. Prose resolution was already recorded; the field was missing.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-3-organisation-hierarchy.md`
   summary: The Program-within-Department rule and "a Program never changes Department" are held by the use cases alone; the database would accept a `project.program_id` naming another Department's Program, or no Program at all.
@@ -524,6 +559,7 @@ work started and was deliberately deferred, with the evidence for the split.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-3-organisation-hierarchy.md`
   summary: The write harness's own-Tenant row check compares only the tables a write is expected to touch (`landedRows`: mapping, disposition, audit, work package, department, program, project); a write that also changed another table passes it.
   evidence: Watched in the sabotage run: a Program move that also updated `connector` passed `tests/cross-tenant-writes.test.ts` and was caught only by `tests/org-writes.test.ts`'s whole-Tenant comparison (`allRows`). The foreign-Tenant probe counts every tenant-owned table, but counts cannot see an UPDATE. Comparing `allRows` before and after every own-Tenant write in the harness would close it for all writes at once.
+  resolved: YES, 2026-09-23 by the Epic 1 retrospective's deferred-work audit (retro action item 6). `tests/cross-tenant-writes.test.ts` now diffs `allRows` before and after EVERY own-Tenant write and asserts every table the write must leave alone is byte-identical — which is exactly what this entry proposed, and it closes the whole class rather than one case.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-3-organisation-hierarchy.md`
   summary: The org writes have no read side: nothing lists Departments or Programs, and `program` is declared unreached in the read harness.
@@ -541,6 +577,7 @@ work started and was deliberately deferred, with the evidence for the split.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-3-organisation-hierarchy.md`
   summary: The web app now bundles `@momo/adapters` (and its `uuid`) through `transpilePackages`, verified by typecheck only.
   evidence: Review round 1 (V2). Same gap as the "CI never runs `next build`" entries: dropping `@momo/adapters` from `transpilePackages`, or `uuid` failing to resolve for Next, stays green in every gate. Covered by the eventual `next build` step or the Epic 8 image.
+  resolved: YES, 2026-09-23 by the Epic 1 retrospective's deferred-work audit (retro action item 6). CI runs `pnpm --filter @momo/web build`, and the step's own header names this entry's failure mode verbatim.
 
 - source_spec: `_bmad-output/planning-artifacts/architecture/architecture-momo-keikaku-2026-09-20/ARCHITECTURE-SPINE.md`
   summary: `apps/worker` cannot reach the `Clock` (or any adapter): AD-15 needs the fixture clock in both roles, and the gate allows `packages/adapters` only from `apps/web`'s composition root.
@@ -573,16 +610,17 @@ work started and was deliberately deferred, with the evidence for the split.
 - source_spec: none
   summary: Story 1.4 slice 2 — revocation and membership changes (including PM assignment into `tenant_membership.project_ids`) as audited `app` use cases, refused on the revoked user's next request.
   evidence: Split from story 1.4 at Build's multi-goal gate (founder, 2026-09-21); independently shippable once slice 1's session and `RequestContext` exist.
-  resolved: 2026-09-21 in `spec-1-4-revocation-and-membership.md`. `revokeMembership`, `changeMemberRole`, `assignMemberProject` and `unassignMemberProject` are audited use cases (`membership.revoke` / `change_role` / `assign_project` / `unassign_project`, target = the member's user id, previous value in the payload), each gated on `tenant_admin` in the context and re-checked against the bridge under one ordered lock; the last Tenant Admin cannot be revoked or demoted. Written through `packages/db`'s one bridge writer (`repo-membership-write.ts`), every statement filtered by `tenant_id`. The app role holds SELECT, UPDATE, DELETE on `tenant_membership` (no INSERT). Revocation deletes the row; the resolver signs the user out on their next request and deletes that session (`tests/membership.test.ts`) — except a session that has not yet reached a first page (no `activeTenantId`), which resolves `no_access` and is kept (spec matrix row "Revoke before first page"). No screen, by decision.
+  resolved: YES, 2026-09-21 in `spec-1-4-revocation-and-membership.md`. `revokeMembership`, `changeMemberRole`, `assignMemberProject` and `unassignMemberProject` are audited use cases (`membership.revoke` / `change_role` / `assign_project` / `unassign_project`, target = the member's user id, previous value in the payload), each gated on `tenant_admin` in the context and re-checked against the bridge under one ordered lock; the last Tenant Admin cannot be revoked or demoted. Written through `packages/db`'s one bridge writer (`repo-membership-write.ts`), every statement filtered by `tenant_id`. The app role holds SELECT, UPDATE, DELETE on `tenant_membership` (no INSERT). Revocation deletes the row; the resolver signs the user out on their next request and deletes that session (`tests/membership.test.ts`) — except a session that has not yet reached a first page (no `activeTenantId`), which resolves `no_access` and is kept (spec matrix row "Revoke before first page"). No screen, by decision.
 
 - source_spec: none
   summary: Story 1.4 slice 3 — Google sign-in.
   evidence: Split from story 1.4 at Build's multi-goal gate (founder, 2026-09-21); needs a decision on Google OAuth credentials for local and CI (test double or real client ids).
-  resolved: 2026-09-22 in `spec-1-4-google-sign-in.md` (founder decision 2026-09-21, option (a): a fake OIDC provider locally and in CI). Google is one `genericOAuth` provider (`providerId: 'google'`) in `packages/db/auth/src/google.ts`, discovered from `GOOGLE_ISSUER_URL`, off unless `AUTH_GOOGLE=on`. Link by verified email to an existing user only; provider tokens stored as null; every refusal lands on `/sign-in?google=refused`; the middleware refreshes sessions on a Google-less instance. The fake is `tests/support/fake-oidc.ts` (`pnpm fake-oidc` for local dev); the matrix is `tests/google-sign-in.test.ts`.
+  resolved: YES, 2026-09-22 in `spec-1-4-google-sign-in.md` (founder decision 2026-09-21, option (a): a fake OIDC provider locally and in CI). Google is one `genericOAuth` provider (`providerId: 'google'`) in `packages/db/auth/src/google.ts`, discovered from `GOOGLE_ISSUER_URL`, off unless `AUTH_GOOGLE=on`. Link by verified email to an existing user only; provider tokens stored as null; every refusal lands on `/sign-in?google=refused`; the middleware refreshes sessions on a Google-less instance. The fake is `tests/support/fake-oidc.ts` (`pnpm fake-oidc` for local dev); the matrix is `tests/google-sign-in.test.ts`.
 
 - source_spec: none
   summary: Story 1.4 slice 4 — password reset through `MailerPort` (`mailer-console` in development, `mailer-ses` in production; AWS account and sender domain are Epic 8's).
   evidence: Split from story 1.4 at Build's multi-goal gate (founder, 2026-09-21); independently shippable once slice 1's email + password sign-in exists.
+  resolved: YES, 2026-09-23 by the Epic 1 retrospective's deferred-work audit (retro action item 6). Landed as commit `d0343b6`: the `MailerPort`, `mailer-console`, the reset hooks, the two server actions and `tests/password-reset.test.ts`. `mailer-ses` is Epic 8's by this entry's own parenthetical.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-4-identity-and-request-context.md`
   summary: The email + password sign-in server action has no rate limit; Better Auth's limiter runs only in its HTTP router, which the action bypasses.
@@ -593,6 +631,7 @@ work started and was deliberately deferred, with the evidence for the split.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-4-identity-and-request-context.md`
   summary: The Node-runtime middleware, Better Auth and `pg` in the Next bundles are verified on `next dev` only; CI never runs `next build`.
   evidence: Checked by hand on `next dev` (port 3101): the middleware compiled with `pg` (already in `serverExternalPackages`), redirected signed-out requests, slid a session and forwarded its `Set-Cookie`. Dropping `@momo/db-auth` from `transpilePackages` or a bundling regression stays green in every gate. Same fix as the other "CI never runs `next build`" entries.
+  resolved: YES, 2026-09-23 by the Epic 1 retrospective's deferred-work audit (retro action item 6). CI runs `next build` (`.github/workflows/ci.yml`), added by commit `23157bc`. The residual — that the step inherits the job env — is tracked by its own entry.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-4-identity-and-request-context.md`
   summary: The sign-in FORM (the `useActionState` client component and its generic error) is exercised by no automated test; the flow underneath is.
@@ -610,6 +649,7 @@ work started and was deliberately deferred, with the evidence for the split.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-4-identity-and-request-context.md`
   summary: A local database created before this story needs `DROP TABLE app_user` before `drizzle-kit push`, which otherwise stops on an interactive rename prompt.
   evidence: Measured locally: push asks whether `auth_user` is `app_user` renamed and fails with no TTY. CI starts from an empty database and is unaffected. README-DEMO.md also still says "No authentication"; it predates this story and needs the sign-in steps (SEED_DEMO_PASSWORD, the four new env keys).
+  resolved: YES, 2026-09-23 by the Epic 1 retrospective's deferred-work audit (retro action item 6). `README-DEMO.md` now documents the `DROP TABLE IF EXISTS app_user` step and the sign-in flow with `SEED_DEMO_PASSWORD`; the "No authentication" text is gone.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-4-identity-and-request-context.md`
   summary: `/` still redirects every signed-in user to the demo Project (`/p/prj-ec2/review`) instead of a Project from their membership.
@@ -618,12 +658,14 @@ work started and was deliberately deferred, with the evidence for the split.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-4-identity-and-request-context.md`
   summary: The middleware redirects an expired session's server-action POST with 307 (unverified, medium if real).
   evidence: A 307 replays the POST against `/sign-in`; a 303 may be correct for non-GET. Settle it by posting a Mapping form in `next dev` with an expired session, with and without JS, and seeing where the browser lands.
+  resolved: YES, 2026-09-23 by the Epic 1 retrospective's deferred-work audit (retro action item 6). `apps/web/src/server/session-gate.ts` redirects with 303 for anything but GET, with the reasoning written beside it. The experiment this entry asked for was run and the answer landed in commit `23157bc`.
 
 ## Deferred from: implementation of spec-1-4-revocation-and-membership (2026-09-21)
 
 - source_spec: `_bmad-output/planning-artifacts/architecture/architecture-momo-keikaku-2026-09-20/ARCHITECTURE-SPINE.md`
   summary: The spine (AD-21's per-entry exceptions, AD-23's bridge) and the compiled `epic-1-context.md` still say `tenant_membership` is SELECT-only for the application role and read "by nothing else" than `resolveRequestContext`; since slice 2 the role holds SELECT, UPDATE, DELETE and the bridge has one writer (`membershipWriterOn`, pinned by `source-discipline.test.ts`).
   evidence: The spec scoped the change to code, registry and SQL; the planning wording was left alone on purpose, because an amended planning doc gets an adversarial review first (up to two rounds). Amend AD-21 and AD-23 ("one reader for request resolution, one writer; no INSERT — invitation"), review, then regenerate the epic context.
+  resolved: YES, 2026-09-23 by the Epic 1 retrospective's deferred-work audit (retro action item 6). AD-21 now states `tenant_membership`'s SELECT/UPDATE/DELETE-no-INSERT grant and AD-23 names `membershipWriterOn` as the one writer; `epic-1-context.md` matches.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-4-revocation-and-membership.md`
   summary: Revocation ends only the session that makes the next request; a revoked user's OTHER sessions (another browser) each end on their own next request, and until then the rows stay in `session`.
@@ -644,6 +686,7 @@ work started and was deliberately deferred, with the evidence for the split.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-4-revocation-and-membership.md`
   summary: `epic-1-context.md` still says the app role holds SELECT only on `tenant_membership` and that the bridge has a single reader.
   evidence: Code review (B1). The context is compiled from the spine, whose AD-21/AD-23 wording is deferred until an adversarial review of the amendment; regenerate the context after the spine changes.
+  resolved: YES, 2026-09-23 by the Epic 1 retrospective's deferred-work audit (retro action item 6). `epic-1-context.md` was regenerated after the AD-21/AD-23 amendment and now says the bridge is "written on the app role only by `membershipWriterOn`".
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-4-revocation-and-membership.md`
   summary: A Tenant Admin's membership may carry `projectIds` (kept on promotion, assignable); story 1.5 must not read them as a limit on a Tenant Admin's reach.
@@ -659,7 +702,7 @@ work started and was deliberately deferred, with the evidence for the split.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-4-google-sign-in.md`
   summary: The spine's AD-1 carve-out still describes `createAuth({ db, secret, baseURL, idleHours, generateId })` and the four web-edge bindings; slice 3 added the optional `google` argument, the Google bindings (`googleSignIn`, `googleRegistered`, the provider-aware allowlist) and a second, Google-less instance for the middleware. `table-classes.ts:134`'s "why" for `verification` does not yet mention the OAuth state it now holds.
   evidence: Deferred by the spec on purpose: an amended planning doc gets its own adversarial review (up to two rounds) before it lands. Amend AD-1 (and the `verification` note), review, then regenerate `epic-1-context.md`.
-  resolved: DONE, 2026-09-22. AD-1, AD-15, AD-16, AD-17 and AD-23 amended after rubric, tech-currency and two adversarial rounds (`reviews/review-*-ad1-google*.md`); `table-classes.ts`'s `account`/`verification` notes updated; `epic-1-context.md` regenerated.
+  resolved: YES, 2026-09-22. AD-1, AD-15, AD-16, AD-17 and AD-23 amended after rubric, tech-currency and two adversarial rounds (`reviews/review-*-ad1-google*.md`); `table-classes.ts`'s `account`/`verification` notes updated; `epic-1-context.md` regenerated.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-4-google-sign-in.md`
   summary: Epic 8 must check Google sign-in against REAL Google — the issuer's spelling (`https://accounts.google.com` in discovery vs the bare `accounts.google.com` Google puts in some tokens' `iss`), discovery retried after a failure (today a fast failure skips the provider for the life of the instance, i.e. until the process restarts), and a timeout for a discovery request that hangs (Better Auth's `betterFetch` has none, and every call on the page instance waits for it).
@@ -716,6 +759,7 @@ work started and was deliberately deferred, with the evidence for the split.
   evidence: Deferred by the spec on purpose, mirroring how slice 3's AD-1 amendment for Google was
   handled: an amended planning doc gets its own adversarial review (up to two rounds) before it
   lands. Amend the spine, review, then regenerate `epic-1-context.md`.
+  resolved: YES, 2026-09-23 by the Epic 1 retrospective's deferred-work audit (retro action item 6). The spine carries `createAuth`'s full signature, `identity_event`'s AD-21 registry entry and all four founder decisions from slice 4; `epic-1-context.md` was regenerated to match.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-4-password-reset.md`
   summary: The credential-account check in `sendResetPassword` (`packages/db/auth/src/auth.ts`'s
@@ -727,6 +771,7 @@ work started and was deliberately deferred, with the evidence for the split.
   them) and needs no new port, but a reviewer should confirm that reading and not just writing
   those tables directly is intended, since every other read in this package goes through
   `internalAdapter` or `auth.api` instead.
+  resolved: YES, 2026-09-23 by the Epic 1 retrospective's deferred-work audit (retro action item 6). AD-1 now sanctions `packages/db/auth` reading and writing the four Better Auth tables directly, and pins the storage formats such a statement may depend on. The code is unchanged — it is reviewed now rather than unreviewed.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-4-password-reset.md`
   summary: `identity_event` rows written for a probe Tenant's members during a test are not swept
@@ -737,6 +782,7 @@ work started and was deliberately deferred, with the evidence for the split.
   evidence: Not exercised today — no test resets a seeded probe member's password, only a
   dedicated extra user's. Small rows in the dev/CI database either way, the same shape as B8's
   `verification`-row growth from the Google slice.
+  resolved: YES, 2026-09-23 by the Epic 1 retrospective's deferred-work audit (retro action item 6). `packages/db/src/probe-tenants.ts` deletes each member's `identity_event` rows and their `reset-password:` verification rows (commit `dd6ba94`), naming this scenario in its comment.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-4-password-reset.md`
   summary: The `/forgot-password` and `/reset-password` pages were not clicked through in a real
@@ -862,10 +908,12 @@ fences and tooling that gate them. Seventeen findings were patched; these ten we
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-5-roles-decide-what-each-person-can-reach.md`
   summary: AD-23 still says membership use cases check `tenant_admin` in the context "Until story 1.5's role model"; that pre-parse sentence is now false in code.
   evidence: Spec Intent/Never excluded a spine amendment this slice. Amend AD-23 (drop or reword the "until 1.5" clause; keep the permanent lock re-check), adversarial-review, then regenerate `epic-1-context.md`.
+  resolved: YES, 2026-09-23 by the Epic 1 retrospective's deferred-work audit (retro action item 6). "Until story 1.5's role model" is gone from AD-23, which now points at AD-12's declared-roles helper and leaves the locked-row re-check with the writer.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-5-roles-decide-what-each-person-can-reach.md`
   summary: Compiled `epic-1-context.md` Cross-Story Dependencies still says "until 1.5 lands, membership use cases check `tenant_admin` themselves".
   evidence: Stale after the declared-roles helper landed; regenerate only after the AD-23 spine amendment above, so the next compile does not reintroduce the old sentence.
+  resolved: YES, 2026-09-23 by the Epic 1 retrospective's deferred-work audit (retro action item 6). `epic-1-context.md` was regenerated and no longer says "until 1.5".
 
 ## Deferred from: code review of spec-1-5-roles-decide-what-each-person-can-reach (2026-09-22)
 
