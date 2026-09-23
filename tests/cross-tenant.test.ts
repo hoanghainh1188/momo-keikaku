@@ -5,6 +5,7 @@ import { hours, present, stringify } from '@momo/domain';
 import type { AppError } from '../packages/app/src/result';
 import { getProjectReview } from '../packages/app/src/use-cases';
 import { closeAllPools, getDb, getPool, schema, type Db } from '../packages/db/src/client';
+import { acquireSeedSuiteLock, releaseSeedSuiteLock } from '../packages/db/src/seed-suite-lock';
 import { buildDemoState } from '../packages/db/src/fixtures';
 import {
   DEMO_PROJECT_ID,
@@ -155,6 +156,14 @@ if (REQUIRE_DB && !reachable) {
       'and `pnpm db:policies` first; this harness is what discharges NFR-S1, so it must not ' +
       'be skipped.',
   );
+}
+
+// This suite writes probe Tenants, so it holds the seed-suite lock shared for its lifetime
+// (`tests/seed-suite-lock.ts`, retrospective F1). It builds its own connections rather than
+// going through `connectWriteHarness`, which is where every other probe suite picks this up,
+// so it has to ask for itself. `closeAllPools()` below drops it with the session.
+if (reachable) {
+  await acquireSeedSuiteLock(OWNER_DATABASE_URL!, 'shared');
 }
 
 // --- the pure gate -----------------------------------------------------------------------
@@ -1023,5 +1032,6 @@ describe.skipIf(!reachable)('the cross-tenant harness, driven against two probe 
 afterAll(async () => {
   // Outside the suite above, because the reachability probe opens a pool even when the
   // database turns out to be unreachable as one of the two roles.
+  await releaseSeedSuiteLock();
   await closeAllPools();
 });

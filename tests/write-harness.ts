@@ -29,6 +29,7 @@ import { inTenantTransaction } from '../packages/db/src/tenant-transaction';
 import { withTenant } from '../packages/db/src/with-tenant';
 import type { InvokeWrite, WriteTarget } from './read-use-cases';
 import { HARNESS_USER_ID } from './request-context';
+import { acquireSeedSuiteLock, type SeedLockMode } from '../packages/db/src/seed-suite-lock';
 
 export interface HarnessEnv {
   /** DATABASE_URL: the owning role. */
@@ -57,11 +58,33 @@ async function reachableAs(connectionString: string | undefined): Promise<boolea
   }
 }
 
+export interface ConnectOptions {
+  /**
+   * How this suite holds the seed-suite lock (`tests/seed-suite-lock.ts`, retrospective F1).
+   *
+   * The default, `shared`, is right for every suite that writes probe Tenants — which is every
+   * suite using this harness except the two that seed. A suite that calls `seed()` must pass
+   * `exclusive`, because seeding TRUNCATEs the whole database underneath everyone else.
+   *
+   * Defaulting rather than requiring is deliberate: a new suite that forgets to think about this
+   * gets the safe half, and the only suites that must remember are the two whose whole subject is
+   * the seed.
+   */
+  readonly seedLock?: SeedLockMode;
+}
+
 /**
  * Points the harness at the suite's database and answers whether both roles are reachable — the
  * DB suites skip without them, or fail under REQUIRE_DB=1.
+ *
+ * Also takes the seed-suite lock when the database is reachable, and holds it for the suite's
+ * lifetime; `closeAllPools()` in the suite's `afterAll` drops it with the session, so a suite that
+ * does not seed needs no teardown of its own.
  */
-export async function connectWriteHarness(harnessEnv: HarnessEnv): Promise<boolean> {
+export async function connectWriteHarness(
+  harnessEnv: HarnessEnv,
+  options: ConnectOptions = {},
+): Promise<boolean> {
   connected = harnessEnv;
   if (harnessEnv.requireDb && !(harnessEnv.ownerUrl && harnessEnv.appUrl)) {
     throw new Error(
@@ -77,6 +100,9 @@ export async function connectWriteHarness(harnessEnv: HarnessEnv): Promise<boole
       'REQUIRE_DB=1 but the database is not reachable as both roles. Run `pnpm pgboss:migrate` ' +
         'and `pnpm db:policies` first.',
     );
+  }
+  if (reachable) {
+    await acquireSeedSuiteLock(harnessEnv.ownerUrl!, options.seedLock ?? 'shared');
   }
   return reachable;
 }

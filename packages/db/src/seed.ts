@@ -715,17 +715,34 @@ const IDENTITY_SEQ_TABLES = [
 ] as const;
 
 /**
- * Advance each identity counter to `MAX(seq)` so a later default insert does not collide
+ * Advance each identity counter past `MAX(seq)` so a later default insert does not collide
  * with fixture-relative values written via `OVERRIDING SYSTEM VALUE`.
+ *
+ * ADVANCE, NEVER REWIND. These counters are per-table and therefore shared by every Tenant in
+ * the database, while `MAX(seq)` is whatever rows happen to exist at this instant. Setting a
+ * counter *to* that maximum moves it DOWN whenever rows above it have just been deleted —
+ * which is routine: the test suites create and remove probe Tenants in parallel bands, so a
+ * `createProbeTenant` in the 700,000,000 band could reset a counter another suite had already
+ * carried to 860,000,000. The next ordinary insert then re-issued a `seq` a surviving row still
+ * held, and Postgres refused it with `duplicate key value violates unique constraint
+ * "audit_log_pkey"` — a failure that appeared in whichever suite lost the race, never in the one
+ * that caused it. Found by the Epic 1 retrospective (F1); pinned by `seed-sequences.test.ts`.
+ *
+ * `GREATEST` against the counter's current position makes the operation monotonic, which is what
+ * the name always promised. `pg_sequence_last_value` returns NULL for a counter never yet used,
+ * hence the COALESCE.
  */
 async function syncIdentitySequences(tx: Tx): Promise<void> {
   for (const table of IDENTITY_SEQ_TABLES) {
     const quoted = quoteIdent(table);
     // pg_get_serial_sequence wants a text literal (single-quoted), not an identifier.
+    const seqRef = `pg_get_serial_sequence('${table}', 'seq')`;
     await tx.execute(
       sql.raw(
-        `SELECT setval(pg_get_serial_sequence('${table}', 'seq'), ` +
-          `COALESCE((SELECT MAX(seq) FROM ${quoted}), 1), true)`,
+        `SELECT setval(${seqRef}, GREATEST(` +
+          `COALESCE((SELECT MAX(seq) FROM ${quoted}), 1), ` +
+          `COALESCE(pg_sequence_last_value(${seqRef}::regclass), 1)` +
+          `), true)`,
       ),
     );
   }
