@@ -367,9 +367,9 @@ jobs:
         run: pnpm depcruise
 
       # The round-trip tests need something to read. `db:migrate` applies the migrations in
-      # packages/db/drizzle through `drizzle-kit migrate` (AD-19) — today exactly one, story 2.1's
-      # AD-30 migration, whose hand-written MATCH FULL / DEFERRABLE clauses a `push` from schema.ts
-      # would silently lose. `schema-catalog.test.ts` asserts them against the catalogue.
+      # packages/db/drizzle through `drizzle-kit migrate` (AD-19) — story 2.1's AD-30 migration
+      # (0000) and the watermark slice's identity `seq` (0001). 0000's hand-written MATCH FULL /
+      # DEFERRABLE clauses a `push` from schema.ts would silently lose. `schema-catalog.test.ts` asserts them against the catalogue.
       #
       # `pgboss:migrate` is the owner-role step: it creates the `migrator` and `app` roles,
       # installs pg-boss's schema from the SQL pg-boss itself generates, and grants the app
@@ -407,7 +407,7 @@ jobs:
           drift="$(git status --porcelain packages/db/drizzle)"
           if [ "$drift" != "" ]; then
             echo "$drift"
-            echo "::error::packages/db/drizzle is out of step with packages/db/src/schema.ts. Regenerate the migration with drizzle-kit generate (keep it one file, 0000), re-apply the hand edits its header lists, and commit it."
+            echo "::error::packages/db/drizzle is out of step with packages/db/src/schema.ts. Generate the next migration with drizzle-kit generate, re-apply any hand edits its header lists, and commit it."
             exit 1
           fi
 

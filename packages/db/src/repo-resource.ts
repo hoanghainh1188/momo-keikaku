@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm';
 import type { Bound } from './bound';
 import * as s from './schema';
+import { lockWatermark } from './watermark-lock';
 
 /**
  * THE RESOURCE / RATE REPOSITORY — Resources, `rate_entry`, and `project_default_rate_entry`
@@ -8,7 +9,14 @@ import * as s from './schema';
  *
  * Satisfies `packages/app`'s `ResourceWriteRepository` STRUCTURALLY. Bound to one transaction
  * and one Tenant (`Bound`). `findProject` locks the row so a default-Rate append and a concurrent
- * rename cannot race the dual-write of `default_rate_jpy`.
+ * rename cannot race the dual-write of `default_rate_jpy`. It takes `FOR NO KEY UPDATE`, not
+ * `FOR UPDATE`: the default-Rate append then waits on the Project's watermark lock while holding
+ * that row, and a concurrent Mapping append that already holds the watermark lock takes
+ * `FOR KEY SHARE` on the same row through its foreign key. `FOR UPDATE` conflicts with that and
+ * deadlocks the pair; `FOR NO KEY UPDATE` does not, and still serialises against a rename.
+ *
+ * THE TWO APPENDS TAKE THEIR WATERMARK LOCK FIRST (story 1.2 watermark slice, D2): `rate_entry`
+ * the Tenant key, `project_default_rate_entry` the Project key (`watermark-lock.ts`).
  */
 
 export interface ResourceDepartmentRow {
@@ -51,7 +59,8 @@ function exactlyOne(table: string, id: string, rowCount: number | null): void {
   }
 }
 
-export function resourceWriteRepositoryOn({ tx, tenantId }: Bound) {
+export function resourceWriteRepositoryOn(bound: Bound) {
+  const { tx, tenantId } = bound;
   return {
     findDepartment: async (id: string): Promise<ResourceDepartmentRow | null> => {
       const [row] = await tx
@@ -79,7 +88,7 @@ export function resourceWriteRepositoryOn({ tx, tenantId }: Bound) {
         .select({ id: s.project.id })
         .from(s.project)
         .where(eq(s.project.id, id))
-        .for('update');
+        .for('no key update');
       return row ?? null;
     },
 
@@ -95,6 +104,7 @@ export function resourceWriteRepositoryOn({ tx, tenantId }: Bound) {
     },
 
     appendResourceRate: async (row: RateAppend): Promise<void> => {
+      await lockWatermark(bound, { kind: 'tenant' });
       await tx.insert(s.rateEntry).values({
         tenantId,
         resourceId: row.resourceId,
@@ -104,6 +114,7 @@ export function resourceWriteRepositoryOn({ tx, tenantId }: Bound) {
     },
 
     appendProjectDefaultRate: async (row: ProjectDefaultRateAppend): Promise<void> => {
+      await lockWatermark(bound, { kind: 'project', projectId: row.projectId });
       await tx.insert(s.projectDefaultRateEntry).values({
         tenantId,
         projectId: row.projectId,

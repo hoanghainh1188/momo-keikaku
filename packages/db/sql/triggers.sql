@@ -1,4 +1,4 @@
--- Append-only enforcement: the UPDATE/DELETE and TRUNCATE triggers, and the seq allocators
+-- Append-only enforcement: the UPDATE/DELETE and TRUNCATE triggers
 --
 -- GENERATED from packages/db/src/table-classes.ts by packages/db/src/sql/generate.ts.
 -- Do not edit: `pnpm db:sql` rewrites this file and a test fails when it has drifted.
@@ -173,15 +173,3 @@ DROP TRIGGER IF EXISTS "append_only_truncate_guard" ON public."audit_log";
 CREATE TRIGGER "append_only_truncate_guard"
   BEFORE TRUNCATE ON public."audit_log"
   FOR EACH STATEMENT EXECUTE FUNCTION public."momo_append_only_truncate_guard"();
-
--- actuals_ledger_entry: caller-allocated seq, so the maximum must be read as the owner.
-CREATE OR REPLACE FUNCTION public."momo_next_actuals_ledger_entry_seq"() RETURNS bigint
-LANGUAGE sql SECURITY DEFINER
-SET search_path = pg_catalog, pg_temp
-AS $$ SELECT COALESCE(MAX(seq), 0) + 1 FROM public."actuals_ledger_entry" $$;
-
--- mapping_event: caller-allocated seq, so the maximum must be read as the owner.
-CREATE OR REPLACE FUNCTION public."momo_next_mapping_event_seq"() RETURNS bigint
-LANGUAGE sql SECURITY DEFINER
-SET search_path = pg_catalog, pg_temp
-AS $$ SELECT COALESCE(MAX(seq), 0) + 1 FROM public."mapping_event" $$;

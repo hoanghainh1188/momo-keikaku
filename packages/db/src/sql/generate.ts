@@ -19,7 +19,6 @@
 import {
   APPEND_ONLY_GUARDED,
   appPrivilegesOf,
-  CLIENT_ALLOCATED_SEQ,
   MAINTENANCE_SETTING,
   maintenancePrivilegesOf,
   TABLE_REGISTRY,
@@ -185,19 +184,7 @@ export function generateGrantsSql(appRole: string, maintenanceRole: string): str
     '-- ownership, so the application role can allocate a value and nothing else.',
     `GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO ${app};`,
     '',
-    '-- The caller-allocated `seq` allocators. EXECUTE is revoked from PUBLIC first, because',
-    '-- PostgreSQL grants EXECUTE on a new function to PUBLIC by default and these are',
-    '-- SECURITY DEFINER: leaving that default would hand every role the owner\'s read of the',
-    '-- whole table, which is the opposite of what they are for.',
   );
-  for (const entry of CLIENT_ALLOCATED_SEQ) {
-    const fn = `public.${ident(seqAllocatorName(entry.table))}()`;
-    lines.push(
-      `REVOKE ALL ON FUNCTION ${fn} FROM PUBLIC;`,
-      `GRANT EXECUTE ON FUNCTION ${fn} TO ${app};`,
-    );
-  }
-  lines.push('');
 
   return `${header('Grants: what each role holds, by table class, and nothing more')}${lines.join('\n')}`;
 }
@@ -285,43 +272,16 @@ export function generateTriggersSql(maintenanceRole: string): string {
     );
   }
 
-  // The `seq` allocators.
-  //
-  // `MAX(seq) + 1` computed by the application is wrong the moment row-level security is on:
-  // the maximum a Tenant can see is its own, so two Tenants each compute the same next value
-  // and collide on a key that is unique across all of them. These functions read the true
-  // maximum as the table OWNER (SECURITY DEFINER), so the allocation stops depending on what
-  // the caller may see. They disclose a row count and nothing else.
-  //
-  // This is NOT the watermark discipline the architecture asks for — that takes
-  // `pg_advisory_xact_lock` before allocating and belongs to the slice that owns it. It is
-  // the narrowest thing that stops a cross-tenant primary-key collision being a live bug.
-  for (const entry of CLIENT_ALLOCATED_SEQ) {
-    const fn = seqAllocatorName(entry.table);
-    lines.push(
-      `-- ${entry.table}: caller-allocated seq, so the maximum must be read as the owner.`,
-      `CREATE OR REPLACE FUNCTION public.${ident(fn)}() RETURNS bigint`,
-      'LANGUAGE sql SECURITY DEFINER',
-      'SET search_path = pg_catalog, pg_temp',
-      `AS $$ SELECT COALESCE(MAX(seq), 0) + 1 FROM public.${ident(entry.table)} $$;`,
-      '',
-    );
-  }
-
-  return `${header('Append-only enforcement: the UPDATE/DELETE and TRUNCATE triggers, and the seq allocators')}${lines.join('\n')}`;
-}
-
-/** The name of the SECURITY DEFINER allocator for a caller-allocated `seq`. */
-export function seqAllocatorName(table: string): string {
-  return `momo_next_${table}_seq`;
+  return `${header('Append-only enforcement: the UPDATE/DELETE and TRUNCATE triggers')}${lines.join('\n')}`;
 }
 
 /**
  * The three files, by their name under `packages/db/sql/`.
  *
- * INSERTION ORDER IS APPLY ORDER: `scripts/db-policies.ts` iterates these entries. Triggers
- * come before grants because the grants file grants EXECUTE on the `seq` allocator functions
- * the triggers file creates — the other order fails with "function does not exist".
+ * INSERTION ORDER IS APPLY ORDER: `scripts/db-policies.ts` iterates these entries. Nothing in
+ * the grants depends on the triggers any more — the caller-allocated `seq` allocators the grants
+ * used to reference were removed when both `seq` columns became identity columns (story 1.2
+ * watermark slice, D1) — so the order is kept only because it is harmless.
  */
 export function generateAll(
   appRole: string,

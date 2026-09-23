@@ -117,7 +117,7 @@ const APP_DATABASE_URL = process.env.APP_DATABASE_URL;
  *
  * Their `seq` bands are far from the demo's (1..184) and from `rls.test.ts`'s probe row
  * (9_000_001), because vitest runs files in parallel and `actuals_ledger_entry.seq` and
- * `mapping_event.seq` are GLOBAL primary keys the caller allocates — a shared band is a
+ * `mapping_event.seq` are GLOBAL primary keys the seed writes explicitly — a shared band is a
  * primary-key collision that would surface as a flake in whichever file lost the race.
  */
 const PROBE_A = buildProbeTenant('xtprobe-a', 700_000_000);
@@ -273,8 +273,8 @@ describe('the read surface is enumerated mechanically, not listed by hand', () =
  * between two Tenants however identical their data is.
  *
  * `baseline_version.seq` is `generatedAlwaysAsIdentity`, so the two probes get 2 and 3;
- * `actuals_ledger_entry.seq` and `mapping_event.seq` are caller-allocated global primary
- * keys, so the two probes come out of different bands on purpose. Normalising them by KEY
+ * `actuals_ledger_entry.seq` and `mapping_event.seq` are global primary keys the seed writes
+ * fixture-relative, so the two probes come out of different bands on purpose. Normalising them by KEY
  * NAME (not by value, which would also hit `priority: 2`, and not by path, which would be
  * per-use-case knowledge) is what lets the symmetry comparison below be about the data.
  */

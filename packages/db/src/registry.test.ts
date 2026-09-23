@@ -16,14 +16,13 @@ import {
   appPrivilegesOf,
   CANONICAL_APP_ROLE,
   CANONICAL_MAINTENANCE_ROLE,
-  CLIENT_ALLOCATED_SEQ,
   MAINTENANCE_PRIVILEGES,
   maintenancePrivilegesOf,
   REGISTERED_TABLES,
   TABLE_REGISTRY,
   TENANT_OWNED,
 } from './table-classes';
-import { generateAll, seqAllocatorName } from './sql/generate';
+import { generateAll } from './sql/generate';
 import { TRUNCATE_ORDER } from './seed';
 
 /**
@@ -252,38 +251,38 @@ describe('the checked-in SQL is what the generator emits', () => {
     expect(rls).not.toContain(`current_setting('app.tenant_id')`);
   });
 
-  it('applies the triggers before the grants, because the grants reference them', () => {
-    // Insertion order is apply order in `scripts/db-policies.ts`, and grants.sql grants
-    // EXECUTE on the `seq` allocator functions triggers.sql creates. The other order fails
-    // with "function does not exist", which is a confusing way to learn about an ordering.
-    const names = Object.keys(generateAll(CANONICAL_APP_ROLE, CANONICAL_MAINTENANCE_ROLE));
-    expect(names.indexOf('triggers.sql')).toBeLessThan(names.indexOf('grants.sql'));
-  });
-
-  it('emits a SECURITY DEFINER seq allocator for every caller-allocated seq, and grants it narrowly', () => {
-    // `MAX(seq) + 1` under row-level security is the caller's Tenant's maximum, so two
-    // Tenants collide on a key unique across all of them. These are the functions that read
-    // the true maximum as the owner. EXECUTE must be revoked from PUBLIC: Postgres grants it
-    // to PUBLIC by default and these are SECURITY DEFINER.
+  it('emits no caller-allocated seq allocator: every seq is an identity column (D1)', () => {
+    // `mapping_event.seq` and `actuals_ledger_entry.seq` were caller-allocated through two
+    // SECURITY DEFINER `momo_next_*_seq()` functions until the watermark slice made both identity
+    // columns. Nothing may emit or grant those functions again.
     const files = generateAll(CANONICAL_APP_ROLE, CANONICAL_MAINTENANCE_ROLE);
-    expect(CLIENT_ALLOCATED_SEQ.map((e) => e.table).sort()).toEqual([
-      'actuals_ledger_entry',
-      'mapping_event',
-    ]);
-    for (const entry of CLIENT_ALLOCATED_SEQ) {
-      const fn = `public."${seqAllocatorName(entry.table)}"()`;
-      expect(files['triggers.sql']!).toContain(`CREATE OR REPLACE FUNCTION ${fn} RETURNS bigint`);
-      expect(files['grants.sql']!).toContain(`REVOKE ALL ON FUNCTION ${fn} FROM PUBLIC;`);
-      expect(files['grants.sql']!).toContain(
-        `GRANT EXECUTE ON FUNCTION ${fn} TO "${CANONICAL_APP_ROLE}";`,
+    for (const [name, text] of Object.entries(files)) {
+      expect(text, `${name} still emits a seq allocator`).not.toContain('momo_next_');
+      expect(text, `${name} still emits a SECURITY DEFINER function`).not.toContain(
+        'SECURITY DEFINER',
       );
     }
   });
 
+  it('gives every append-only table an identity seq', () => {
+    // The watermark discipline (`watermark-lock.ts`) needs the `seq` obtained by the INSERT,
+    // after the lock — which is what an identity default is. A plain `seq` column would put the
+    // allocation back in the caller's hands.
+    const guarded = new Set(APPEND_ONLY.map((e) => e.table));
+    const missing = Object.values(schemaModule.schemaTables)
+      .map((t) => getTableConfig(t))
+      .filter((c) => guarded.has(c.name))
+      .filter((c) => {
+        const seq = c.columns.find((col) => col.name === 'seq');
+        return seq !== undefined && seq.generatedIdentity === undefined;
+      })
+      .map((c) => c.name);
+    expect(missing).toEqual([]);
+  });
+
   it('pins search_path on every function it emits', () => {
     // A guard whose `current_setting`/`pg_has_role` resolve through the caller's search_path
-    // can be switched off by a caller who can create objects in an earlier schema; for the
-    // SECURITY DEFINER allocators the same hole is a privilege escalation.
+    // can be switched off by a caller who can create objects in an earlier schema.
     const triggers = generateAll(CANONICAL_APP_ROLE, CANONICAL_MAINTENANCE_ROLE)['triggers.sql']!;
     const functionCount = (triggers.match(/CREATE OR REPLACE FUNCTION/g) ?? []).length;
     const pinnedCount = (triggers.match(/SET search_path = pg_catalog, pg_temp/g) ?? []).length;

@@ -1,6 +1,7 @@
 import { encode } from '@momo/domain';
+import type { Bound } from './bound';
 import * as s from './schema';
-import type { Tx } from './with-tenant';
+import { holdsWatermark, lockWatermark } from './watermark-lock';
 
 /**
  * THE AUDIT SINK — the one writer of `audit_log` for the use cases (story 1.3 slice 1).
@@ -20,6 +21,11 @@ import type { Tx } from './with-tenant';
  * string instead of throwing inside the driver, and a float is refused naming its path rather
  * than stored lossily.
  *
+ * `audit_log` IS APPEND-ONLY AND WATERMARKED (story 1.2 watermark slice, D2). The record rides on
+ * the watermark key the transaction already holds — the change it records took one before its own
+ * append — and when the transaction holds none (an org or membership write), the sink takes the
+ * Tenant key itself, immediately before the insert (`watermark-lock.ts`).
+ *
  * `seed.ts`'s `demo.seed` row is not written here: that is seed tooling as `system:seed`, not a
  * use case.
  */
@@ -31,9 +37,11 @@ export interface AuditRecord {
   readonly payload: unknown;
 }
 
-export function auditSinkOn(tx: Tx, tenantId: string) {
+export function auditSinkOn(bound: Bound) {
+  const { tx, tenantId } = bound;
   return {
     append: async (entry: AuditRecord): Promise<void> => {
+      if (!holdsWatermark(tx)) await lockWatermark(bound, { kind: 'tenant' });
       await tx.insert(s.auditLog).values({
         tenantId,
         actor: entry.actor,
