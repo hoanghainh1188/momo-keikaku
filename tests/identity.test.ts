@@ -359,8 +359,19 @@ describe.skipIf(!reachable)('sign-in and the request context, against Postgres (
     });
     expect(result).toEqual({ ok: true, value: undefined });
 
+    // Filtered by `tenant_id` EXPLICITLY, not left to row-level security. `owner()` is a
+    // superuser locally and in CI, and a superuser bypasses FORCE ROW LEVEL SECURITY entirely —
+    // so `withTenant` sets `app.tenant_id` here and nothing enforces it. Without this predicate
+    // the "latest row" is the latest row in the WHOLE table, and any suite writing an audit row
+    // with a higher `seq` at that moment wins it: this assertion failed once in eight runs with
+    // `seq: 860000024`, a row from another suite's probe band. Epic 1 retrospective, F1.
     const [record] = await withTenant(owner(), PROBE.tenantId, (tx) =>
-      tx.select().from(auditLog).orderBy(desc(auditLog.seq)).limit(1),
+      tx
+        .select()
+        .from(auditLog)
+        .where(eq(auditLog.tenantId, PROBE.tenantId))
+        .orderBy(desc(auditLog.seq))
+        .limit(1),
     );
     expect(record).toMatchObject({
       tenantId: PROBE.tenantId,

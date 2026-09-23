@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import pg from 'pg';
 import { eq, sql } from 'drizzle-orm';
 import { closeAllPools, getDb } from './client';
+import { acquireSeedSuiteLock, releaseSeedSuiteLock } from './seed-suite-lock';
 import * as s from './schema';
 import {
   APPEND_ONLY_GUARDED,
@@ -179,6 +180,14 @@ if (REQUIRE_DB && !reachable) {
   );
 }
 
+// This suite writes the `ten-rls-probe` Tenant, so it is a probe suite like any other and holds
+// the seed-suite lock shared for its lifetime (`seed-suite-lock.ts`, retrospective F1). Without
+// it, `seed-load-orchestration`'s TRUNCATE ran beside these rows and its single-Tenant guard
+// counted them: `Refusing to seed: this database holds 2 Tenants — ten-momo, ten-rls-probe`.
+if (reachable) {
+  await acquireSeedSuiteLock(OWNER_DATABASE_URL!, 'shared');
+}
+
 /** A raw owner connection. Used for catalog reads and for creating tenant B's rows. */
 async function asOwner<T>(work: (client: pg.Client) => Promise<T>): Promise<T> {
   const client = new pg.Client({
@@ -243,6 +252,7 @@ async function removeTenantB(client: pg.Client): Promise<void> {
 
 afterAll(async () => {
   if (reachable) await asOwner(removeTenantB);
+  await releaseSeedSuiteLock();
   await closeAllPools();
 });
 
