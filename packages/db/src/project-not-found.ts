@@ -8,5 +8,5 @@
  * not re-exported from the package barrel.
  */
 export function projectNotFound(projectId: string): Error {
-  return new Error(`project ${projectId} not found — run \`pnpm demo\` to seed`);
+  return new Error(`project ${projectId} not found — run \`pnpm seed\` to seed`);
 }

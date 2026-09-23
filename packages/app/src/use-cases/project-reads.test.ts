@@ -47,7 +47,7 @@ function fakeDeps(behave: (projectId: string) => 'ok' | Error) {
 
 /** packages/db's wording for an invisible Project, verbatim (repo.ts). */
 const notFoundError = (projectId: string) =>
-  new Error(`project ${projectId} not found — run \`pnpm demo\` to seed`);
+  new Error(`project ${projectId} not found — run \`pnpm seed\` to seed`);
 
 const CASES = [
   { name: 'getProjectHeader', run: getProjectHeader, expected: BUNDLE },

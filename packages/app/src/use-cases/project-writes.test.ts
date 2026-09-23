@@ -123,7 +123,7 @@ function fakeDeps(behave: Behaviour = {}) {
 
 /** packages/db's wording for an invisible Project, verbatim (repo-writes.ts, repo.ts). */
 const notFoundError = (projectId: string) =>
-  new Error(`project ${projectId} not found — run \`pnpm demo\` to seed`);
+  new Error(`project ${projectId} not found — run \`pnpm seed\` to seed`);
 
 type Run = (
   deps: ProjectWriteDeps<typeof HANDLE>,
