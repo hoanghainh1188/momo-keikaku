@@ -1381,3 +1381,20 @@ This is **not** the §6 Epic 1 checkpoint. That checkpoint falls at Epic 1's las
 - **Stories closed:** 1.2 (32 h), 1.3 (12), 1.4 (24), 1.5 (12), 1.6 (14), 1.7 (8), 1.8 (10), 1.9 (20), 2.1 (20), 2.2 (20), for **172 estimated hours** (OQ-12's per-story appendix). Story 1.1 (24 h) is open and is not counted.
 - **`E` ≈ 301**, against the 28.6 threshold. This decides nothing: §6 measures `E` over a trailing 8-week window, and a 4-day figure can neither fire the rule nor clear it. It shows only that nothing is visibly slipping yet. The R0 date of 2027-04-14 is unchanged, because nothing has fired, not because the rule was satisfied.
 - **What `E` cannot show here.** The estimates were sized for one person building by hand, while the work was done with AI agents, so `E` counts stories closed, not the founder's hours. **Hours worked were not recorded for this period.** They are the figure most needed to judge the 40 h/week assumption, and the monthly lines from 2026-11-01 must carry them.
+
+### The Epic 1 checkpoint (2026-09-23) — §6's first checkpoint, taken
+
+Epic 1 closed on 2026-09-23. Its last story, 1.1, merged through PR #56 (`0350e5b`), and the founder accepted it by demoing `pnpm dev` the same day. §6 takes the checkpoint at Epic 1's last story, which fell before the 2026-11-15 backstop, so it is taken now. It replaces the early reading above.
+
+- **Period:** 2026-09-20 → 2026-09-23, 4 days = 0.57 weeks. It is inside the 2026-09-20 → 10-31 ramp, whose own line is still due on 2026-11-01.
+- **Stories closed:**
+  - Epic 1 in full: 1.1 (24 h), 1.2 (32), 1.3 (12), 1.4 (24), 1.5 (12), 1.6 (14), 1.7 (8), 1.8 (10), 1.9 (20). That is **156 estimated hours**, and matches the Epic 1 total §6 sized.
+  - Also Epic 2's 2.1 (20) and 2.2 (20), for **196** in total.
+- **`E`:** 156 ÷ 0.57 ≈ **273** for Epic 1 alone, or ≈ 343 counting 2.1 and 2.2, against the **28.6** threshold. **The rule does not fire.** R0 stays at 2027-04-14. The gate's "before 2.1 is written" condition was breached, as the early reading records; with `E` far above the threshold, the breach had no consequence.
+- **Hours worked:** **16 h**, reported by the founder, about **28 h/week**. This is below the 40 h/week §6 assumes. Each hour worked closed about **9.75 estimated hours** of Epic 1, or 12.25 counting 2.1 and 2.2.
+- **What this does and does not show.**
+  - Four days is not §6's trailing 8-week window. The reading is recorded because §6 fixes the checkpoint at Epic 1's last story, not because four days settle anything.
+  - It does show where the risk sits. §6 treats capacity (40 h/week sustained) as the single point of failure. Here the founder worked about 28 h/week, and the threshold was still cleared many times over, because the estimates were sized for building by hand and the work was done with AI agents.
+  - The estimates therefore measure scope, not effort. If the pace holds, the R0 date could move earlier. That decision belongs to §8.1 and has not been taken; nothing here changes the date.
+  - The monthly lines from 2026-11-01 should keep carrying hours worked, since that is now the figure that says the most.
+

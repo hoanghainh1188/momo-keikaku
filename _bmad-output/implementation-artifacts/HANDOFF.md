@@ -1,4 +1,21 @@
-# Handoff — 2026-09-23 (story 1.2 closed: watermark slice merged)
+# Handoff — 2026-09-23 (Epic 1 closed: `pnpm dev` in one command, checkpoint taken)
+
+**Latest (2026-09-23, night): story 1.1 slice B3 merged via PR #56 (`0350e5b`). Story 1.1 and
+Epic 1 are `done`.** `pnpm dev` (with `pnpm demo` as an alias) takes a clean clone through compose,
+`db:migrate`, `pgboss:migrate`, `db:policies`, a seed that runs only on an empty database, and then
+`web` + `worker` under one supervisor (`scripts/dev/supervise.ts`: prefixed output, one Ctrl-C
+stops both, SIGHUP forwarded). **The first run writes a gitignored root `.env.local`** with the
+compose URLs and a random Better Auth secret and demo password. A shell key wins over the file,
+and `seed`/`db:*`/`pgboss:migrate` read the file too. **After pulling:** your first `pnpm dev`
+generates new keys. If the database was seeded under another password, run `pnpm seed`;
+`pnpm dev` warns you. `pnpm dev:web` is the old web-only command. The restart on the shared
+volume was verified by hand: `compose down` then `pnpm dev` kept identical row counts.
+**The Epic 1 velocity checkpoint is taken** (PRD §13): `E` ≈ 273 against 28.6, so the rule does
+not fire and R0 stays 2027-04-14. The founder worked 16 h (about 28 h/week), about 9.75
+estimated hours closed per hour worked. Pulling R0 earlier is a §8.1 decision, not yet taken.
+Next: story **2.3**. The monthly §13 line (stories plus hours) is due on 2026-11-01.
+
+## Earlier: Handoff — 2026-09-23 (story 1.2 closed: watermark slice merged)
 
 **Latest (2026-09-23, evening): story 1.2's watermark slice merged via PR #54 (`724a494`), and
 story 1.2 is `done`.** Every production append to an append-only table now takes
@@ -219,7 +236,7 @@ needs `E` ≥ **28.6**.
   At plan velocity Epic 1 (156 h) closes 2026-10-17. If `E` < 28.6, re-derive
   the R0 date and bring it back to §8.1 **before story 2.1's migration is
   written** — 2.1 spends the expand/contract exemption once.
-  **Still owed.** Epic 1 is still open (story 1.1 slice B3), so the checkpoint falls at 1.1's
+  **Taken 2026-09-23** at Epic 1's close (PRD §13: `E` ≈ 273, 16 h worked, rule not fired). The note that follows is historical. Epic 1 was then still open (story 1.1 slice B3), so the checkpoint fell at 1.1's
   close or 2026-11-15, whichever comes first. Its "before 2.1 is written" half was breached: 2.1's
   migration merged (PR #52) before Epic 1 closed and before any `E` existed. An early reading is
   in PRD §13 (2026-09-23: `E` ≈ 301 over 4 days, which decides nothing under §6's trailing
