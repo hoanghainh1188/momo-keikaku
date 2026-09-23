@@ -283,7 +283,16 @@ const CASES: readonly {
     call: () =>
       composition.planTicketsAsWorkPackage({ projectId: 'prj-ec2', name: 'Scope', ticketIds: TICKETS }),
     recorder: 'recordPlanDisposition',
-    command: { projectId: 'prj-ec2', name: 'Scope', ticketIds: TICKETS, kind: 'plan' },
+    // `wpId` is issued by the composition root's real UUIDv7 id port, so it is matched by shape
+    // rather than by value — what this pins is that the use case hands one DOWN, instead of the
+    // repository building `wp-new-<anchor ms>` for itself (retro audit finding A1).
+    command: {
+      projectId: 'prj-ec2',
+      name: 'Scope',
+      ticketIds: TICKETS,
+      kind: 'plan',
+      wpId: expect.any(String),
+    },
     action: 'disposition.plan',
   },
   {

@@ -27,6 +27,8 @@ import { mapTicketInputSchema, runProjectWrite } from './project-write-input';
  */
 
 const HANDLE = { marker: 'handle' };
+/** What the fake id port issues for a Plan — the app layer, not the repository, names it. */
+const PLANNED_WP_ID = 'wp-planned-0001';
 /** The signed-in caller; the audit actor is derived from its user id (story 1.4 slice 1). */
 const CTX: RequestContext = {
   tenantId: 'ten-a',
@@ -71,6 +73,8 @@ function fakeDeps(behave: Behaviour = {}) {
 
   const deps: ProjectWriteDeps<typeof HANDLE> = {
     handle: HANDLE,
+    // The Plan use case issues the new Work Package's id from here (retro audit finding A1).
+    ids: { next: () => PLANNED_WP_ID },
     transaction: async (handle, tenantId, work) => {
       transactions.push({ handle, tenantId });
       const pendingCalls: Call[] = [];
@@ -185,7 +189,8 @@ const CASES: readonly Case[] = [
     run: planTicketsAsWorkPackage as Run,
     member: 'recordPlanDisposition',
     valid: PLAN,
-    // The Work Package id is the repository's, returned from the insert — not rebuilt here.
+    // The Work Package id is the one the use case ISSUED from the id port and handed down; the
+    // repository returns it rather than inventing one (retro audit finding A1).
     record: {
       action: 'disposition.plan',
       target: 'prj-1',
@@ -254,7 +259,12 @@ describe.each(CASES)('$name', ({ run, member, valid, kind, invalid, record }) =>
 
     expect(result).toEqual({ ok: true, value: undefined });
     expect(transactions).toEqual([{ handle: HANDLE, tenantId: 'ten-a' }]);
-    const command = kind === undefined ? valid : { ...valid, kind };
+    // Plan also carries the Work Package id the use case issued from the `IdGenerator` port —
+    // the repository no longer invents one (retro audit finding A1).
+    const command =
+      kind === undefined
+        ? valid
+        : { ...valid, kind, ...(member === 'recordPlanDisposition' ? { wpId: PLANNED_WP_ID } : {}) };
     expect(calls).toEqual([{ member, stamp: { actor: ACTOR, at: AT }, command }]);
     expect(audits).toEqual([{ actor: ACTOR, at: AT, ...record }]);
   });

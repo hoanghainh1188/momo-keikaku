@@ -1,4 +1,5 @@
 import type { AuditSink } from '../audit';
+import type { IdGenerator } from './ids';
 import type { AuditedWriteDeps, WriteStamp } from './audited-write';
 
 export type { WriteStamp } from './audited-write';
@@ -46,6 +47,16 @@ export interface PlanDispositionCommand {
   readonly projectId: string;
   readonly name: string;
   readonly ticketIds: readonly string[];
+  /**
+   * The new Work Package's id, ISSUED BY THE APP LAYER from the `IdGenerator` port — never
+   * invented by the repository.
+   *
+   * `work_package.id` is a global primary key (`tenant_id` sits beside the key, not in it), and
+   * this id used to be `wp-new-<the Project's anchor in ms>`. Two Tenants planning at the same
+   * anchor therefore collided, and in the demo every Project shares one anchor — so a PM's write
+   * failed because of a FOREIGN Tenant's rows. Epic 1 retrospective, audit finding A1.
+   */
+  readonly wpId: string;
 }
 
 /** FR-29 *Explain*: a note is attached to the Tickets. */
@@ -115,4 +126,7 @@ export interface ProjectWriteScope {
  * What a project write use case is given: the transaction to open and the handle it is opened on
  * — slice 2's generic `AuditedWriteDeps` over this scope. Both are chosen by the composition root.
  */
-export type ProjectWriteDeps<Handle> = AuditedWriteDeps<Handle, ProjectWriteScope>;
+export type ProjectWriteDeps<Handle> = AuditedWriteDeps<Handle, ProjectWriteScope> & {
+  /** Plan issues a new Work Package id from here (AD-15's UUIDv7 port), as `createProject` does. */
+  readonly ids: IdGenerator;
+};

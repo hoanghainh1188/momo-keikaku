@@ -49,6 +49,8 @@ export interface PlanDispositionCommand {
   readonly projectId: string;
   readonly name: string;
   readonly ticketIds: readonly string[];
+  /** Issued by the app layer from the `IdGenerator` port — see `recordPlanDisposition`. */
+  readonly wpId: string;
 }
 
 export interface ExplainDispositionCommand {
@@ -174,9 +176,10 @@ function recordMapDisposition(bound: Bound) {
  * existing `9.` Work Packages, then the Mappings and the Disposition. Returns the new Work
  * Package's id, which the use case's audit payload records.
  *
- * The Work Package id is `wp-new-<anchor ms>`, as it always was — so a second Plan on the same
- * Project collides on `work_package`'s primary key while the demo clock is fixed. Recorded in
- * deferred-work; changing the id is not a rewiring.
+ * The id arrives in the command, issued by the app layer from the `IdGenerator` port. It used to
+ * be built here as `wp-new-<anchor ms>`, which collided whenever a Project was planned twice —
+ * and, because `work_package.id` is a GLOBAL primary key, whenever two Tenants planned at the
+ * same anchor, which in the demo is every Tenant. Epic 1 retrospective, audit finding A1.
  */
 function recordPlanDisposition(bound: Bound) {
   return async (
@@ -184,8 +187,7 @@ function recordPlanDisposition(bound: Bound) {
     command: PlanDispositionCommand,
   ): Promise<{ readonly wpId: string }> => {
     const { tx, tenantId } = bound;
-    const { kind, projectId, name, ticketIds } = command;
-    const wpId = `wp-new-${stamp.at.getTime()}`;
+    const { kind, projectId, name, ticketIds, wpId } = command;
     const existing = await tx
       .select()
       .from(s.workPackage)

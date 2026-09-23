@@ -89,6 +89,7 @@ export async function planTicketsAsWorkPackage<Handle>(
     const { wpId } = await scope.projectWrite.recordPlanDisposition(stamp, {
       ...command,
       kind: 'plan',
+      wpId: deps.ids.next(),
     });
     await audit.record(scope, stamp, 'disposition.plan', projectId, {
       ticketIds: [...ticketIds],

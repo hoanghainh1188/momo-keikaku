@@ -171,8 +171,10 @@ export const EXPECTED: Readonly<Record<string, Expect>> = {
     ...disposition(ctx, 'map', ctx.target.wpId, null),
   }),
   planTicketsAsWorkPackage: (ctx) => {
-    const { target, at, ninesBefore } = ctx;
-    const wpId = `wp-new-${at.getTime()}`;
+    const { target, ninesBefore } = ctx;
+    // The id the use case issued from the harness's id port — not `wp-new-<anchor ms>`, which
+    // collided across Tenants because `work_package.id` is a global primary key (retro A1).
+    const wpId = ctx.newIds.at(-1)!;
     return {
       ...NO_ROWS,
       mappingEvents: dispositionMappings(ctx, wpId),
