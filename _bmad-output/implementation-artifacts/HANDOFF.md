@@ -1,4 +1,17 @@
-# Handoff — 2026-09-23 (stories 2.1 + 2.2 merged)
+# Handoff — 2026-09-23 (story 1.2 closed: watermark slice merged)
+
+**Latest (2026-09-23, evening): story 1.2's watermark slice merged via PR #54 (`724a494`), and
+story 1.2 is `done`.** Every production append to an append-only table now takes
+`pg_advisory_xact_lock(namespace, key)` through `packages/db/src/watermark-lock.ts` (1 = Project,
+2 = Tenant) before its `seq`; `mapping_event.seq` and `actuals_ledger_entry.seq` became identity
+columns in migration `0001` (the first expand/contract migration). The `mapping_event_pkey` 23505
+flake is gone. Two unrelated flakes remain (`seed-sequences`, `membership`; `deferred-work.md`).
+An early velocity reading is recorded (PRD §13): `E` ≈ 301 over 4 days, which decides nothing —
+§6 uses a trailing 8-week window. **The Epic 1 checkpoint is still owed**, at 1.1's close or
+2026-11-15, and it should carry hours worked. **After pulling `main`, run `pnpm db:migrate` then
+`pnpm db:policies`** — the second grants `momo_app` USAGE on the two new identity sequences.
+Next: story 1.1 slice B3, then story **2.3**.
+
 
 State at `main` (PR #52, `005798a`). **Stories 2.1 (the scheduling schema lands in one
 migration) and 2.2 (the demo spike is disposed of) are `done`.** Both were implemented,
@@ -206,11 +219,12 @@ needs `E` ≥ **28.6**.
   At plan velocity Epic 1 (156 h) closes 2026-10-17. If `E` < 28.6, re-derive
   the R0 date and bring it back to §8.1 **before story 2.1's migration is
   written** — 2.1 spends the expand/contract exemption once.
-  **⚠ Not run (found 2026-09-23).** Epic 1 closed and story 2.1's migration was
-  written and merged (PR #52), but neither the Epic 1 retrospective nor PRD §13
-  records an `E` reading. The 2.1 half of the gate has passed unexamined; the
-  `E` measurement is still owed. Take it before Epic 2 goes further, and bring
-  any date change to §8.1.
+  **Still owed.** Epic 1 is still open (story 1.1 slice B3), so the checkpoint falls at 1.1's
+  close or 2026-11-15, whichever comes first. Its "before 2.1 is written" half was breached: 2.1's
+  migration merged (PR #52) before Epic 1 closed and before any `E` existed. An early reading is
+  in PRD §13 (2026-09-23: `E` ≈ 301 over 4 days, which decides nothing under §6's trailing
+  8-week window). When the checkpoint is taken, record hours worked too, and bring any date
+  change to §8.1.
 - **Monthly from 2026-11-01**: append one line to PRD §13 with the stories
   closed and hours worked. Any two consecutive months both below 28.6 fire the
   §8.3 cut order at item 0.
@@ -405,12 +419,12 @@ Correct Course is needed. Status key: `epic-1-retrospective: optional`.
 See "Latest" at the top. After pulling `main`, recreate the local database once (see
 Environment notes): `pnpm db:migrate` refuses a database created by `push`.
 
-### 4. The velocity checkpoint — owed
+### 4. The velocity checkpoint — still owed (early reading recorded 2026-09-23, PRD §13)
 
-The `E` reading that "Where the plan stands" requires at Epic 1 close was never taken. Take it
-before Epic 2 goes much further.
+Due at story 1.1's close or 2026-11-15, whichever comes first (see "Where the plan stands").
+An early reading only is in PRD §13; it decides nothing. Record hours worked with the checkpoint.
 
-### 5. Story 1.2's watermark slice — now the priority fix
+### 5. Story 1.2's watermark slice — DONE on `main` (PR #54, `724a494`)
 
 Take `pg_advisory_xact_lock` before allocating `seq`. **It is now the cause of flaky tests.** A
 full `pnpm test` failed 2 of 17 local runs with `mapping_event_pkey` 23505 from
