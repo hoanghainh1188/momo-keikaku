@@ -511,8 +511,9 @@ export async function applyPlanChange<Handle>(
             ((error as { code?: string }).code === 'cf_value_type_mismatch' ||
               (error as { code?: string }).code === 'cf_option_invalid')
           ) {
+            const code = (error as { code?: string }).code ?? 'cf_value_type_mismatch';
             refuse('invalid_input', {
-              customField: [(error as { code: string }).code],
+              customField: [code],
             });
           }
           const mapped = mapSchedulingConstraint(error);
