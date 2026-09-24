@@ -1,4 +1,63 @@
-# Handoff — 2026-09-24 (story 2.6 closed: the backward pass, Float and the critical path)
+# Handoff — 2026-09-24 (story 2.7 closed: constraints are soft, reported, and stay on their own Work Package)
+
+**Latest (2026-09-24, midday): story 2.7 merged via PR #66 (`f30d6cc`) and is `done`.**
+- **Soft constraints land on the forward pass.** `recalculate` is still the one entry point (AD-25).
+  Helpers live in `packages/domain/src/schedule/constraints.ts` (internal). `backward.ts` is
+  untouched: a constraint is never an anchor, and a violation changes no Float and never
+  displaces the critical path.
+- **New inputs on `ScheduleWp`:** `constraintType` (`asap` | `must_start_on` | `must_finish_on`)
+  and `constraintDate` (`IsoDate | null`). They mirror `work_package`; the DB CHECK keeps them
+  on leaves only. Fixtures default to `asap` / `null`. A mismatched pair throws at the entry.
+- **New output:** `ScheduleOutputs.violations` — asked date (unrolled), derived date, working days
+  late (> 0), constraint type, and the first-driver chain. Sorted by days late descending, then
+  `compareWp`.
+- **MSO** holds a remaining WP back: early start = max(graph start, rolled date via
+  `ceilPosition`). Where the graph forces a later start, the graph wins and a violation is
+  reported. Drivers clear when the bound alone sets the start.
+- **MFO** is report-only: it never delays a WP that could finish earlier. A derived finish after
+  the rolled date (`floorPosition`) is a violation.
+- **Halt:** `calendar_range` also fires for a constraint date outside the range, or a rolled
+  position still out of range — including remaining `no_duration` leaves. Complete and
+  in-progress constraints are ignored (Q5).
+- **Constraint conventions (founder decisions Q1–Q7).** 2.8's corpus is hand-computed against these.
+  - **Q1:** MSO is hold-back only (start ≥ date).
+  - **Q2:** MFO only reports misses; finishing early is success.
+  - **Q3:** a *satisfied* MSO that delays a WP may move other WPs' Float; only *violations* are
+    barred from changing Float / the path.
+  - **Q4:** non-working dates roll (MSO forward, MFO back); out of range / roll-off-end halts.
+  - **Q5:** complete / in-progress constraints are ignored for dates and the violation list.
+  - **Q6:** days late are non-negative working days; only misses appear on the list.
+  - **Q7:** the chain is the whole first-driver walk (`drivingPredecessors[0]` each step).
+- **Carried forward (`deferred-work.md`).**
+  - **2.9:** index-encode violation `wpId` and `chain` into `inputs.wps` (with the 2.6 encoding of
+    `drivingPredecessors` / `criticalPath`); write the new fields into the stored run.
+  - **2.8:** pin 2.6's Q6/Q7, negative Float against a PM-set finish, and a `must_finish_on` missed
+    by six weeks that must not displace the critical path.
+  - **Epic 6 / FR-31:** Health may compare constraint dates to actuals for complete / in-progress
+    WPs (left out of `recalculate` by Q5 → A).
+- **Still open from 2.5 / 2.6:**
+  - `range_start` must cover the Project's history.
+  - `remainingDays` in the stored outputs.
+  - The manual check on 2.13's grid (Float with its anchor, negative Float in red, Critical,
+    and now constraint / violation markers when the surface lands).
+- **Next: story 2.8** (the golden scheduler corpus; the only correctness gate). Things to know
+  before starting:
+  - Expected outputs are **hand-computed and recorded**, never captured from the implementation.
+  - Compare through the AD-4 codec's canonical form. Register `engine_version`; each case re-derives
+    under its own recorded version (AR-51).
+  - **Minimum coverage (AR-35 / AD-27):** a slip across a JP and a VN weekend; mid-flight
+    complete / in-progress / remaining against a Data Date; negative Float against a PM-set
+    finish; an out-of-sequence actual start; a `must_finish_on` missed by six weeks that does not
+    displace the critical path; a zero-duration milestone; a leaf with no duration.
+  - Also pin from deferred work: 2.6 Q6 (no late finish past the anchor under strongly negative
+    lag) and Q7 (computed finish ignores complete-only plans).
+  - Hand-compute against the 2.5 date conventions, the 2.6 backward conventions, and the 2.7
+    soft-constraint conventions above — they are the product now.
+  - The five other scheduler CI gates (fence, trigger call-sites, reachability, shuffle,
+    re-derivation) stay separate; this story is correctness only.
+- Spec: `spec-2-7-constraints-are-soft-reported-and-stay-on-their-own-work-pac.md`.
+
+## Earlier: Handoff — 2026-09-24 (story 2.6 closed: the backward pass, Float and the critical path)
 
 **Latest (2026-09-24, late morning): story 2.6 merged via PR #64 (`6c93bcb`) and is `done`.**
 - **`recalculate` now runs both passes.** It is still the one entry point (AD-25), and no second
