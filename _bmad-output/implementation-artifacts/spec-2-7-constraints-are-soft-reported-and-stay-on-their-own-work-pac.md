@@ -2,7 +2,7 @@
 title: 'Story 2.7 — constraints are soft, reported, and stay on their own Work Package'
 type: 'feature'
 created: '2026-09-24'
-status: 'in-progress'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '74f99503968006d8dd95234d8556fcf82a32f540'
@@ -99,10 +99,32 @@ Positions are working days. Lag 0 unless stated. Rows marked ⟨Qn⟩ are pinned
 - Soft constraints live in `packages/domain/src/schedule/constraints.ts` (internal; not exported from `index.ts`) so `recalculate.ts` stays under the 800-line cap. MSO hold-back is applied in the remaining-leaf path of `scheduleLeaf`; MFO is range-checked there and judged in `collectViolations` after early dates exist. `backward.ts` is untouched.
 - `ScheduleWp` gains `constraintType` / `constraintDate` (defaults via fixtures: `asap` / `null`). `assertInputs` throws on a mismatched pair. `ScheduleOutputs.violations` carries asked (unrolled), derived, days late and the first-driver chain, sorted days-late desc then canonical index.
 - Existing shuffle (N ≥ 50) and 2,500-leaf timing plans in `recalculate.test.ts` / `recalculate.backward.test.ts` now mix asap and pinned constraints; the new `recalculate.constraints.test.ts` covers every matrix row.
+- Review pass 1 patches: remaining `no_duration` leaves range-check constraints before exiting (Q4 halt); two Q4 halt tests added (no_duration OOR, MFO on a weekend-opening calendar); JSDoc restored onto `ScheduleWp`.
 
 ## Spec Change Log
 
 ## Review Triage Log
+
+Review pass 1 (2026-09-24), by the Blind Hunter (BH), the Edge Case Hunter (EC) and the Verification Gap reviewer (VG).
+
+| # | Source | Finding | Verdict | Evidence | Route |
+|---|---|---|---|---|---|
+| 1 | EC, BH | Remaining `no_duration` leaf with out-of-range `must_*` never hits `resolveRemainingConstraint`, so `calendar_range` does not fire | medium | Reproduced: `durationDays: null` + `must_start_on` `2026-09-15` on an Oct calendar returns `scheduled` with `notSchedulable`, not halted. Q4 requires a halt when the constraint date is outside the range | patch |
+| 2 | VG | MFO whose `floorPosition` is −1 (calendar opens on a non-working day) is untested; breaking `rolledConstraint`'s `>= 0` check still leaves the suite green and can emit a bogus violation | medium | Pre-verified (VG). Code at `constraints.ts:54-56` is correct today (`mfo-leading-weekend` probe halted); the Q4 outside-range test only uses dates before/after the range | patch |
+| 3 | BH | JSDoc "One WP as the scheduler reads it…" sits above `ConstraintType` instead of `ScheduleWp` | low | Confirmed at `recalculate.ts:90-97`. Wrong attachment, no runtime effect | patch |
+| 4 | BH | Spec frontmatter still `in-progress` while tasks are `[x]` | false | Workflow: status was `in-progress` during implement and is now `in-review` for this pass | reject |
+| 5 | BH | Spec Change Log and Review Triage Log empty in the landing diff | false | Expected on the first review pass; this table is the trail | reject |
+| 6 | BH | Compressing the file header drops still-binding 2.5/2.6 conventions | false | Lines 36–41 still state inclusive dates, (1+L), reverse lag, bridge, Project-finish roll-back and soft rolls. Detail moved to `constraints.ts` / prior specs, not deleted from behaviour | reject |
+| 7 | BH | Code Map still cites pre-change line numbers / ~760 lines | false | Finding's fix is to edit this build's spec; rejected per triage rules | reject |
+| 8 | BH | Q7 cycle guard has a `seen` set but no cyclic-driver test | low | `validate` rejects cycles before the passes; a self-drive cannot appear in `drivers` on a scheduled plan. Unlikely in everyday use; adding a synthetic cycle would fight the graph gate | reject |
+| 9 | BH | No bridged no-duration driver in the chain suite | low | Bridging is pinned in 2.5/2.6; the chain walks the same `drivers` array. Unlikely everyday gap | reject |
+| 10 | BH | Q3 test only asserts Float inequality, not hand-computed values | low | Matrix expects that Float *may* change; inequality is enough. Exact Float belongs to 2.8's corpus | reject |
+| 11 | BH | Six-week MFO case never asserts an exact `daysLate` | low | AC and matrix require Float/path identity and a violation; exact days late is corpus work | reject |
+| 12 | BH | Calendar-range halt coverage is one-sided (MSO before / MFO after only) | low | Grouped with #2 for the roll-off-the-end path; raw opposite sides are the same `ceilPosition`/`floorPosition` failure already covered by the outside-range test | reject |
+| 13 | BH | Q4 vs Q5: out-of-range `must_*` on complete/in-progress should be ignored (no halt) and is untested | false | Q5 → A ignores those constraints entirely; not resolving them is the intended behaviour. No defect | reject |
+| 14 | BH | Remaining `no_duration` with in-range `must_*` is silently skipped with no matrix row | false | Same root as #1 for OOR; in-range not-schedulable leaves have no derived dates to bound or report, which matches "remaining *dated* leaves" in `collectViolations`. Not a separate defect | reject |
+| 15 | BH | `ConstraintViolation.chain` docs are MSO-centric | low | Cosmetic JSDoc; chain is still the first-driver walk that forced the early dates. No product harm | reject |
+| 16 | BH | Forward-path halt uses `'ok' in resolved` instead of a tagged union | low | Works; a tagged union is a redesign, not a direct correction | reject |
 
 ## Design Notes
 
