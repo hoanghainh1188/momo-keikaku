@@ -2,7 +2,7 @@
 title: 'Story 2.8 — the golden scheduler corpus'
 type: 'feature'
 created: '2026-09-24'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '55d85c2e93d7ed2e41a9c8768e98ebdabfd50b3b'
