@@ -13,8 +13,8 @@ import {
 } from '@momo/domain';
 
 /**
- * The scheduler's test fixture builders (stories 2.5 and 2.6), shared by every
- * `recalculate*.test.ts` so the forward and backward suites build plans the same way.
+ * The scheduler's test fixture builders (stories 2.5–2.7), shared by every
+ * `recalculate*.test.ts` so the forward, backward and constraint suites build plans the same way.
  *
  * October 2026: Mon 5 … Fri 9, Sat 10, Sun 11, Mon 12 … Fri 16, Mon 19 …
  */
@@ -37,6 +37,10 @@ export interface WpSpec {
   actualFinish?: IsoDate | null;
   recordedPct?: Ratio | null;
   projectId?: string;
+  /** Defaults to `asap`. */
+  constraintType?: ScheduleWp['constraintType'];
+  /** Defaults to `null`. */
+  constraintDate?: IsoDate | null;
 }
 
 /** A WP whose id doubles as its WBS code, so `compareWp` order is the natural order of the ids. */
@@ -50,6 +54,8 @@ export const wp = (id: string, spec: WpSpec = {}): ScheduleWp => ({
   actualStart: spec.actualStart ?? null,
   actualFinish: spec.actualFinish ?? null,
   recordedPct: spec.recordedPct ?? null,
+  constraintType: spec.constraintType ?? 'asap',
+  constraintDate: spec.constraintDate ?? null,
 });
 
 export const edge = (predecessorId: string, successorId: string, lagDays = 0): ScheduleEdge => ({

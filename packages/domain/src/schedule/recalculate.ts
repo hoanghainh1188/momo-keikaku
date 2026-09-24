@@ -1,5 +1,6 @@
 /**
- * The forward pass (story 2.5) and the backward pass, Float and the critical path (story 2.6).
+ * The forward pass (story 2.5), the backward pass, Float and the critical path (story 2.6), and
+ * soft constraints (story 2.7).
  *
  * `recalculate(inputs, prevInputs)` is `domain/schedule`'s one pure scheduling function (AD-25:
  * nothing else is named `recalculate`; `app/schedule.recalculateProject` wraps it in 2.9). It
@@ -10,68 +11,39 @@
  *   1. The four graph rules (FR-6a, AR-46) are checked first through `validate`. Any offence
  *      halts with `graph_invalid` and the four lists: the pass never guesses around a cycle.
  *   2. The forward pass (FR-5, FR-6b, AR-49) runs over the leaves in topological order, ties
- *      broken by canonical (`compareWp`) index, each leaf in one of three states:
- *        * complete — it has an actual finish; its actual dates stand;
- *        * in progress — an actual start and no finish; it resumes at the later of its actual
- *          start and the Data Date and runs its remaining duration from there. Unfinished
- *          predecessors do not drive it;
- *        * remaining — no actuals; it starts at the latest of the Data Date, the Project start
- *          and each predecessor's drive.
- *      Remaining duration is `ceil(duration × (1 − pct))`, at least 1, through `ceilDiv`; a
- *      missing pct is 0 and a remaining WP runs its full duration. It is derived, never stored.
- *   3. An actual date always wins (AR-58): when a WP's actual start precedes a predecessor's
- *      drive, its actual dates are kept and the pair is flagged out-of-sequence.
- *   4. A leaf with no duration gets no dates and is listed "not schedulable yet" (`no_duration`),
- *      never treated as 0 or 1. Its successors are bridged across it (Q4 → A):
- *      P →(a) X →(b) S drives S as P →(a+b) S, transitively, taking the latest drive.
- *   5. Summaries roll up from their descendant leaves (earliest start, latest finish, summed
- *      `plannedMh`). A pass never reads a roll-up back.
- *   6. The backward pass (FR-6b, AR-49; `backward.ts`) runs over the same graph from ONE anchor:
- *      the PM-set Project finish, otherwise the computed finish (the latest early finish of a
- *      remaining or in-progress WP). A constraint is never the anchor. Each remaining and
- *      in-progress WP gets a late start, a late finish and Float = late start − early start (an
- *      in-progress WP's from where it resumes); a complete WP, a WP with no duration and a
- *      summary get none. Float is negative only against a Project finish, and never clamped.
- *   7. The critical path is the minimum-Float set, never the zero-Float set (`isCritical` is
- *      decided in `backward.ts` only), ordered by early start, then `compareWp`.
- *   8. Driving predecessors (AR-56): every predecessor (complete ones included), direct or
- *      bridged, whose drive equals a remaining WP's early start, in `compareWp` order. A drive that ties with the Data Date or
- *      the Project start still drives; none is listed when those alone set the start.
- *   9. A pass that leaves the calendar's range halts with `calendar_range` (FR-6b), naming the
- *      WPs (and anchors) and the side of the range they left by. A late date before the range,
- *      or a Project finish outside it, halts the same way (Q5 → A).
+ *      broken by canonical (`compareWp`) index, each leaf complete / in progress / remaining.
+ *      Remaining duration is `ceil(duration × (1 − pct))`, at least 1 (`ceilDiv`); a missing pct
+ *      is 0. Soft constraints (`constraints.ts`): a remaining leaf's *must start on* holds it
+ *      back where the graph allows; *must finish on* only reports a miss. Complete and
+ *      in-progress constraints are ignored (Q5 → A).
+ *   3. An actual date always wins (AR-58): an early actual vs a predecessor's drive is kept and
+ *      flagged out-of-sequence.
+ *   4. A leaf with no duration is "not schedulable yet" (`no_duration`); successors are bridged
+ *      across it (Q4 → A): P →(a) X →(b) S drives S as P →(a+b) S.
+ *   5. Summaries roll up from descendant leaves; a pass never reads a roll-up back.
+ *   6. The backward pass (`backward.ts`) runs from ONE anchor: the Project finish, else the
+ *      computed finish. A constraint is never the anchor. Float = late start − early start,
+ *      never clamped; negative only against a Project finish.
+ *   7. The critical path is the minimum-Float set (`isCritical` only in `backward.ts`), ordered
+ *      by early start then `compareWp`.
+ *   8. Driving predecessors (AR-56): every tied driver of a remaining WP's early start, in
+ *      `compareWp` order (none when only the Data Date / Project start / an MSO bound set it).
+ *   9. Leaving the calendar's range halts with `calendar_range` (FR-6b), naming WPs/anchors and
+ *      the side — including a constraint date outside the range (Q4 → B).
+ *  10. Violations (`ScheduleOutputs.violations`) report asked date, derived date, working days
+ *      late and the first-driver chain; they change no Float and never displace the path.
  *
- * Conventions (founder decisions, 2026-09-24):
- *   * Start and finish are inclusive working days. A WP of duration d > 0 starting on working day
- *     position s finishes on s + d − 1.
- *   * FS lag L starts the successor (1 + L) working days after the predecessor's finish: lag 0 is
- *     the next working day, −1 the finish day, −2 the day before (Q2). A predecessor's finish on
- *     a non-working day (an actual) counts from the last working day on or before it.
- *   * A zero-duration WP's date (start = finish) is its earliest start, and a lag-L successor
- *     starts L working days after that date (Q3 → A).
- *   * The Data Date and the Project start roll forward to the next working day (Q2).
+ * Conventions (founder decisions, 2026-09-24): start/finish inclusive; FS lag L starts the
+ * successor (1 + L) working days after the predecessor's finish; Data Date and Project start
+ * roll forward; a zero-duration WP's start equals its finish. Backward: reverse of (1 + L)
+ * (Q1 → A); only forward-used edges constrain late dates (Q2 → A); bridge across no-duration
+ * (Q3 → A); Project finish on a non-working day rolls back (Q4 → A). Soft: MSO via
+ * `ceilPosition`, MFO via `floorPosition` (Q4 → B).
  *
- * Conventions of the backward pass (founder decisions, 2026-09-24, story 2.6):
- *   * The reverse of (1 + L) (Q1 → A): a work predecessor's late finish is the least of
- *     (successor late start − L − 1), a milestone's the least of (successor late start − L). A
- *     milestone's late start equals its late finish. A WP with no dated successor finishes at the
- *     anchor, and no late finish is later than the anchor (so a negative lag cannot leave a plan
- *     with no Project finish without a zero-Float WP).
- *   * Only edges the forward pass used for dates constrain the backward pass: an edge into a
- *     complete or in-progress WP is ignored on the way back (Q2 → A), and P →(a) X →(b) S holds P
- *     back as P →(a+b) S across a no-duration X, transitively, taking the tightest bound (Q3 → A).
- *   * A Project finish on a non-working day rolls back to the last working day on or before it
- *     for the pass (Q4 → A); `anchor.date` reports the date the PM set.
- *   * Setting or clearing the Project finish moves no early date: it changes only the anchor.
+ * Outputs are keyed by `wpId` (AD-26's index encoding is 2.9's), identical under any shuffle of
+ * the WP and edge lists (AD-28). `prevInputs` stays in the signature but is unread here (2.9).
  *
- * Outputs are keyed by `wpId` (AD-26's index-referenced encoding belongs to 2.9): WPs in
- * `compareWp` order, out-of-sequence pairs in (predecessor, successor) `compareWp` order. They are
- * identical under any shuffle of the WP and edge lists (AD-28).
- *
- * `prevInputs` stays in the signature (AD-25), but no per-WP cause is computed here (Q5 → A):
- * that is story 2.9's (`deferred-work.md`).
- *
- * Out of scope: constraints (2.7), the stored run and its index-referenced encoding (2.9).
+ * Out of scope: the stored run and its index-referenced encoding (2.9).
  *
  * Traceability: AD-25, AD-26, AD-27, AD-28, AR-7, AR-46, AR-49, AR-56, AR-58, FR-5, FR-6a, FR-6b.
  */
@@ -96,6 +68,13 @@ import {
   type BackwardNode,
   type LateDates,
 } from './backward';
+import {
+  assertConstraintPairing,
+  collectViolations,
+  holdBackStart,
+  resolveRemainingConstraint,
+  type AppliedConstraint,
+} from './constraints';
 import { buildPlan, topologicalOrder, type Plan as PlanOf } from './plan';
 import {
   hasOffences,
@@ -107,6 +86,9 @@ import {
 } from './validate';
 
 // --- inputs ---------------------------------------------------------------------------------
+
+/** `work_package.constraint_type`. */
+export type ConstraintType = 'asap' | 'must_start_on' | 'must_finish_on';
 
 /**
  * One WP as the scheduler reads it. Scheduling inputs on a summary are ignored: leafness comes
@@ -122,6 +104,10 @@ export interface ScheduleWp extends PlanGraphWp {
   readonly actualFinish: IsoDate | null;
   /** Recorded % Complete, in [0, 1]. `null` counts as 0. */
   readonly recordedPct: Ratio | null;
+  /** `work_package.constraint_type`. Pair with `constraintDate`: `asap` ↔ null, `must_*` ↔ a date. */
+  readonly constraintType: ConstraintType;
+  /** `work_package.constraint_date`. The date the PM set; rolling is the pass's job. */
+  readonly constraintDate: IsoDate | null;
 }
 
 /** An FS dependency (`wp_dependency`) with its lag in working days, possibly negative. */
@@ -191,6 +177,26 @@ export interface NotSchedulable {
   readonly reason: NotSchedulableReason;
 }
 
+/**
+ * A soft-constraint miss on a remaining leaf (story 2.7). Sorted by `daysLate` descending, then
+ * `compareWp`. A violation changes no Float and never displaces the critical path.
+ */
+export interface ConstraintViolation {
+  readonly wpId: string;
+  readonly constraintType: 'must_start_on' | 'must_finish_on';
+  /** The date the PM set, unrolled (as `anchor.date` reports a Project finish). */
+  readonly askedDate: IsoDate;
+  /** The early start (MSO) or early finish (MFO) the graph derived. */
+  readonly derivedDate: IsoDate;
+  /** Working days between the rolled asked date and `derivedDate`; always > 0 on this list. */
+  readonly daysLate: number;
+  /**
+   * The first-driver walk from this WP: at each step `drivingPredecessors[0]`, until a WP with no
+   * driver (with a cycle guard). Empty when the Data Date or Project start alone set the start.
+   */
+  readonly chain: readonly string[];
+}
+
 export interface ScheduleOutputs {
   /** Every WP of the Project, in `compareWp` order. */
   readonly wps: readonly WpScheduleOutput[];
@@ -202,6 +208,8 @@ export interface ScheduleOutputs {
   readonly outOfSequence: readonly EdgeRef[];
   /** The "not schedulable yet" leaves, in `compareWp` order. */
   readonly notSchedulable: readonly NotSchedulable[];
+  /** Soft-constraint misses, worst first then `compareWp` (story 2.7). */
+  readonly violations: readonly ConstraintViolation[];
   /** The Project finish if set, else the computed finish; `null` when neither exists. */
   readonly anchor: ScheduleAnchor | null;
   /** The latest early finish of a remaining or in-progress WP; `null` when none is dated. */
@@ -279,7 +287,7 @@ export function recalculate(
       : computedFinish !== null
         ? { kind: 'computed_finish', date: computedFinish }
         : null;
-  return { kind: 'scheduled', outputs: assemble(plan, pass, late, anchor, computedFinish) };
+  return { kind: 'scheduled', outputs: assemble(plan, pass, late, anchor, computedFinish, cal) };
 }
 
 function rangeHalt(
@@ -302,6 +310,8 @@ function assertInputs(inputs: ScheduleInputs): void {
     const name = `recalculate: Work Package "${wp.id}"`;
     if (wp.durationDays !== null) assertDuration(wp.durationDays, name);
     assertPct(wp.recordedPct, name);
+    assertConstraintPairing(wp, name);
+    if (wp.constraintDate !== null) assertIsoDate(wp.constraintDate, `${name} constraintDate`);
     if (wp.actualStart !== null) assertIsoDate(wp.actualStart, `${name} actualStart`);
     if (wp.actualFinish !== null) {
       assertIsoDate(wp.actualFinish, `${name} actualFinish`);
@@ -542,6 +552,11 @@ function scheduleLeaf(
   }
 
   if (wp.durationDays === null) {
+    // Q4: a remaining no-duration leaf still range-checks its constraint before exiting.
+    if (state === 'remaining') {
+      const resolved = resolveRemainingConstraint(cal, wp);
+      if (resolved !== null && 'ok' in resolved) return resolved;
+    }
     // An actual start still stands ("an actual date always wins"); only the finish is unknown.
     const leaf = {
       state,
@@ -573,6 +588,17 @@ function scheduleLeaf(
     drivers = [...received].filter(([, drive]) => drive === start).map(([source]) => source);
     drivers.sort((a, b) => a - b);
     days = wp.durationDays;
+
+    // Soft constraints (2.7): remaining leaves only. MSO holds back; MFO is range-checked here
+    // and judged after early dates exist. Complete / in-progress never reach this branch.
+    const resolved = resolveRemainingConstraint(cal, wp);
+    if (resolved !== null && 'ok' in resolved) return resolved; // calendar_range
+    const constraint: AppliedConstraint | null = resolved;
+    const held = holdBackStart(start, constraint);
+    if (held > start) {
+      start = held;
+      drivers = []; // the bound alone set the start (as when only the Data Date does)
+    }
   }
 
   // A zero-duration WP occupies its start day: start = finish (Q3).
@@ -639,6 +665,7 @@ function assemble(
   late: readonly (LateDates | undefined)[],
   anchor: ScheduleAnchor | null,
   computedFinish: IsoDate | null,
+  cal: WorkingDayIndex,
 ): ScheduleOutputs {
   const rolled = rollUp(plan, pass);
   const critical = criticalPath(late, (i) => pass.leaves[i]!.earlyStart!);
@@ -696,6 +723,7 @@ function assemble(
     wps,
     outOfSequence,
     notSchedulable,
+    violations: collectViolations(plan, pass.leaves, cal),
     anchor,
     computedFinish,
     criticalPath: critical.path.map(idOf),
