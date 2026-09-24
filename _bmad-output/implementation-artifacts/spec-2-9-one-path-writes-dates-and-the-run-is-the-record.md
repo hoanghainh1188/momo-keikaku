@@ -96,6 +96,8 @@ context:
 - Tests: `tests/schedule-closure.test.ts` (AR-52), `tests/schedule/{fence,stored-run,cause,retention}.test.ts`.
 - App imports scheduling repos via relative `../../../db/src/repositories/...` (vitest package export resolution); `WriteScope.bound` for fence-built repos.
 - Deferred-work: annotated 2.9-directed entries (shuffle YES; cause/halt/encoding YES; invariants + watermark + 23503 PARTIAL residues for 2.10 / shared path).
+- Audit follow-up (2026-09-24): calendar-range halt AC covered in `tests/schedule/fence.test.ts` (success then `must_finish_on` past synthetic `rangeEnd` → halted run, null outputs, prior `wp_schedule.stale=true`). Concurrent ingest: contending `lockWatermark` with `SET LOCAL lock_timeout` yields SQLSTATE `55P03` in <5s (Drizzle wraps on `.cause`). Size: raw ±25% of 385 kB; `pg_column_size` asserted as upper budget ≤141 kB×1.25 with >8 kB floor (measured ~30 kB jsonb binary vs AD-26 text estimate); WAL measured across COMMIT (measured ~40–50 kB, upper ≤152 kB×1.25).
+
 - Gaps: synthetic calendar until 2.12; size gate is in-memory raw encode ±25% of 385 kB (optional DB pglz/WAL when reachable); no dedicated COMMIT-time 23503 audit-absence probe; concurrent ingest/`lock_timeout` lightly covered; `applyPlanChange` not on use-cases barrel yet.
 
 ## Spec Change Log
