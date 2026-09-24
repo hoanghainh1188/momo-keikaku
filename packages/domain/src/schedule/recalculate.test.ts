@@ -1,95 +1,29 @@
 import { describe, expect, it } from 'vitest';
-import {
-  addDays,
-  isWeekend,
-  workingDayIndex,
-  type CalendarVersion,
-  type IsoDate,
-} from '../calendar';
-import { ratio, type Ratio } from '../units';
+import { workingDayIndex, type IsoDate } from '../calendar';
+import { ratio } from '../units';
 import {
   recalculate,
   remainingDuration,
   type ScheduleEdge,
   type ScheduleInputs,
   type ScheduleOutputs,
-  type ScheduleResult,
   type ScheduleWp,
-  type WpScheduleOutput,
 } from './recalculate';
 import { validate } from './validate';
 import { expectShuffleInvariant, seededUint32 } from '../../../../tests/support/shuffle-invariant';
-
-// October 2026: Mon 5 … Fri 9, Sat 10, Sun 11, Mon 12 … Fri 16, Mon 19 …
-const PROJECT = 'prj-a';
-
-/** A hand-built version: every weekend in range, plus `holidays`. */
-function calendar(rangeStart: IsoDate, rangeEnd: IsoDate, holidays: IsoDate[] = []): CalendarVersion {
-  const nonWorkingDays: IsoDate[] = [...holidays];
-  for (let d = rangeStart; d <= rangeEnd; d = addDays(d, 1)) if (isWeekend(d)) nonWorkingDays.push(d);
-  return { nonWorkingDays, rangeStart, rangeEnd };
-}
-
-const CAL = calendar('2026-09-01', '2027-12-31');
-
-interface WpSpec {
-  parentId?: string | null;
-  durationDays?: number | null;
-  plannedMh?: bigint;
-  actualStart?: IsoDate | null;
-  actualFinish?: IsoDate | null;
-  recordedPct?: Ratio | null;
-  projectId?: string;
-}
-
-/** A WP whose id doubles as its WBS code, so `compareWp` order is the natural order of the ids. */
-const wp = (id: string, spec: WpSpec = {}): ScheduleWp => ({
-  id,
-  wbsCode: id,
-  projectId: spec.projectId ?? PROJECT,
-  parentId: spec.parentId ?? null,
-  durationDays: spec.durationDays === undefined ? 1 : spec.durationDays,
-  plannedMh: spec.plannedMh ?? 0n,
-  actualStart: spec.actualStart ?? null,
-  actualFinish: spec.actualFinish ?? null,
-  recordedPct: spec.recordedPct ?? null,
-});
-
-const edge = (predecessorId: string, successorId: string, lagDays = 0): ScheduleEdge => ({
-  predecessorId,
-  successorId,
-  lagDays,
-});
-
-function inputs(
-  wps: ScheduleWp[],
-  edges: ScheduleEdge[] = [],
-  over: Partial<ScheduleInputs> = {},
-): ScheduleInputs {
-  return {
-    projectId: PROJECT,
-    wps,
-    edges,
-    projectStart: '2026-09-01',
-    dataDate: '2026-10-05',
-    calendar: CAL,
-    ...over,
-  };
-}
-
-function scheduled(result: ScheduleResult): ScheduleOutputs {
-  if (result.kind !== 'scheduled') throw new Error(`expected a schedule, got ${result.reason}`);
-  return result.outputs;
-}
+import {
+  CAL,
+  PROJECT,
+  calendar,
+  edge,
+  inputs,
+  row,
+  scheduled,
+  wp,
+} from '../../../../tests/support/schedule-fixtures';
 
 function run(wps: ScheduleWp[], edges: ScheduleEdge[] = [], over: Partial<ScheduleInputs> = {}) {
   return scheduled(recalculate(inputs(wps, edges, over), null));
-}
-
-function row(outputs: ScheduleOutputs, id: string): WpScheduleOutput {
-  const found = outputs.wps.find((w) => w.wpId === id);
-  if (found === undefined) throw new Error(`no output row for ${id}`);
-  return found;
 }
 
 const dates = (outputs: ScheduleOutputs, id: string) => {
@@ -288,6 +222,11 @@ describe('recalculate — the I/O matrix (FR-6b)', () => {
       remainingDays: null,
       notSchedulableReason: null,
       plannedMh: 13_000n, // 8 + 1 + 4 (1.3's own value is not read)
+      lateStart: null,
+      lateFinish: null,
+      floatDays: null,
+      isCritical: false,
+      drivingPredecessors: [],
     });
     expect(row(out, '1.3')).toMatchObject({ state: null, plannedMh: 4_000n, earlyStart: '2026-10-07' });
     // A summary whose descendants are all unschedulable has no dates.
@@ -428,6 +367,8 @@ describe('recalculate — the I/O matrix (FR-6b)', () => {
     );
     expect(() => run([wp('A'), wp('B')], [edge('A', 'B', 0.5)])).toThrow(/lag 0.5/);
     expect(() => run([wp('A')], [], { dataDate: '2026-13-01' })).toThrow(/dataDate/);
+    expect(() => run([wp('A')], [], { projectFinish: '2026-13-01' })).toThrow(/projectFinish/);
+    expect(() => run([wp('A')], [], { projectFinish: 'garbage' })).toThrow(/projectFinish/);
   });
 
   it('accepts a pct with a negative denominator that is still in [0, 1]', () => {
@@ -627,7 +568,19 @@ describe('recalculate — a slip moves the tasks that depend on it (AC 1)', () =
         expect(position(now.earlyFinish) - position(was.earlyFinish), `${id} finish, N = ${n}`).toBe(n);
       }
       expect(row(after, 'A').earlyStart).toBe(row(before, 'A').earlyStart);
-      for (const id of ['W', 'Z', 'X']) expect(row(after, id)).toEqual(row(before, id));
+      for (const id of ['W', 'X']) expect(row(after, id)).toEqual(row(before, id));
+      // Z's forward fields stay; its Float grows by N with the computed finish (story 2.6).
+      const z = row(before, 'Z');
+      expect(row(after, 'Z')).toMatchObject({
+        state: z.state,
+        earlyStart: z.earlyStart,
+        earlyFinish: z.earlyFinish,
+        remainingDays: z.remainingDays,
+        notSchedulableReason: z.notSchedulableReason,
+        plannedMh: z.plannedMh,
+        drivingPredecessors: z.drivingPredecessors,
+      });
+      expect(row(after, 'Z').floatDays! - z.floatDays!, `Z Float, N = ${n}`).toBe(n);
     }
   });
 
@@ -694,6 +647,9 @@ describe('recalculate — determinism (AD-28)', () => {
         edge('2.3', '2.4', 3),
         edge('1.1', '3', -2),
       ],
+      // A Project finish the plan misses, so the backward pass's outputs (negative Float, the
+      // minimum-Float path) are shuffled too.
+      { projectFinish: '2026-10-09' },
     );
     const items: Item[] = [
       ...base.wps.map((w): Item => ({ kind: 'wp', wp: w })),
@@ -703,6 +659,8 @@ describe('recalculate — determinism (AD-28)', () => {
     expect(new Set(out.wps.map((w) => w.state))).toEqual(new Set(['complete', 'in_progress', 'remaining', null]));
     expect(out.outOfSequence.length).toBeGreaterThan(0);
     expect(out.notSchedulable).toEqual([{ wpId: '1.10', reason: 'no_duration' }]);
+    expect(out.wps.some((w) => w.floatDays !== null && w.floatDays < 0)).toBe(true);
+    expect(out.criticalPath.length).toBeGreaterThan(0);
     expectShuffleInvariant(fromItems(base), items, 50);
   });
 });

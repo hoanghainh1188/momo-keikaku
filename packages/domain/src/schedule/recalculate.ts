@@ -1,5 +1,5 @@
 /**
- * The forward pass: a slip moves the tasks that depend on it (story 2.5).
+ * The forward pass (story 2.5) and the backward pass, Float and the critical path (story 2.6).
  *
  * `recalculate(inputs, prevInputs)` is `domain/schedule`'s one pure scheduling function (AD-25:
  * nothing else is named `recalculate`; `app/schedule.recalculateProject` wraps it in 2.9). It
@@ -26,8 +26,20 @@
  *      P →(a) X →(b) S drives S as P →(a+b) S, transitively, taking the latest drive.
  *   5. Summaries roll up from their descendant leaves (earliest start, latest finish, summed
  *      `plannedMh`). A pass never reads a roll-up back.
- *   6. A pass that leaves the calendar's range halts with `calendar_range` (FR-6b), naming the
- *      WPs (and anchors) and the side of the range they left by.
+ *   6. The backward pass (FR-6b, AR-49; `backward.ts`) runs over the same graph from ONE anchor:
+ *      the PM-set Project finish, otherwise the computed finish (the latest early finish of a
+ *      remaining or in-progress WP). A constraint is never the anchor. Each remaining and
+ *      in-progress WP gets a late start, a late finish and Float = late start − early start (an
+ *      in-progress WP's from where it resumes); a complete WP, a WP with no duration and a
+ *      summary get none. Float is negative only against a Project finish, and never clamped.
+ *   7. The critical path is the minimum-Float set, never the zero-Float set (`isCritical` is
+ *      decided in `backward.ts` only), ordered by early start, then `compareWp`.
+ *   8. Driving predecessors (AR-56): every predecessor (complete ones included), direct or
+ *      bridged, whose drive equals a remaining WP's early start, in `compareWp` order. A drive that ties with the Data Date or
+ *      the Project start still drives; none is listed when those alone set the start.
+ *   9. A pass that leaves the calendar's range halts with `calendar_range` (FR-6b), naming the
+ *      WPs (and anchors) and the side of the range they left by. A late date before the range,
+ *      or a Project finish outside it, halts the same way (Q5 → A).
  *
  * Conventions (founder decisions, 2026-09-24):
  *   * Start and finish are inclusive working days. A WP of duration d > 0 starting on working day
@@ -39,6 +51,19 @@
  *     starts L working days after that date (Q3 → A).
  *   * The Data Date and the Project start roll forward to the next working day (Q2).
  *
+ * Conventions of the backward pass (founder decisions, 2026-09-24, story 2.6):
+ *   * The reverse of (1 + L) (Q1 → A): a work predecessor's late finish is the least of
+ *     (successor late start − L − 1), a milestone's the least of (successor late start − L). A
+ *     milestone's late start equals its late finish. A WP with no dated successor finishes at the
+ *     anchor, and no late finish is later than the anchor (so a negative lag cannot leave a plan
+ *     with no Project finish without a zero-Float WP).
+ *   * Only edges the forward pass used for dates constrain the backward pass: an edge into a
+ *     complete or in-progress WP is ignored on the way back (Q2 → A), and P →(a) X →(b) S holds P
+ *     back as P →(a+b) S across a no-duration X, transitively, taking the tightest bound (Q3 → A).
+ *   * A Project finish on a non-working day rolls back to the last working day on or before it
+ *     for the pass (Q4 → A); `anchor.date` reports the date the PM set.
+ *   * Setting or clearing the Project finish moves no early date: it changes only the anchor.
+ *
  * Outputs are keyed by `wpId` (AD-26's index-referenced encoding belongs to 2.9): WPs in
  * `compareWp` order, out-of-sequence pairs in (predecessor, successor) `compareWp` order. They are
  * identical under any shuffle of the WP and edge lists (AD-28).
@@ -46,8 +71,7 @@
  * `prevInputs` stays in the signature (AD-25), but no per-WP cause is computed here (Q5 → A):
  * that is story 2.9's (`deferred-work.md`).
  *
- * Out of scope: late dates, Float and the critical path (2.6), constraints (2.7), the stored run
- * (2.9).
+ * Out of scope: constraints (2.7), the stored run and its index-referenced encoding (2.9).
  *
  * Traceability: AD-25, AD-26, AD-27, AD-28, AR-7, AR-46, AR-49, AR-56, AR-58, FR-5, FR-6a, FR-6b.
  */
@@ -64,7 +88,15 @@ import {
   type WorkingDayIndex,
 } from '../calendar';
 import { ceilDiv, type Mh, type Ratio } from '../units';
-import { canonicalWps } from './order';
+import {
+  backwardPass,
+  computedFinishPosition,
+  criticalPath,
+  projectFinishPosition,
+  type BackwardNode,
+  type LateDates,
+} from './backward';
+import { buildPlan, topologicalOrder, type Plan as PlanOf } from './plan';
 import {
   hasOffences,
   validate,
@@ -106,6 +138,8 @@ export interface ScheduleInputs {
   /** Non-null: the "no project start yet" gate belongs to the app layer. */
   readonly projectStart: IsoDate;
   readonly dataDate: IsoDate;
+  /** The PM-set Project finish, the backward pass's anchor when set. It moves no early date. */
+  readonly projectFinish: IsoDate | null;
   readonly calendar: CalendarVersion;
 }
 
@@ -128,6 +162,28 @@ export interface WpScheduleOutput {
   readonly notSchedulableReason: NotSchedulableReason | null;
   /** A leaf's own `plannedMh`; a summary's sum over its descendant leaves. */
   readonly plannedMh: Mh;
+  /**
+   * The backward pass's dates, against `ScheduleOutputs.anchor`. `null` on a complete WP, a WP
+   * with no duration and a summary.
+   */
+  readonly lateStart: IsoDate | null;
+  readonly lateFinish: IsoDate | null;
+  /** Late start − early start (an in-progress WP's resume point), in working days. Never clamped. */
+  readonly floatDays: number | null;
+  /** Float equals the minimum Float in the Plan. Never "Float = 0". */
+  readonly isCritical: boolean;
+  /**
+   * Every predecessor (complete ones included), direct or bridged, whose drive equals a remaining
+   * WP's early start, in `compareWp` order (AR-56). Empty when the Data Date or the Project start alone set it, and on
+   * every WP that is not remaining.
+   */
+  readonly drivingPredecessors: readonly string[];
+}
+
+/** Which of the two dates Float is measured against. `date` is as the PM set it, unrolled. */
+export interface ScheduleAnchor {
+  readonly kind: 'project_finish' | 'computed_finish';
+  readonly date: IsoDate;
 }
 
 export interface NotSchedulable {
@@ -146,14 +202,20 @@ export interface ScheduleOutputs {
   readonly outOfSequence: readonly EdgeRef[];
   /** The "not schedulable yet" leaves, in `compareWp` order. */
   readonly notSchedulable: readonly NotSchedulable[];
+  /** The Project finish if set, else the computed finish; `null` when neither exists. */
+  readonly anchor: ScheduleAnchor | null;
+  /** The latest early finish of a remaining or in-progress WP; `null` when none is dated. */
+  readonly computedFinish: IsoDate | null;
+  /** The minimum-Float WPs, early start ascending, then `compareWp`. */
+  readonly criticalPath: readonly string[];
 }
 
-export type CalendarAnchor = 'data_date' | 'project_start';
+export type CalendarAnchor = 'data_date' | 'project_start' | 'project_finish';
 
 export interface CalendarRangeHalt {
   readonly kind: 'halted';
   readonly reason: 'calendar_range';
-  /** The Project dates that left the range, in the order `data_date`, `project_start`. */
+  /** The Project dates that left the range, in the order `data_date`, `project_start`, `project_finish`. */
   readonly anchors: readonly { readonly anchor: CalendarAnchor; readonly side: RangeSide }[];
   /** The WPs whose dates left the range, in `compareWp` order. */
   readonly wps: readonly { readonly wpId: string; readonly side: RangeSide }[];
@@ -196,15 +258,38 @@ export function recalculate(
     return { kind: 'halted', reason: 'calendar_range', anchors: anchors.offences, wps: [] };
   }
 
-  const plan = buildPlan(inputs);
+  const plan = buildPlan(inputs.projectId, inputs.wps, inputs.edges);
   const pass = forwardPass(plan, cal, anchors);
-  if (pass.leftRange.length > 0) {
-    const wps = [...pass.leftRange]
-      .sort((a, b) => a.index - b.index)
-      .map(({ index, side }) => ({ wpId: plan.wps[index]!.id, side }));
-    return { kind: 'halted', reason: 'calendar_range', anchors: [], wps };
+  if (pass.leftRange.length > 0) return rangeHalt(plan, pass.leftRange);
+
+  const nodes = backwardNodes(plan, pass);
+  const computed = computedFinishPosition(nodes);
+  const anchorPosition = anchors.projectFinish ?? computed;
+  let late: readonly (LateDates | undefined)[] = new Array<LateDates | undefined>(plan.wps.length).fill(undefined);
+  if (anchorPosition !== null) {
+    const back = backwardPass(plan, nodes, cal, anchorPosition);
+    if (!back.ok) return rangeHalt(plan, back.leftRange);
+    late = back.late;
   }
-  return { kind: 'scheduled', outputs: assemble(plan, pass) };
+  // The computed finish is some dated WP's early finish, which the forward pass kept in range.
+  const computedFinish = computed === null ? null : cal.days[computed]!;
+  const anchor: ScheduleAnchor | null =
+    inputs.projectFinish !== null
+      ? { kind: 'project_finish', date: inputs.projectFinish }
+      : computedFinish !== null
+        ? { kind: 'computed_finish', date: computedFinish }
+        : null;
+  return { kind: 'scheduled', outputs: assemble(plan, pass, late, anchor, computedFinish) };
+}
+
+function rangeHalt(
+  plan: Plan,
+  leftRange: readonly { readonly index: number; readonly side: RangeSide }[],
+): CalendarRangeHalt {
+  const wps = [...leftRange]
+    .sort((a, b) => a.index - b.index)
+    .map(({ index, side }) => ({ wpId: plan.wps[index]!.id, side }));
+  return { kind: 'halted', reason: 'calendar_range', anchors: [], wps };
 }
 
 // --- input checks ---------------------------------------------------------------------------
@@ -212,6 +297,7 @@ export function recalculate(
 function assertInputs(inputs: ScheduleInputs): void {
   assertIsoDate(inputs.projectStart, 'projectStart');
   assertIsoDate(inputs.dataDate, 'dataDate');
+  if (inputs.projectFinish !== null) assertIsoDate(inputs.projectFinish, 'projectFinish');
   for (const wp of inputs.wps) {
     const name = `recalculate: Work Package "${wp.id}"`;
     if (wp.durationDays !== null) assertDuration(wp.durationDays, name);
@@ -261,6 +347,8 @@ interface Anchors {
   readonly dataDate: number;
   /** The later of the rolled Data Date and the rolled Project start. */
   readonly earliestStart: number;
+  /** The Project finish's position, rolled back (Q4 → A); `null` when none is set. */
+  readonly projectFinish: number | null;
 }
 
 type AnchorResult = Anchors | { readonly ok: false; readonly offences: CalendarRangeHalt['anchors'] };
@@ -282,12 +370,20 @@ function resolveAnchors(cal: WorkingDayIndex, inputs: ScheduleInputs): AnchorRes
     if (rolled.ok) projectStart = rolled.value;
     else offences.push({ anchor: 'project_start', side: rolled.side });
   }
+
+  let projectFinish: number | null = null;
+  if (inputs.projectFinish !== null) {
+    const rolled = projectFinishPosition(cal, inputs.projectFinish);
+    if (rolled.ok) projectFinish = rolled.value;
+    else offences.push({ anchor: 'project_finish', side: rolled.side });
+  }
   // `!dataDate.ok` implies an offence; it is repeated only so TypeScript narrows `dataDate` below.
   if (offences.length > 0 || !dataDate.ok) return { ok: false, offences };
   return {
     ok: true,
     dataDate: dataDate.value,
     earliestStart: Math.max(dataDate.value, projectStart ?? dataDate.value),
+    projectFinish,
   };
 }
 
@@ -298,122 +394,9 @@ function rolledPosition(cal: WorkingDayIndex, d: IsoDate): InRange<number> {
   return position.value < cal.days.length ? position : { ok: false, side: 'after' };
 }
 
-// --- the plan as the pass sees it -----------------------------------------------------------
+// --- the plan as the passes see it (`plan.ts`) ----------------------------------------------
 
-interface Plan {
-  /** The canonical WP list; every other reference is an index into it. */
-  readonly wps: readonly ScheduleWp[];
-  /** Whether each WP is a summary (some supplied WP's parent). */
-  readonly isSummary: readonly boolean[];
-  /** Whether each WP belongs to `inputs.projectId`: foreign WPs are not reported. */
-  readonly isOwn: readonly boolean[];
-  /** Incoming edges per WP, as (predecessor index, lag), in canonical predecessor order. */
-  readonly incoming: readonly (readonly (readonly [number, number])[])[];
-  /** Successor indices per WP, ascending, duplicates removed. */
-  readonly successors: readonly (readonly number[])[];
-  /** In-plan children per WP, ascending. */
-  readonly children: readonly (readonly number[])[];
-}
-
-function buildPlan(inputs: ScheduleInputs): Plan {
-  const { wps, indexOf } = canonicalWps(inputs.wps);
-  const n = wps.length;
-  const isSummary = new Array<boolean>(n).fill(false);
-  const children: number[][] = Array.from({ length: n }, () => []);
-  wps.forEach((wp, i) => {
-    const parent = wp.parentId === null || wp.parentId === undefined ? undefined : indexOf.get(wp.parentId);
-    if (parent !== undefined) {
-      isSummary[parent] = true;
-      children[parent]!.push(i);
-    }
-  });
-
-  const incoming: [number, number][][] = Array.from({ length: n }, () => []);
-  const successors: number[][] = Array.from({ length: n }, () => []);
-  // `validate` has already refused any edge to an unknown WP.
-  const pairs = inputs.edges
-    .map((edge) => [indexOf.get(edge.predecessorId)!, indexOf.get(edge.successorId)!, edge.lagDays] as const)
-    .sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2]);
-  for (const [p, s, lag] of pairs) {
-    incoming[s]!.push([p, lag]);
-    const out = successors[p]!;
-    if (out[out.length - 1] !== s) out.push(s);
-  }
-  return {
-    wps,
-    isSummary,
-    isOwn: wps.map((wp) => wp.projectId === inputs.projectId),
-    incoming,
-    successors,
-    children,
-  };
-}
-
-/**
- * Kahn's algorithm with the ready set kept as a min-heap of canonical indices, so the order is
- * a function of the plan alone. `validate` has refused every cycle, so every WP is reached.
- */
-function topologicalOrder(plan: Plan): number[] {
-  const n = plan.wps.length;
-  const pending = new Array<number>(n).fill(0);
-  for (let s = 0; s < n; s++) {
-    // Count distinct predecessors: `successors` is de-duplicated, so indegree must match it.
-    pending[s] = new Set(plan.incoming[s]!.map(([p]) => p)).size;
-  }
-  const heap = new MinHeap();
-  for (let i = 0; i < n; i++) if (pending[i] === 0) heap.push(i);
-  const order: number[] = [];
-  while (heap.size > 0) {
-    const u = heap.pop();
-    order.push(u);
-    for (const s of plan.successors[u]!) {
-      pending[s] = pending[s]! - 1;
-      if (pending[s] === 0) heap.push(s);
-    }
-  }
-  return order;
-}
-
-class MinHeap {
-  private readonly items: number[] = [];
-
-  get size(): number {
-    return this.items.length;
-  }
-
-  push(value: number): void {
-    const items = this.items;
-    items.push(value);
-    let i = items.length - 1;
-    while (i > 0) {
-      const parent = (i - 1) >> 1;
-      if (items[parent]! <= value) break;
-      items[i] = items[parent]!;
-      i = parent;
-    }
-    items[i] = value;
-  }
-
-  pop(): number {
-    const items = this.items;
-    const top = items[0]!;
-    const last = items.pop()!;
-    if (items.length > 0) {
-      let i = 0;
-      for (;;) {
-        const left = 2 * i + 1;
-        if (left >= items.length) break;
-        const right = left + 1;
-        const child = right < items.length && items[right]! < items[left]! ? right : left;
-        if (items[child]! >= last) break;
-        items[i] = items[child]!;
-        i = child;
-      }
-      items[i] = last;
-    }
-    return top;
-  }
-}
+type Plan = PlanOf<ScheduleWp>;
 
 // --- the forward pass -----------------------------------------------------------------------
 
@@ -423,6 +406,13 @@ interface LeafResult {
   readonly earlyFinish: IsoDate | null;
   readonly remainingDays: number | null;
   readonly notSchedulable: boolean;
+  /**
+   * A remaining or in-progress WP's derived positions: its early start (or resume point) and its
+   * early finish. `null` on a complete WP and a WP with no duration.
+   */
+  readonly positions: { readonly start: number; readonly finish: number } | null;
+  /** The canonical indices whose drive set a remaining WP's start, ascending (AR-56). */
+  readonly drivers: readonly number[];
 }
 
 interface Pass {
@@ -543,6 +533,8 @@ function scheduleLeaf(
         earlyFinish: wp.actualFinish,
         remainingDays: 0,
         notSchedulable: false,
+        positions: null,
+        drivers: [],
       },
       passOn,
       actualStartFloor,
@@ -557,12 +549,15 @@ function scheduleLeaf(
       earlyFinish: null,
       remainingDays: null,
       notSchedulable: true,
+      positions: null,
+      drivers: [],
     };
     return { ok: true, leaf, passOn: null, actualStartFloor };
   }
 
   let start: number;
   let days: number;
+  let drivers: number[] = [];
   if (state === 'in_progress') {
     const actualStart = ceilPosition(cal, wp.actualStart!);
     if (actualStart.ok) start = Math.max(actualStart.value, anchors.dataDate);
@@ -573,6 +568,10 @@ function scheduleLeaf(
   } else {
     start = anchors.earliestStart;
     for (const drive of received.values()) if (drive > start) start = drive;
+    // Every source whose drive is the start drives it, a tie with the Data Date or the Project
+    // start included (AR-56). `received` holds the latest drive per source.
+    drivers = [...received].filter(([, drive]) => drive === start).map(([source]) => source);
+    drivers.sort((a, b) => a - b);
     days = wp.durationDays;
   }
 
@@ -591,6 +590,8 @@ function scheduleLeaf(
       earlyFinish: finishDate.value,
       remainingDays: days,
       notSchedulable: false,
+      positions: { start, finish },
+      drivers,
     },
     passOn: days === 0 ? finish : finish + 1,
     actualStartFloor,
@@ -610,10 +611,38 @@ export function remainingDuration(durationDays: number, pct: Ratio | null): numb
   return left < 1n ? 1 : Number(left);
 }
 
+// --- the backward pass's view (`backward.ts`) ---------------------------------------------
+
+/** Each WP's part in the backward pass, from what the forward pass derived. */
+function backwardNodes(plan: Plan, pass: Pass): BackwardNode[] {
+  return plan.wps.map((_, i): BackwardNode => {
+    const leaf = pass.leaves[i];
+    if (leaf === undefined) return { role: 'none' }; // a summary or a foreign WP
+    if (leaf.notSchedulable) return { role: 'bridge' };
+    if (leaf.positions === null) return { role: 'none' }; // complete
+    return {
+      role: 'dated',
+      // Only a remaining WP is driven by its predecessors, so only it bounds them (Q2 → A).
+      bounds: leaf.state === 'remaining',
+      start: leaf.positions.start,
+      finish: leaf.positions.finish,
+      days: leaf.remainingDays!,
+    };
+  });
+}
+
 // --- assembly -------------------------------------------------------------------------------
 
-function assemble(plan: Plan, pass: Pass): ScheduleOutputs {
+function assemble(
+  plan: Plan,
+  pass: Pass,
+  late: readonly (LateDates | undefined)[],
+  anchor: ScheduleAnchor | null,
+  computedFinish: IsoDate | null,
+): ScheduleOutputs {
   const rolled = rollUp(plan, pass);
+  const critical = criticalPath(late, (i) => pass.leaves[i]!.earlyStart!);
+  const idOf = (i: number): string => plan.wps[i]!.id;
   const wps: WpScheduleOutput[] = [];
   const notSchedulable: NotSchedulable[] = [];
   plan.wps.forEach((wp, i) => {
@@ -628,10 +657,16 @@ function assemble(plan: Plan, pass: Pass): ScheduleOutputs {
         remainingDays: null,
         notSchedulableReason: null,
         plannedMh: r.plannedMh,
+        lateStart: null,
+        lateFinish: null,
+        floatDays: null,
+        isCritical: false,
+        drivingPredecessors: [],
       });
       return;
     }
     const leaf = pass.leaves[i]!;
+    const own = late[i];
     if (leaf.notSchedulable) notSchedulable.push({ wpId: wp.id, reason: 'no_duration' });
     wps.push({
       wpId: wp.id,
@@ -641,6 +676,11 @@ function assemble(plan: Plan, pass: Pass): ScheduleOutputs {
       remainingDays: leaf.remainingDays,
       notSchedulableReason: leaf.notSchedulable ? 'no_duration' : null,
       plannedMh: wp.plannedMh,
+      lateStart: own?.lateStart ?? null,
+      lateFinish: own?.lateFinish ?? null,
+      floatDays: own?.floatDays ?? null,
+      isCritical: critical.isCritical[i]!,
+      drivingPredecessors: leaf.drivers.map(idOf),
     });
   });
 
@@ -650,9 +690,16 @@ function assemble(plan: Plan, pass: Pass): ScheduleOutputs {
     const key = `${p}:${s}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    outOfSequence.push({ predecessorId: plan.wps[p]!.id, successorId: plan.wps[s]!.id });
+    outOfSequence.push({ predecessorId: idOf(p), successorId: idOf(s) });
   }
-  return { wps, outOfSequence, notSchedulable };
+  return {
+    wps,
+    outOfSequence,
+    notSchedulable,
+    anchor,
+    computedFinish,
+    criticalPath: critical.path.map(idOf),
+  };
 }
 
 interface RollUp {
