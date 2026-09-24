@@ -401,14 +401,24 @@ describe('recalculate — the backward pass: acceptance (story 2.6)', () => {
         wp('1', { durationDays: null }),
         wp('1.1', { parentId: '1', durationDays: 3, actualStart: '2026-09-21', actualFinish: '2026-09-25' }),
         wp('1.2', { parentId: '1', durationDays: 6, actualStart: '2026-09-28', recordedPct: ratio(1n, 2n) }),
-        wp('1.3', { parentId: '1', durationDays: 2 }),
+        wp('1.3', {
+          parentId: '1',
+          durationDays: 2,
+          constraintType: 'must_finish_on',
+          constraintDate: '2026-10-01',
+        }),
         wp('1.4', { parentId: '1', durationDays: 2 }),
         wp('1.10', { parentId: '1', durationDays: null }),
         wp('2', { durationDays: null }),
         wp('2.1', { parentId: '2', durationDays: 0 }),
-        wp('2.2', { parentId: '2', durationDays: 4 }),
+        wp('2.2', {
+          parentId: '2',
+          durationDays: 4,
+          constraintType: 'must_start_on',
+          constraintDate: '2026-10-06',
+        }),
         wp('2.3', { parentId: '2', durationDays: 1 }),
-        wp('3', { durationDays: 5 }),
+        wp('3', { durationDays: 5, constraintType: 'must_start_on', constraintDate: '2026-10-12' }),
       ],
       [
         edge('1.1', '1.2'),
@@ -442,6 +452,7 @@ describe('recalculate — the backward pass: acceptance (story 2.6)', () => {
     expect(out.wps.some((w) => w.floatDays !== null && w.floatDays < 0)).toBe(true);
     expect(out.criticalPath.length).toBeGreaterThan(1);
     expect(row(out, '2.2').drivingPredecessors.length).toBeGreaterThan(1);
+    expect(out.violations.length).toBeGreaterThan(0);
     expectShuffleInvariant(fn, items, 50);
   });
 
@@ -454,7 +465,26 @@ describe('recalculate — the backward pass: acceptance (story 2.6)', () => {
       wps.push(wp(summary, { durationDays: null }));
       for (let k = 0; k < 50; k++) {
         const id = `${l + 1}.${k + 1}`;
-        wps.push(wp(id, { parentId: summary, durationDays: 1 + (next() % 4), plannedMh: 8_000n }));
+        const roll = next() % 5;
+        wps.push(
+          roll === 0
+            ? wp(id, {
+                parentId: summary,
+                durationDays: 1 + (next() % 4),
+                plannedMh: 8_000n,
+                constraintType: 'must_start_on',
+                constraintDate: '2026-10-07',
+              })
+            : roll === 1
+              ? wp(id, {
+                  parentId: summary,
+                  durationDays: 1 + (next() % 4),
+                  plannedMh: 8_000n,
+                  constraintType: 'must_finish_on',
+                  constraintDate: '2026-09-15',
+                })
+              : wp(id, { parentId: summary, durationDays: 1 + (next() % 4), plannedMh: 8_000n }),
+        );
         if (l > 0) {
           const links = 1 + (next() % 3);
           for (let e = 0; e < links; e++) edges.push(edge(`${l}.${1 + (next() % 50)}`, id, (next() % 3) - 1));

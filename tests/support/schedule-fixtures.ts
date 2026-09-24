@@ -13,8 +13,8 @@ import {
 } from '@momo/domain';
 
 /**
- * The scheduler's test fixture builders (stories 2.5 and 2.6), shared by every
- * `recalculate*.test.ts` so the forward and backward suites build plans the same way.
+ * The scheduler's test fixture builders (stories 2.5–2.7), shared by every
+ * `recalculate*.test.ts` so the forward, backward and constraint suites build plans the same way.
  *
  * October 2026: Mon 5 … Fri 9, Sat 10, Sun 11, Mon 12 … Fri 16, Mon 19 …
  */

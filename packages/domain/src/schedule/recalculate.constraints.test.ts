@@ -202,8 +202,7 @@ describe('recalculate — soft constraints: the I/O matrix (FR-6b, AR-49)', () =
     ]);
   });
 
-  it('⟨Q4⟩ a constraint date outside the calendar rangehalts with calendar_range naming the WP', () => {
-    // typo-fixed label below in assertion only
+  it('⟨Q4⟩ a constraint date outside the calendar range halts with calendar_range naming the WP', () => {
     const tight = calendar('2026-10-01', '2026-10-31');
     const before = recalculate(
       inputs(
