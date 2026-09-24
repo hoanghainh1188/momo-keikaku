@@ -1,4 +1,88 @@
-# Handoff — 2026-09-23 (story 2.4 closed: the four graph rules as invariants)
+# Handoff — 2026-09-24 (story 2.5 closed: the forward pass)
+
+**Latest (2026-09-24, morning): story 2.5 merged via PR #62 (`373da72`) and is `done`.**
+- **`recalculate(inputs, prevInputs)`** (`packages/domain/src/schedule/recalculate.ts`) is AD-25's
+  pure forward pass. It returns `{ kind: 'scheduled', outputs }` or a `halted` result, never a
+  partial output. There are two halts:
+  - `graph_invalid` carries `validate`'s four lists. `validate` runs first.
+  - `calendar_range` carries `anchors: [{ anchor, side }]` and `wps: [{ wpId, side }]`. WPs
+    downstream of one that left the range are not evaluated, so they are not named.
+
+  `prevInputs` is accepted but not read (Q5 → A).
+- **Inputs are keyed by id, in any order.** `ScheduleWp` extends `PlanGraphWp` with
+  `durationDays`, `plannedMh`, `actualStart`, `actualFinish` and `recordedPct: Ratio | null`, and
+  `ScheduleEdge` adds `lagDays`. `projectStart` must be non-null: the "no project start yet" gate
+  is the app's.
+- **Outputs are keyed by `wpId`,** in `compareWp` order. AD-26's index-referenced encoding is
+  2.9's.
+  - Per WP: `state`, `earlyStart`, `earlyFinish`, `remainingDays`, `notSchedulableReason`
+    (`no_duration`) and `plannedMh`.
+  - Per Project: `outOfSequence` and `notSchedulable`.
+- **A bounded calendar.** `CalendarVersion { nonWorkingDays, rangeStart, rangeEnd }` lives in
+  `packages/domain/src/calendar.ts`, and `workingDayIndex` turns it into integer positions, so
+  every shift is O(1). **The non-working-day set is exhaustive: weekends are listed, and the
+  domain applies no weekend rule.** The old unbounded `HolidayCalendar` helpers (`evm`,
+  `forecast`) are untouched.
+- **Date conventions pinned by founder decisions (Q2–Q4).** 2.8's corpus is hand-computed against
+  these:
+  - Start and finish are inclusive.
+  - FS lag L starts the successor (1 + L) working days after the predecessor's finish: lag 0 is
+    the next working day, −1 the finish day, −2 the day before.
+  - A Data Date or Project start on a non-working day rolls forward.
+  - An in-progress WP resumes at the later of its actual start and the Data Date. Unfinished
+    predecessors do not drive it.
+  - A milestone's start = finish = its earliest start, and a lag-L successor starts L days after
+    it.
+  - Across a no-duration WP, P →(a) X →(b) S drives S as P →(a+b) S.
+- **Conventions the implementer chose, which the founder has not ratified.** They are in the
+  spec's Implementation Notes; confirm them before 2.8 hand-computes against them.
+  - An actual finish on a non-working day drives from the last working day on or before it. A
+    complete milestone drives from the first working day on or after it.
+  - A complete WP with a null duration keeps its actuals and is not "not schedulable".
+  - An actual finish with no actual start throws as a caller defect. The import flags such rows
+    first.
+  - A milestone's remaining duration stays 0: the "minimum 1" applies to work.
+- **Carried forward (`deferred-work.md`).**
+  - **2.9:** the per-WP cause from `diff(prevInputs, inputs)`; recording both halts
+    (`halted_reason`, no outputs, `wp_schedule.stale`); and the stored-run half of the shuffle
+    check.
+  - **2.12:** resolve a `holiday_calendar_version` row into `CalendarVersion` with weekends
+    listed.
+- **Open for the founder (from the walkthrough).**
+  - **`range_start` must cover the Project's history.** A complete WP whose actual finish is
+    before `rangeStart` halts the whole run once it has a successor to drive. If 2.12's dataset
+    starts 2026-01-01, a Project with a task that finished in December 2025 never schedules.
+  - **`remainingDays` in outputs.** The AC says remaining duration is "never stored", and 2.9
+    will store `outputs`. Either confirm it is a derived output, or drop it before 2.9 fixes the
+    stored shape.
+  - **Manual check deferred to 2.13's grid.** On the grid, check that a slip moves the chain,
+    that a milestone after a Friday finish reads Monday, and that the calendar-range halt shows
+    a banner.
+- **Next: story 2.6** (the backward pass, Float and the critical path; cut-order item 2, built
+  before 2.7). Things to know before starting:
+  - **It extends `recalculate`; it adds no second function.**
+    - Per WP it adds `lateStart`, `lateFinish`, `floatDays` and `isCritical`.
+    - Per Project it adds the critical path (ordered by early start, then `compareWp`), the
+      anchor and the computed finish.
+    - `ScheduleInputs` has no `projectFinish` yet; add it (`IsoDate | null`).
+  - **One anchor, only one.** It is the PM-set Project finish, otherwise the computed finish (the
+    latest early finish). A constraint is never the anchor. Float is negative only against a
+    PM-set finish. **The critical path is the minimum-Float set, never the zero-Float set.**
+  - **Driving predecessors (AR-56) are not recorded yet.** 2.5's `Drives` map keeps the latest
+    drive per source but not which predecessors tie. 2.6 must record every tied driver in
+    `compareWp` order, bridged ones included.
+  - **Expect intent-gap questions:**
+    - the reverse of the (1 + L) convention, and a milestone's late date;
+    - how complete and in-progress WPs take part in the backward pass, and whether they get
+      Float at all;
+    - backward bridging across no-duration WPs;
+    - a PM-set finish on a non-working day (roll back?);
+    - a late date before `rangeStart`: does it halt, like the forward pass?
+  - The shuffle invariance (N ≥ 50) and the 2,500-leaf timing must keep passing with the new
+    fields.
+- Spec: `spec-2-5-the-forward-pass-a-slip-moves-the-tasks-that-depend-on-it.md`.
+
+## Earlier: Handoff — 2026-09-23 (story 2.4 closed: the four graph rules as invariants)
 
 **Latest (2026-09-23, late night): story 2.4 merged via PR #60 (`718a4cb`) and is `done`.**
 - **`validate(plan, edges)`** (`packages/domain/src/schedule/validate.ts`) returns the four
