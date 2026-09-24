@@ -231,6 +231,12 @@ export function scheduleRepositoryOn(bound: Bound) {
       >;
       /** AR-48: max `wp_status_event.seq` for the Project (0 when none). */
       readonly wpStatusSeqMax: number;
+      readonly pctHeads: ReadonlyMap<
+        string,
+        { readonly num: bigint; readonly den: bigint }
+      >;
+      /** AR-48: max `pct_override_event.seq` for the Project (0 when none). */
+      readonly pctOverrideSeqMax: number;
       readonly calendar: {
         readonly seq: number;
         readonly nonWorkingDays: string[];
@@ -312,6 +318,32 @@ export function scheduleRepositoryOn(bound: Bound) {
         }
       }
 
+      const pctRows = await tx
+        .select({
+          wpId: s.pctOverrideEvent.wpId,
+          recordedPctNum: s.pctOverrideEvent.recordedPctNum,
+          recordedPctDen: s.pctOverrideEvent.recordedPctDen,
+          seq: s.pctOverrideEvent.seq,
+        })
+        .from(s.pctOverrideEvent)
+        .where(
+          and(
+            eq(s.pctOverrideEvent.tenantId, tenantId),
+            eq(s.pctOverrideEvent.projectId, projectId),
+          ),
+        );
+      const pctHeads = new Map<string, { readonly num: bigint; readonly den: bigint }>();
+      const pctMaxSeq = new Map<string, number>();
+      let pctOverrideSeqMax = 0;
+      for (const row of pctRows) {
+        if (row.seq > pctOverrideSeqMax) pctOverrideSeqMax = row.seq;
+        const prev = pctMaxSeq.get(row.wpId);
+        if (prev === undefined || row.seq > prev) {
+          pctMaxSeq.set(row.wpId, row.seq);
+          pctHeads.set(row.wpId, { num: row.recordedPctNum, den: row.recordedPctDen });
+        }
+      }
+
       const calSeq = await this.latestCalendarVersionSeq(projectId);
       let calendar: {
         readonly seq: number;
@@ -338,7 +370,16 @@ export function scheduleRepositoryOn(bound: Bound) {
         if (cal) calendar = cal;
       }
 
-      return { project, wps, edges, statusHeads, wpStatusSeqMax, calendar };
+      return {
+        project,
+        wps,
+        edges,
+        statusHeads,
+        wpStatusSeqMax,
+        pctHeads,
+        pctOverrideSeqMax,
+        calendar,
+      };
     },
   };
 }

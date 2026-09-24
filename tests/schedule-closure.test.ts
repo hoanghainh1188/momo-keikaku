@@ -15,7 +15,17 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url));
 
 function walk(dir: string, acc: string[] = []): string[] {
   for (const name of readdirSync(dir)) {
-    if (name === 'node_modules' || name === 'dist' || name === '.git') continue;
+    // Skip install/build/VCS trees — bundled `.next` chunks re-emit plan-input writers and
+    // would false-positive the AD-25 source scan (CI after `next build`).
+    if (
+      name === 'node_modules' ||
+      name === 'dist' ||
+      name === '.git' ||
+      name === '.next' ||
+      name === 'coverage'
+    ) {
+      continue;
+    }
     const path = join(dir, name);
     if (statSync(path).isDirectory()) walk(path, acc);
     else if (/\.(ts|tsx|js|mjs|cjs)$/.test(name) && !name.endsWith('.test.ts')) acc.push(path);
@@ -67,7 +77,6 @@ describe('AR-52 writers — AD-25 input writes stay inside the fence', () => {
       const text = readFileSync(file, 'utf8');
       const path = rel(file);
       if (isAllowedAd25Helper(path)) continue;
-      // Production writers of duration/constraint must live in plan-input.
       const updatesWp =
         /\.update\(\s*s\.workPackage/.test(text) ||
         /\.update\(\s*workPackage/.test(text);
@@ -83,6 +92,52 @@ describe('AR-52 writers — AD-25 input writes stay inside the fence', () => {
     expect(
       offenders,
       `work_package duration/constraint updates outside plan-input:\n${offenders.join('\n')}`,
+    ).toEqual([]);
+  });
+
+  it('only plan-input inserts work_package, wp_status_event, pct_override_event, CF tables, or patches data_date', () => {
+    const files = walk(join(ROOT, 'packages')).concat(walk(join(ROOT, 'apps')));
+    const offenders: string[] = [];
+    const patterns: { name: string; re: RegExp }[] = [
+      { name: 'workPackage insert', re: /\.insert\(\s*s\.workPackage|\.insert\(\s*workPackage/ },
+      { name: 'wpStatusEvent insert', re: /\.insert\(\s*s\.wpStatusEvent|\.insert\(\s*wpStatusEvent/ },
+      {
+        name: 'pctOverrideEvent insert',
+        re: /\.insert\(\s*s\.pctOverrideEvent|\.insert\(\s*pctOverrideEvent/,
+      },
+      {
+        name: 'customFieldDefinition insert',
+        re: /\.insert\(\s*s\.customFieldDefinition|\.insert\(\s*customFieldDefinition/,
+      },
+      {
+        name: 'customFieldValue write',
+        re: /\.insert\(\s*s\.customFieldValue|\.insert\(\s*customFieldValue/,
+      },
+      {
+        name: 'project dataDate update',
+        re: /\.update\(\s*s\.project[\s\S]{0,200}dataDate|\.set\(\{[^}]*dataDate/,
+      },
+    ];
+    for (const file of files) {
+      const text = readFileSync(file, 'utf8');
+      const path = rel(file);
+      if (isAllowedAd25Helper(path)) continue;
+      // Disposition FR-29 Plan path is the documented exception for work_package insert.
+      if (path.includes('repo-writes.ts') && /workPackage insert/.test('workPackage insert')) {
+        // Still forbid status/pct/CF/data_date from repo-writes.
+        for (const { name, re } of patterns) {
+          if (name === 'workPackage insert') continue;
+          if (re.test(text)) offenders.push(`${path} (${name})`);
+        }
+        continue;
+      }
+      for (const { name, re } of patterns) {
+        if (re.test(text)) offenders.push(`${path} (${name})`);
+      }
+    }
+    expect(
+      offenders,
+      `AD-25 writers outside plan-input:\n${offenders.join('\n')}`,
     ).toEqual([]);
   });
 });

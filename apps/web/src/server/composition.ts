@@ -111,6 +111,15 @@ import {
   type RevokeMembershipInput,
   type UnassignMemberProjectInput,
   type WriteDeps,
+  applyPlanChange,
+  completeWorkPackage,
+  deleteWorkPackage,
+  getFirstObservedActivity,
+  getPlanThinUiState,
+  getWpDeleteConfirm,
+  proposedCompleteDay,
+  refuseDerivedDateEdit,
+  DERIVED_DATE_TEACHING,
 } from '@momo/app';
 import { buildResetPasswordMail } from '@momo/i18n';
 import { mailerConsoleOn, productClockOn, systemClock, uuidV7IdsOn } from '@momo/adapters';
@@ -499,6 +508,60 @@ export async function markChangeRequestCandidates(input: ChangeRequestCandidates
 export async function mapTicket(input: MapTicketInput, ctx?: RequestContext) {
   const context = ctx ?? (await requestContext());
   return mapTicketUseCase(writeDeps(), context, input);
+}
+
+/** Story 2.10 fence — plan-input write + recalculation. */
+export async function planChange(input: unknown, ctx?: RequestContext) {
+  const context = ctx ?? (await requestContext());
+  return applyPlanChange(writeDeps(), context, input);
+}
+
+/** Mark-complete through the fence (actual finish, optional first-observed accept). */
+export async function completeWp(input: unknown, ctx?: RequestContext) {
+  const context = ctx ?? (await requestContext());
+  return completeWorkPackage(writeDeps(), context, input);
+}
+
+/** Soft-delete a WP through the fence. */
+export async function deleteWp(input: unknown, ctx?: RequestContext) {
+  const context = ctx ?? (await requestContext());
+  return deleteWorkPackage(writeDeps(), context, input);
+}
+
+/** First-observed activity evidence for the complete flow (read-only). */
+export async function firstObservedForWp(
+  input: { projectId: string; wpId: string },
+  ctx?: RequestContext,
+) {
+  const context = ctx ?? (await requestContext());
+  return getFirstObservedActivity(writeDeps(), context, input);
+}
+
+/** Edge endpoints for the delete confirmation. */
+export async function wpDeleteConfirm(
+  input: { projectId: string; wpId: string },
+  ctx?: RequestContext,
+) {
+  const context = ctx ?? (await requestContext());
+  return getWpDeleteConfirm(writeDeps(), context, input);
+}
+
+/** Project data_date + per-WP constraints for the thin plan UI. */
+export async function planThinUiState(projectId: string, ctx?: RequestContext) {
+  const context = ctx ?? (await requestContext());
+  return getPlanThinUiState(writeDeps(), context, { projectId });
+}
+
+/** Teaching refuse for a derived-date edit (UX-DR12) — nothing written. */
+export function refuseDerivedDate() {
+  return refuseDerivedDateEdit();
+}
+
+export { DERIVED_DATE_TEACHING };
+
+/** Product-clock calendar day for the complete-flow finish proposal (UX-DR13). */
+export function proposedCompleteFinish(tzOffsetMinutes: number): string {
+  return proposedCompleteDay(webClock().now(), tzOffsetMinutes);
 }
 
 // --- FR-1's organisation writes (story 1.3 slice 2). No page calls them yet: the Organisation

@@ -140,6 +140,7 @@ export async function resolveScheduleInputs(
 
   const wps: ScheduleWp[] = plan.wps.map((w) => {
     const status = plan.statusHeads.get(w.id);
+    const pct = plan.pctHeads.get(w.id);
     return {
       id: w.id,
       wbsCode: w.wbsCode,
@@ -149,7 +150,7 @@ export async function resolveScheduleInputs(
       plannedMh: w.plannedMh,
       actualStart: status?.actualStart ?? null,
       actualFinish: status?.actualFinish ?? null,
-      recordedPct: null,
+      recordedPct: pct !== undefined ? { num: pct.num, den: pct.den } : null,
       constraintType: w.constraintType as ScheduleWp['constraintType'],
       constraintDate: w.constraintDate,
     };
@@ -189,8 +190,7 @@ export async function resolveScheduleInputs(
     calendarVersionSeq: calendarVersionSeq!,
     milestoneIds,
     wpStatusSeqMax: plan.wpStatusSeqMax,
-    // pct_override_event lands in 2.10 — assert 0 until then.
-    pctOverrideSeqMax: 0,
+    pctOverrideSeqMax: plan.pctOverrideSeqMax,
   };
 }
 

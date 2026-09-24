@@ -71,15 +71,16 @@ describe('the table-class registry is the single source', () => {
     expect(new Set(TRUNCATE_ORDER).size, 'a table is truncated twice').toBe(TRUNCATE_ORDER.length);
   });
 
-  it('holds the 29 tables of this release, 22 of them tenant-owned', () => {
+  it('holds the 32 tables of this release, 25 of them tenant-owned', () => {
     // Pinned as numbers as well as names: a future change that removes a table and adds
     // another keeps the name lists agreeing with `schema.ts` while silently changing what
     // this story was reasoned about. Story 1.4 slice 1: `app_user` out; the four Better Auth
     // tables and the tenant-membership bridge in, all `global`. Slice 4 adds `identity_event`,
     // also `global`. Story 1.6 adds `project_default_rate_entry` (tenant-owned, append-only).
-    // Story 2.1 (AD-30) adds the five scheduling tables, all tenant-owned.
-    expect(TABLE_REGISTRY).toHaveLength(29);
-    expect(TENANT_OWNED).toHaveLength(22);
+    // Story 2.1 (AD-30) adds the five scheduling tables, all tenant-owned. Story 2.10 adds
+    // `pct_override_event` and Custom Field definition/value.
+    expect(TABLE_REGISTRY).toHaveLength(32);
+    expect(TENANT_OWNED).toHaveLength(25);
     expect(TABLE_REGISTRY.filter((e) => e.tenantColumn === null).map((e) => e.table)).toEqual([
       'tenant',
       'auth_user',
@@ -102,7 +103,7 @@ describe('the table-class registry is the single source', () => {
     expect(TENANT_BRIDGES[0]!.tenantColumn).toBeNull();
   });
 
-  it('classes the thirteen insert-only tables append-only', () => {
+  it('classes the fourteen insert-only tables append-only', () => {
     expect(APPEND_ONLY.map((e) => e.table).sort()).toEqual(
       [
         'actuals_ledger_entry',
@@ -112,6 +113,7 @@ describe('the table-class registry is the single source', () => {
         'disposition_event',
         'holiday_calendar_version',
         'mapping_event',
+        'pct_override_event',
         'project_default_rate_entry',
         'rate_entry',
         'schedule_run',
@@ -122,10 +124,13 @@ describe('the table-class registry is the single source', () => {
     );
   });
 
-  it('classes the scheduling slice as AD-21 decides (story 2.1)', () => {
+  it('classes the scheduling slice as AD-21 decides (story 2.1 / 2.10)', () => {
     const classOf = (table: string) => TABLE_REGISTRY.find((e) => e.table === table)?.class;
     expect(classOf('wp_dependency')).toBe('mutable-audited');
     expect(classOf('wp_status_event')).toBe('append-only');
+    expect(classOf('pct_override_event')).toBe('append-only');
+    expect(classOf('custom_field_definition')).toBe('mutable-audited');
+    expect(classOf('custom_field_value')).toBe('mutable-audited');
     expect(classOf('holiday_calendar_version')).toBe('append-only');
     expect(classOf('schedule_run')).toBe('append-only');
     expect(classOf('wp_schedule')).toBe('derived');

@@ -1,8 +1,13 @@
 import { getTranslations } from 'next-intl/server';
-import { getProjectReview } from '@/server/composition';
+import {
+  getProjectReview,
+  planThinUiState,
+  proposedCompleteFinish,
+} from '@/server/composition';
 import { valueOrNotFound } from '@/server/result';
 import { hours, type Mh } from '@momo/domain/present';
 import { Section } from '@/components/ui';
+import { CompleteWpForm, DeleteWpForm, DerivedDateCell } from '@/components/plan-thin-edit';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,8 +15,8 @@ export const dynamic = 'force-dynamic';
  * FR-5, FR-7: the Current Plan as a tree grid against the active Baseline.
  *
  * A Work Package carries no planned date (story 2.2): its dates here are the Baseline's and its
- * actual dates. The scheduler's derived dates, and the tree grid that shows them, arrive with
- * stories 2.5–2.13.
+ * actual dates. Story 2.10 adds thin complete / delete / derived-date refuse controls; the full
+ * tree grid arrives with 2.13+.
  */
 export default async function PlanPage({
   params,
@@ -22,10 +27,13 @@ export default async function PlanPage({
   const em = t('common.em_dash');
   const { projectId } = await params;
   const { bundle, review: r } = valueOrNotFound(await getProjectReview({ projectId }));
+  const thin = valueOrNotFound(await planThinUiState(projectId));
 
   const baseline = bundle.baseline;
   const baselineByWp = new Map((baseline?.wps ?? []).map((b) => [b.wpId, b]));
   const acByWp = r.attribution.acByWp;
+  const dataDate = thin.dataDate;
+  const proposedFinish = proposedCompleteFinish(bundle.project.tzOffsetMinutes);
 
   // roll-ups (FR-5): summary WP effort comes from the children
   const children = new Map<string, typeof bundle.wps>();
@@ -87,6 +95,8 @@ export default async function PlanPage({
               <th className="num">{t('plan.actual_h')}</th>
               <th>{t('plan.baseline_dates')}</th>
               <th>{t('plan.actual_dates')}</th>
+              <th>Constraint</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -99,15 +109,21 @@ export default async function PlanPage({
                 const baselineMh = agg ? agg.baselineMh : (b?.baselineMh ?? 0n);
                 const plannedMh = agg ? agg.mh : w.plannedMh;
                 const acMh = agg ? agg.acMh : (acByWp.get(w.id) ?? 0n);
-                // A leaf's actual dates; a summary's would be a roll-up, which is the scheduler's.
                 const actualStart = isSummary ? null : w.actualStart;
                 const actualFinish = isSummary ? null : w.actualFinish;
-                // Late: finished after the Baseline finish, or a milestone not reached by it.
                 const late = Boolean(
                   b &&
                     ((actualFinish && actualFinish > b.finish) ||
                       (w.isMilestone && !actualFinish && bundle.input.asOf > b.finish)),
                 );
+                const constraintInputId = `constraint-${w.id}`;
+                const constraint = thin.constraints.get(w.id);
+                const constraintLabel =
+                  constraint === undefined
+                    ? 'asap'
+                    : constraint.constraintDate !== null
+                      ? `${constraint.constraintType} ${constraint.constraintDate}`
+                      : constraint.constraintType;
                 return (
                   <tr key={w.id} data-testid={`wp-${w.wbsCode}`}>
                     <td style={{ fontWeight: isSummary ? 600 : 400 }}>{w.wbsCode}</td>
@@ -120,16 +136,49 @@ export default async function PlanPage({
                       {w.name}
                       {w.isCatchAll ? <span className="tag">{t('plan.catch_all_loe')}</span> : null}
                       {w.isMilestone ? <span className="tag">{t('plan.milestone')}</span> : null}
-                      {!b && w.isLeaf ? <span className="tag unplanned">{t('plan.non_baselined')}</span> : null}
+                      {!b && w.isLeaf ? (
+                        <span className="tag unplanned">{t('plan.non_baselined')}</span>
+                      ) : null}
                     </td>
                     <td className="num">{baselineMh !== 0n ? hours(baselineMh) : em}</td>
                     <td className="num">{plannedMh !== 0n ? hours(plannedMh) : em}</td>
                     <td className="num">{acMh !== 0n ? hours(acMh) : em}</td>
-                    <td className="caption">
-                      {b ? `${b.start} → ${b.finish}` : em}
+                    <td className="caption">{b ? `${b.start} → ${b.finish}` : em}</td>
+                    <td
+                      className="caption"
+                      style={late ? { color: 'var(--health-amber)' } : undefined}
+                    >
+                      {actualStart || actualFinish
+                        ? `${actualStart ?? em} → ${actualFinish ?? em}`
+                        : em}
                     </td>
-                    <td className="caption" style={late ? { color: 'var(--health-amber)' } : undefined}>
-                      {actualStart || actualFinish ? `${actualStart ?? em} → ${actualFinish ?? em}` : em}
+                    <td>
+                      {w.isLeaf ? (
+                        <input
+                          id={constraintInputId}
+                          type="text"
+                          readOnly
+                          value={constraintLabel}
+                          aria-label={`Constraint for ${w.name}`}
+                          data-testid={`constraint-${w.id}`}
+                        />
+                      ) : (
+                        em
+                      )}
+                    </td>
+                    <td>
+                      {w.isLeaf ? (
+                        <>
+                          <DerivedDateCell constraintInputId={constraintInputId} />
+                          <CompleteWpForm
+                            projectId={projectId}
+                            wpId={w.id}
+                            dataDate={dataDate}
+                            proposedFinish={proposedFinish}
+                          />
+                          <DeleteWpForm projectId={projectId} wpId={w.id} />
+                        </>
+                      ) : null}
                     </td>
                   </tr>
                 );
@@ -137,7 +186,9 @@ export default async function PlanPage({
             })}
           </tbody>
         </table>
-        <p className="caption" style={{ marginTop: 12 }}>{t('plan.summary_rows_roll_up_effort')}</p>
+        <p className="caption" style={{ marginTop: 12 }}>
+          {t('plan.summary_rows_roll_up_effort')}
+        </p>
       </Section>
     </div>
   );

@@ -130,6 +130,48 @@ CREATE POLICY "maintenance_bypass" ON public."wp_status_event"
   USING (true)
   WITH CHECK (true);
 
+-- pct_override_event (append-only): Recorded Percent Complete for Plan-grid edits (story 2.10, AD-25). Append-only; the head feeds schedule_run.inputs. FR-30's audited override ceremony is Epic 6.
+ALTER TABLE public."pct_override_event" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public."pct_override_event" FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "tenant_isolation" ON public."pct_override_event";
+CREATE POLICY "tenant_isolation" ON public."pct_override_event"
+  FOR ALL
+  USING ("tenant_id" = NULLIF(current_setting('app.tenant_id', true), ''))
+  WITH CHECK ("tenant_id" = NULLIF(current_setting('app.tenant_id', true), ''));
+DROP POLICY IF EXISTS "maintenance_bypass" ON public."pct_override_event";
+CREATE POLICY "maintenance_bypass" ON public."pct_override_event"
+  FOR ALL TO "momo_maintenance"
+  USING (true)
+  WITH CHECK (true);
+
+-- custom_field_definition (mutable-audited): Custom Field schema per Project (FR-8). Edited through the fence; NFR-P1 tested bound is 100 definitions.
+ALTER TABLE public."custom_field_definition" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public."custom_field_definition" FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "tenant_isolation" ON public."custom_field_definition";
+CREATE POLICY "tenant_isolation" ON public."custom_field_definition"
+  FOR ALL
+  USING ("tenant_id" = NULLIF(current_setting('app.tenant_id', true), ''))
+  WITH CHECK ("tenant_id" = NULLIF(current_setting('app.tenant_id', true), ''));
+DROP POLICY IF EXISTS "maintenance_bypass" ON public."custom_field_definition";
+CREATE POLICY "maintenance_bypass" ON public."custom_field_definition"
+  FOR ALL TO "momo_maintenance"
+  USING (true)
+  WITH CHECK (true);
+
+-- custom_field_value (mutable-audited): Custom Field values on Work Packages (FR-8). Plan inputs, not scheduling inputs; still written only through the fence.
+ALTER TABLE public."custom_field_value" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public."custom_field_value" FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "tenant_isolation" ON public."custom_field_value";
+CREATE POLICY "tenant_isolation" ON public."custom_field_value"
+  FOR ALL
+  USING ("tenant_id" = NULLIF(current_setting('app.tenant_id', true), ''))
+  WITH CHECK ("tenant_id" = NULLIF(current_setting('app.tenant_id', true), ''));
+DROP POLICY IF EXISTS "maintenance_bypass" ON public."custom_field_value";
+CREATE POLICY "maintenance_bypass" ON public."custom_field_value"
+  FOR ALL TO "momo_maintenance"
+  USING (true)
+  WITH CHECK (true);
+
 -- holiday_calendar_version (append-only): A resolved non-working-day set over a range (AD-29). A Baseline re-derives against the version it pinned, so a version is never edited.
 ALTER TABLE public."holiday_calendar_version" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public."holiday_calendar_version" FORCE ROW LEVEL SECURITY;

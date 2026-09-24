@@ -129,3 +129,22 @@ export type {
   CreateResourceInput,
 } from './use-cases/resource-input';
 export type { ChangeTenantCurrencyInput, TenantCurrencyDeps } from './use-cases/tenant-currency';
+
+// Story 2.10 fence surface — outside the use-cases barrel (role gate enumerates that barrel only).
+export {
+  applyPlanChange,
+  planMutationSchema,
+  type ApplyPlanChangeDeps,
+  type ApplyPlanChangeResult,
+  type PlanMutation,
+} from './schedule/apply-plan-change';
+export {
+  completeWorkPackage,
+  deleteWorkPackage,
+  getFirstObservedActivity,
+  getPlanThinUiState,
+  getWpDeleteConfirm,
+  proposedCompleteDay,
+  refuseDerivedDateEdit,
+  DERIVED_DATE_TEACHING,
+} from './schedule/plan-edit';
