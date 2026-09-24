@@ -2,7 +2,7 @@
 title: 'Story 2.8 — the golden scheduler corpus'
 type: 'feature'
 created: '2026-09-24'
-status: 'in-progress'
+status: 'in-review'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '55d85c2e93d7ed2e41a9c8768e98ebdabfd50b3b'
@@ -90,10 +90,32 @@ Each row is one golden case (or a named pair). Exact dates live in the TypeScrip
 - Corpus: ten cases under `packages/domain/src/schedule/corpus/` covering every I/O-matrix row; builders and JP/VN calendars (`CAL_JP` / `CAL_VN`, Wed 7 Oct vs Tue 13 Oct) in `corpus/fixtures.ts` (also mirrored on `tests/support/schedule-fixtures.ts`).
 - Runner: `corpus/corpus.test.ts` codec-compares via `stringify(encode(…))` and re-derives under each case's `engine_version`; also pins MFO−6w Float/path vs asap twin and JP≠VN dates.
 - deferred-work: 2.6 Q6/Q7 corpus entry resolved; Q2 → B (unratified 2.5 edges) appended.
+- Review fix (2026-09-24): MFO asked date Tue 25 Aug → daysLate 30 (calendar from 1 Aug); JP/VN chains lengthened to A(5)→B(3) so Tue 13 shifts VN early dates; unknown `engine_version` RangeError asserted in `corpus.test.ts`.
 
 ## Spec Change Log
 
 ## Review Triage Log
+
+Review pass 1 (2026-09-24), by the Blind Hunter (BH), the Edge Case Hunter (EC) and the Verification Gap reviewer (VG).
+
+| # | Source | Finding | Verdict | Evidence | Route |
+|---|---|---|---|---|---|
+| 1 | EC, BH | `mfo-six-weeks` pins `daysLate` 17 (~3.5 weeks), not a six-week miss | medium | Frozen matrix / AR-35 require a `must_finish_on` missed by six weeks. Asked 11 Sep → derived 6 Oct is 17 working days. The case must move the asked date (or lengthen the miss) to ~30 working days | patch |
+| 2 | BH | VN mid-week holiday (Tue 13 Oct) never shifts the VN slip chain, which ends Fri 9 | medium | Q3 → A requires calendars that differ by a mid-week holiday *and* the corpus must show that difference. JP's Wed 7 bites; VN's Tue 13 does not. Lengthen or redate the VN chain so Tue 13 affects early dates | patch |
+| 3 | VG | Unknown `engine_version` reject path is untested | medium | Pre-verified: `engineAt` throws `RangeError`, but every corpus call uses a registered key. Softening the throw still keeps the suite green | patch |
+| 4 | BH | All-complete matrix says path empty "unless a Project finish anchors," but case keeps `criticalPath: []` with a Project finish | false | 2.6 Q2/Q7: complete WPs have no Float. An all-complete plan never has a critical path; the "unless" is vestigial. The case correctly pins `[]` | reject |
+| 5 | BH | No all-complete case with `projectFinish: null` | low | Matrix marks Project finish optional; one variant is enough for Q7's `computedFinish: null` | reject |
+| 6 | BH | No dedicated MSO / other 2.7-Q corpus cases | false | Minimum coverage names MFO −6 weeks specifically; Boundaries say hand-compute *against* 2.7 conventions, not one case per Q | reject |
+| 7 | BH | Corpus fixtures duplicate `tests/support/schedule-fixtures.ts` | false | Comment in `corpus/fixtures.ts`: depcruise forbids importing `tests/support` from source. Duplication is required | reject |
+| 8 | BH | Match and re-derive tests are identical with a one-entry registry | low | Q1 → A deliberately ships one version; the second assertion is the AR-51 dispatch shape for 2.9. Unlikely everyday defect | reject |
+| 9 | BH | Registry smoke only runs `CORPUS[0]` | low | Inventory test already lists every case; each case has its own codec test. Direct correction optional, not required | reject |
+| 10 | BH | ASAP twin is built live, not hand-pinned | false | AC requires identity with the asap twin; a live twin is the right check. Hand-pinning would duplicate the golden | reject |
+| 11 | BH | Twin test omits late dates / drivers | low | AC names Float and critical path; early-date equality is extra. Late dates follow from the same graph | reject |
+| 12 | BH | Q2 deferred wording broader than the decision list | low | Cosmetic deferred-work prose; the four edges named in Q2 → B are what matters | reject |
+| 13 | BH | Spec Change Log / Triage empty; status still in-progress in the landing commit | false | First review pass populates this table; status is now `in-review` | reject |
+| 14 | BH | Mid-flight note omits the null-pct → full remaining rule | low | Rule is pinned in 2.5 / `remainingDuration`; the golden still encodes the dates | reject |
+| 15 | BH | OOS case has empty drivers on in-progress S | false | 2.6: in-progress WPs list no driving predecessors. Matrix "successors driven from actuals" is about pass-on, which the early dates of dependents pin | reject |
+| 16 | EC | Missing `CORPUS.find` / `wps.find` guards → TypeError | low | `CORPUS` is a static const; inventory test would fail first. Unlikely everyday use | reject |
 
 ## Design Notes
 

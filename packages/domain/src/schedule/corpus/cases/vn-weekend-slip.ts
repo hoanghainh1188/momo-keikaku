@@ -4,20 +4,21 @@ import { out } from '../helpers';
 import type { CorpusCase } from '../types';
 
 /**
- * VN weekend slip ⟨Q3⟩ — same topology as the JP case on the VN calendar
- * (weekends + Tue 13 Oct holiday). The short chain ends before Tue 13, so dates
- * match a weekends-only calendar and differ from JP where Wed 7 slipped A/B.
+ * VN weekend slip ⟨Q3⟩ — same topology A(5)→B(3) on the VN calendar
+ * (weekends + Tue 13 Oct holiday). The holiday falls inside B's run and shifts it.
  *
- * A Mon5–Wed7; B Thu8–Fri9. Anchor Fri9; path [A,B].
+ * A Mon5–Fri9; B Mon12, Wed14, Thu15 (Tue13 skipped). Anchor Thu15; path [A,B].
+ * Early dates differ from JP (A ends Mon12, B starts Tue13) where Wed 7 is the holiday.
  */
 export const vnWeekendSlip: CorpusCase = {
   id: 'vn-weekend-slip',
   title: 'VN weekend slip ⟨Q3⟩',
   engineVersion: ENGINE_VERSION,
   note:
-    'VN: Tue 13 Oct is non-working (after this chain). A(3) Mon5–Wed7; B(2) Thu8–Fri9. ' +
-    'Differs from JP (A ends Thu8, B ends Mon12) where Wed 7 is the holiday.',
-  inputs: inputs([wp('A', { durationDays: 3 }), wp('B', { durationDays: 2 })], [edge('A', 'B')], {
+    'VN: Tue 13 Oct is non-working. A(5) Mon5–Fri9; B(3) Mon12,Wed14,Thu15. ' +
+    'Without the holiday B would finish Tue13; the slip moves B\'s finish to Thu15. ' +
+    'Differs from JP (A ends Mon12, B Tue13–Thu15).',
+  inputs: inputs([wp('A', { durationDays: 5 }), wp('B', { durationDays: 3 })], [edge('A', 'B')], {
     calendar: CAL_VN,
   }),
   expected: {
@@ -25,20 +26,20 @@ export const vnWeekendSlip: CorpusCase = {
       out('A', {
         state: 'remaining',
         earlyStart: '2026-10-05',
-        earlyFinish: '2026-10-07',
-        remainingDays: 3,
+        earlyFinish: '2026-10-09',
+        remainingDays: 5,
         lateStart: '2026-10-05',
-        lateFinish: '2026-10-07',
+        lateFinish: '2026-10-09',
         floatDays: 0,
         isCritical: true,
       }),
       out('B', {
         state: 'remaining',
-        earlyStart: '2026-10-08',
-        earlyFinish: '2026-10-09',
-        remainingDays: 2,
-        lateStart: '2026-10-08',
-        lateFinish: '2026-10-09',
+        earlyStart: '2026-10-12',
+        earlyFinish: '2026-10-15',
+        remainingDays: 3,
+        lateStart: '2026-10-12',
+        lateFinish: '2026-10-15',
         floatDays: 0,
         isCritical: true,
         drivingPredecessors: ['A'],
@@ -47,8 +48,8 @@ export const vnWeekendSlip: CorpusCase = {
     outOfSequence: [],
     notSchedulable: [],
     violations: [],
-    anchor: { kind: 'computed_finish', date: '2026-10-09' },
-    computedFinish: '2026-10-09',
+    anchor: { kind: 'computed_finish', date: '2026-10-15' },
+    computedFinish: '2026-10-15',
     criticalPath: ['A', 'B'],
   },
 };

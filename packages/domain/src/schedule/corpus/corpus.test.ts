@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { encode, stringify } from '../../present/codec';
-import { ENGINE_VERSION, recalculateAt, registeredEngineVersions } from '../engine-version';
+import {
+  ENGINE_VERSION,
+  engineAt,
+  recalculateAt,
+  registeredEngineVersions,
+} from '../engine-version';
 import { CORPUS } from './index';
 
 /**
@@ -17,6 +22,16 @@ describe('golden scheduler corpus', () => {
       const result = recalculateAt(version, CORPUS[0]!.inputs, null);
       expect(result.kind).toBe('scheduled');
     }
+  });
+
+  it('engineAt and recalculateAt throw RangeError naming an unknown engine_version', () => {
+    const unknown = 'schedule-never-registered';
+    expect(() => engineAt(unknown)).toThrowError(RangeError);
+    expect(() => engineAt(unknown)).toThrowError(`unknown engine_version "${unknown}"`);
+    expect(() => recalculateAt(unknown, CORPUS[0]!.inputs, null)).toThrowError(RangeError);
+    expect(() => recalculateAt(unknown, CORPUS[0]!.inputs, null)).toThrowError(
+      `unknown engine_version "${unknown}"`,
+    );
   });
 
   it('inventories every AR-35 / 2.6 Q6 / Q7 matrix row', () => {
@@ -38,7 +53,9 @@ describe('golden scheduler corpus', () => {
     const jp = CORPUS.find((c) => c.id === 'jp-weekend-slip')!;
     const vn = CORPUS.find((c) => c.id === 'vn-weekend-slip')!;
     expect(stringify(encode(jp.expected.wps))).not.toBe(stringify(encode(vn.expected.wps)));
-    expect(jp.expected.computedFinish).not.toBe(vn.expected.computedFinish);
+    // Same total duration clears both mid-week holidays, so finishes may match; early dates must not.
+    expect(jp.expected.wps[0]!.earlyFinish).not.toBe(vn.expected.wps[0]!.earlyFinish);
+    expect(jp.expected.wps[1]!.earlyStart).not.toBe(vn.expected.wps[1]!.earlyStart);
   });
 
   for (const c of CORPUS) {

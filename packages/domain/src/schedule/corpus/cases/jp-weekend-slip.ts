@@ -4,21 +4,21 @@ import { out } from '../helpers';
 import type { CorpusCase } from '../types';
 
 /**
- * JP weekend slip ⟨Q3⟩ — A(3)→B(2) from Data Date Mon 5 Oct on the JP calendar
- * (weekends + Wed 7 Oct holiday).
+ * JP weekend slip ⟨Q3⟩ — A(5)→B(3) from Data Date Mon 5 Oct on the JP calendar
+ * (weekends + Wed 7 Oct holiday). Same topology as the VN case.
  *
- * Working days from Mon 5: Mon5, Tue6, Thu8, Fri9, Mon12, …
- * A occupies Mon5–Thu8 (Wed7 skipped); B Fri9–Mon12.
- * Anchor = computed finish Mon12; both Float 0, critical path A→B.
+ * Working days from Mon 5: Mon5, Tue6, Thu8, Fri9, Mon12, Tue13, …
+ * A occupies Mon5–Mon12 (Wed7 skipped); B Tue13–Thu15.
+ * Anchor = computed finish Thu15; both Float 0, critical path A→B.
  */
 export const jpWeekendSlip: CorpusCase = {
   id: 'jp-weekend-slip',
   title: 'JP weekend slip ⟨Q3⟩',
   engineVersion: ENGINE_VERSION,
   note:
-    'JP: Wed 7 Oct is non-working. A(3) Mon5,Tue6,Thu8; B(2) Fri9,Mon12. ' +
-    'Late: B Fri9–Mon12 Float 0; A Mon5–Thu8 Float 0. Path [A,B].',
-  inputs: inputs([wp('A', { durationDays: 3 }), wp('B', { durationDays: 2 })], [edge('A', 'B')], {
+    'JP: Wed 7 Oct is non-working. A(5) Mon5,Tue6,Thu8,Fri9,Mon12; B(3) Tue13–Thu15. ' +
+    'Late: both Float 0. Path [A,B]. Differs from VN where A ends Fri9 and B starts Mon12.',
+  inputs: inputs([wp('A', { durationDays: 5 }), wp('B', { durationDays: 3 })], [edge('A', 'B')], {
     calendar: CAL_JP,
   }),
   expected: {
@@ -26,20 +26,20 @@ export const jpWeekendSlip: CorpusCase = {
       out('A', {
         state: 'remaining',
         earlyStart: '2026-10-05',
-        earlyFinish: '2026-10-08',
-        remainingDays: 3,
+        earlyFinish: '2026-10-12',
+        remainingDays: 5,
         lateStart: '2026-10-05',
-        lateFinish: '2026-10-08',
+        lateFinish: '2026-10-12',
         floatDays: 0,
         isCritical: true,
       }),
       out('B', {
         state: 'remaining',
-        earlyStart: '2026-10-09',
-        earlyFinish: '2026-10-12',
-        remainingDays: 2,
-        lateStart: '2026-10-09',
-        lateFinish: '2026-10-12',
+        earlyStart: '2026-10-13',
+        earlyFinish: '2026-10-15',
+        remainingDays: 3,
+        lateStart: '2026-10-13',
+        lateFinish: '2026-10-15',
         floatDays: 0,
         isCritical: true,
         drivingPredecessors: ['A'],
@@ -48,8 +48,8 @@ export const jpWeekendSlip: CorpusCase = {
     outOfSequence: [],
     notSchedulable: [],
     violations: [],
-    anchor: { kind: 'computed_finish', date: '2026-10-12' },
-    computedFinish: '2026-10-12',
+    anchor: { kind: 'computed_finish', date: '2026-10-15' },
+    computedFinish: '2026-10-15',
     criticalPath: ['A', 'B'],
   },
 };
