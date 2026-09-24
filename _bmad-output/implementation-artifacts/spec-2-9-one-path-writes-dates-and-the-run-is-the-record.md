@@ -2,7 +2,7 @@
 title: 'Story 2.9 — one path writes dates, and the run is the record'
 type: 'feature'
 created: '2026-09-24'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: 'd2e4e5b51f456bb72e4f17aaa4692c21fd4269d5'
