@@ -2,7 +2,7 @@
 title: 'Story 2.11 — The three Project schedule settings'
 type: 'feature'
 created: '2026-09-24'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '5ff76f6885a2b677940a68f66ae1f8f9d351422c'
