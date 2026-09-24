@@ -1,4 +1,76 @@
-# Handoff — 2026-09-24 (story 2.7 closed: constraints are soft, reported, and stay on their own Work Package)
+# Handoff — 2026-09-24 (story 2.8 closed: the golden scheduler corpus)
+
+**Latest (2026-09-24, afternoon): story 2.8 merged via PR #68 (`c7f2db9`) and is `done`.**
+- **The correctness gate lands.** Five other scheduler CI gates only prove self-consistency;
+  the corpus is the only place that fails when the arithmetic is wrong (AR-35 / AD-27).
+- **Hand-computed expectations only.** Ten cases under `packages/domain/src/schedule/corpus/`
+  carry inputs, expected `ScheduleOutputs`, and a short prose note of the arithmetic. Never
+  capture-from-implementation. Compare through `stringify(encode(…))` (AD-4).
+- **`engine_version` registry.** `packages/domain/src/schedule/engine-version.ts` registers
+  `schedule-2026-09-24` with a multi-version API from day one (`registeredEngineVersions`,
+  `engineAt`, `recalculateAt`). CI re-derives every golden under its own recorded key (AR-51).
+  Unknown keys throw `RangeError`. The `schedule_run.engine_version` column is written by 2.9.
+- **Synthetic JP / VN calendars.** `CAL_JP` / `CAL_VN` list weekends exhaustively and differ by
+  a mid-week holiday (Wed 7 Oct vs Tue 13 Oct). No national dataset; 2.12 still owns that.
+  Chains are A(5)→B(3) so both holidays bite early dates. Future calendars stay compatible via
+  `CalendarVersion`'s exhaustive `nonWorkingDays`.
+- **Minimum coverage (AR-35) plus deferred 2.6 pins.** Named cases: `jp-weekend-slip`,
+  `vn-weekend-slip`, `mid-flight`, `negative-float`, `out-of-sequence`, `mfo-six-weeks`
+  (daysLate 30; Float / critical path identical to the asap twin), `milestone`, `no-duration`,
+  `anchor-cap` (2.6 Q6), `all-complete` (2.6 Q7).
+- **Corpus conventions (founder decisions Q1–Q5).**
+  - **Q1:** registry API now, even with one entry.
+  - **Q2:** keep cases off the unratified 2.5 implementer edges (deferred-work).
+  - **Q3:** synthetic JP/VN `CalendarVersion`s, not a national dataset.
+  - **Q4:** TypeScript modules + short hand-computation notes (demo-golden style).
+  - **Q5:** implementer hand-computes in the PR; review / founder checks the arithmetic.
+- **Carried forward (`deferred-work.md`).**
+  - **2.9:** one fence `app/schedule.applyPlanChange`; write `schedule_run` (including
+    `engine_version`); AD-26 index-encode `drivingPredecessors`, `criticalPath`, and violation
+    `wpId` / `chain` into `inputs.wps`; record both halts; measure the 500-WP payload against
+    AD-26's 385 kB / ~141 kB / ~152 kB WAL; retention-by-reference; the three closure tests
+    (writers / callers / reachability); NFR-P1 under the per-Project lock.
+  - **Unratified 2.5 edges (Q2 → B):** actual finish on a non-working day; complete+null
+    duration; actual finish without start; milestone remaining-duration edges — stay out of the
+    corpus until the founder ratifies.
+  - **2.12:** resolve a `holiday_calendar_version` into an exhaustive `CalendarVersion`.
+- **Still open from 2.5 / 2.6 / 2.7:**
+  - `range_start` must cover the Project's history.
+  - `remainingDays` in the stored outputs.
+  - The manual check on 2.13's grid (Float with its anchor, negative Float in red, Critical,
+    constraint / violation markers when the surface lands).
+  - Epic 6 / FR-31: Health may compare constraint dates to actuals for complete / in-progress
+    WPs (left out of `recalculate` by 2.7 Q5).
+- **Next: story 2.9** (one path writes dates, and the run is the record; heaviest in the plan).
+  Things to know before starting:
+  - **Fence.** `app/schedule.applyPlanChange(ctx, mutation)` does the input write **and** the
+    synchronous recalculation in one transaction under the AD-20 per-Project exclusive lock.
+    Only `app/schedule` may import `db/repositories/plan-input` (and schedule); dependency-cruiser
+    fails on any other importer (AR-43). A rejected edit rolls back completely — nothing persists.
+  - **Two layers, two names.** `domain/schedule.recalculate` stays pure; `app/schedule.recalculateProject`
+    resolves inputs, calls it, and appends the run. Nothing else is called `recalculate` (AR-47).
+  - **Fully resolved inputs.** `schedule_run.inputs` carries the whole WP tree, edges, Project
+    settings, and the resolved non-working-day set itself — no pointers a pure function would
+    have to dereference (AR-48). Watermarks travel as assertions.
+  - **AD-26 index encoding.** `inputs.wps` is the array; every other reference — parent, edge
+    ends, `drivingPredecessors`, `criticalPath`, violation `wpId` / `chain` — is that array's
+    integer index in `compareWp` order. Write `engine_version` from the 2.8 registry.
+  - **Halts and projection.** Record `graph_invalid` and `calendar_range` as halted runs with
+    `halted_reason` and no outputs; mark `wp_schedule` stale. On success, rebuild `wp_schedule`
+    from the latest run (`stale = false`); INSERT-only on `schedule_run`.
+  - **Measure.** 500 WP / 500 edge from Epic 1's fixture against AD-26's measured sizes; NFR-P1
+    300 ms p95 under the lock. Miss → lock granularity, never a background path. Exercise AD-5
+    retention (runs between two Reviews survive).
+  - **Three closure tests.** Writers (every AD-25 input write is inside the fence); callers
+    (`recalculateProject` callers = FR-6b's trigger list); reachability (unreachable from
+    `ingestSnapshot`, `evaluateRules`, mapping, Tracker jobs). All three required (AR-52).
+  - Call `checkPlanInvariants` on every mutation before the write (deferred from 2.4). Map
+    23503/23514 to `invalid_input` with the guard's rule codes when a writer first lands.
+  - Expect intent-gap questions on cause derivation (`prevInputs`), halt recording shape, and
+    how far the first PR splits the fence vs the measurement vs the retention tests.
+- Spec: `spec-2-8-the-golden-scheduler-corpus.md`.
+
+## Earlier: Handoff — 2026-09-24 (story 2.7 closed: constraints are soft, reported, and stay on their own Work Package)
 
 **Latest (2026-09-24, midday): story 2.7 merged via PR #66 (`f30d6cc`) and is `done`.**
 - **Soft constraints land on the forward pass.** `recalculate` is still the one entry point (AD-25).
