@@ -1,4 +1,59 @@
-# Handoff — 2026-09-24 (story 2.9 closed: one path writes dates, and the run is the record)
+# Handoff — 2026-09-25 (stories 2.10 + 2.11 closed: fence authoring and Project schedule settings)
+
+**Latest (2026-09-25): story 2.11 merged via PR #73 (`f07adcf`) + docs #74 (`911e841`); story 2.10
+merged via PR #72 (`5ff76f6`). Both are `done`.** Epic 2 remains `in-progress` (2.12–2.17 backlog).
+
+## Story 2.10 (recap) — WP authoring, actuals, CFs through the fence
+- Fence mutation union widened: create/delete/move/re-parent WP, name/duration/effort/resources/
+  milestone/constraint, actuals (`wp_status_event`), Recorded % (`pct_override_event`, append_only),
+  CF definition + value writers. `checkPlanInvariants` + `lockWatermark` on new append-only paths.
+- **Q2 → A:** actual finish after Data Date may advance `project.data_date` in the **same** fence
+  call when the PM confirms (compound). Standalone settings stayed 2.11.
+- Thin Plan UI (Q1 → B): complete / delete confirm / derived-date teaching refuse; first-observed
+  evidence + accept → `source = accepted-from-proposal` only.
+- Leaf→summary same-statement clear; soft-delete WP + hard-delete edges (no relink).
+- Spec: `spec-2-10-work-packages-actual-dates-and-custom-fields-edited-through.md`.
+
+## Story 2.11 (recap) — three Project schedule settings
+- Fence kinds: `set_project_start` (first write pairs start + Data Date today in Project tz),
+  `clear_project_start` (Q2 → A: restore "no project start yet", **no** recalc, still audited),
+  `patch_project_finish` (teaching copy; moves no WP), `patch_data_date` (preview remaining leaves;
+  refuse earlier than latest live-leaf actual finish).
+- **Q1 → B:** `/p/[projectId]/settings` owns the three fields; Plan owns no-start band + *Set Project
+  start* only. Strip chrome / What-moved stay **2.15**.
+- `resolveScheduleInputs`: no silent Data Date invent once start exists; null start → refuse FR-6b.
+- Review triage patched clobber-on-re-set, live-leaf blockers, preview sync, finish required, audit
+  gaps, etc. Deferred: English product copy on settings/Plan (BH8 → `deferred-work.md`).
+- Spec: `spec-2-11-the-three-project-schedule-settings.md`.
+
+## Carried forward
+- **2.12 (next):** resolve `holiday_calendar_version` → exhaustive `CalendarVersion` (weekends +
+  JP/VN nationals + Project days); create `calendar_day_event` (append_only); national dataset
+  2026–2028; `app/calendar.publishCalendarVersion` — **one Project lock at a time**, append version,
+  `recalculateProject(cause = 'calendar changed')`, operator_audit + per-Project audit; retire
+  synthetic weekends-only seed / corpus `CAL_JP`/`CAL_VN` as the production path (fixtures may stay
+  hand-built). `lockWatermark` on calendar version appends.
+- **2.13+:** tree grid / preset; deps+constraints UX; strip + What-moved; exceptions rail;
+  Organisation UI (2.17).
+- **Still open (unchanged):** `range_start` must cover Project history; unratified 2.5 corpus edges;
+  Epic 6 / FR-31 health vs actuals; `applyPlanChange` on use-cases barrel / audit gate enumeration;
+  COMMIT-time 23503 audit-absence probe residue (PARTIAL from 2.9/2.10).
+
+## Next: story 2.12 — The Holiday Calendar and its dated versions
+Things to know before starting:
+- **Versions are immutable resolved `date[]`.** Never store a calendar *name* as the schedule input;
+  merge nationals + Project days at publish time (AR-57).
+- **Domain stays pure.** `domain/calendar` takes the resolved set; no weekend rule inside the engine.
+- **Fan-out cannot deadlock.** National-table publish loops Projects serially under each Project's
+  AD-20 lock; one halted Project does not stop the rest.
+- **Past-range plans halt** with `calendar_range` / stale `wp_schedule`; extending range is an
+  **operator** action (AR-58, UX-DR23).
+- **Do not fork the fence** for calendar-driven recalcs — call `recalculateProject` with cause
+  `calendar changed` after the version append in the same Project transaction.
+- Spec does not exist yet — Build creates it. Epics AC: `epics.md` § Story 2.12.
+- Kickoff: `/bmad-build Story 2.12 — The Holiday Calendar and its dated versions`
+
+## Earlier: Handoff — 2026-09-24 (story 2.9 closed: one path writes dates, and the run is the record)
 
 **Latest (2026-09-24, evening): story 2.9 merged via PR #70 (`49c01a4`) and is `done`.**
 Walkthrough approved; fence observation suite green (happy path / cycle refuse / calendar-range
