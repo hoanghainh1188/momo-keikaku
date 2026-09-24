@@ -1,4 +1,66 @@
-# Handoff — 2026-09-24 (story 2.8 closed: the golden scheduler corpus)
+# Handoff — 2026-09-24 (story 2.9 closed: one path writes dates, and the run is the record)
+
+**Latest (2026-09-24, evening): story 2.9 merged via PR #70 (`49c01a4`) and is `done`.**
+Walkthrough approved; fence observation suite green (happy path / cycle refuse / calendar-range
+halt / lock_timeout).
+- **The fence lands.** `app/schedule.applyPlanChange` + `recalculateProject` write the input and
+  recalculate in one tenant transaction under the AD-20 per-Project exclusive lock for the whole
+  mutation + recalc (sanctioned long hold). Only `app/schedule` may import
+  `db/repositories/plan-input` and `db/repositories/schedule`; dependency-cruiser fails any other
+  importer (AR-43).
+- **Two layers, two names.** `domain/schedule.recalculate` stays pure; only
+  `app/schedule.recalculateProject` resolves inputs, calls it, and appends the run (AR-47).
+- **Stored run.** Fully resolved inputs (AR-48); AD-26 index encoding into `inputs.wps`;
+  `remainingDays` stripped from stored outputs only (Q1 → B); FR-28 per-WP causes from
+  `prevInputs`; `engine_version` from the 2.8 registry (`schedule-2026-09-24`).
+- **Halt split (Q2 → A).** Graph offences → full rollback/refuse. `calendar_range` → halted run
+  (`halted_reason`, null outputs) + `wp_schedule.stale = true`. Success rebuilds `wp_schedule`
+  (`stale = false`); `schedule_run` is INSERT-only.
+- **Minimal mutation union (Q4 → A).** Duration / constraint / dependency patches through the
+  fence. Story 2.10 widens authoring (create/delete/move/re-parent, actuals, recorded %, CFs).
+- **Closure / measure / retention.** AR-52 writers / callers / reachability; codec shuffle of
+  stored shape; 500 WP / ~500 edge size vs AD-26 budgets (raw ±25%; `pg_column_size` / WAL as
+  upper bounds); AD-5 retention-by-reference helper + proof.
+- **Founder decisions (walkthrough / build Q1–Q4):** strip stored `remainingDays`; AD-27 halt
+  split; keep full story; minimal mutation union first.
+- **Carried forward (`deferred-work.md`).**
+  - **2.10:** widen `applyPlanChange` mutation union (WP create/delete/move/re-parent,
+    actuals via `wp_status_event`, Recorded % via new `pct_override_event`); keep
+    `checkPlanInvariants` on every mutation; finish COMMIT-time 23503/23514 → `invalid_input`
+    audit-absence probe / generic `runAuditedWrite` mapper residue; `lockWatermark` on every new
+    append-only writer.
+  - **2.12:** resolve `holiday_calendar_version` into exhaustive `CalendarVersion` (retire
+    synthetic weekends-only seed).
+  - **Unratified 2.5 edges (Q2 → B):** stay out of the corpus until the founder ratifies.
+- **Still open:**
+  - `range_start` must cover the Project's history (carry from 2.5).
+  - Manual check on 2.13's grid (Float with anchor, negative Float, Critical, constraint /
+    violation markers).
+  - Epic 6 / FR-31: Health may compare constraint dates to actuals for complete / in-progress.
+  - `applyPlanChange` not yet on the use-cases barrel / audit gate enumeration.
+- **Next: story 2.10** (Work Packages, actual dates and Custom Fields, edited through the fence).
+  Things to know before starting:
+  - **All edits go through the fence.** No second writer of AD-25 inputs. Widen the mutation
+    union; do not invent a parallel path.
+  - **Planned dates are never typed** (FR-5 / UX-DR12). Refuse derived-date edits with teaching
+    copy and move focus to the constraint cell.
+  - **`wp_status_event` is the home of actual dates** (AD-25 / AR-42). Marking complete asks for
+    actual finish (propose today); first-observed activity is evidence only, never auto-written.
+  - **`pct_override_event` is created here** (append_only, table-class registry) for Plan-grid
+    Recorded %. FR-30's audited override (mandatory reason, Observed-vs-Recorded) is Epic 6.
+  - **Leaf → summary.** Same action must resolve duration/constraint/deps (move to child or
+    drop); clear leaf-only columns in the same statement as `child_count` (CHECK is not
+    deferrable).
+  - **Delete with edges.** Incoming/outgoing edges deleted with the WP and listed in confirm;
+    never auto-relink predecessor-to-successor.
+  - **Actual finish after Data Date** → ask to advance Data Date in the same action (FR-43).
+  - **Custom Fields:** text/number/date/single-select; 100 CFs is the NFR-P1 tested bound.
+  - Call `checkPlanInvariants` before every new mutation shape; map 23503/23514; `lockWatermark`
+    before first INSERT on `wp_status_event` / `pct_override_event`.
+- Spec: `spec-2-9-one-path-writes-dates-and-the-run-is-the-record.md`.
+
+## Earlier: Handoff — 2026-09-24 (story 2.8 closed: the golden scheduler corpus)
+
 
 **Latest (2026-09-24, afternoon): story 2.8 merged via PR #68 (`c7f2db9`) and is `done`.**
 - **The correctness gate lands.** Five other scheduler CI gates only prove self-consistency;
