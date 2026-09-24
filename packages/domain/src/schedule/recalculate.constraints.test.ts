@@ -235,6 +235,49 @@ describe('recalculate — soft constraints: the I/O matrix (FR-6b, AR-49)', () =
     });
   });
 
+  it('⟨Q4⟩ a remaining no_duration leaf with an out-of-range must_* still halts with calendar_range', () => {
+    const tight = calendar('2026-10-01', '2026-10-31');
+    const result = recalculate(
+      inputs(
+        [
+          wp('W', {
+            durationDays: null,
+            constraintType: 'must_start_on',
+            constraintDate: '2026-09-15',
+          }),
+        ],
+        [],
+        { calendar: tight },
+      ),
+      null,
+    );
+    expect(result).toEqual({
+      kind: 'halted',
+      reason: 'calendar_range',
+      anchors: [],
+      wps: [{ wpId: 'W', side: 'before' }],
+    });
+  });
+
+  it('⟨Q4⟩ MFO on the leading non-working day of a weekend-opening calendar halts with side before', () => {
+    // Sat 10 Oct opens the range; floorPosition of Sat 10 is −1 (no working day on or before it).
+    const weekendOpen = calendar('2026-10-10', '2026-10-31');
+    const result = recalculate(
+      inputs(
+        [wp('W', { constraintType: 'must_finish_on', constraintDate: '2026-10-10' })],
+        [],
+        { calendar: weekendOpen, dataDate: '2026-10-12', projectStart: '2026-10-12' },
+      ),
+      null,
+    );
+    expect(result).toEqual({
+      kind: 'halted',
+      reason: 'calendar_range',
+      anchors: [],
+      wps: [{ wpId: 'W', side: 'before' }],
+    });
+  });
+
   it('⟨Q5⟩ a constraint on a complete or in-progress WP is ignored for dates and the violation list', () => {
     const complete = run([
       wp('C', {

@@ -87,13 +87,13 @@ import {
 
 // --- inputs ---------------------------------------------------------------------------------
 
+/** `work_package.constraint_type`. */
+export type ConstraintType = 'asap' | 'must_start_on' | 'must_finish_on';
+
 /**
  * One WP as the scheduler reads it. Scheduling inputs on a summary are ignored: leafness comes
  * from the plan's own parent links, as in `validate`.
  */
-/** `work_package.constraint_type`. */
-export type ConstraintType = 'asap' | 'must_start_on' | 'must_finish_on';
-
 export interface ScheduleWp extends PlanGraphWp {
   /** `work_package.duration_days`, in working days. `null` = not schedulable yet. */
   readonly durationDays: number | null;
@@ -552,6 +552,11 @@ function scheduleLeaf(
   }
 
   if (wp.durationDays === null) {
+    // Q4: a remaining no-duration leaf still range-checks its constraint before exiting.
+    if (state === 'remaining') {
+      const resolved = resolveRemainingConstraint(cal, wp);
+      if (resolved !== null && 'ok' in resolved) return resolved;
+    }
     // An actual start still stands ("an actual date always wins"); only the finish is unknown.
     const leaf = {
       state,
