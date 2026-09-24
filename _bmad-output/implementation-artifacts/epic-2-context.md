@@ -4,15 +4,15 @@
 
 ## Goal
 
-A PM builds a Plan by hand and it schedules itself. Leaf Work Packages (WPs) carry a duration, finish-to-start dependencies with lag, and one of three constraint types. The Project carries a start, an optional finish and a Data Date, over a versioned JP/VN working-day calendar. A slipped task moves the tasks that depend on it. Float and the critical path are always current, and every constraint violation, out-of-sequence link and unschedulable WP is listed with the chain behind it. This is the riskiest epic: no scheduling code existed, and automatic recalculation is why the plan can leave Excel. The tree grid is the only R0 scheduling surface; the Gantt is R1. Stories 2.1 and 2.2 are done: the schema migration landed and the demo spike was disposed of. Next is 2.3. Size the engine (2.3–2.12) and the plan surface (2.13–2.16) separately. Story 2.17 is not scheduling work. It adds the Organisation screens that Epic 1 claimed and did not ship, so size it separately too.
+A PM builds a Plan by hand and it schedules itself. Leaf Work Packages (WPs) carry a duration, finish-to-start dependencies with lag, and one of three constraint types. The Project carries a start, an optional finish and a Data Date, over a versioned JP/VN working-day calendar. A slipped task moves the tasks that depend on it. Float and the critical path are always current, negative Float shows as a negative number against a Project finish the PM set, and every constraint violation, out-of-sequence link and unschedulable WP is listed with the chain behind it. This is the riskiest epic, because automatic recalculation is the reason the plan can leave Excel. The tree grid is the only R0 scheduling surface; the Gantt is R1. Stories 2.1–2.5 are done (schema, spike disposal, `compareWp`, graph invariants, forward pass). **Next is 2.6: the backward pass, Float and the critical path.** Size the engine (2.3–2.12) and the plan surface (2.13–2.16) separately. Story 2.17 is the Organisation UI that Epic 1 did not ship, and it is not scheduling work.
 
 ## Stories
 
 - Story 2.1: The scheduling schema lands in one migration (done)
 - Story 2.2: The demo spike is disposed of, file by file (done)
-- Story 2.3: One canonical order for everything the scheduler reports
-- Story 2.4: The four graph rules are invariants, not entry checks
-- Story 2.5: The forward pass — a slip moves the tasks that depend on it
+- Story 2.3: One canonical order for everything the scheduler reports (done)
+- Story 2.4: The four graph rules are invariants, not entry checks (done)
+- Story 2.5: The forward pass — a slip moves the tasks that depend on it (done)
 - Story 2.6: The backward pass, Float, and the critical path
 - Story 2.7: Constraints are soft, reported, and stay on their own Work Package
 - Story 2.8: The golden scheduler corpus
@@ -28,138 +28,97 @@ A PM builds a Plan by hand and it schedules itself. Leaf Work Packages (WPs) car
 
 ## Requirements & Constraints
 
-- **Planned dates are never typed; the scheduler derives them.** On a leaf, a PM sets name, duration (working days), effort, an optional constraint, actual start and finish, Resources, Custom Fields and the milestone flag. Scheduling inputs exist on leaves only. A summary WP rolls up from its children (earliest start, latest finish, summed effort), and a pass never reads a roll-up back.
-- **Dependencies are FS only and leaf-to-leaf only.** Lag is in working days and may be negative. Four graph rules hold as invariants on every mutation and before every pass. Each offence is reported separately, not just the first: cycles, ancestor/descendant links (a separate check from cycles), summary endpoints, and cross-project links.
-- **The recalculation trigger set is closed:** duration; a dependency added, removed or re-lagged; a constraint; WP create, delete, move or re-parent; actual start or finish; Recorded % Complete; calendar version; Data Date, Project start or Project finish. **Nothing derived from Tracker evidence is ever a scheduling input.** Snapshots, the ledger, Mappings, Rules and Observed % never move a date.
-- **Forward pass.** Each leaf is in one of three states:
-  - *Complete*: its actual dates stand.
-  - *In progress*: it starts at its actual start and runs its remaining duration from no earlier than the Data Date.
-  - *Remaining*: it starts at the latest of the Data Date, the Project start, and each predecessor's finish plus lag.
-
-  Remaining duration is `ceil(duration × (1 − recorded_pct))`, with a minimum of 1. It is never stored, and a missing Recorded % counts as 0%.
-
-  **An actual date always wins.** When one conflicts with the graph, the pair is flagged out-of-sequence.
-
-  A leaf with no duration is left out of both passes and the critical path and listed as "not schedulable yet". It never counts as 0 or 1.
-
-  A pass that runs past the calendar's loaded range halts instead of guessing.
-- **Backward pass.** It has one anchor: the PM-set Project finish, otherwise the computed finish. A constraint is never the anchor. Float = late start − early start, as an integer. Float is negative only against a PM-set finish. **The critical path is the minimum-Float set, never the zero-Float set.** Float is always shown with its anchor.
-- **Constraints are soft.** A constraint is applied as a bound where the graph allows it and reported where it does not. The report gives the date asked for, the date derived, the working days late and the chain that forced it. A violation changes no WP's Float and never displaces the critical path. A milestone is a zero-duration leaf, and its target date *is* its `must_finish_on` constraint.
-- **Project settings:**
-  - With no Project start, the Project shows a "no project start yet" state and is not scheduled.
-  - The Data Date defaults to today and only the PM advances it. It is never advanced automatically.
-  - The Data Date cannot be set before the latest actual finish.
-  - An actual date later than the Data Date offers to advance the Data Date in the same action.
-  - Setting or clearing the Project finish moves no WP.
-- **Calendar:** JP and/or VN national holidays (Tết included), plus Project-specific non-working days. A new version is appended when a Project day changes, when the choice of national calendars changes, or when a national table is corrected. The 2026–2028 national data ships as a versioned static dataset.
-- **Custom Fields:** text, number, date and single-select, usable as columns and grouping axes. The tested bound is 100 per Project. A 101st is allowed with a warning.
-- **Cut order:** 2.5 is never cut. The first cut is 2.7, which also removes milestone target dates, so FR-31's milestone rules lose their input (this is still an open question for sprint planning). The second cut is 2.6. Build 2.6 before 2.7.
-- **NFRs, measured on Epic 1's 5×500-WP fixture:**
+- **Planned dates are never typed; the scheduler derives them.** Scheduling inputs exist on leaves only. A summary WP rolls up from its descendants (earliest early start, latest early finish, summed effort), is computed once into outputs, and is never read back into a pass.
+- **Dependencies are FS only and leaf-to-leaf only.** Lag is in working days and may be negative. The four graph rules (cycles, ancestor/descendant links, summary endpoints, cross-project links) hold on every mutation and before every pass, and every offence is reported.
+- **The recalculation trigger set is closed:** duration; a dependency added, removed or re-lagged; a constraint; WP create, delete, move or re-parent; actual start or finish; Recorded % Complete; calendar version; Data Date, Project start or Project finish. **Nothing derived from Tracker evidence is ever a scheduling input.**
+- **Forward pass (done in 2.5).** A leaf is *complete* (its actual dates stand), *in progress* (it resumes over its remaining duration from no earlier than the Data Date) or *remaining* (it starts at the latest of the Data Date, the Project start and each predecessor's finish plus lag). Remaining duration is `ceil(duration × (1 − recorded_pct))`, at least 1, never stored. A missing Recorded % counts as 0%. An actual date always wins, and a conflicting pair is flagged out-of-sequence. A leaf with no duration is excluded from both passes and from the critical path, its successors are driven as though it were absent, and it is listed as "not schedulable yet". A pass that leaves the calendar's loaded range halts rather than guessing.
+- **Backward pass (2.6).**
+  - It derives late start and late finish backwards through the same graph from **one anchor only**: the Project finish if the PM set one, otherwise the **computed finish** (the latest derived finish in the Plan). **A constraint is never the anchor.**
+  - Only two names exist for these dates: *Project finish* (set by the PM) and *computed finish* (derived). Never introduce a third label.
+  - With a PM-set finish, Float is absolute and may go negative. Without one, Float is relative and cannot go negative.
+- **Float (2.6)** = late start − early start, as an integer number of working days. It is negative **only** because the plan cannot meet a PM-set Project finish. It is shown as it is, never clamped to 0 or left blank.
+- **Critical path (2.6).**
+  - It is the set of WPs whose Float equals the **minimum Float in the Plan against the anchor**: zero on a plan with slack, negative on a late plan. **It is never the zero-Float set.** A late plan has no zero-Float WPs, so that definition would drop the deciding chain exactly when it matters.
+  - It is output as an ordered list: early start ascending, then `compareWp`.
+  - The same WP can be critical against one anchor and not the other.
+- **Driving predecessors (AR-56, 2.6).** Where several predecessors tie on the value that set an early start, outputs record **all** of them in `compareWp` order, and the UI names the first. Naming one and hiding the rest sends the PM after the wrong link.
+- **Anchor always travels with Float.** Every place Float is shown also shows which anchor it was measured against, because the two anchors give different Float and the difference reaches the client on a published schedule.
+- **Constraints (2.7, the boundary 2.6 must not cross).**
+  - Constraints are soft: a bound where the graph allows it, a violation where it does not, and the graph always wins.
+  - A violation reports the date asked for, the date derived, the working days late and the chain that forced it.
+  - **A violation changes no WP's Float, its own or upstream, and never displaces the critical path.** This is deliberately unlike common CPM. Violations are a separate list, sorted by days late descending then `compareWp`.
+  - A milestone is a zero-duration leaf whose target *is* its `must_finish_on`.
+  - So 2.6 computes Float and the critical path purely from the graph and the anchor, and constraints play no part in it.
+- **Cut order.** 2.5 is never cut. The first cut is 2.7, which also removes milestone targets. The second cut is 2.6, and it is taken only after 2.7. **Build order is the reverse: 2.6 is built before 2.7 and depends on nothing in it.**
+- **Downstream readers of these outputs.** Epic 6's Schedule-red Health rule reads the same minimum Float, and the rule "cannot fire" when no Project finish is set. Baselines (FR-15) and Published Snapshots (FR-35) re-derive dates, Float, violations and the critical path exactly, comparing the path as an ordered set.
+- **Project settings.** No Project start means "no project start yet", and the Project is not scheduled. The Data Date defaults to today, only the PM advances it, and it cannot be earlier than the latest actual finish. **Setting or clearing the Project finish moves no WP; it changes only the backward pass's anchor.**
+- **Calendar.** JP and/or VN national holidays (Tết included) plus Project non-working days. Versions are append-only. The 2026–2028 national data ships as a versioned static dataset.
+- **NFRs, on Epic 1's 5×500-WP fixture.**
   - Full recalculation under 300 ms p95.
   - Plan edits under 500 ms p75 and 1 s p95, recalculation included.
   - Grid load under 2 s p75 and 4 s p95.
   - Determinism is exact under shuffled input order.
-  - Every edit writes its audit row in the same transaction, with the previous value, and for actual dates the source (typed, imported, or accepted from evidence).
+  - Audit is written in the same transaction.
   - WCAG 2.1 AA, and nothing is conveyed by colour alone.
 
 ## Technical Decisions
 
-- **Schema as landed (2.1).** The schema comes from `0000_scheduling_schema.sql` through `pnpm db:migrate`. **The expand/contract exemption is spent**, and every later migration (`0001` onward) is expand/contract, with backfills through `maintenance`. Tables and columns:
-  - `wp_dependency` (`mutable_audited`): a `CHECK type='FS'`; `SS/FF/SF` stay expressible values. Its leaf FKs are `DEFERRABLE INITIALLY DEFERRED`.
-  - `wp_status_event` (`append_only`) is **the only home of actual dates**.
-  - `holiday_calendar_version` and `schedule_run` (`append_only`), and `wp_schedule` (`derived`).
-  - `work_package` gains `duration_days`, `constraint_type` and `constraint_date` with a leaf-only CHECK, plus an app-maintained `child_count` and a STORED `is_leaf`. It has no start, finish, `completed_at` or `milestone_done_at`.
-  - `project` gains `project_start`, `project_finish` and `data_date`.
-  - `baseline_version` has an FK to `schedule_run`.
-
-  There are 34 composite, `tenant_id`-led FKs with NO ACTION. They are `MATCH FULL`, except the seven with a nullable member, which are `MATCH SIMPLE`. `schema-catalog.test.ts` pins the hand-written clauses, and a CI drift step fails if `schema.ts` and the migration diverge. The seed writes no Baseline. Register every new table in `table-classes.ts` in the same change.
-- **Tables this epic still creates:** `pct_override_event` (2.10) and `calendar_day_event` (2.12), both `append_only`.
-- **Every append-only writer must call `lockWatermark`** (per-Project advisory lock, two-argument form) right before its first INSERT: `schedule_run`, `wp_status_event`, `holiday_calendar_version`, `pct_override_event` and `calendar_day_event`. Nothing enforces this mechanically.
-- **Two layers, two names.** `domain/schedule.recalculate(inputs, prevInputs) → outputs` is pure. `app/schedule.recalculateProject(ctx, projectId, cause)` resolves the inputs and appends the run. Nothing else may be called `recalculate`. `domain/schedule` must not import `domain/attribution`.
-- **One fence.** `app/schedule.applyPlanChange(ctx, mutation)` does the input write and the synchronous recalculation in one transaction, under the per-Project lock. Only `app/schedule` may import `db/repositories/plan-input` and `db/repositories/schedule`, and dependency-cruiser enforces this. A rejected edit rolls back completely. If the latency budget is missed, the fix is lock granularity, never a background path. An ingest arriving concurrently waits under a `lock_timeout` and records a retryable failure.
-- **Only two callers are not PM edits:** `publishCalendarVersion` (operator, one Project lock at a time) and `confirmImport` (Epic 3).
-- **Check graph rules app-side before writing** (2.4, 2.10, 2.14). The DB FKs are only the backstop. Map 23503/23514 errors, including a deferred FK failing at COMMIT, to `invalid_input` with a named rule, never a 500.
-- **`schedule_run.inputs` is fully resolved, with no pointers:**
-  - the whole WP tree, the edges, the three settings, and the resolved non-working-day set;
-  - watermarks as assertions, not filters;
-  - `inputs.wps` ordered by `compareWp`, with every other reference an integer index into it.
-
-  Measure the payload against about 385 kB raw, ~141 kB stored and ~152 kB of WAL. Retention is by reference, and the runs between two Reviews must survive.
-
-  `outputs` has two parts:
-  - Per WP: early start/finish (the "derived" dates), late start/finish, Float, is_critical, state, `not_schedulable_reason` and the cause.
-  - Per Project: violations, out-of-sequence rows, the ordered critical path, the anchor and the computed finish.
-
-  A calendar-range halt appends a run with `halted_reason` and no outputs, and marks `wp_schedule` `stale`.
-- **Ordering.** `compareWp` in `domain/schedule/order` is the only place order is decided, and it is total:
-  - WBS codes are NFKC-normalised first (a missing code becomes `''`), then split on `.`.
-  - Segments compare left to right in natural order:
-    - maximal `[0-9]` runs compare as arbitrary-precision integers, so `1` and `01` tie and the comparison continues;
-    - other runs compare by true code point through `compareNfkc`;
-    - a digit run sorts before a non-digit run;
-    - once the shared runs tie, fewer runs sort first, so the empty segment comes first.
-  - Once every shared segment ties, fewer segments sort first (`1.2` < `1.2.1`). This is a tie-break, not a count comparison: `1.1` still sorts before `2`.
-  - When the codes compare equal, the lowercase `wp_id` (Unicode default lowercasing) breaks the tie, then the raw `wp_id`, both by code point. Two distinct WPs therefore never compare equal.
-  - AD-28 was amended on 2026-09-23 because the code-point rule for mixed segments was intransitive (`2` < `10` < `1a` < `2`). Result: `3` < `3a` < `3b` < `4` < `10`.
-
-  **A WBS code orders WPs but never identifies them.** Matches across runs use `wp_id`. Tied driving predecessors are all recorded, in `compareWp` order. A cycle is rotated to start at its minimum WP. Violations sort by days late descending, then `compareWp`.
-- **Integer discipline.** Working days are integers and ratios use `{num, den}`. Compare outputs in the codec's canonical decoded form, never as `jsonb` text. Working-day math lives only in `domain/calendar`, and wall time comes only from the `Clock` port.
-- **CI gates owned here:** input-writer fence, trigger call-site, `recalculateProject` reachability (unreachable from ingest, rules, mapping and Tracker jobs), shuffled-input determinism, and the **golden corpus**.
+- **Two layers, two names.** `domain/schedule.recalculate(inputs, prevInputs) → outputs` is pure and reads only its arguments. `app/schedule.recalculateProject(ctx, projectId, cause)` resolves the inputs and appends the run. Nothing else may be called `recalculate`. The backward pass extends `recalculate`; it is not a second function. `domain/schedule` must not import `domain/attribution`.
+- **The outputs contract (AD-26).**
+  - Per WP: `early_start`/`early_finish` (the UI's "derived" dates), `late_start`, `late_finish`, `float_days`, `is_critical`, `state`, `not_schedulable_reason`, the FR-28 `cause`, and the summary roll-ups.
+  - Per Project: the violation rows (days late and chain), the out-of-sequence rows, the ordered critical path, the **anchor used** and the **computed finish**.
+  - `schedule_run` also carries `anchor` and `computed_finish` as columns.
+  - `is_critical` is defined only through the minimum-Float rule, so there are never two implementations.
+- **Ordering.** `compareWp` (`domain/schedule/order`) is the only ordering site, and it is total (natural order by WBS segment, amended 2026-09-23; see AD-28). Everything the scheduler reports goes through it: driving predecessors, the critical path, violations, out-of-sequence rows, the not-schedulable block and rotated cycles. The passes are max/min reductions, so the dates themselves are order-independent. `compareWp` only fixes the order of what is reported. **A WBS code orders WPs but never identifies them:** cross-run matching uses `wp_id`.
+- **Integer discipline.** Working days, lag, Float and days late are integers, and ratios use `{num, den}`. Working-day arithmetic lives only in `domain/calendar` and takes the resolved non-working-day set as an argument. Wall time comes only from the `Clock` port. Compare outputs in the AD-4 codec's canonical decoded form, never as `jsonb` text.
+- **One fence (2.9).** `app/schedule.applyPlanChange(ctx, mutation)` does the input write and the synchronous recalculation in one transaction, under the per-Project lock. Only `app/schedule` may import `db/repositories/plan-input` and `db/repositories/schedule`, and dependency-cruiser enforces it. A rejected edit rolls back completely. If the latency budget is missed, the fix is lock granularity, never a background path.
+- **Stored run.**
+  - `schedule_run.inputs` is fully resolved. It includes the whole WP tree, the edges, the three settings and the resolved non-working-day set, and the watermarks are assertions.
+  - `inputs.wps` is in `compareWp` order, and every other reference in `inputs` and `outputs` is an integer index into it. This includes the critical path and the driving chains.
+  - Payload targets: ~385 kB raw, ~141 kB stored and ~152 kB WAL.
+  - A calendar-range halt appends a run with `halted_reason` and no outputs, and marks `wp_schedule` stale.
+  - `engine_version` is a registry key. Any change to the passes, the roll-up, the ordering or the cause logic registers a new version.
+- **Schema.** It landed in 2.1 through `0000_scheduling_schema.sql`, and the expand/contract exemption is spent. Every later migration is expand/contract. Tables still to create are `pct_override_event` (2.10) and `calendar_day_event` (2.12), both `append_only`. Every append-only writer calls `lockWatermark` before its first INSERT. Register new tables in `table-classes.ts` in the same change.
+- **CI gates owned here:** the input-writer fence, the trigger call-site test, `recalculateProject` reachability, shuffled-input determinism, re-derivation, and the **golden corpus (2.8)**.
   - The corpus is hand-computed and is the only correctness gate.
-  - It must cover:
-    - a slip across JP and VN weekends;
-    - a mid-flight plan;
-    - negative Float;
-    - an out-of-sequence start;
-    - a `must_finish_on` missed by six weeks that does not displace the critical path;
-    - a zero-duration milestone;
-    - a leaf with no duration.
-  - `engine_version` is a registry key, and each case re-derives under its own version.
-- **Carry-overs landing in this epic:**
-  - The first real WP writer (2.10) should switch to app-generated UUIDv7 ids and `Clock`-stamped times; Project writes still stamp `demoAnchor`.
-  - Settle `child_count` semantics under soft delete.
-  - The 2.2 follow-ups are still open: move the pages' `bigint` and date arithmetic into use cases (and fix the SV note), and extend the +30% JA layout gate to the Project surfaces.
-- **2.17** reuses the existing audited org write use cases and adds no new write path. It adds read use cases, registered in the cross-tenant harness, and removes their tables from `UNREACHED_TENANT_OWNED_TABLES`. Rates are append-only. A PM gets `not_found` through the role gate. It narrows `loadProjectBundle`'s unscoped `resource` and `rate_entry` reads to the Project. Invitations are out of scope.
+  - Its minimum coverage includes negative Float against a PM-set finish, and a `must_finish_on` missed by six weeks that does not displace the critical path.
 
 ## UX & Interaction Patterns
 
-- **Plan layout, top to bottom:** schedule strip, toolbar, tree grid, with the exceptions rail on the right. The What-moved band appears between the toolbar and the grid after each recalculation.
-  - Three columns are frozen, visually only: WBS, Name with the expand control, and the state glyph.
-  - The grid is an ARIA treegrid.
-- **Presets.** Keys `1`–`4` switch preset and keep the focused row. The choice is saved per user per project.
-  - Schedule is the default and is complete in this epic: derived start/finish, duration, predecessors, constraint, Float, Critical, Exception. It must fit 1,232px at a 1280px viewport.
-  - Progress ships only its Epic 2 columns here.
-  - Baseline compare is finished in Epic 4.
-  - All is Comfort tier.
-- **Cell rules:**
-  - Typing into a derived date cell shows "Planned dates are derived. To pin a date, set a constraint." and moves focus to the constraint cell.
-  - Dates on or before the Data Date use muted ink.
-  - Summary cells show an em dash with an accessible name, never a blank.
-  - Negative Float keeps its minus sign.
-  - A critical row shows the word "Critical" with a rule, and the column header names the anchor.
-  - Exceptions show a glyph, a word and a number: "▲ Late 6d", "⇄ Out of sequence", "⊘ No duration".
-  - Out-of-sequence uses neutral ink.
-  - Nothing is edited by dragging.
-- **Predecessor cell.** It takes MS-Project syntax (`2.3FS+2d, 2.4`), with autocomplete over leaf WPs only. A rejection appears under the cell and names the offence and the WPs involved. The cell keeps the typed text, and the rejection is announced assertively.
-- **Constraint cell.** One column that reads like "Must finish on 18 Mar 2027", edited as type then date. Milestone targets are edited here. The Links panel (`l`) is Comfort tier.
-- **Schedule strip.** It shows the start, the finish (or *not set*), the Data Date, the computed finish, the minimum Float, and the anchor written as a sentence. It never scrolls away, and its fields are editable inline through the fence.
-- **What-moved band.** A one-line summary, then *See what moved*, which groups moved WPs under the seven causes.
-  - When nothing moved it says "No dates moved".
-  - Another PM's edit is shown with their name and has no Undo.
-  - During a recalculation, affected cells show "…".
-  - Changed cells get a 300 ms highlight that respects reduced motion.
-- **Exceptions rail.** Three groups, always in this order: violations (worst first), out-of-sequence, not schedulable.
-  - It is pinned at ≥1680px and becomes a drawer below that. The drawer toggle always shows the total.
-  - When empty it says "No schedule exceptions".
-  - The violation explainer names the calendar version and the chain.
-  - The out-of-sequence explainer offers no fix.
-  - The not-schedulable explainer has an inline duration field.
-  - If the plan has an illegal edge, a banner names it and the grid shows the last good schedule, marked stale.
-- **Mark complete** (`Shift+Enter`) proposes today as the actual finish. The first observed Ticket activity is shown only as evidence, with a one-click fill. The system never writes that date itself.
+- **Plan layout, top to bottom:** schedule strip, toolbar, then the tree grid (an ARIA treegrid), with the exceptions rail on the right. The What-moved band appears under the toolbar after each recalculation. The Schedule preset (the default) shows derived start/finish, duration, predecessors, constraint, Float, Critical and Exception.
+- **Float and Critical cells.**
+  - Negative Float keeps its minus sign and uses the health-red colour.
+  - Critical is the word "Critical" plus a bar glyph and a 3px left rule on the row, never colour alone.
+  - The column header names the anchor in short form: "vs Project finish" or "vs computed finish".
+  - Summary rows show an em dash with an accessible name.
+  - Not-schedulable rows show "—" for dates, Float and Critical.
+- **Schedule strip.**
+  - It shows the Project start, the Project finish (or *not set*), the Data Date, the computed finish, the minimum Float, and the anchor as a sentence. Examples: "Float measured against the Project finish, 31 Mar 2027", or "…against the computed finish, 12 Mar 2027 — relative…".
+  - Setting a Project finish for the first time is confirmed with what it actually does: it moves no WP and changes what Float is measured against.
+- **Announcements.** Float is never announced without its anchor. A recalculation is announced politely, e.g. "Computed finish 26 March 2027. Minimum Float minus 3." The What-moved band shows "minimum Float +4 → −3".
+- **Violation explainer (2.16).** It ends with "This violation stays on this work package. It has not changed any other work package's Float." The critical path visibly does not jump to a violated chain.
 
 ## Cross-Story Dependencies
 
-- 2.1 and 2.2 are done, and Story 1.1's `pnpm dev` is now unblocked and closed.
-- The engine (2.3 → 2.4 → 2.5 → 2.6 → 2.7) is pure and needs no database. 2.8 locks in its correctness. 2.9 wraps the engine in the fence and `schedule_run`, and it is the heaviest story in the plan. 2.10–2.12 write inputs through the fence. 2.13–2.16 build the surface on top. 2.17 reuses the 2.2 shell and the 2.13–2.16 grid.
-- From Epic 1 this epic uses: the table-class registry, RLS and `withTenant`, audit in the same transaction, `runAuditedWrite`, `lockWatermark`, the `Clock` port, the role gate, `compareNfkc`, and the load fixture.
-- Recorded % Complete has no real writer until Epic 3 (import) and Epic 6 (the audited override), so the in-progress branch is exercised only by the seed and the golden corpus. Epics 5 and 6 complete the Progress preset. Epic 4 completes Baseline compare and pins a `schedule_run` by reference. Epic 6's Review re-captures `schedule_run_seq` after each PM write.
+- **Engine order.** 2.3 → 2.4 → 2.5 → **2.6** → 2.7 is pure, with no database. 2.8 locks in correctness. 2.9 wraps the engine in the fence and `schedule_run`, and it is the heaviest story. 2.10–2.12 write inputs through the fence. 2.13–2.16 build the surface, and 2.17 reuses it.
+- **Date conventions pinned by founder decisions in 2.5.** 2.8 computes the corpus by hand against these, and 2.6's backward pass must mirror them.
+  - Start and finish are inclusive.
+  - FS lag L starts the successor (1+L) working days after the predecessor finishes.
+  - A Data Date or Project start on a non-working day rolls forward.
+  - A milestone's start equals its finish.
+  - Across a no-duration WP X, P →(a) X →(b) S behaves as P →(a+b) S.
+- **Open questions for 2.6, not settled by the planning docs.**
+  - The reverse of the (1+L) rule, and a milestone's late date.
+  - Whether complete and in-progress WPs get Float, and how they take part in the backward pass.
+  - Backward bridging across no-duration WPs.
+  - A PM-set finish on a non-working day.
+  - A late date before the calendar's `range_start`.
+  - Also carried from 2.5: whether `remainingDays` stays in the stored outputs.
+- **Inherited from 2.5.** Driving predecessors are not recorded yet: the forward pass keeps only the latest driver, not the ties. 2.6 must record every tied driver in `compareWp` order, including drivers bridged across no-duration WPs. The inputs have no Project finish yet, so 2.6 adds one (nullable). The shuffle invariance and the 2,500-leaf timing must keep passing with the new fields.
+- **Carried to 2.9.** The per-WP cause from `diff(prevInputs, inputs)`, recording the halted run, and the index-referenced encoding.
+- **Carried to 2.12.** Resolving a calendar version into the domain calendar, with weekends listed explicitly.
+- **Other epics.**
+  - Epic 1 provides the table-class registry, RLS and `withTenant`, same-transaction audit, `lockWatermark`, `Clock`, the role gate, `compareNfkc` and the load fixture.
+  - Recorded % has no real writer until Epic 3 (import) and Epic 6 (the audited override).
+  - Epic 4 pins a `schedule_run` by reference.
+  - Epic 6's Health rules read the minimum Float and the violation list.
