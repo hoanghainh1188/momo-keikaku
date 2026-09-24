@@ -1,5 +1,6 @@
 /**
- * The forward pass (story 2.5) and the backward pass, Float and the critical path (story 2.6).
+ * The forward pass (story 2.5), the backward pass, Float and the critical path (story 2.6), and
+ * soft constraints (story 2.7).
  *
  * `recalculate(inputs, prevInputs)` is `domain/schedule`'s one pure scheduling function (AD-25:
  * nothing else is named `recalculate`; `app/schedule.recalculateProject` wraps it in 2.9). It
@@ -71,7 +72,12 @@
  * `prevInputs` stays in the signature (AD-25), but no per-WP cause is computed here (Q5 → A):
  * that is story 2.9's (`deferred-work.md`).
  *
- * Out of scope: constraints (2.7), the stored run and its index-referenced encoding (2.9).
+ * Soft constraints (story 2.7): a remaining leaf's *must start on* holds it back where the graph
+ * allows; *must finish on* only reports a miss. Violations live on `ScheduleOutputs.violations`
+ * and never enter the backward pass or displace the critical path. A constraint is never the
+ * anchor.
+ *
+ * Out of scope: the stored run and its index-referenced encoding (2.9).
  *
  * Traceability: AD-25, AD-26, AD-27, AD-28, AR-7, AR-46, AR-49, AR-56, AR-58, FR-5, FR-6a, FR-6b.
  */
@@ -112,6 +118,9 @@ import {
  * One WP as the scheduler reads it. Scheduling inputs on a summary are ignored: leafness comes
  * from the plan's own parent links, as in `validate`.
  */
+/** `work_package.constraint_type`. */
+export type ConstraintType = 'asap' | 'must_start_on' | 'must_finish_on';
+
 export interface ScheduleWp extends PlanGraphWp {
   /** `work_package.duration_days`, in working days. `null` = not schedulable yet. */
   readonly durationDays: number | null;
@@ -122,6 +131,10 @@ export interface ScheduleWp extends PlanGraphWp {
   readonly actualFinish: IsoDate | null;
   /** Recorded % Complete, in [0, 1]. `null` counts as 0. */
   readonly recordedPct: Ratio | null;
+  /** `work_package.constraint_type`. Pair with `constraintDate`: `asap` ↔ null, `must_*` ↔ a date. */
+  readonly constraintType: ConstraintType;
+  /** `work_package.constraint_date`. The date the PM set; rolling is the pass's job. */
+  readonly constraintDate: IsoDate | null;
 }
 
 /** An FS dependency (`wp_dependency`) with its lag in working days, possibly negative. */
@@ -191,6 +204,26 @@ export interface NotSchedulable {
   readonly reason: NotSchedulableReason;
 }
 
+/**
+ * A soft-constraint miss on a remaining leaf (story 2.7). Sorted by `daysLate` descending, then
+ * `compareWp`. A violation changes no Float and never displaces the critical path.
+ */
+export interface ConstraintViolation {
+  readonly wpId: string;
+  readonly constraintType: 'must_start_on' | 'must_finish_on';
+  /** The date the PM set, unrolled (as `anchor.date` reports a Project finish). */
+  readonly askedDate: IsoDate;
+  /** The early start (MSO) or early finish (MFO) the graph derived. */
+  readonly derivedDate: IsoDate;
+  /** Working days between the rolled asked date and `derivedDate`; always > 0 on this list. */
+  readonly daysLate: number;
+  /**
+   * The first-driver walk from this WP: at each step `drivingPredecessors[0]`, until a WP with no
+   * driver (with a cycle guard). Empty when the Data Date or Project start alone set the start.
+   */
+  readonly chain: readonly string[];
+}
+
 export interface ScheduleOutputs {
   /** Every WP of the Project, in `compareWp` order. */
   readonly wps: readonly WpScheduleOutput[];
@@ -202,6 +235,8 @@ export interface ScheduleOutputs {
   readonly outOfSequence: readonly EdgeRef[];
   /** The "not schedulable yet" leaves, in `compareWp` order. */
   readonly notSchedulable: readonly NotSchedulable[];
+  /** Soft-constraint misses, worst first then `compareWp` (story 2.7). */
+  readonly violations: readonly ConstraintViolation[];
   /** The Project finish if set, else the computed finish; `null` when neither exists. */
   readonly anchor: ScheduleAnchor | null;
   /** The latest early finish of a remaining or in-progress WP; `null` when none is dated. */
@@ -696,6 +731,7 @@ function assemble(
     wps,
     outOfSequence,
     notSchedulable,
+    violations: [],
     anchor,
     computedFinish,
     criticalPath: critical.path.map(idOf),

@@ -37,6 +37,10 @@ export interface WpSpec {
   actualFinish?: IsoDate | null;
   recordedPct?: Ratio | null;
   projectId?: string;
+  /** Defaults to `asap`. */
+  constraintType?: ScheduleWp['constraintType'];
+  /** Defaults to `null`. */
+  constraintDate?: IsoDate | null;
 }
 
 /** A WP whose id doubles as its WBS code, so `compareWp` order is the natural order of the ids. */
@@ -50,6 +54,8 @@ export const wp = (id: string, spec: WpSpec = {}): ScheduleWp => ({
   actualStart: spec.actualStart ?? null,
   actualFinish: spec.actualFinish ?? null,
   recordedPct: spec.recordedPct ?? null,
+  constraintType: spec.constraintType ?? 'asap',
+  constraintDate: spec.constraintDate ?? null,
 });
 
 export const edge = (predecessorId: string, successorId: string, lagDays = 0): ScheduleEdge => ({
