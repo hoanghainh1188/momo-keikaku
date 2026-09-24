@@ -119,7 +119,14 @@ import {
   getWpDeleteConfirm,
   proposedCompleteDay,
   refuseDerivedDateEdit,
+  setProjectStart,
+  clearProjectStart,
+  patchProjectFinishSetting,
+  patchDataDateSetting,
+  dataDateAdvancePreview,
   DERIVED_DATE_TEACHING,
+  PROJECT_FINISH_TEACHING,
+  NO_PROJECT_START_YET,
 } from '@momo/app';
 import { buildResetPasswordMail } from '@momo/i18n';
 import { mailerConsoleOn, productClockOn, systemClock, uuidV7IdsOn } from '@momo/adapters';
@@ -528,6 +535,30 @@ export async function deleteWp(input: unknown, ctx?: RequestContext) {
   return deleteWorkPackage(writeDeps(), context, input);
 }
 
+/** Set Project start (+ Data Date today) through the fence. */
+export async function setProjectStartSetting(input: unknown, ctx?: RequestContext) {
+  const context = ctx ?? (await requestContext());
+  return setProjectStart(writeDeps(), context, input);
+}
+
+/** Clear Project start (Q2→A). */
+export async function clearProjectStartSetting(input: unknown, ctx?: RequestContext) {
+  const context = ctx ?? (await requestContext());
+  return clearProjectStart(writeDeps(), context, input);
+}
+
+/** Set or clear Project finish after teaching confirm. */
+export async function patchProjectFinish(input: unknown, ctx?: RequestContext) {
+  const context = ctx ?? (await requestContext());
+  return patchProjectFinishSetting(writeDeps(), context, input);
+}
+
+/** Standalone Data Date advance. */
+export async function patchDataDate(input: unknown, ctx?: RequestContext) {
+  const context = ctx ?? (await requestContext());
+  return patchDataDateSetting(writeDeps(), context, input);
+}
+
 /** First-observed activity evidence for the complete flow (read-only). */
 export async function firstObservedForWp(
   input: { projectId: string; wpId: string },
@@ -546,18 +577,23 @@ export async function wpDeleteConfirm(
   return getWpDeleteConfirm(writeDeps(), context, input);
 }
 
-/** Project data_date + per-WP constraints for the thin plan UI. */
+/** Project schedule settings + constraints for Plan / settings thin UI. */
 export async function planThinUiState(projectId: string, ctx?: RequestContext) {
   const context = ctx ?? (await requestContext());
   return getPlanThinUiState(writeDeps(), context, { projectId });
 }
 
+export {
+  DERIVED_DATE_TEACHING,
+  PROJECT_FINISH_TEACHING,
+  NO_PROJECT_START_YET,
+  dataDateAdvancePreview,
+};
+
 /** Teaching refuse for a derived-date edit (UX-DR12) — nothing written. */
 export function refuseDerivedDate() {
   return refuseDerivedDateEdit();
 }
-
-export { DERIVED_DATE_TEACHING };
 
 /** Product-clock calendar day for the complete-flow finish proposal (UX-DR13). */
 export function proposedCompleteFinish(tzOffsetMinutes: number): string {

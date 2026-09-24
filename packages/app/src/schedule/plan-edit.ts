@@ -1,6 +1,6 @@
 /**
- * Thin plan-edit helpers for story 2.10 UI (complete / delete confirm / derived-date refuse).
- * Reads and writes go through the fence or schedule-owned ports — never a second mutator.
+ * Thin plan-edit helpers for stories 2.10 / 2.11 UI (complete / delete / derived-date refuse;
+ * Project schedule settings). Reads and writes go through the fence — never a second mutator.
  */
 import { z } from 'zod';
 import { and, eq, isNull } from 'drizzle-orm';
@@ -23,6 +23,34 @@ import { readFirstObservedActivity } from './first-observed';
 export const DERIVED_DATE_TEACHING =
   'Planned dates are derived. To pin a date, set a constraint.';
 
+/** Exact teaching copy for set/clear Project finish (FR-43, UX-DR5). */
+export const PROJECT_FINISH_TEACHING =
+  'This moves no work package. It changes what Float is measured against, and lets Float go negative';
+
+export const NO_PROJECT_START_YET = 'no project start yet';
+
+/** Advance preview copy (UX-DR14) — count is remaining leaves without actual finish. */
+export function dataDateAdvancePreview(dataDate: string, remainingCount: number): string {
+  // Format as "26 Sep" style without locale libs — ISO YYYY-MM-DD → day mon abbrev.
+  const [, m, d] = dataDate.split('-').map(Number);
+  const months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+  const label = `${d} ${months[(m ?? 1) - 1] ?? 'Jan'}`;
+  return `Advancing to ${label} re-dates ${remainingCount} remaining work packages`;
+}
+
 function asBound(scheduling: SchedulingBound): Bound {
   return scheduling as Bound;
 }
@@ -32,14 +60,18 @@ export function proposedCompleteDay(now: Date, tzOffsetMinutes: number): string 
   return projectDate(now.toISOString(), tzOffsetMinutes);
 }
 
-/** Read-only: Project data_date + per-WP constraints for the thin plan UI. */
+/** Read-only: Project schedule settings + per-WP constraints for the thin plan / settings UI. */
 export async function getPlanThinUiState<Handle>(
   deps: ApplyPlanChangeDeps<Handle>,
   ctx: RequestContext,
   input: { readonly projectId: string },
 ): Promise<
   Result<{
+    readonly projectStart: string | null;
+    readonly projectFinish: string | null;
     readonly dataDate: string | null;
+    readonly tzOffsetMinutes: number;
+    readonly remainingLeafCount: number;
     readonly constraints: ReadonlyMap<
       string,
       { readonly constraintType: string; readonly constraintDate: string | null }
@@ -52,7 +84,12 @@ export async function getPlanThinUiState<Handle>(
   const value = await deps.transaction(deps.handle, ctx.tenantId, async (scope) => {
     const bound = asBound(scope.bound);
     const [project] = await bound.tx
-      .select({ dataDate: s.project.dataDate })
+      .select({
+        projectStart: s.project.projectStart,
+        projectFinish: s.project.projectFinish,
+        dataDate: s.project.dataDate,
+        tzOffsetMinutes: s.project.tzOffsetMinutes,
+      })
       .from(s.project)
       .where(and(eq(s.project.tenantId, bound.tenantId), eq(s.project.id, input.projectId)));
     if (!project) throw projectNotFound(input.projectId);
@@ -72,6 +109,9 @@ export async function getPlanThinUiState<Handle>(
         ),
       );
 
+    const planInput = planInputRepositoryOn(bound);
+    const remainingLeafCount = await planInput.remainingLeafCount(input.projectId);
+
     const constraints = new Map(
       rows.map(
         (r) =>
@@ -81,7 +121,14 @@ export async function getPlanThinUiState<Handle>(
           ] as const,
       ),
     );
-    return { dataDate: project.dataDate, constraints };
+    return {
+      projectStart: project.projectStart,
+      projectFinish: project.projectFinish,
+      dataDate: project.dataDate,
+      tzOffsetMinutes: project.tzOffsetMinutes,
+      remainingLeafCount,
+      constraints,
+    };
   });
   return ok(value);
 }
@@ -189,5 +236,85 @@ export async function deleteWorkPackage<Handle>(
     kind: 'delete_wp',
     projectId: parsed.data.projectId,
     wpId: parsed.data.wpId,
+  });
+}
+
+const setStartSchema = z.object({
+  projectId: z.string().min(1),
+  projectStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  dataDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+});
+
+/** Set Project start (+ Data Date defaulting to today inside the fence). */
+export async function setProjectStart<Handle>(
+  deps: ApplyPlanChangeDeps<Handle>,
+  ctx: RequestContext,
+  input: unknown,
+): Promise<Result<ApplyPlanChangeResult>> {
+  const parsed = setStartSchema.safeParse(input);
+  if (!parsed.success) return fail('invalid_input');
+  return applyPlanChange(deps, ctx, {
+    kind: 'set_project_start',
+    projectId: parsed.data.projectId,
+    projectStart: parsed.data.projectStart,
+    ...(parsed.data.dataDate !== undefined ? { dataDate: parsed.data.dataDate } : {}),
+  });
+}
+
+const projectIdSchema = z.object({ projectId: z.string().min(1) });
+
+/** Clear Project start — returns to "no project start yet" without recalculation (Q2→A). */
+export async function clearProjectStart<Handle>(
+  deps: ApplyPlanChangeDeps<Handle>,
+  ctx: RequestContext,
+  input: unknown,
+): Promise<Result<ApplyPlanChangeResult>> {
+  const parsed = projectIdSchema.safeParse(input);
+  if (!parsed.success) return fail('invalid_input');
+  return applyPlanChange(deps, ctx, {
+    kind: 'clear_project_start',
+    projectId: parsed.data.projectId,
+  });
+}
+
+const finishSchema = z.object({
+  projectId: z.string().min(1),
+  projectFinish: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
+  /** Must be true — UI shows PROJECT_FINISH_TEACHING before submit. */
+  confirmed: z.literal(true),
+});
+
+/** Set or clear Project finish after teaching confirm. */
+export async function patchProjectFinishSetting<Handle>(
+  deps: ApplyPlanChangeDeps<Handle>,
+  ctx: RequestContext,
+  input: unknown,
+): Promise<Result<ApplyPlanChangeResult>> {
+  const parsed = finishSchema.safeParse(input);
+  if (!parsed.success) return fail('invalid_input');
+  return applyPlanChange(deps, ctx, {
+    kind: 'patch_project_finish',
+    projectId: parsed.data.projectId,
+    projectFinish: parsed.data.projectFinish,
+  });
+}
+
+const dataDateSchema = z.object({
+  projectId: z.string().min(1),
+  dataDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});
+
+/** Standalone Data Date advance through the fence. */
+export async function patchDataDateSetting<Handle>(
+  deps: ApplyPlanChangeDeps<Handle>,
+  ctx: RequestContext,
+  input: unknown,
+): Promise<Result<ApplyPlanChangeResult>> {
+  const parsed = dataDateSchema.safeParse(input);
+  if (!parsed.success) return fail('invalid_input');
+  return applyPlanChange(deps, ctx, {
+    kind: 'patch_data_date',
+    projectId: parsed.data.projectId,
+    dataDate: parsed.data.dataDate,
   });
 }

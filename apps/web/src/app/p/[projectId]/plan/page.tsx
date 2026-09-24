@@ -1,13 +1,14 @@
 import { getTranslations } from 'next-intl/server';
 import {
   getProjectReview,
+  NO_PROJECT_START_YET,
   planThinUiState,
   proposedCompleteFinish,
 } from '@/server/composition';
 import { valueOrNotFound } from '@/server/result';
 import { hours, type Mh } from '@momo/domain/present';
 import { Section } from '@/components/ui';
-import { CompleteWpForm, DeleteWpForm, DerivedDateCell } from '@/components/plan-thin-edit';
+import { CompleteWpForm, DeleteWpForm, DerivedDateCell, SetProjectStartForm } from '@/components/plan-thin-edit';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,8 +16,8 @@ export const dynamic = 'force-dynamic';
  * FR-5, FR-7: the Current Plan as a tree grid against the active Baseline.
  *
  * A Work Package carries no planned date (story 2.2): its dates here are the Baseline's and its
- * actual dates. Story 2.10 adds thin complete / delete / derived-date refuse controls; the full
- * tree grid arrives with 2.13+.
+ * actual dates. Story 2.10 adds thin complete / delete / derived-date refuse controls; 2.11 adds
+ * "no project start yet" / *Set Project start* (Q1→B). The full tree grid arrives with 2.13+.
  */
 export default async function PlanPage({
   params,
@@ -33,6 +34,7 @@ export default async function PlanPage({
   const baselineByWp = new Map((baseline?.wps ?? []).map((b) => [b.wpId, b]));
   const acByWp = r.attribution.acByWp;
   const dataDate = thin.dataDate;
+  const noProjectStart = thin.projectStart === null;
   const proposedFinish = proposedCompleteFinish(bundle.project.tzOffsetMinutes);
 
   // roll-ups (FR-5): summary WP effort comes from the children
@@ -83,6 +85,17 @@ export default async function PlanPage({
           </>
         )}
       </div>
+
+      {noProjectStart ? (
+        <div
+          className="report-sub"
+          style={{ marginTop: 12 }}
+          data-testid="no-project-start-yet"
+        >
+          <span aria-label={NO_PROJECT_START_YET}>{NO_PROJECT_START_YET}</span>
+          <SetProjectStartForm projectId={projectId} proposedStart={proposedFinish} />
+        </div>
+      ) : null}
 
       <Section title={t('plan.tree_schedule')} id="wbs">
         <table className="ledger" data-testid="plan-tree">
@@ -169,7 +182,11 @@ export default async function PlanPage({
                     <td>
                       {w.isLeaf ? (
                         <>
-                          <DerivedDateCell constraintInputId={constraintInputId} />
+                          <DerivedDateCell
+                            constraintInputId={constraintInputId}
+                            noProjectStart={noProjectStart}
+                            noProjectStartLabel={NO_PROJECT_START_YET}
+                          />
                           <CompleteWpForm
                             projectId={projectId}
                             wpId={w.id}

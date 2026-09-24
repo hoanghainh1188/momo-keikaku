@@ -1,0 +1,40 @@
+[
+  {
+    "location": "packages/app/src/schedule/apply-plan-change.ts:481-497",
+    "trigger_condition": "set_project_start dataDate before latest actual finish",
+    "guard_snippet": "const blockers = await planInput.dataDateBlockers(id, dataDate); if (blockers.length) refuse('invalid_input', { dataDate: ['before_latest_actual_finish'], blockingWpIds: blockers.map(b => b.wpId) });",
+    "potential_consequence": "Data Date commits earlier than actual finishes"
+  },
+  {
+    "location": "packages/app/src/schedule/apply-plan-change.ts:487-496",
+    "trigger_condition": "re-set start omits dataDate while DD already advanced",
+    "guard_snippet": "if (beforeSettings?.projectStart != null && mutation.dataDate === undefined) { await planInput.patchProjectStart({ projectId, projectStart: mutation.projectStart }); } else { /* write start+dataDate */ }",
+    "potential_consequence": "PM-advanced Data Date silently reset to today"
+  },
+  {
+    "location": "packages/db/src/repositories/plan-input/index.ts:dataDateBlockers",
+    "trigger_condition": "soft-deleted WP head actualFinish after proposed dataDate",
+    "guard_snippet": "filter heads to WPs with deletedAt IS NULL (and isLeaf) before comparing actualFinish > dataDate",
+    "potential_consequence": "Advance refused citing deleted or non-plan WPs"
+  },
+  {
+    "location": "apps/web/src/app/p/[projectId]/settings/page.tsx:previewDate + project-schedule-settings.tsx:dataDateValue",
+    "trigger_condition": "user changes Advance Data Date input off server previewDate",
+    "guard_snippet": "derive advancePreview from dataDateValue (client) or recompute onChange; do not freeze thin.dataDate label",
+    "potential_consequence": "Confirm copy names a different date than submitted"
+  },
+  {
+    "location": "apps/web/src/components/project-schedule-settings.tsx:finish forms + apply-plan-change.ts:666",
+    "trigger_condition": "patch_project_finish while projectStart is null",
+    "guard_snippet": "disable finish set/clear when projectStart === null; or skip resolve/recalc when start null after settings write",
+    "potential_consequence": "Finish submit rolls back with projectStart required"
+  },
+  {
+    "location": "packages/app/src/schedule/apply-plan-change.ts:481-497",
+    "trigger_condition": "Given a Data Date earlier than the latest actual finish, when submitted, then it is refused with the blocking WPs",
+    "guard_snippet": "set_project_start writes dataDate with no dataDateBlockers check (unlike patch_data_date)",
+    "potential_consequence": "Believers of the refuse claim accept early Data Date via set-start",
+    "kind": "claim",
+    "confidence": "high"
+  }
+]

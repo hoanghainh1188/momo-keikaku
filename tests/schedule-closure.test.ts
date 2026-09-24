@@ -95,7 +95,7 @@ describe('AR-52 writers — AD-25 input writes stay inside the fence', () => {
     ).toEqual([]);
   });
 
-  it('only plan-input inserts work_package, wp_status_event, pct_override_event, CF tables, or patches data_date', () => {
+  it('only plan-input inserts work_package, wp_status_event, pct_override_event, CF tables, or patches project schedule settings', () => {
     const files = walk(join(ROOT, 'packages')).concat(walk(join(ROOT, 'apps')));
     const offenders: string[] = [];
     const patterns: { name: string; re: RegExp }[] = [
@@ -116,6 +116,14 @@ describe('AR-52 writers — AD-25 input writes stay inside the fence', () => {
       {
         name: 'project dataDate update',
         re: /\.update\(\s*s\.project[\s\S]{0,200}dataDate|\.set\(\{[^}]*dataDate/,
+      },
+      {
+        name: 'project projectStart update',
+        re: /\.update\(\s*s\.project[\s\S]{0,200}projectStart|\.set\(\{[^}]*projectStart/,
+      },
+      {
+        name: 'project projectFinish update',
+        re: /\.update\(\s*s\.project[\s\S]{0,200}projectFinish|\.set\(\{[^}]*projectFinish/,
       },
     ];
     for (const file of files) {

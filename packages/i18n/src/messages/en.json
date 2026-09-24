@@ -417,6 +417,10 @@
       "connectors": {
         "label": "Connectors",
         "title": "Tracker Connectors"
+      },
+      "settings": {
+        "label": "Project settings",
+        "title": "Schedule settings"
       }
     },
     "roleLabels": {

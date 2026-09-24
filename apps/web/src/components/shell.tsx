@@ -16,6 +16,7 @@ const SURFACES = [
   { slug: 'mapping', glyph: '⇄', messageKey: 'shell.surfaces.mapping' as const },
   { slug: 'baselines', glyph: '▤', messageKey: 'shell.surfaces.baselines' as const },
   { slug: 'connectors', glyph: '⟲', messageKey: 'shell.surfaces.connectors' as const },
+  { slug: 'settings', glyph: '⚙', messageKey: 'shell.surfaces.settings' as const },
 ];
 
 export interface ShellProps {

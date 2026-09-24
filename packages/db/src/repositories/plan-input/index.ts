@@ -1,7 +1,7 @@
 /**
- * AD-25 plan-input writers (stories 2.9 / 2.10) — duration / constraint / dependency patches,
- * WP authoring (create / soft-delete / re-parent / patch), actuals, Recorded %, Custom Fields,
- * and the actuals-compound Data Date advance.
+ * AD-25 plan-input writers (stories 2.9 / 2.10 / 2.11) — duration / constraint / dependency
+ * patches, WP authoring, actuals, Recorded %, Custom Fields, the actuals-compound Data Date
+ * advance, and the three Project schedule settings (start / finish / data_date).
  *
  * Bound to one transaction and one Tenant. Only `packages/app/src/schedule` may import this
  * module (`.dependency-cruiser.cjs` `SCHEDULING_REPOSITORIES`). Every write goes through the
@@ -13,7 +13,7 @@
  * 23503 / 23514 from the leaf and type CHECKs / FKs surface as Postgres errors; the fence maps
  * them to `invalid_input` with the plan-invariant rule codes.
  */
-import { and, eq, or, sql } from 'drizzle-orm';
+import { and, eq, isNull, or, sql } from 'drizzle-orm';
 import type { Bound } from '../../bound';
 import { projectNotFound } from '../../project-not-found';
 import * as s from '../../schema';
@@ -136,6 +136,22 @@ export interface AppendPctOverrideCommand {
 export interface PatchDataDateCommand {
   readonly projectId: string;
   readonly dataDate: string;
+}
+
+export interface PatchProjectStartCommand {
+  readonly projectId: string;
+  /** ISO date, or `null` to clear (Q2→A — returns to "no project start yet"). */
+  readonly projectStart: string | null;
+  /**
+   * When setting start, Data Date is written in the same statement (FR-43).
+   * Omit / ignore when clearing.
+   */
+  readonly dataDate?: string | null;
+}
+
+export interface PatchProjectFinishCommand {
+  readonly projectId: string;
+  readonly projectFinish: string | null;
 }
 
 export interface CreateCustomFieldDefinitionCommand {
@@ -719,6 +735,124 @@ export function planInputRepositoryOn(bound: Bound) {
         .where(and(eq(s.project.tenantId, tenantId), eq(s.project.id, command.projectId)))
         .returning({ id: s.project.id });
       if (updated.length === 0) throw projectNotFound(command.projectId);
+    },
+
+    /**
+     * Set or clear Project start. Setting also writes `data_date` in the same UPDATE when
+     * provided (FR-43 first action). Clearing leaves finish/data_date alone (Q2→A).
+     */
+    async patchProjectStart(command: PatchProjectStartCommand): Promise<void> {
+      await requireProject(bound, command.projectId);
+      const set =
+        command.projectStart === null
+          ? { projectStart: null as string | null }
+          : {
+              projectStart: command.projectStart,
+              ...(command.dataDate !== undefined ? { dataDate: command.dataDate } : {}),
+            };
+      const updated = await tx
+        .update(s.project)
+        .set(set)
+        .where(and(eq(s.project.tenantId, tenantId), eq(s.project.id, command.projectId)))
+        .returning({ id: s.project.id });
+      if (updated.length === 0) throw projectNotFound(command.projectId);
+    },
+
+    async patchProjectFinish(command: PatchProjectFinishCommand): Promise<void> {
+      await requireProject(bound, command.projectId);
+      const updated = await tx
+        .update(s.project)
+        .set({ projectFinish: command.projectFinish })
+        .where(and(eq(s.project.tenantId, tenantId), eq(s.project.id, command.projectId)))
+        .returning({ id: s.project.id });
+      if (updated.length === 0) throw projectNotFound(command.projectId);
+    },
+
+    /**
+     * Live leaf WPs whose actual finish is after `dataDate` — blockers for an early Data Date
+     * (FR-43). Head = max seq per WP; soft-deleted and non-leaf WPs are ignored.
+     */
+    async dataDateBlockers(
+      projectId: string,
+      dataDate: string,
+    ): Promise<readonly { readonly wpId: string; readonly actualFinish: string }[]> {
+      await requireProject(bound, projectId);
+      const liveLeaves = await tx
+        .select({ id: s.workPackage.id })
+        .from(s.workPackage)
+        .where(
+          and(
+            eq(s.workPackage.tenantId, tenantId),
+            eq(s.workPackage.projectId, projectId),
+            eq(s.workPackage.isLeaf, true),
+            isNull(s.workPackage.deletedAt),
+          ),
+        );
+      const liveLeafIds = new Set(liveLeaves.map((l) => l.id));
+      if (liveLeafIds.size === 0) return [];
+
+      const events = await tx
+        .select({
+          wpId: s.wpStatusEvent.wpId,
+          actualFinish: s.wpStatusEvent.actualFinish,
+          seq: s.wpStatusEvent.seq,
+        })
+        .from(s.wpStatusEvent)
+        .where(
+          and(eq(s.wpStatusEvent.tenantId, tenantId), eq(s.wpStatusEvent.projectId, projectId)),
+        );
+      const heads = new Map<string, { readonly actualFinish: string | null; readonly seq: number }>();
+      for (const row of events) {
+        if (!liveLeafIds.has(row.wpId)) continue;
+        const prev = heads.get(row.wpId);
+        if (prev === undefined || row.seq > prev.seq) {
+          heads.set(row.wpId, { actualFinish: row.actualFinish, seq: row.seq });
+        }
+      }
+      return [...heads.entries()]
+        .filter(([, h]) => h.actualFinish !== null && h.actualFinish > dataDate)
+        .map(([wpId, h]) => ({ wpId, actualFinish: h.actualFinish! }))
+        .sort((a, b) => (a.wpId < b.wpId ? -1 : a.wpId > b.wpId ? 1 : 0));
+    },
+
+    /** Leaf count with no actual finish — Data Date advance preview (UX-DR14). */
+    async remainingLeafCount(projectId: string): Promise<number> {
+      await requireProject(bound, projectId);
+      const leaves = await tx
+        .select({ id: s.workPackage.id })
+        .from(s.workPackage)
+        .where(
+          and(
+            eq(s.workPackage.tenantId, tenantId),
+            eq(s.workPackage.projectId, projectId),
+            eq(s.workPackage.isLeaf, true),
+            isNull(s.workPackage.deletedAt),
+          ),
+        );
+      if (leaves.length === 0) return 0;
+      const events = await tx
+        .select({
+          wpId: s.wpStatusEvent.wpId,
+          actualFinish: s.wpStatusEvent.actualFinish,
+          seq: s.wpStatusEvent.seq,
+        })
+        .from(s.wpStatusEvent)
+        .where(
+          and(eq(s.wpStatusEvent.tenantId, tenantId), eq(s.wpStatusEvent.projectId, projectId)),
+        );
+      const heads = new Map<string, { readonly actualFinish: string | null; readonly seq: number }>();
+      for (const row of events) {
+        const prev = heads.get(row.wpId);
+        if (prev === undefined || row.seq > prev.seq) {
+          heads.set(row.wpId, { actualFinish: row.actualFinish, seq: row.seq });
+        }
+      }
+      const done = new Set(
+        [...heads.entries()]
+          .filter(([, h]) => h.actualFinish !== null)
+          .map(([wpId]) => wpId),
+      );
+      return leaves.filter((l) => !done.has(l.id)).length;
     },
 
     async countCustomFieldDefinitions(projectId: string): Promise<number> {
