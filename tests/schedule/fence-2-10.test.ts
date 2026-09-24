@@ -5,7 +5,12 @@
 import { afterAll, describe, expect, it } from 'vitest';
 import { and, eq } from 'drizzle-orm';
 import { applyPlanChange } from '../../packages/app/src/schedule/apply-plan-change';
-import { refuseDerivedDateEdit, DERIVED_DATE_TEACHING } from '../../packages/app/src/schedule/plan-edit';
+import {
+  completeWorkPackage,
+  getFirstObservedActivity,
+  refuseDerivedDateEdit,
+  DERIVED_DATE_TEACHING,
+} from '../../packages/app/src/schedule/plan-edit';
 import { closeAllPools, getDb, getPool } from '../../packages/db/src/client';
 import {
   assertProbeTenantsDisjoint,
@@ -205,6 +210,212 @@ describe.skipIf(!reachable)('applyPlanChange fence (story 2.10)', () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error.code).toBe('invalid_input');
+  });
+
+  // I/O matrix: Actuals happy — typed actuals on/before Data Date; cause actual_dates.
+  it('writes typed actuals on or before Data Date without advancing it', async () => {
+    const owner = getDb(OWNER_DATABASE_URL!);
+    const app = getDb(APP_DATABASE_URL!);
+    const leaf = await prepareSchedulableProject(owner);
+
+    const result = await applyPlanChange(
+      { handle: app, transaction: inTenantTransaction },
+      ctx(),
+      {
+        kind: 'patch_actual_dates',
+        projectId: PROBE.projectId,
+        wpId: leaf.id,
+        actualStart: '2026-09-29',
+        actualFinish: '2026-10-03',
+        source: 'typed',
+      },
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const [project] = await withTenant(app, PROBE.tenantId, async (tx) =>
+      tx
+        .select({ dataDate: s.project.dataDate })
+        .from(s.project)
+        .where(eq(s.project.id, PROBE.projectId)),
+    );
+    expect(project?.dataDate).toBe('2026-10-05');
+
+    const status = await withTenant(app, PROBE.tenantId, async (tx) =>
+      tx
+        .select({
+          actualStart: s.wpStatusEvent.actualStart,
+          actualFinish: s.wpStatusEvent.actualFinish,
+          source: s.wpStatusEvent.source,
+        })
+        .from(s.wpStatusEvent)
+        .where(
+          and(
+            eq(s.wpStatusEvent.projectId, PROBE.projectId),
+            eq(s.wpStatusEvent.wpId, leaf.id),
+          ),
+        )
+        .orderBy(s.wpStatusEvent.seq),
+    );
+    const head = status[status.length - 1]!;
+    expect(head.actualStart).toBe('2026-09-29');
+    expect(head.actualFinish).toBe('2026-10-03');
+    expect(head.source).toBe('typed');
+
+    const runs = await withTenant(app, PROBE.tenantId, async (tx) =>
+      tx
+        .select({ cause: s.scheduleRun.cause })
+        .from(s.scheduleRun)
+        .where(eq(s.scheduleRun.projectId, PROBE.projectId)),
+    );
+    expect(runs.some((r) => r.cause === 'actual_dates')).toBe(true);
+  });
+
+  // I/O matrix: First-observed fill — evidence shown; write only on accept with accepted-from-proposal.
+  it('shows first-observed evidence and writes only on accept with accepted-from-proposal', async () => {
+    const owner = getDb(OWNER_DATABASE_URL!);
+    const app = getDb(APP_DATABASE_URL!);
+    await prepareSchedulableProject(owner);
+
+    // Pick a leaf that the fixture maps Tickets onto (relabelled ids).
+    const mappedWpId = PROBE.state.mappingEvents.find((m) => m.wpId !== null)?.wpId;
+    if (mappedWpId === null || mappedWpId === undefined) {
+      throw new Error('fixture needs a mapped WP');
+    }
+    const leaf = PROBE.state.wps.find((w) => w.id === mappedWpId && w.isLeaf);
+    if (!leaf) throw new Error('mapped WP must be a leaf');
+
+    await withTenant(owner, PROBE.tenantId, async (tx) => {
+      await tx
+        .update(s.workPackage)
+        .set({ durationDays: 3, constraintType: 'asap', constraintDate: null })
+        .where(
+          and(eq(s.workPackage.projectId, PROBE.projectId), eq(s.workPackage.id, leaf.id)),
+        );
+    });
+
+    const deps = { handle: app, transaction: inTenantTransaction };
+    const statusBefore = await withTenant(app, PROBE.tenantId, async (tx) =>
+      tx
+        .select({ seq: s.wpStatusEvent.seq })
+        .from(s.wpStatusEvent)
+        .where(
+          and(
+            eq(s.wpStatusEvent.projectId, PROBE.projectId),
+            eq(s.wpStatusEvent.wpId, leaf.id),
+          ),
+        ),
+    );
+
+    // Read path: evidence only — never auto-writes.
+    const evidence = await getFirstObservedActivity(deps, ctx(), {
+      projectId: PROBE.projectId,
+      wpId: leaf.id,
+    });
+    expect(evidence.ok).toBe(true);
+    if (!evidence.ok) return;
+    expect(evidence.value.firstObserved).not.toBeNull();
+    const firstObserved = evidence.value.firstObserved!;
+
+    const statusAfterRead = await withTenant(app, PROBE.tenantId, async (tx) =>
+      tx
+        .select({ seq: s.wpStatusEvent.seq })
+        .from(s.wpStatusEvent)
+        .where(
+          and(
+            eq(s.wpStatusEvent.projectId, PROBE.projectId),
+            eq(s.wpStatusEvent.wpId, leaf.id),
+          ),
+        ),
+    );
+    expect(statusAfterRead).toHaveLength(statusBefore.length);
+
+    // Accept through the complete-flow helper — only then is source accepted-from-proposal.
+    const finish =
+      firstObserved <= '2026-10-05' ? '2026-10-05' : firstObserved;
+    const accepted = await completeWorkPackage(deps, ctx(), {
+      projectId: PROBE.projectId,
+      wpId: leaf.id,
+      actualStart: firstObserved,
+      actualFinish: finish,
+      source: 'accepted-from-proposal',
+      ...(finish > '2026-10-05' ? { advanceDataDate: finish } : {}),
+    });
+    expect(accepted.ok).toBe(true);
+    if (!accepted.ok) return;
+
+    const status = await withTenant(app, PROBE.tenantId, async (tx) =>
+      tx
+        .select({
+          actualStart: s.wpStatusEvent.actualStart,
+          source: s.wpStatusEvent.source,
+        })
+        .from(s.wpStatusEvent)
+        .where(
+          and(
+            eq(s.wpStatusEvent.projectId, PROBE.projectId),
+            eq(s.wpStatusEvent.wpId, leaf.id),
+          ),
+        )
+        .orderBy(s.wpStatusEvent.seq),
+    );
+    expect(status.length).toBe(statusBefore.length + 1);
+    const head = status[status.length - 1]!;
+    expect(head.actualStart).toBe(firstObserved);
+    expect(head.source).toBe('accepted-from-proposal');
+  });
+
+  // I/O matrix: CF value write — definition exists; set value through the fence.
+  it('persists a custom field value through the fence after a definition exists', async () => {
+    const owner = getDb(OWNER_DATABASE_URL!);
+    const app = getDb(APP_DATABASE_URL!);
+    const leaf = await prepareSchedulableProject(owner);
+    const definitionId = `${PROBE.tenantId}-cf-value-def`;
+
+    const defined = await applyPlanChange(
+      { handle: app, transaction: inTenantTransaction },
+      ctx(),
+      {
+        kind: 'create_custom_field_definition',
+        projectId: PROBE.projectId,
+        definitionId,
+        name: 'Risk note',
+        fieldType: 'text',
+      },
+    );
+    expect(defined.ok).toBe(true);
+
+    const valued = await applyPlanChange(
+      { handle: app, transaction: inTenantTransaction },
+      ctx(),
+      {
+        kind: 'set_custom_field_value',
+        projectId: PROBE.projectId,
+        wpId: leaf.id,
+        definitionId,
+        textValue: 'high',
+      },
+    );
+    expect(valued.ok).toBe(true);
+    if (!valued.ok) return;
+
+    const [row] = await withTenant(app, PROBE.tenantId, async (tx) =>
+      tx
+        .select({
+          textValue: s.customFieldValue.textValue,
+          definitionId: s.customFieldValue.definitionId,
+          wpId: s.customFieldValue.wpId,
+        })
+        .from(s.customFieldValue)
+        .where(
+          and(
+            eq(s.customFieldValue.projectId, PROBE.projectId),
+            eq(s.customFieldValue.definitionId, definitionId),
+            eq(s.customFieldValue.wpId, leaf.id),
+          ),
+        ),
+    );
+    expect(row?.textValue).toBe('high');
   });
 
   it('compound advances data_date with actual finish when confirmed', async () => {

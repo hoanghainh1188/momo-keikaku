@@ -107,6 +107,7 @@ context:
 - Thin UI: plan page complete / delete confirm / derived-date teaching refuse; first-observed read from ledger of mapped tickets; accept writes `source=accepted-from-proposal` only.
 - Deferred-work: invariants on WP shapes closed for 2.10; watermark on status/pct closed; generic `runAuditedWrite` 23503 COMMIT probe still open.
 - Risk: 100-CF probe runs 101 full fence recalcs (slow); MATCH FULL must stay in migration (live DB repaired after generate-before-edit); Disposition `work_package` insert remains FR-29 exception.
+- Matrix audit (2026-09-24): added fence-2-10 cases for Actuals happy (typed on/before Data Date), First-observed fill (read never writes; accept → `accepted-from-proposal`), and CF value write after definition.
 
 ## Spec Change Log
 
