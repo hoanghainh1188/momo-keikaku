@@ -56,6 +56,8 @@ export const AUDIT_ACTIONS = [
   'resource.create',
   'rate.append',
   'project_default_rate.append',
+  // Scheduling fence (story 2.9): one record per applyPlanChange.
+  'schedule.apply_plan_change',
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];

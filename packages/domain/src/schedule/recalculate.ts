@@ -41,9 +41,7 @@
  * `ceilPosition`, MFO via `floorPosition` (Q4 → B).
  *
  * Outputs are keyed by `wpId` (AD-26's index encoding is 2.9's), identical under any shuffle of
- * the WP and edge lists (AD-28). `prevInputs` stays in the signature but is unread here (2.9).
- *
- * Out of scope: the stored run and its index-referenced encoding (2.9).
+ * the WP and edge lists (AD-28). `prevInputs` drives the per-WP FR-28 cause (story 2.9).
  *
  * Traceability: AD-25, AD-26, AD-27, AD-28, AR-7, AR-46, AR-49, AR-56, AR-58, FR-5, FR-6a, FR-6b.
  */
@@ -68,6 +66,7 @@ import {
   type BackwardNode,
   type LateDates,
 } from './backward';
+import { deriveWpCauses, withCauses, type WpMoveCause } from './cause';
 import {
   assertConstraintPairing,
   collectViolations,
@@ -84,6 +83,8 @@ import {
   type PlanGraphEdge,
   type PlanGraphWp,
 } from './validate';
+
+// WpMoveCause is declared on WpScheduleOutput below; import the type only (re-exported from cause).
 
 // --- inputs ---------------------------------------------------------------------------------
 
@@ -164,6 +165,11 @@ export interface WpScheduleOutput {
    * every WP that is not remaining.
    */
   readonly drivingPredecessors: readonly string[];
+  /**
+   * FR-28 What-moved cause for this WP (AD-26). Null on the first run (`prevInputs` null) and
+   * when this WP's early dates did not move.
+   */
+  readonly cause: WpMoveCause | null;
 }
 
 /** Which of the two dates Float is measured against. `date` is as the PM set it, unrolled. */
@@ -243,8 +249,8 @@ export type ScheduleResult =
 // --- the pass -------------------------------------------------------------------------------
 
 /**
- * Derives every planned date of `inputs`. `prevInputs` is accepted for AD-25's signature and not
- * read (Q5 → A).
+ * Derives every planned date of `inputs`. When `prevInputs` is set, each WP whose early dates
+ * moved carries an FR-28 cause from `diff(prevInputs, inputs)` (story 2.9).
  *
  * Throws on a caller defect: a malformed date, a pct outside [0, 1], a negative or non-integer
  * duration or lag, an actual finish without an actual start or before it, and (through
@@ -254,7 +260,20 @@ export function recalculate(
   inputs: ScheduleInputs,
   prevInputs: ScheduleInputs | null,
 ): ScheduleResult {
-  void prevInputs;
+  const result = scheduleOnce(inputs);
+  if (result.kind !== 'scheduled') return result;
+
+  let prevOutputs: ScheduleOutputs | null = null;
+  if (prevInputs !== null) {
+    const prev = scheduleOnce(prevInputs);
+    if (prev.kind === 'scheduled') prevOutputs = prev.outputs;
+  }
+  const causes = deriveWpCauses(inputs, prevInputs, result.outputs, prevOutputs);
+  return { kind: 'scheduled', outputs: withCauses(result.outputs, causes) };
+}
+
+/** One pass without cause overlay — used by `recalculate` and the prevInputs comparison. */
+function scheduleOnce(inputs: ScheduleInputs): ScheduleResult {
   assertInputs(inputs);
 
   const offences = validate({ projectId: inputs.projectId, wps: inputs.wps }, inputs.edges);
@@ -689,6 +708,7 @@ function assemble(
         floatDays: null,
         isCritical: false,
         drivingPredecessors: [],
+        cause: null,
       });
       return;
     }
@@ -708,6 +728,7 @@ function assemble(
       floatDays: own?.floatDays ?? null,
       isCritical: critical.isCritical[i]!,
       drivingPredecessors: leaf.drivers.map(idOf),
+      cause: null,
     });
   });
 

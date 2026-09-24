@@ -1,2 +1,13 @@
-{ "name": "@momo/app", "version": "0.0.0", "private": true, "type": "module", "main": "src/index.ts",
-  "dependencies": { "zod": "4.6.5", "@momo/domain": "workspace:*", "pino": "10.3.1" } }
+{
+  "name": "@momo/app",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "dependencies": {
+    "zod": "4.6.5",
+    "@momo/domain": "workspace:*",
+    "@momo/db": "workspace:*",
+    "pino": "10.3.1"
+  }
+}

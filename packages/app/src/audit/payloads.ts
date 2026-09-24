@@ -50,6 +50,14 @@ export const auditPayloadSchema = z.union([
   // Resource / Rate writes (story 1.6).
   z.object({ departmentId: z.string(), name: z.string(), role: z.string() }).strict(),
   z.object({ effectiveFrom: z.string(), yenPerHour: z.number().int() }).strict(),
+  // Scheduling fence (story 2.9).
+  z
+    .object({
+      kind: z.string(),
+      runSeq: z.number().int(),
+      haltedReason: z.string().nullable(),
+    })
+    .strict(),
 ]);
 
 /**
@@ -103,6 +111,13 @@ export const AUDIT_PAYLOAD_BY_ACTION = {
   'resource.create': z.object({ departmentId: z.string(), name: z.string(), role: z.string() }).strict(),
   'rate.append': z.object({ effectiveFrom: z.string(), yenPerHour: z.number().int() }).strict(),
   'project_default_rate.append': z.object({ effectiveFrom: z.string(), yenPerHour: z.number().int() }).strict(),
+  'schedule.apply_plan_change': z
+    .object({
+      kind: z.string(),
+      runSeq: z.number().int(),
+      haltedReason: z.string().nullable(),
+    })
+    .strict(),
 } as const;
 
 /**
