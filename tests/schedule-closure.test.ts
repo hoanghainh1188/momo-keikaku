@@ -15,7 +15,17 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url));
 
 function walk(dir: string, acc: string[] = []): string[] {
   for (const name of readdirSync(dir)) {
-    if (name === 'node_modules' || name === 'dist' || name === '.git') continue;
+    // Skip install/build/VCS trees — bundled `.next` chunks re-emit plan-input writers and
+    // would false-positive the AD-25 source scan (CI after `next build`).
+    if (
+      name === 'node_modules' ||
+      name === 'dist' ||
+      name === '.git' ||
+      name === '.next' ||
+      name === 'coverage'
+    ) {
+      continue;
+    }
     const path = join(dir, name);
     if (statSync(path).isDirectory()) walk(path, acc);
     else if (/\.(ts|tsx|js|mjs|cjs)$/.test(name) && !name.endsWith('.test.ts')) acc.push(path);
