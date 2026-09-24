@@ -115,7 +115,9 @@ import {
   completeWorkPackage,
   deleteWorkPackage,
   getFirstObservedActivity,
+  getPlanThinUiState,
   getWpDeleteConfirm,
+  proposedCompleteDay,
   refuseDerivedDateEdit,
   DERIVED_DATE_TEACHING,
 } from '@momo/app';
@@ -544,6 +546,12 @@ export async function wpDeleteConfirm(
   return getWpDeleteConfirm(writeDeps(), context, input);
 }
 
+/** Project data_date + per-WP constraints for the thin plan UI. */
+export async function planThinUiState(projectId: string, ctx?: RequestContext) {
+  const context = ctx ?? (await requestContext());
+  return getPlanThinUiState(writeDeps(), context, { projectId });
+}
+
 /** Teaching refuse for a derived-date edit (UX-DR12) — nothing written. */
 export function refuseDerivedDate() {
   return refuseDerivedDateEdit();
@@ -552,8 +560,8 @@ export function refuseDerivedDate() {
 export { DERIVED_DATE_TEACHING };
 
 /** Product-clock calendar day for the complete-flow finish proposal (UX-DR13). */
-export function proposedCompleteFinish(): string {
-  return webClock().now().toISOString().slice(0, 10);
+export function proposedCompleteFinish(tzOffsetMinutes: number): string {
+  return proposedCompleteDay(webClock().now(), tzOffsetMinutes);
 }
 
 // --- FR-1's organisation writes (story 1.3 slice 2). No page calls them yet: the Organisation

@@ -3,11 +3,12 @@
  * compound Data Date, 100-CF write-path probe.
  */
 import { afterAll, describe, expect, it } from 'vitest';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, or } from 'drizzle-orm';
 import { applyPlanChange } from '../../packages/app/src/schedule/apply-plan-change';
 import {
   completeWorkPackage,
   getFirstObservedActivity,
+  getWpDeleteConfirm,
   refuseDerivedDateEdit,
   DERIVED_DATE_TEACHING,
 } from '../../packages/app/src/schedule/plan-edit';
@@ -437,6 +438,25 @@ describe.skipIf(!reachable)('applyPlanChange fence (story 2.10)', () => {
     );
     expect(declined.ok).toBe(false);
 
+    const afterDecline = await withTenant(app, PROBE.tenantId, async (tx) => {
+      const [project] = await tx
+        .select({ dataDate: s.project.dataDate })
+        .from(s.project)
+        .where(eq(s.project.id, PROBE.projectId));
+      const status = await tx
+        .select({ seq: s.wpStatusEvent.seq })
+        .from(s.wpStatusEvent)
+        .where(
+          and(
+            eq(s.wpStatusEvent.projectId, PROBE.projectId),
+            eq(s.wpStatusEvent.wpId, leaf.id),
+          ),
+        );
+      return { dataDate: project?.dataDate, statusCount: status.length };
+    });
+    expect(afterDecline.dataDate).toBe('2026-10-05');
+    expect(afterDecline.statusCount).toBe(0);
+
     const accepted = await applyPlanChange(
       { handle: app, transaction: inTenantTransaction },
       ctx(),
@@ -471,6 +491,14 @@ describe.skipIf(!reachable)('applyPlanChange fence (story 2.10)', () => {
     );
     expect(status.length).toBeGreaterThan(0);
     expect(status[status.length - 1]!.actualFinish).toBe('2026-10-20');
+
+    const runs = await withTenant(app, PROBE.tenantId, async (tx) =>
+      tx
+        .select({ cause: s.scheduleRun.cause })
+        .from(s.scheduleRun)
+        .where(eq(s.scheduleRun.projectId, PROBE.projectId)),
+    );
+    expect(runs.some((r) => r.cause === 'data_date')).toBe(true);
   });
 
   it('writes recorded pct via pct_override_event and resolves watermark', async () => {
@@ -510,8 +538,13 @@ describe.skipIf(!reachable)('applyPlanChange fence (story 2.10)', () => {
     );
     expect(runs.some((r) => r.cause === 'progress')).toBe(true);
     const latest = runs[runs.length - 1]!;
-    const raw = latest.inputs as { watermarks?: { pctOverrideSeqMax?: number } };
+    const raw = latest.inputs as {
+      watermarks?: { pctOverrideSeqMax?: number };
+      wps?: readonly { id: string; recordedPct: { num: string; den: string } | null }[];
+    };
     expect((raw.watermarks?.pctOverrideSeqMax ?? 0) > 0).toBe(true);
+    const storedWp = raw.wps?.find((w) => w.id === leaf.id);
+    expect(storedWp?.recordedPct).toEqual({ den: '100', num: '25' });
   });
 
   it('leaf→summary clears leaf-only columns in the same action with drop resolution', async () => {
@@ -551,6 +584,130 @@ describe.skipIf(!reachable)('applyPlanChange fence (story 2.10)', () => {
     expect(parent?.childCount).toBeGreaterThanOrEqual(1);
     expect(parent?.durationDays).toBeNull();
     expect(parent?.constraintType).toBe('asap');
+  });
+
+  it('leaf→summary moves leaf-only columns onto the child when resolved move_to_child', async () => {
+    const owner = getDb(OWNER_DATABASE_URL!);
+    const app = getDb(APP_DATABASE_URL!);
+    const leaf = await prepareSchedulableProject(owner);
+    const childId = `${PROBE.tenantId}-moved-child`;
+
+    const result = await applyPlanChange(
+      { handle: app, transaction: inTenantTransaction },
+      ctx(),
+      {
+        kind: 'create_wp',
+        projectId: PROBE.projectId,
+        wpId: childId,
+        parentId: leaf.id,
+        wbsCode: `${leaf.wbsCode}.1`,
+        name: 'Child receiving leaf inputs',
+        leafResolution: { strategy: 'move_to_child', childWpId: childId },
+      },
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const rows = await withTenant(app, PROBE.tenantId, async (tx) =>
+      tx
+        .select({
+          id: s.workPackage.id,
+          isLeaf: s.workPackage.isLeaf,
+          durationDays: s.workPackage.durationDays,
+          constraintType: s.workPackage.constraintType,
+        })
+        .from(s.workPackage)
+        .where(
+          and(
+            eq(s.workPackage.projectId, PROBE.projectId),
+            or(eq(s.workPackage.id, leaf.id), eq(s.workPackage.id, childId)),
+          ),
+        ),
+    );
+    const parent = rows.find((r) => r.id === leaf.id);
+    const child = rows.find((r) => r.id === childId);
+    expect(parent?.isLeaf).toBe(false);
+    expect(parent?.durationDays).toBeNull();
+    expect(parent?.constraintType).toBe('asap');
+    expect(child?.durationDays).toBe(3);
+  });
+
+  it('refuses leaf→summary without leafResolution when the parent still has leaf inputs', async () => {
+    const owner = getDb(OWNER_DATABASE_URL!);
+    const app = getDb(APP_DATABASE_URL!);
+    const leaf = await prepareSchedulableProject(owner);
+
+    const result = await applyPlanChange(
+      { handle: app, transaction: inTenantTransaction },
+      ctx(),
+      {
+        kind: 'create_wp',
+        projectId: PROBE.projectId,
+        wpId: `${PROBE.tenantId}-unresolved-child`,
+        parentId: leaf.id,
+        wbsCode: `${leaf.wbsCode}.1`,
+        name: 'Child without resolution',
+        durationDays: 1,
+      },
+    );
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe('invalid_input');
+    expect(result.error.details?.leafResolution).toEqual(['required']);
+  });
+
+  it('lists edge endpoints for delete confirm before soft-delete', async () => {
+    const owner = getDb(OWNER_DATABASE_URL!);
+    const app = getDb(APP_DATABASE_URL!);
+    const leafA = await prepareSchedulableProject(owner);
+    const leafB = PROBE.state.wps.find((w) => w.isLeaf && !w.isMilestone && w.id !== leafA.id);
+    if (!leafB) throw new Error('need two leaves');
+
+    await withTenant(owner, PROBE.tenantId, async (tx) => {
+      await tx
+        .update(s.workPackage)
+        .set({ durationDays: 2 })
+        .where(and(eq(s.workPackage.projectId, PROBE.projectId), eq(s.workPackage.id, leafB.id)));
+      await tx.insert(s.wpDependency).values({
+        tenantId: PROBE.tenantId,
+        projectId: PROBE.projectId,
+        predecessorWpId: leafA.id,
+        successorWpId: leafB.id,
+        type: 'FS',
+        lagDays: 0,
+        predIsLeaf: true,
+        succIsLeaf: true,
+      });
+    });
+
+    const confirm = await getWpDeleteConfirm(
+      { handle: app, transaction: inTenantTransaction },
+      ctx(),
+      { projectId: PROBE.projectId, wpId: leafA.id },
+    );
+    expect(confirm.ok).toBe(true);
+    if (!confirm.ok) return;
+    expect(confirm.value.edges).toEqual([
+      { predecessorWpId: leafA.id, successorWpId: leafB.id },
+    ]);
+  });
+
+  it('refuses soft-delete of a WP that still has children', async () => {
+    const owner = getDb(OWNER_DATABASE_URL!);
+    const app = getDb(APP_DATABASE_URL!);
+    await prepareSchedulableProject(owner);
+    const summary = PROBE.state.wps.find((w) => !w.isLeaf);
+    if (!summary) throw new Error('need a summary with children');
+
+    const result = await applyPlanChange(
+      { handle: app, transaction: inTenantTransaction },
+      ctx(),
+      { kind: 'delete_wp', projectId: PROBE.projectId, wpId: summary.id },
+    );
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe('invalid_input');
+    expect(result.error.details?.wpId).toEqual(['has_children']);
   });
 
   it('100 CF definitions meet write-path probe; 101st is warned not blocked', async () => {

@@ -172,17 +172,7 @@ async function isLeafWp(
   projectId: string,
   wpId: string,
 ): Promise<boolean> {
-  const [row] = await bound.tx
-    .select({ isLeaf: s.workPackage.isLeaf })
-    .from(s.workPackage)
-    .where(
-      and(
-        eq(s.workPackage.tenantId, bound.tenantId),
-        eq(s.workPackage.projectId, projectId),
-        eq(s.workPackage.id, wpId),
-      ),
-    );
-  if (!row) throw projectNotFound(projectId);
+  const row = await requireActiveWp(bound, projectId, wpId);
   return row.isLeaf;
 }
 
@@ -223,6 +213,17 @@ async function loadWpRow(
   return row;
 }
 
+/** Soft-deleted WPs are absent for plan-input writers (not_found). */
+async function requireActiveWp(
+  bound: Bound,
+  projectId: string,
+  wpId: string,
+): Promise<Awaited<ReturnType<typeof loadWpRow>>> {
+  const row = await loadWpRow(bound, projectId, wpId);
+  if (row.deletedAt !== null) throw projectNotFound(projectId);
+  return row;
+}
+
 async function listEdgesForWp(
   bound: Bound,
   projectId: string,
@@ -257,7 +258,7 @@ async function promoteLeafParent(
   parentId: string,
   resolution: LeafResolution | undefined,
 ): Promise<void> {
-  const parent = await loadWpRow(bound, projectId, parentId);
+  const parent = await requireActiveWp(bound, projectId, parentId);
   if (!parent.isLeaf) {
     // Already a summary — just bump child_count.
     await bound.tx
@@ -288,7 +289,7 @@ async function promoteLeafParent(
 
   if (resolution?.strategy === 'move_to_child') {
     const childId = resolution.childWpId;
-    await bound.tx
+    const moved = await bound.tx
       .update(s.workPackage)
       .set({
         durationDays: parent.durationDays,
@@ -301,7 +302,11 @@ async function promoteLeafParent(
           eq(s.workPackage.projectId, projectId),
           eq(s.workPackage.id, childId),
         ),
-      );
+      )
+      .returning({ id: s.workPackage.id });
+    if (moved.length === 0) {
+      throw Object.assign(new Error('child_not_found'), { code: 'child_not_found' });
+    }
 
     for (const edge of edges) {
       const newPred = edge.predecessorWpId === parentId ? childId : edge.predecessorWpId;
@@ -383,6 +388,7 @@ export function planInputRepositoryOn(bound: Bound) {
   return {
     async patchDuration(command: DurationPatch): Promise<void> {
       await requireProject(bound, command.projectId);
+      await requireActiveWp(bound, command.projectId, command.wpId);
       const updated = await tx
         .update(s.workPackage)
         .set({ durationDays: command.durationDays })
@@ -399,6 +405,7 @@ export function planInputRepositoryOn(bound: Bound) {
 
     async patchConstraint(command: ConstraintPatch): Promise<void> {
       await requireProject(bound, command.projectId);
+      await requireActiveWp(bound, command.projectId, command.wpId);
       const updated = await tx
         .update(s.workPackage)
         .set({
@@ -467,6 +474,9 @@ export function planInputRepositoryOn(bound: Bound) {
 
     async createWp(command: CreateWpCommand): Promise<void> {
       await requireProject(bound, command.projectId);
+      if (command.parentId !== null) {
+        await requireActiveWp(bound, command.projectId, command.parentId);
+      }
 
       await tx.insert(s.workPackage).values({
         id: command.wpId,
@@ -557,8 +567,10 @@ export function planInputRepositoryOn(bound: Bound) {
 
     async reparentWp(command: ReparentWpCommand): Promise<void> {
       await requireProject(bound, command.projectId);
-      const wp = await loadWpRow(bound, command.projectId, command.wpId);
-      if (wp.deletedAt !== null) throw projectNotFound(command.projectId);
+      const wp = await requireActiveWp(bound, command.projectId, command.wpId);
+      if (command.newParentId !== null) {
+        await requireActiveWp(bound, command.projectId, command.newParentId);
+      }
       const oldParentId = wp.parentId;
       if (oldParentId === command.newParentId) return;
 
@@ -598,6 +610,7 @@ export function planInputRepositoryOn(bound: Bound) {
 
     async patchWpName(command: PatchWpNameCommand): Promise<void> {
       await requireProject(bound, command.projectId);
+      await requireActiveWp(bound, command.projectId, command.wpId);
       const updated = await tx
         .update(s.workPackage)
         .set({ name: command.name })
@@ -614,6 +627,7 @@ export function planInputRepositoryOn(bound: Bound) {
 
     async patchEffort(command: PatchEffortCommand): Promise<void> {
       await requireProject(bound, command.projectId);
+      await requireActiveWp(bound, command.projectId, command.wpId);
       const updated = await tx
         .update(s.workPackage)
         .set({ plannedMh: command.plannedMh })
@@ -630,6 +644,7 @@ export function planInputRepositoryOn(bound: Bound) {
 
     async patchResources(command: PatchResourcesCommand): Promise<void> {
       await requireProject(bound, command.projectId);
+      await requireActiveWp(bound, command.projectId, command.wpId);
       const updated = await tx
         .update(s.workPackage)
         .set({ assignedResourceIds: [...command.assignedResourceIds] })
@@ -646,6 +661,7 @@ export function planInputRepositoryOn(bound: Bound) {
 
     async patchMilestone(command: PatchMilestoneCommand): Promise<void> {
       await requireProject(bound, command.projectId);
+      await requireActiveWp(bound, command.projectId, command.wpId);
       const updated = await tx
         .update(s.workPackage)
         .set(
@@ -666,6 +682,7 @@ export function planInputRepositoryOn(bound: Bound) {
 
     async appendStatusEvent(command: AppendStatusEventCommand): Promise<void> {
       await requireProject(bound, command.projectId);
+      await requireActiveWp(bound, command.projectId, command.wpId);
       await lockWatermark(bound, { kind: 'project', projectId: command.projectId });
       await tx.insert(s.wpStatusEvent).values({
         tenantId,
@@ -681,6 +698,7 @@ export function planInputRepositoryOn(bound: Bound) {
 
     async appendPctOverride(command: AppendPctOverrideCommand): Promise<void> {
       await requireProject(bound, command.projectId);
+      await requireActiveWp(bound, command.projectId, command.wpId);
       await lockWatermark(bound, { kind: 'project', projectId: command.projectId });
       await tx.insert(s.pctOverrideEvent).values({
         tenantId,
@@ -732,6 +750,55 @@ export function planInputRepositoryOn(bound: Bound) {
 
     async setCustomFieldValue(command: SetCustomFieldValueCommand): Promise<void> {
       await requireProject(bound, command.projectId);
+      await requireActiveWp(bound, command.projectId, command.wpId);
+
+      const [definition] = await tx
+        .select({
+          id: s.customFieldDefinition.id,
+          fieldType: s.customFieldDefinition.fieldType,
+          options: s.customFieldDefinition.options,
+        })
+        .from(s.customFieldDefinition)
+        .where(
+          and(
+            eq(s.customFieldDefinition.tenantId, tenantId),
+            eq(s.customFieldDefinition.projectId, command.projectId),
+            eq(s.customFieldDefinition.id, command.definitionId),
+          ),
+        );
+      if (!definition) throw projectNotFound(command.projectId);
+
+      const textSet = command.textValue !== undefined;
+      const numberSet = command.numberValue !== undefined;
+      const dateSet = command.dateValue !== undefined;
+      const selectSet = command.selectValue !== undefined;
+      const setCount = [textSet, numberSet, dateSet, selectSet].filter(Boolean).length;
+      const matchesType =
+        (definition.fieldType === 'text' && textSet) ||
+        (definition.fieldType === 'number' && numberSet) ||
+        (definition.fieldType === 'date' && dateSet) ||
+        (definition.fieldType === 'single_select' && selectSet);
+      if (setCount !== 1 || !matchesType) {
+        throw Object.assign(new Error('cf_value_type_mismatch'), {
+          code: 'cf_value_type_mismatch',
+        });
+      }
+      if (
+        definition.fieldType === 'single_select' &&
+        command.selectValue !== null &&
+        command.selectValue !== undefined &&
+        !definition.options.includes(command.selectValue)
+      ) {
+        throw Object.assign(new Error('cf_option_invalid'), { code: 'cf_option_invalid' });
+      }
+
+      const textValue = definition.fieldType === 'text' ? (command.textValue ?? null) : null;
+      const numberValue =
+        definition.fieldType === 'number' ? (command.numberValue ?? null) : null;
+      const dateValue = definition.fieldType === 'date' ? (command.dateValue ?? null) : null;
+      const selectValue =
+        definition.fieldType === 'single_select' ? (command.selectValue ?? null) : null;
+
       await tx
         .insert(s.customFieldValue)
         .values({
@@ -739,10 +806,10 @@ export function planInputRepositoryOn(bound: Bound) {
           projectId: command.projectId,
           wpId: command.wpId,
           definitionId: command.definitionId,
-          textValue: command.textValue ?? null,
-          numberValue: command.numberValue ?? null,
-          dateValue: command.dateValue ?? null,
-          selectValue: command.selectValue ?? null,
+          textValue,
+          numberValue,
+          dateValue,
+          selectValue,
         })
         .onConflictDoUpdate({
           target: [
@@ -751,12 +818,7 @@ export function planInputRepositoryOn(bound: Bound) {
             s.customFieldValue.wpId,
             s.customFieldValue.definitionId,
           ],
-          set: {
-            textValue: command.textValue ?? null,
-            numberValue: command.numberValue ?? null,
-            dateValue: command.dateValue ?? null,
-            selectValue: command.selectValue ?? null,
-          },
+          set: { textValue, numberValue, dateValue, selectValue },
         });
     },
   };

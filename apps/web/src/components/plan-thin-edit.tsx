@@ -7,12 +7,23 @@ import {
   loadDeleteConfirmAction,
   loadFirstObservedAction,
   refuseDerivedDateAction,
+  type PlanWriteOutcome,
 } from '@/app/p/[projectId]/plan/actions';
 
 /**
  * Story 2.10 thin plan controls (Q1 → B): complete / delete confirm / derived-date teaching
  * refuse. Full tree grid stays 2.13+.
  */
+
+function refuseMessage(outcome: Extract<PlanWriteOutcome, { ok: false }>): string {
+  if (outcome.details !== undefined) {
+    const parts = Object.entries(outcome.details).map(
+      ([key, values]) => `${key}: ${values.join(', ')}`,
+    );
+    if (parts.length > 0) return parts.join('; ');
+  }
+  return outcome.messageKey;
+}
 
 export function CompleteWpForm({
   projectId,
@@ -33,6 +44,7 @@ export function CompleteWpForm({
   const [actualFinish, setActualFinish] = useState(proposedFinish);
   const [acceptProposal, setAcceptProposal] = useState(false);
   const [advance, setAdvance] = useState(false);
+  const [refuse, setRefuse] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -54,8 +66,10 @@ export function CompleteWpForm({
       style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginTop: 4 }}
       data-testid={`complete-wp-${wpId}`}
       action={(fd) => {
-        start(() => {
-          void completeWorkPackageAction(fd);
+        start(async () => {
+          setRefuse(null);
+          const outcome = await completeWorkPackageAction(fd);
+          if (!outcome.ok) setRefuse(refuseMessage(outcome));
         });
       }}
     >
@@ -117,6 +131,11 @@ export function CompleteWpForm({
       <button type="submit" disabled={pending || (needsAdvance && !advance)}>
         Mark complete
       </button>
+      {refuse !== null ? (
+        <p className="caption" role="alert" data-testid="complete-wp-refuse">
+          {refuse}
+        </p>
+      ) : null}
     </form>
   );
 }
@@ -133,6 +152,7 @@ export function DeleteWpForm({
     readonly { predecessorWpId: string; successorWpId: string }[] | null
   >(null);
   const [confirming, setConfirming] = useState(false);
+  const [refuse, setRefuse] = useState<string | null>(null);
 
   return (
     <div className="caption" style={{ marginTop: 4 }} data-testid={`delete-wp-${wpId}`}>
@@ -144,6 +164,7 @@ export function DeleteWpForm({
               const listed = await loadDeleteConfirmAction(projectId, wpId);
               setEdges(listed);
               setConfirming(true);
+              setRefuse(null);
             });
           }}
           disabled={pending}
@@ -153,8 +174,10 @@ export function DeleteWpForm({
       ) : (
         <form
           action={(fd) => {
-            start(() => {
-              void deleteWorkPackageAction(fd);
+            start(async () => {
+              setRefuse(null);
+              const outcome = await deleteWorkPackageAction(fd);
+              if (!outcome.ok) setRefuse(refuseMessage(outcome));
             });
           }}
         >
@@ -174,6 +197,11 @@ export function DeleteWpForm({
           <button type="button" onClick={() => setConfirming(false)}>
             Cancel
           </button>
+          {refuse !== null ? (
+            <p className="caption" role="alert" data-testid="delete-wp-refuse">
+              {refuse}
+            </p>
+          ) : null}
         </form>
       )}
     </div>

@@ -3,8 +3,12 @@
  * Reads and writes go through the fence or schedule-owned ports — never a second mutator.
  */
 import { z } from 'zod';
+import { and, eq, isNull } from 'drizzle-orm';
+import { projectDate } from '@momo/domain';
 import type { Bound } from '../../../db/src/bound';
 import { planInputRepositoryOn } from '../../../db/src/repositories/plan-input';
+import { projectNotFound } from '../../../db/src/project-not-found';
+import * as s from '../../../db/src/schema';
 import { authorize, PROJECT_REACH_ROLES } from '../authz/authorize';
 import type { RequestContext } from '../authz/request-context';
 import type { SchedulingBound } from '../ports/schedule-write';
@@ -21,6 +25,65 @@ export const DERIVED_DATE_TEACHING =
 
 function asBound(scheduling: SchedulingBound): Bound {
   return scheduling as Bound;
+}
+
+/** Project-local calendar day for the complete-flow finish proposal (UX-DR13). */
+export function proposedCompleteDay(now: Date, tzOffsetMinutes: number): string {
+  return projectDate(now.toISOString(), tzOffsetMinutes);
+}
+
+/** Read-only: Project data_date + per-WP constraints for the thin plan UI. */
+export async function getPlanThinUiState<Handle>(
+  deps: ApplyPlanChangeDeps<Handle>,
+  ctx: RequestContext,
+  input: { readonly projectId: string },
+): Promise<
+  Result<{
+    readonly dataDate: string | null;
+    readonly constraints: ReadonlyMap<
+      string,
+      { readonly constraintType: string; readonly constraintDate: string | null }
+    >;
+  }>
+> {
+  const roles = authorize(ctx, { roles: PROJECT_REACH_ROLES, projectId: input.projectId });
+  if (!roles.ok) return roles;
+
+  const value = await deps.transaction(deps.handle, ctx.tenantId, async (scope) => {
+    const bound = asBound(scope.bound);
+    const [project] = await bound.tx
+      .select({ dataDate: s.project.dataDate })
+      .from(s.project)
+      .where(and(eq(s.project.tenantId, bound.tenantId), eq(s.project.id, input.projectId)));
+    if (!project) throw projectNotFound(input.projectId);
+
+    const rows = await bound.tx
+      .select({
+        id: s.workPackage.id,
+        constraintType: s.workPackage.constraintType,
+        constraintDate: s.workPackage.constraintDate,
+      })
+      .from(s.workPackage)
+      .where(
+        and(
+          eq(s.workPackage.tenantId, bound.tenantId),
+          eq(s.workPackage.projectId, input.projectId),
+          isNull(s.workPackage.deletedAt),
+        ),
+      );
+
+    const constraints = new Map(
+      rows.map(
+        (r) =>
+          [
+            r.id,
+            { constraintType: r.constraintType, constraintDate: r.constraintDate },
+          ] as const,
+      ),
+    );
+    return { dataDate: project.dataDate, constraints };
+  });
+  return ok(value);
 }
 
 /** Read-only: first-observed activity date for the complete flow (never writes). */

@@ -142,7 +142,9 @@ export {
   completeWorkPackage,
   deleteWorkPackage,
   getFirstObservedActivity,
+  getPlanThinUiState,
   getWpDeleteConfirm,
+  proposedCompleteDay,
   refuseDerivedDateEdit,
   DERIVED_DATE_TEACHING,
 } from './schedule/plan-edit';

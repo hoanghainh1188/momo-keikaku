@@ -150,6 +150,7 @@ export type ScheduleRunCause =
   | 'wp_moved'
   | 'actual_dates'
   | 'progress'
+  | 'plan_edit'
   | 'seed';
 
 export type IsoDateOrNull = IsoDate | null;

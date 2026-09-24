@@ -1,5 +1,9 @@
 import { getTranslations } from 'next-intl/server';
-import { getProjectReview, proposedCompleteFinish } from '@/server/composition';
+import {
+  getProjectReview,
+  planThinUiState,
+  proposedCompleteFinish,
+} from '@/server/composition';
 import { valueOrNotFound } from '@/server/result';
 import { hours, type Mh } from '@momo/domain/present';
 import { Section } from '@/components/ui';
@@ -23,12 +27,13 @@ export default async function PlanPage({
   const em = t('common.em_dash');
   const { projectId } = await params;
   const { bundle, review: r } = valueOrNotFound(await getProjectReview({ projectId }));
+  const thin = valueOrNotFound(await planThinUiState(projectId));
 
   const baseline = bundle.baseline;
   const baselineByWp = new Map((baseline?.wps ?? []).map((b) => [b.wpId, b]));
   const acByWp = r.attribution.acByWp;
-  const dataDate: string | null = null;
-  const proposedFinish = proposedCompleteFinish();
+  const dataDate = thin.dataDate;
+  const proposedFinish = proposedCompleteFinish(bundle.project.tzOffsetMinutes);
 
   // roll-ups (FR-5): summary WP effort comes from the children
   const children = new Map<string, typeof bundle.wps>();
@@ -112,6 +117,13 @@ export default async function PlanPage({
                       (w.isMilestone && !actualFinish && bundle.input.asOf > b.finish)),
                 );
                 const constraintInputId = `constraint-${w.id}`;
+                const constraint = thin.constraints.get(w.id);
+                const constraintLabel =
+                  constraint === undefined
+                    ? 'asap'
+                    : constraint.constraintDate !== null
+                      ? `${constraint.constraintType} ${constraint.constraintDate}`
+                      : constraint.constraintType;
                 return (
                   <tr key={w.id} data-testid={`wp-${w.wbsCode}`}>
                     <td style={{ fontWeight: isSummary ? 600 : 400 }}>{w.wbsCode}</td>
@@ -146,7 +158,7 @@ export default async function PlanPage({
                           id={constraintInputId}
                           type="text"
                           readOnly
-                          defaultValue="asap"
+                          value={constraintLabel}
                           aria-label={`Constraint for ${w.name}`}
                           data-testid={`constraint-${w.id}`}
                         />

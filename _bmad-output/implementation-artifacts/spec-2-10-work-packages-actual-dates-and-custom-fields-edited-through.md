@@ -2,7 +2,7 @@
 title: 'Story 2.10 — Work Packages, actual dates and Custom Fields, edited through the fence'
 type: 'feature'
 created: '2026-09-24'
-status: 'in-progress'
+status: 'in-review'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '8c51e4569028b82cad82dafab2c0c4add95adb5f'
@@ -112,6 +112,32 @@ context:
 ## Spec Change Log
 
 ## Review Triage Log
+
+Review pass 1 (2026-09-24), by the Blind Hunter (BH), the Edge Case Hunter (EC) and the Verification Gap reviewer (VG).
+
+| # | Source | Finding | Verdict | Evidence | Route |
+|---|---|---|---|---|---|
+| 1 | BH, EC, VG | Plan page hardcodes `dataDate = null`, so thin complete UI never shows Advance Data Date confirm | high | `page.tsx:30` verified; form `needsAdvance` requires non-null `dataDate`; fence already supports `advanceDataDate` | patch |
+| 2 | BH, EC | `create_wp` skips asap⇔null / must_*⇔date `superRefine` used by `patch_constraint` | medium | `apply-plan-change.ts:164-177` only refines `patch_constraint` | patch |
+| 3 | BH, EC, VG | `setCustomFieldValue` does not load definition or enforce one typed column | medium | `plan-input/index.ts:733-760` writes all optional columns; matrix requires refuse | patch |
+| 4 | EC | `move_to_child` does not check child row was updated before clearing parent | medium | UPDATE child then clear parent with no `returning` length check (`plan-input` ~289-304) | patch |
+| 5 | EC | Name/effort/resources/milestone/status/pct/CF writers do not refuse soft-deleted WPs | medium | `patchName` etc. update without `deletedAt` guard; only delete/reparent check | patch |
+| 6 | EC | `create_wp` / reparent can attach under a soft-deleted parent | medium | `promoteLeafParent`/`loadWpRow` do not refuse `deletedAt !== null` | patch |
+| 7 | BH, EC | Proposed complete finish and first-observed day use UTC `toISOString().slice(0,10)` | medium | `composition.ts:555-557`, `first-observed.ts:66`; Project has `tzOffsetMinutes` | patch |
+| 8 | BH | `runCause` maps name/effort/resources/milestone/CF to `'duration'` | medium | `apply-plan-change.ts:247-254`; audit/history mislabels non-duration edits | patch |
+| 9 | BH | Derived-date refuse focuses a fake Constraint input (`defaultValue="asap"`) | medium | `plan-thin-edit.tsx` / page; AC requires focus to the row's constraint cell | patch |
+| 10 | BH, EC | `completeWorkPackageAction` / `deleteWorkPackageAction` swallow fence refusals via `writeLanded` | medium | actions return void on `!writeLanded`; finish-before-start / missing advance look like no-ops | patch |
+| 11 | VG | Recorded-% fence test never asserts resolved `recordedPct` in stored inputs | medium | `fence-2-10.test.ts` checks watermark/cause only; engine could stay null | patch |
+| 12 | VG | Compound Data Date decline/accept under-asserted (no cause / no "writes nothing" on decline) | medium | decline only checks `ok===false` | patch |
+| 13 | VG | `move_to_child` leaf→summary path has no executing test | medium | only `drop` covered | patch |
+| 14 | VG | Missing `leafResolution` refuse untested | medium | `leaf_resolution_required` has no test hit | patch |
+| 15 | VG | `getWpDeleteConfirm` / edge listing untested | medium | soft-delete asserts post-delete only | patch |
+| 16 | BH | Hardcoded English "Constraint"/"Actions" headers vs next-intl | low | temporary thin UI until 2.13; unlikely everyday harm | reject |
+| 17 | BH | `loadFirstObserved` / delete-confirm map errors to null/[] | low | auth miss looks like "no evidence"; rare vs typed path | reject |
+| 18 | BH | `proposedGraph` for `delete_wp` orphans children before writer refuses `wp_has_children` | false | writer still refuses; user outcome is refuse, not corrupt tree | reject |
+| 19 | BH | `move_to_child` hardcodes edge `type: 'FS'` | false | R0 CHECK admits FS only; no non-FS edge can exist | reject |
+| 20 | BH | Spec status / empty triage / deferred 23503 residue | false | process snapshot; 23503 COMMIT probe was intentionally left PARTIAL | reject |
+| 21 | VG | Soft-delete of WP with children refuse untested | medium | `wp_has_children` mapping exists; no test | patch |
 
 ## Design Notes
 

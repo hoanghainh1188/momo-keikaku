@@ -162,17 +162,33 @@ const planMutationBase = z.discriminatedUnion('kind', [
 
 /** asap ⇔ null date; must_* ⇔ non-null date. Finish-before-start refused for actuals. */
 export const planMutationSchema = planMutationBase.superRefine((value, ctx) => {
-  if (value.kind === 'patch_constraint') {
-    const asap = value.constraintType === 'asap';
-    const nullDate = value.constraintDate === null;
-    if (asap !== nullDate) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['constraintDate'],
-        message: asap
-          ? 'asap requires a null constraintDate'
-          : 'must_start_on / must_finish_on require a constraintDate',
-      });
+  if (value.kind === 'patch_constraint' || value.kind === 'create_wp') {
+    const constraintFieldsPresent =
+      value.kind === 'patch_constraint' ||
+      value.constraintType !== undefined ||
+      value.constraintDate !== undefined;
+    if (constraintFieldsPresent) {
+      const constraintType =
+        value.kind === 'patch_constraint'
+          ? value.constraintType
+          : (value.constraintType ?? 'asap');
+      const constraintDate =
+        value.kind === 'patch_constraint'
+          ? value.constraintDate
+          : value.constraintDate !== undefined
+            ? value.constraintDate
+            : null;
+      const asap = constraintType === 'asap';
+      const nullDate = constraintDate === null;
+      if (asap !== nullDate) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['constraintDate'],
+          message: asap
+            ? 'asap requires a null constraintDate'
+            : 'must_start_on / must_finish_on require a constraintDate',
+        });
+      }
     }
   }
   if (value.kind === 'patch_actual_dates') {
@@ -250,8 +266,7 @@ function runCause(mutation: PlanMutation): ScheduleRunCause {
     case 'patch_milestone':
     case 'create_custom_field_definition':
     case 'set_custom_field_value':
-      // Non-scheduling or metadata edits still recalculate (idempotent for CF-only).
-      return 'duration';
+      return 'plan_edit';
     case 'patch_actual_dates':
       return mutation.advanceDataDate !== undefined ? 'data_date' : 'actual_dates';
     case 'patch_recorded_pct':
@@ -484,6 +499,21 @@ export async function applyPlanChange<Handle>(
             (error as { code?: string }).code === 'wp_has_children'
           ) {
             refuse('invalid_input', { wpId: ['has_children'] });
+          }
+          if (
+            error instanceof Error &&
+            (error as { code?: string }).code === 'child_not_found'
+          ) {
+            refuse('invalid_input', { leafResolution: ['child_not_found'] });
+          }
+          if (
+            error instanceof Error &&
+            ((error as { code?: string }).code === 'cf_value_type_mismatch' ||
+              (error as { code?: string }).code === 'cf_option_invalid')
+          ) {
+            refuse('invalid_input', {
+              customField: [(error as { code: string }).code],
+            });
           }
           const mapped = mapSchedulingConstraint(error);
           if (mapped !== null) {
