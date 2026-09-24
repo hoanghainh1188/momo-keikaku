@@ -8,6 +8,7 @@
  */
 import { z } from 'zod';
 import type { Bound } from '../../../db/src/bound';
+import { lockWatermark } from '../../../db/src/watermark-lock';
 import { planInputRepositoryOn } from '../../../db/src/repositories/plan-input';
 import { scheduleRepositoryOn } from '../../../db/src/repositories/schedule';
 import type { PlanGraphEdge, PlanGraphWp, ScheduleRunCause } from '@momo/domain';
@@ -30,7 +31,7 @@ import {
 const noNul = (value: string) => !value.includes('\0');
 const id = z.string().min(1).refine(noNul, 'must not contain a NUL character');
 
-export const planMutationSchema = z.discriminatedUnion('kind', [
+const planMutationBase = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('patch_duration'),
     projectId: id,
@@ -66,7 +67,23 @@ export const planMutationSchema = z.discriminatedUnion('kind', [
   }),
 ]);
 
-export type PlanMutation = z.infer<typeof planMutationSchema>;
+/** asap ⇔ null date; must_* ⇔ non-null date. */
+export const planMutationSchema = planMutationBase.superRefine((value, ctx) => {
+  if (value.kind !== 'patch_constraint') return;
+  const asap = value.constraintType === 'asap';
+  const nullDate = value.constraintDate === null;
+  if (asap !== nullDate) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['constraintDate'],
+      message: asap
+        ? 'asap requires a null constraintDate'
+        : 'must_start_on / must_finish_on require a constraintDate',
+    });
+  }
+});
+
+export type PlanMutation = z.infer<typeof planMutationBase>;
 
 export type ApplyPlanChangeScope = {
   readonly bound: SchedulingBound;
@@ -190,6 +207,10 @@ export async function applyPlanChange<Handle>(
         const gate = checkPlanInvariants(proposed.plan, proposed.edges);
         if (!gate.ok) refuse(gate.error.code, gate.error.details);
 
+        // Per-Project exclusive lock for the whole mutation + recalculation (AR-43 / AD-20).
+        // Held for the rest of this tenant transaction; appendRun's lock is then a no-op.
+        await lockWatermark(bound, { kind: 'project', projectId: mutation.projectId });
+
         try {
           await applyMutation(bound, mutation);
         } catch (error) {
@@ -214,6 +235,8 @@ export async function applyPlanChange<Handle>(
           prevInputs: resolved.prevInputs,
           calendarVersionSeq: resolved.calendarVersionSeq,
           milestoneIds: resolved.milestoneIds,
+          wpStatusSeqMax: resolved.wpStatusSeqMax,
+          pctOverrideSeqMax: resolved.pctOverrideSeqMax,
         });
 
         await audit.record(scope, stamp, 'schedule.apply_plan_change', mutation.projectId, {

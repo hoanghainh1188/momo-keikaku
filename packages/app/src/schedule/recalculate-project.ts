@@ -43,6 +43,8 @@ export interface RecalculateProjectArgs {
   readonly prevInputs?: ScheduleInputs | null;
   readonly milestoneIds?: ReadonlySet<string>;
   readonly calendarVersionSeq?: number;
+  readonly wpStatusSeqMax?: number;
+  readonly pctOverrideSeqMax?: number;
 }
 
 export interface RecalculateProjectResult {
@@ -97,6 +99,8 @@ export async function resolveScheduleInputs(
   readonly prevInputs: ScheduleInputs | null;
   readonly calendarVersionSeq: number;
   readonly milestoneIds: ReadonlySet<string>;
+  readonly wpStatusSeqMax: number;
+  readonly pctOverrideSeqMax: number;
 }> {
   const schedule = scheduleRepositoryOn(bound);
   const plan = await schedule.loadPlanRows(projectId);
@@ -184,6 +188,9 @@ export async function resolveScheduleInputs(
     prevInputs,
     calendarVersionSeq: calendarVersionSeq!,
     milestoneIds,
+    wpStatusSeqMax: plan.wpStatusSeqMax,
+    // pct_override_event lands in 2.10 — assert 0 until then.
+    pctOverrideSeqMax: 0,
   };
 }
 
@@ -202,6 +209,8 @@ export async function recalculateProject(
           prevInputs: args.prevInputs ?? null,
           calendarVersionSeq: args.calendarVersionSeq!,
           milestoneIds: args.milestoneIds ?? new Set<string>(),
+          wpStatusSeqMax: args.wpStatusSeqMax ?? 0,
+          pctOverrideSeqMax: args.pctOverrideSeqMax ?? 0,
         }
       : await resolveScheduleInputs(args.bound, args.projectId, {
           actor: args.actor,
@@ -220,6 +229,8 @@ export async function recalculateProject(
     const storedInputs = encodeScheduleInputs(resolved.inputs, new Map(), {
       calendarVersionSeq: resolved.calendarVersionSeq,
       milestoneIds: resolved.milestoneIds,
+      wpStatusSeqMax: resolved.wpStatusSeqMax,
+      pctOverrideSeqMax: resolved.pctOverrideSeqMax,
     });
     const { seq } = await schedule.appendRun({
       projectId: args.projectId,
@@ -247,6 +258,8 @@ export async function recalculateProject(
   const storedInputs = encodeScheduleInputs(resolved.inputs, causesByWpId(outputs), {
     calendarVersionSeq: resolved.calendarVersionSeq,
     milestoneIds: resolved.milestoneIds,
+    wpStatusSeqMax: resolved.wpStatusSeqMax,
+    pctOverrideSeqMax: resolved.pctOverrideSeqMax,
   });
   const orderedIds = storedInputs.wps.map((w) => w.id);
   const storedOutputs = encodeScheduleOutputs(outputs, orderedIds);

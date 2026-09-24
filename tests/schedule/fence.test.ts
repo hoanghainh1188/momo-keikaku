@@ -9,6 +9,7 @@ import {
   encode,
   encodeScheduleInputs,
   encodeScheduleOutputs,
+  parseStoredInputs,
   parseStoredOutputs,
   stringify,
   recalculate,
@@ -137,6 +138,67 @@ describe.skipIf(!reachable)('applyPlanChange fence (story 2.9)', () => {
     expect(runs[0]!.outputs).not.toBeNull();
     const storedOut = parseStoredOutputs(runs[0]!.outputs);
     expect(stringify(encode(storedOut))).not.toContain('remainingDays');
+
+    const [wpRow] = await withTenant(app, PROBE.tenantId, async (tx) =>
+      tx
+        .select({ durationDays: s.workPackage.durationDays })
+        .from(s.workPackage)
+        .where(
+          and(
+            eq(s.workPackage.tenantId, PROBE.tenantId),
+            eq(s.workPackage.projectId, PROBE.projectId),
+            eq(s.workPackage.id, leaf.id),
+          ),
+        ),
+    );
+    expect(wpRow?.durationDays).toBe(5);
+
+    const audits = await withTenant(app, PROBE.tenantId, async (tx) =>
+      tx
+        .select({ action: s.auditLog.action })
+        .from(s.auditLog)
+        .where(
+          and(
+            eq(s.auditLog.tenantId, PROBE.tenantId),
+            eq(s.auditLog.action, 'schedule.apply_plan_change'),
+          ),
+        ),
+    );
+    expect(audits).toHaveLength(1);
+
+    // Second successful mutation — FR-28 causes from prevInputs (edited WP non-null).
+    const second = await applyPlanChange(
+      { handle: app, transaction: inTenantTransaction },
+      ctx(),
+      {
+        kind: 'patch_duration',
+        projectId: PROBE.projectId,
+        wpId: leaf.id,
+        durationDays: 7,
+      },
+    );
+    expect(second.ok).toBe(true);
+    if (!second.ok) return;
+
+    const runsAfter = await withTenant(app, PROBE.tenantId, async (tx) =>
+      tx
+        .select()
+        .from(s.scheduleRun)
+        .where(
+          and(eq(s.scheduleRun.tenantId, PROBE.tenantId), eq(s.scheduleRun.projectId, PROBE.projectId)),
+        )
+        .orderBy(s.scheduleRun.seq),
+    );
+    expect(runsAfter.length).toBeGreaterThanOrEqual(2);
+    const latestInputs = parseStoredInputs(runsAfter[runsAfter.length - 1]!.inputs);
+    const editedIndex = latestInputs.wps.findIndex((w) => w.id === leaf.id);
+    expect(editedIndex).toBeGreaterThanOrEqual(0);
+    expect(latestInputs.causes[editedIndex]).not.toBeNull();
+    const latestOutputs = parseStoredOutputs(runsAfter[runsAfter.length - 1]!.outputs);
+    const outRow = latestOutputs.wps.find((_, i) => latestInputs.wps[i]?.id === leaf.id);
+    // causes also live on stored inputs; outputs rows carry cause too when scheduled.
+    expect(latestInputs.causes.some((c) => c !== null)).toBe(true);
+    void outRow;
 
     const projection = await withTenant(app, PROBE.tenantId, async (tx) =>
       tx
@@ -304,9 +366,29 @@ describe.skipIf(!reachable)('applyPlanChange fence (story 2.9)', () => {
     expect(afterProjection.every((r) => r.stale === true)).toBe(true);
   });
 
-  it('contending Project watermark with lock_timeout fails retryably (does not block forever)', async () => {
+  it('contending applyPlanChange with lock_timeout fails retryably (does not block forever)', async () => {
+    const owner = getDb(OWNER_DATABASE_URL!);
     const app = getDb(APP_DATABASE_URL!);
-    await createProbeTenant(getDb(OWNER_DATABASE_URL!), PROBE);
+    await createProbeTenant(owner, PROBE);
+
+    const leaf = PROBE.state.wps.find((w) => w.isLeaf && !w.isMilestone);
+    if (!leaf) throw new Error('fixture needs a leaf WP');
+    await withTenant(owner, PROBE.tenantId, async (tx) => {
+      await tx
+        .update(s.project)
+        .set({ projectStart: '2026-09-01', dataDate: '2026-10-05', projectFinish: null })
+        .where(eq(s.project.id, PROBE.projectId));
+      await tx
+        .update(s.workPackage)
+        .set({ durationDays: 2, constraintType: 'asap', constraintDate: null })
+        .where(
+          and(
+            eq(s.workPackage.tenantId, PROBE.tenantId),
+            eq(s.workPackage.projectId, PROBE.projectId),
+            eq(s.workPackage.id, leaf.id),
+          ),
+        );
+    });
 
     let releaseHolder!: () => void;
     const held = new Promise<void>((resolve) => {
@@ -325,16 +407,27 @@ describe.skipIf(!reachable)('applyPlanChange fence (story 2.9)', () => {
 
     await locked;
 
+    // Fence acquires the Project watermark at the start of applyPlanChange — set lock_timeout
+    // on that transaction so a held key fails retryably instead of waiting forever.
+    const transactionWithTimeout: typeof inTenantTransaction = (db, tenantId, work) =>
+      inTenantTransaction(db, tenantId, async (scope) => {
+        await scope.bound.tx.execute(sql`SET LOCAL lock_timeout = '150ms'`);
+        return work(scope);
+      });
+
     const started = performance.now();
     let error: unknown;
     try {
-      await withTenant(app, PROBE.tenantId, async (tx) => {
-        await tx.execute(sql`SET LOCAL lock_timeout = '150ms'`);
-        await lockWatermark(
-          { tx, tenantId: PROBE.tenantId },
-          { kind: 'project', projectId: PROBE.projectId },
-        );
-      });
+      await applyPlanChange(
+        { handle: app, transaction: transactionWithTimeout },
+        ctx(),
+        {
+          kind: 'patch_duration',
+          projectId: PROBE.projectId,
+          wpId: leaf.id,
+          durationDays: 3,
+        },
+      );
     } catch (e) {
       error = e;
     } finally {
@@ -344,10 +437,9 @@ describe.skipIf(!reachable)('applyPlanChange fence (story 2.9)', () => {
 
     const elapsed = performance.now() - started;
     expect(error).toBeDefined();
-    // Drizzle wraps the driver error on `.cause`; pg sets SQLSTATE 55P03 for lock_timeout.
     function pgCode(err: unknown): string {
       let cur: unknown = err;
-      for (let i = 0; i < 4 && cur && typeof cur === 'object'; i++) {
+      for (let i = 0; i < 6 && cur && typeof cur === 'object'; i++) {
         const code = (cur as { code?: unknown }).code;
         if (typeof code === 'string' && /^[0-9A-Z]{5}$/.test(code)) return code;
         cur = (cur as { cause?: unknown }).cause;
@@ -356,6 +448,36 @@ describe.skipIf(!reachable)('applyPlanChange fence (story 2.9)', () => {
     }
     expect(pgCode(error)).toBe('55P03');
     expect(elapsed).toBeLessThan(5_000);
+  });
+
+  it('summary patch_duration maps leaf-only CHECK to invalid_input', async () => {
+    const owner = getDb(OWNER_DATABASE_URL!);
+    const app = getDb(APP_DATABASE_URL!);
+    await createProbeTenant(owner, PROBE);
+
+    const summary = PROBE.state.wps.find((w) => !w.isLeaf);
+    if (!summary) throw new Error('fixture needs a summary WP');
+
+    await withTenant(owner, PROBE.tenantId, async (tx) => {
+      await tx
+        .update(s.project)
+        .set({ projectStart: '2026-09-01', dataDate: '2026-10-05' })
+        .where(eq(s.project.id, PROBE.projectId));
+    });
+
+    const result = await applyPlanChange(
+      { handle: app, transaction: inTenantTransaction },
+      ctx(),
+      {
+        kind: 'patch_duration',
+        projectId: PROBE.projectId,
+        wpId: summary.id,
+        durationDays: 5,
+      },
+    );
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe('invalid_input');
   });
 });
 

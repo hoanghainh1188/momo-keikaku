@@ -27,6 +27,18 @@ function rel(path: string): string {
   return relative(ROOT, path).replaceAll('\\', '/');
 }
 
+function isAllowedAd25Helper(path: string): boolean {
+  if (path.includes('repositories/plan-input')) return true;
+  if (path.includes('schema-catalog.test')) return true;
+  if (path.includes('baseline-read.test')) return true;
+  if (path.includes('/tests/schedule/')) return true; // fence size probe inserts schedule_run only
+  if (path.includes('seed.ts') || path.includes('probe-tenants') || path.includes('fixtures')) {
+    return true; // seed/probe — not lasting AD-25 writers (spec Never)
+  }
+  if (path.includes('schema.ts') || path.includes('drizzle/')) return true;
+  return false;
+}
+
 describe('AR-52 writers — AD-25 input writes stay inside the fence', () => {
   it('only plan-input (and seed/probe test helpers) insert into wp_dependency', () => {
     const files = walk(join(ROOT, 'packages')).concat(walk(join(ROOT, 'apps')));
@@ -34,14 +46,7 @@ describe('AR-52 writers — AD-25 input writes stay inside the fence', () => {
     for (const file of files) {
       const text = readFileSync(file, 'utf8');
       const path = rel(file);
-      if (path.includes('repositories/plan-input')) continue;
-      if (path.includes('schema-catalog.test')) continue;
-      if (path.includes('baseline-read.test')) continue;
-      if (path.includes('seed.ts') || path.includes('probe-tenants') || path.includes('fixtures')) {
-        continue; // seed/probe — not lasting AD-25 writers (spec Never)
-      }
-      if (path.includes('schema.ts') || path.includes('drizzle/')) continue;
-      // Drizzle insert into wpDependency / work_package duration/constraint.
+      if (isAllowedAd25Helper(path)) continue;
       if (
         /insert\s*\(\s*s\.wpDependency/.test(text) ||
         /insert\s*\(\s*wpDependency/.test(text) ||
@@ -53,6 +58,32 @@ describe('AR-52 writers — AD-25 input writes stay inside the fence', () => {
     expect(offenders, `wp_dependency inserts outside plan-input:\n${offenders.join('\n')}`).toEqual(
       [],
     );
+  });
+
+  it('only plan-input updates work_package duration / constraint columns', () => {
+    const files = walk(join(ROOT, 'packages')).concat(walk(join(ROOT, 'apps')));
+    const offenders: string[] = [];
+    for (const file of files) {
+      const text = readFileSync(file, 'utf8');
+      const path = rel(file);
+      if (isAllowedAd25Helper(path)) continue;
+      // Production writers of duration/constraint must live in plan-input.
+      const updatesWp =
+        /\.update\(\s*s\.workPackage/.test(text) ||
+        /\.update\(\s*workPackage/.test(text);
+      if (!updatesWp) continue;
+      if (
+        /durationDays/.test(text) ||
+        /constraintType/.test(text) ||
+        /constraintDate/.test(text)
+      ) {
+        offenders.push(path);
+      }
+    }
+    expect(
+      offenders,
+      `work_package duration/constraint updates outside plan-input:\n${offenders.join('\n')}`,
+    ).toEqual([]);
   });
 });
 

@@ -107,6 +107,10 @@ export function scheduleRepositoryOn(bound: Bound) {
       if (existing !== null) return existing;
 
       await lockWatermark(bound, { kind: 'project', projectId });
+      // Re-check under the lock — a concurrent fence may have inserted first.
+      const raced = await this.latestCalendarVersionSeq(projectId);
+      if (raced !== null) return raced;
+
       const [row] = await tx
         .insert(s.holidayCalendarVersion)
         .values({
@@ -134,7 +138,8 @@ export function scheduleRepositoryOn(bound: Bound) {
 
       const prev = await this.latestRun(command.projectId);
 
-      // AD-20: lock immediately before the first schedule_run INSERT.
+      // AD-20: lock before INSERT. No-op when the fence already holds the Project key
+      // (`watermark-lock` remembers per-tx); still required for any non-fence caller.
       await lockWatermark(bound, { kind: 'project', projectId: command.projectId });
 
       const [row] = await tx
@@ -224,6 +229,8 @@ export function scheduleRepositoryOn(bound: Bound) {
         string,
         { readonly actualStart: string | null; readonly actualFinish: string | null }
       >;
+      /** AR-48: max `wp_status_event.seq` for the Project (0 when none). */
+      readonly wpStatusSeqMax: number;
       readonly calendar: {
         readonly seq: number;
         readonly nonWorkingDays: string[];
@@ -289,7 +296,9 @@ export function scheduleRepositoryOn(bound: Bound) {
         { readonly actualStart: string | null; readonly actualFinish: string | null }
       >();
       const maxSeq = new Map<string, number>();
+      let wpStatusSeqMax = 0;
       for (const row of statusRows) {
+        if (row.seq > wpStatusSeqMax) wpStatusSeqMax = row.seq;
         // Skip defective heads (finish without start) — seed demos can carry them; the fence
         // refuses them at recalculate. A real writer (2.10) will not produce that pair.
         if (row.actualFinish !== null && row.actualStart === null) continue;
@@ -329,7 +338,7 @@ export function scheduleRepositoryOn(bound: Bound) {
         if (cal) calendar = cal;
       }
 
-      return { project, wps, edges, statusHeads, calendar };
+      return { project, wps, edges, statusHeads, wpStatusSeqMax, calendar };
     },
   };
 }

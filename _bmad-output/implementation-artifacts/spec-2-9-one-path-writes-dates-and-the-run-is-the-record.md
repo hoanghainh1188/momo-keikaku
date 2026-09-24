@@ -2,7 +2,7 @@
 title: 'Story 2.9 — one path writes dates, and the run is the record'
 type: 'feature'
 created: '2026-09-24'
-status: 'review'
+status: 'in-review'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: 'd2e4e5b51f456bb72e4f17aaa4692c21fd4269d5'
@@ -96,14 +96,46 @@ context:
 - Tests: `tests/schedule-closure.test.ts` (AR-52), `tests/schedule/{fence,stored-run,cause,retention}.test.ts`.
 - App imports scheduling repos via relative `../../../db/src/repositories/...` (vitest package export resolution); `WriteScope.bound` for fence-built repos.
 - Deferred-work: annotated 2.9-directed entries (shuffle YES; cause/halt/encoding YES; invariants + watermark + 23503 PARTIAL residues for 2.10 / shared path).
+- Review fixes (2026-09-24): Project `lockWatermark` at fence start (mutation+recalc under lock; `appendRun` no-op when held); `pg-errors` walks Drizzle `.cause`, maps `23505` duplicate edge; `removeDependency` refuses zero rows; `predIsLeaf`/`succIsLeaf` from `work_package.is_leaf`; `patch_constraint` asap⇔null / must_*⇔date refine; AR-48 `wpStatusSeqMax` from status events; `ensureCalendarVersion` re-checks under lock; fence asserts duration write + audit + FR-28 causes; lock_timeout aimed at `applyPlanChange`; closure greps duration/constraint UPDATEs.
+
 - Audit follow-up (2026-09-24): calendar-range halt AC covered in `tests/schedule/fence.test.ts` (success then `must_finish_on` past synthetic `rangeEnd` → halted run, null outputs, prior `wp_schedule.stale=true`). Concurrent ingest: contending `lockWatermark` with `SET LOCAL lock_timeout` yields SQLSTATE `55P03` in <5s (Drizzle wraps on `.cause`). Size: raw ±25% of 385 kB; `pg_column_size` asserted as upper budget ≤141 kB×1.25 with >8 kB floor (measured ~30 kB jsonb binary vs AD-26 text estimate); WAL measured across COMMIT (measured ~40–50 kB, upper ≤152 kB×1.25).
 
 - Gaps: synthetic calendar until 2.12; size gate is in-memory raw encode ±25% of 385 kB (optional DB pglz/WAL when reachable); no dedicated COMMIT-time 23503 audit-absence probe; concurrent ingest/`lock_timeout` lightly covered; `applyPlanChange` not on use-cases barrel yet.
 
 ## Spec Change Log
 
-
 ## Review Triage Log
+
+Review pass 1 (2026-09-24), by the Blind Hunter (BH), the Edge Case Hunter (EC) and the Verification Gap reviewer (VG).
+
+| # | Source | Finding | Verdict | Evidence | Route |
+|---|---|---|---|---|---|
+| 1 | BH, EC, VG | Fence never holds the Project watermark across mutation + recalculate — `lockWatermark` only runs immediately before `schedule_run` INSERT | high | Frozen Always / AC require write + recalc under the per-Project exclusive lock (sanctioned long hold). `apply-plan-change.ts` mutates then calls `recalculateProject`; `appendRun` locks only at INSERT (`schedule/index.ts:137-138`). Concurrent mutations can interleave; `prev` is read before the lock | patch |
+| 2 | BH, VG | `postgresConstraintCode` / `mapSchedulingConstraint` read only top-level `error.code`, not Drizzle `.cause` | high | `pg-errors.ts:11-15`. Lock-timeout test documents `.cause`; live 23503/23514 from plan-input would rethrow as 500. No test covers `mapSchedulingConstraint` | patch |
+| 3 | BH | AR-48 watermarks always `{ wpStatusSeqMax: 0, pctOverrideSeqMax: 0 }` | medium | `encodeScheduleInputs` defaults to 0; `recalculate-project.ts` never passes real seq maxima from `wp_status_event` / pct override | patch |
+| 4 | BH, VG | `patchDuration` / `patchConstraint` / `reLag` throw `projectNotFound` when WP/edge missing | low | `plan-input/index.ts:73,92,137`. Unlikely everyday (grid supplies ids); distinct not-found would add surface | reject |
+| 5 | BH | `addDependency` hardcodes `predIsLeaf`/`succIsLeaf` true | medium | `plan-input/index.ts:104-105`. Leaf FK backstop cannot distinguish summary endpoints if the app guard is skipped | patch |
+| 6 | BH, EC | When `prevInputs` would halt, every FR-28 cause collapses to null | low | Domain overlay only attaches causes when prior schedule is `scheduled`. Everyday path is a successful prior run; post-halt first resume is rare | reject |
+| 7 | BH | Stored-run shuffle never INSERT/SELECT `schedule_run` | false | Deferred half asks codec re-read of stored inputs/outputs. Fence happy path SELECT + `parseStoredOutputs` does that; shuffle pins encode determinism in codec form | reject |
+| 8 | BH | Retention is only a pure unit helper | false | AD-5 rule is reference-based; `retention.test.ts` proves intervening runs between two Review pins survive a last-N alternative. No prune job in this story | reject |
+| 9 | BH | AR-52 writers grep only `wp_dependency` inserts | medium | Duration/constraint UPDATEs on `work_package` outside plan-input would not fail CI | patch |
+| 10 | BH | App deep-imports `packages/db` via relative paths | low | Documented vitest/export resolution; package exports exist. Cosmetic for this story | reject |
+| 11 | BH | Size measure builds ≤499 chain edges; asymmetric raw floor | low | Still ≥400 edges and within ±25% raw / pg_column_size budgets after audit fix | reject |
+| 12 | BH | Spec Change Log / Triage empty; status notes list gaps | false | First review pass populates this table; status is `in-review` | reject |
+| 13 | BH, VG | `mapSchedulingConstraint` / leaf-only CHECK path untested | medium | Same as #2 — add summary `patch_duration` or unit table | patch |
+| 14 | BH, EC, VG | `removeDependency` is a silent no-op when the edge is missing | medium | `plan-input/index.ts:109-120` — still recalculates and appends `dependency_removed` | patch |
+| 15 | EC | `patch_constraint` allows `must_*` + null date (or asap + date) | medium | No zod refine; engine can throw after the write | patch |
+| 16 | EC | Duplicate dependency 23505 unmapped | medium | Unique on `wp_dependency` is not 23503/23514; becomes 500 | patch |
+| 17 | EC | `decodeScheduleInputs` can TypeError on out-of-bounds index | low | Corrupt jsonb; loud failure is acceptable | reject |
+| 18 | EC | Synthetic calendar with start after `rangeEnd` | low | Probe seeds valid starts; inverted range needs deliberate abuse | reject |
+| 19 | EC | `inputs` without `calendarVersionSeq` | false | `applyPlanChange` always passes `calendarVersionSeq` from `resolveScheduleInputs` | reject |
+| 20 | EC | `ensureCalendarVersion` race can duplicate rows | medium | Checks existing, then locks, then inserts without re-check (`schedule/index.ts:106-124`) | patch |
+| 21 | EC | Corrupt prior `inputs` drop all causes via refuse | low | Refuse is correct; rare corruption path | reject |
+| 22 | EC | Intent signatures omit `deps` / differ from exports | false | Intent is product naming; App audited-write deps pattern is established across Epic 1 | reject |
+| 23 | VG | Fence happy path never asserts the plan-input write landed | medium | Pre-verified: test seeds duration 3, patches to 5, never re-reads `work_package` or encoded inputs | patch |
+| 24 | VG | `schedule.apply_plan_change` audit row unverified | medium | Pre-verified: `audit.record` exists; no test selects `audit_log` for this action | patch |
+| 25 | VG | Contending-lock test calls `lockWatermark` directly, not via `appendRun`/`applyPlanChange` | high | Same root as #1 — fix by holding the lock for the whole fence and asserting contention against `applyPlanChange` | patch |
+| 26 | VG | Fence never verifies stored-run → `prevInputs` → FR-28 causes | medium | Pre-verified: domain-only cause tests; second successful fence mutation never asserts causes | patch |
 
 ## Design Notes
 

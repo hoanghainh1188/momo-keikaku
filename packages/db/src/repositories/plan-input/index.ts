@@ -53,6 +53,25 @@ async function requireProject(bound: Bound, projectId: string): Promise<void> {
   if (!row) throw projectNotFound(projectId);
 }
 
+async function isLeafWp(
+  bound: Bound,
+  projectId: string,
+  wpId: string,
+): Promise<boolean> {
+  const [row] = await bound.tx
+    .select({ isLeaf: s.workPackage.isLeaf })
+    .from(s.workPackage)
+    .where(
+      and(
+        eq(s.workPackage.tenantId, bound.tenantId),
+        eq(s.workPackage.projectId, projectId),
+        eq(s.workPackage.id, wpId),
+      ),
+    );
+  if (!row) throw projectNotFound(projectId);
+  return row.isLeaf;
+}
+
 export function planInputRepositoryOn(bound: Bound) {
   const { tx, tenantId } = bound;
 
@@ -94,6 +113,8 @@ export function planInputRepositoryOn(bound: Bound) {
 
     async addDependency(command: DependencyAdd): Promise<void> {
       await requireProject(bound, command.projectId);
+      const predIsLeaf = await isLeafWp(bound, command.projectId, command.predecessorWpId);
+      const succIsLeaf = await isLeafWp(bound, command.projectId, command.successorWpId);
       await tx.insert(s.wpDependency).values({
         tenantId,
         projectId: command.projectId,
@@ -101,14 +122,14 @@ export function planInputRepositoryOn(bound: Bound) {
         successorWpId: command.successorWpId,
         type: 'FS',
         lagDays: command.lagDays,
-        predIsLeaf: true,
-        succIsLeaf: true,
+        predIsLeaf,
+        succIsLeaf,
       });
     },
 
     async removeDependency(command: DependencyRemove): Promise<void> {
       await requireProject(bound, command.projectId);
-      await tx
+      const deleted = await tx
         .delete(s.wpDependency)
         .where(
           and(
@@ -117,7 +138,9 @@ export function planInputRepositoryOn(bound: Bound) {
             eq(s.wpDependency.predecessorWpId, command.predecessorWpId),
             eq(s.wpDependency.successorWpId, command.successorWpId),
           ),
-        );
+        )
+        .returning({ seq: s.wpDependency.seq });
+      if (deleted.length === 0) throw projectNotFound(command.projectId);
     },
 
     async reLagDependency(command: DependencyReLag): Promise<void> {
