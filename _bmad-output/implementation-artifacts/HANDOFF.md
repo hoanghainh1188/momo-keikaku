@@ -1,4 +1,75 @@
-# Handoff — 2026-09-24 (story 2.5 closed: the forward pass)
+# Handoff — 2026-09-24 (story 2.6 closed: the backward pass, Float and the critical path)
+
+**Latest (2026-09-24, late morning): story 2.6 merged via PR #64 (`6c93bcb`) and is `done`.**
+- **`recalculate` now runs both passes.** It is still the one entry point (AD-25), and no second
+  pass function is exported. The pass lives in `packages/domain/src/schedule/backward.ts`, which is
+  internal. The plan structure moved to `schedule/plan.ts` with no change in behaviour. Test
+  builders are shared from `tests/support/schedule-fixtures.ts`.
+- **New input:** `ScheduleInputs.projectFinish: IsoDate | null`. It moves no early date.
+- **New outputs.**
+  - Per WP: `lateStart`, `lateFinish`, `floatDays`, `isCritical` and `drivingPredecessors`.
+    - `drivingPredecessors` lists every tied driver of a remaining WP in `compareWp` order,
+      bridged and complete ones included (AR-56). It is empty when the Data Date or the Project
+      start alone set the start.
+    - `isCritical` is always a boolean.
+  - Per Project: `anchor` (`{ kind: 'project_finish' | 'computed_finish', date } | null`),
+    `computedFinish` and `criticalPath`.
+    - The anchor reports the Project finish as the PM set it, not rolled.
+    - The critical path is the **minimum-Float** set, ordered by early start, then `compareWp`.
+  - The `calendar_range` halt gains the anchor `project_finish`: it fires when a Project finish
+    is outside the range. A late date before `rangeStart` halts naming the WPs instead.
+- **Backward conventions (founder decisions Q1–Q7).** 2.8's corpus is hand-computed against these.
+  - **Q1:** it mirrors (1 + L). A work predecessor's late finish = min(successor LS − L − 1), and a
+    milestone's = min(LS − L). A milestone's LS equals its LF.
+  - **Q2:** a complete WP has no late dates or Float. An in-progress WP's Float is measured from
+    where it resumes. Edges into complete or in-progress WPs are ignored on the way back, so
+    Float is never negative against the computed finish.
+  - **Q3:** bridging on the way back: P →(a) X →(b) S holds P back as P →(a+b) S.
+  - **Q4:** a Project finish on a non-working day rolls back to the last working day on or before
+    it.
+  - **Q5:** a late date before `rangeStart`, or a Project finish outside the range, halts.
+  - **Q6:** no late finish is later than the anchor. Otherwise a lag of −2 or less would leave a
+    plan with no zero-Float WP.
+  - **Q7:** the computed finish counts only remaining and in-progress WPs, so an all-complete Plan
+    has no computed finish and no critical path.
+- **Carried forward (`deferred-work.md`).**
+  - **2.9:** encode `drivingPredecessors` and `criticalPath` as indices into `inputs.wps` (AD-26).
+    Write `anchor` and `computed_finish` to `schedule_run`, mirror the per-WP fields into
+    `wp_schedule`, and record the new halt.
+  - **2.8:** pin Q6 and Q7 with hand-computed cases, plus negative Float against a PM-set finish.
+- **Still open from 2.5:**
+  - `range_start` must cover the Project's history.
+  - `remainingDays` in the stored outputs.
+  - The manual check on 2.13's grid, which now also covers Float with its anchor, negative Float
+    in red and the Critical marker.
+- **Next: story 2.7** (constraints are soft, reported, and stay on their own Work Package; cut-order
+  item 1, so it is the first to go if the plan is cut). Things to know before starting:
+  - **Inputs.** `ScheduleWp` gains `constraintType` (`asap` | `must_start_on` | `must_finish_on`)
+    and `constraintDate`. They mirror `work_package.constraint_type/constraint_date`; the DB CHECK
+    keeps them on leaves only.
+  - **Outputs.** It adds the violation list: asked date, derived date, working days late, and the
+    chain. It is sorted by days late descending, then `compareWp`.
+    - The chain can be walked from `drivingPredecessors`, taking the first driver at each step
+      (AR-56: the UI names the first).
+    - A violation changes no WP's Float and never displaces the critical path. So constraints
+      must not enter `backward.ts`: a constraint is never an anchor.
+  - A milestone's target **is** its `must_finish_on`.
+  - **Expect intent-gap questions:**
+    - Does *must start on* only hold a WP back (start ≥ date)? And does *must finish on* only
+      report (finish > date is a violation), or does it also delay a WP that could finish
+      earlier?
+    - When a satisfied *must start on* delays a WP, its early dates move, and so does the Float
+      of everything that depends on it. Is that intended? It is not a violation.
+    - A constraint date on a non-working day, or outside the calendar range.
+    - A constraint on a complete or in-progress WP: judged against its actuals, or ignored?
+    - Is "days late" in working days, and signed or clamped at 0?
+    - Is the chain the whole first-driver walk back to a WP with no driver, or only the direct
+      driver?
+  - The shuffle invariance (N ≥ 50) and the 2,500-leaf timing must keep passing with
+    constraints in the plan.
+- Spec: `spec-2-6-the-backward-pass-float-and-the-critical-path.md`.
+
+## Earlier: Handoff — 2026-09-24 (story 2.5 closed: the forward pass)
 
 **Latest (2026-09-24, morning): story 2.5 merged via PR #62 (`373da72`) and is `done`.**
 - **`recalculate(inputs, prevInputs)`** (`packages/domain/src/schedule/recalculate.ts`) is AD-25's
