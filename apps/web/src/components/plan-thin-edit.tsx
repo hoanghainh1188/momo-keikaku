@@ -1,0 +1,211 @@
+'use client';
+
+import { useEffect, useId, useState, useTransition } from 'react';
+import {
+  completeWorkPackageAction,
+  deleteWorkPackageAction,
+  loadDeleteConfirmAction,
+  loadFirstObservedAction,
+  refuseDerivedDateAction,
+} from '@/app/p/[projectId]/plan/actions';
+
+/**
+ * Story 2.10 thin plan controls (Q1 → B): complete / delete confirm / derived-date teaching
+ * refuse. Full tree grid stays 2.13+.
+ */
+
+export function CompleteWpForm({
+  projectId,
+  wpId,
+  dataDate,
+  proposedFinish,
+}: {
+  readonly projectId: string;
+  readonly wpId: string;
+  readonly dataDate: string | null;
+  /** Product-clock "today" proposed by the server (UX-DR13). */
+  readonly proposedFinish: string;
+}) {
+  const formId = useId();
+  const [pending, start] = useTransition();
+  const [firstObserved, setFirstObserved] = useState<string | null>(null);
+  const [actualStart, setActualStart] = useState('');
+  const [actualFinish, setActualFinish] = useState(proposedFinish);
+  const [acceptProposal, setAcceptProposal] = useState(false);
+  const [advance, setAdvance] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadFirstObservedAction(projectId, wpId).then((day) => {
+      if (!cancelled) setFirstObserved(day);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId, wpId]);
+
+  const needsAdvance =
+    dataDate !== null && actualFinish !== '' && actualFinish > dataDate;
+
+  return (
+    <form
+      id={formId}
+      className="caption"
+      style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginTop: 4 }}
+      data-testid={`complete-wp-${wpId}`}
+      action={(fd) => {
+        start(() => {
+          void completeWorkPackageAction(fd);
+        });
+      }}
+    >
+      <input type="hidden" name="projectId" value={projectId} />
+      <input type="hidden" name="wpId" value={wpId} />
+      <input type="hidden" name="acceptFirstObserved" value={acceptProposal ? '1' : '0'} />
+      <label>
+        Actual start{' '}
+        <input
+          name="actualStart"
+          type="date"
+          value={actualStart}
+          onChange={(e) => {
+            setActualStart(e.target.value);
+            setAcceptProposal(false);
+          }}
+          data-testid="actual-start"
+        />
+      </label>
+      {firstObserved !== null ? (
+        <span data-testid="first-observed-evidence">
+          First observed: {firstObserved}{' '}
+          <button
+            type="button"
+            onClick={() => {
+              setActualStart(firstObserved);
+              setAcceptProposal(true);
+            }}
+            data-testid="accept-first-observed"
+          >
+            Use
+          </button>
+        </span>
+      ) : null}
+      <label>
+        Actual finish{' '}
+        <input
+          name="actualFinish"
+          type="date"
+          value={actualFinish}
+          onChange={(e) => setActualFinish(e.target.value)}
+          required
+          data-testid="actual-finish"
+        />
+      </label>
+      {needsAdvance ? (
+        <label data-testid="advance-data-date">
+          <input
+            type="checkbox"
+            checked={advance}
+            onChange={(e) => setAdvance(e.target.checked)}
+          />{' '}
+          Advance Data Date to {actualFinish}
+          {advance ? (
+            <input type="hidden" name="advanceDataDate" value={actualFinish} />
+          ) : null}
+        </label>
+      ) : null}
+      <button type="submit" disabled={pending || (needsAdvance && !advance)}>
+        Mark complete
+      </button>
+    </form>
+  );
+}
+
+export function DeleteWpForm({
+  projectId,
+  wpId,
+}: {
+  readonly projectId: string;
+  readonly wpId: string;
+}) {
+  const [pending, start] = useTransition();
+  const [edges, setEdges] = useState<
+    readonly { predecessorWpId: string; successorWpId: string }[] | null
+  >(null);
+  const [confirming, setConfirming] = useState(false);
+
+  return (
+    <div className="caption" style={{ marginTop: 4 }} data-testid={`delete-wp-${wpId}`}>
+      {!confirming ? (
+        <button
+          type="button"
+          onClick={() => {
+            start(async () => {
+              const listed = await loadDeleteConfirmAction(projectId, wpId);
+              setEdges(listed);
+              setConfirming(true);
+            });
+          }}
+          disabled={pending}
+        >
+          Delete…
+        </button>
+      ) : (
+        <form
+          action={(fd) => {
+            start(() => {
+              void deleteWorkPackageAction(fd);
+            });
+          }}
+        >
+          <input type="hidden" name="projectId" value={projectId} />
+          <input type="hidden" name="wpId" value={wpId} />
+          {edges !== null && edges.length > 0 ? (
+            <p data-testid="delete-edge-list">
+              Edges that will be removed (not relinked):{' '}
+              {edges.map((e) => `${e.predecessorWpId}→${e.successorWpId}`).join(', ')}
+            </p>
+          ) : (
+            <p>No dependency edges.</p>
+          )}
+          <button type="submit" disabled={pending}>
+            Confirm delete
+          </button>{' '}
+          <button type="button" onClick={() => setConfirming(false)}>
+            Cancel
+          </button>
+        </form>
+      )}
+    </div>
+  );
+}
+
+/** Derived-date cell: teaching refuse; focus moves to the constraint control. */
+export function DerivedDateCell({
+  constraintInputId,
+}: {
+  readonly constraintInputId: string;
+}) {
+  const [message, setMessage] = useState<string | null>(null);
+
+  return (
+    <div data-testid="derived-date-cell">
+      <input
+        type="date"
+        aria-label="Derived date (not editable)"
+        onChange={async () => {
+          const result = await refuseDerivedDateAction();
+          setMessage(result.message);
+          const el = document.getElementById(constraintInputId);
+          el?.focus();
+        }}
+        data-testid="derived-date-input"
+      />
+      {message !== null ? (
+        <p className="caption" role="status" data-testid="derived-date-teaching">
+          {message}
+        </p>
+      ) : null}
+    </div>
+  );
+}

@@ -74,6 +74,16 @@ CREATE TRIGGER "append_only_truncate_guard"
   BEFORE TRUNCATE ON public."wp_status_event"
   FOR EACH STATEMENT EXECUTE FUNCTION public."momo_append_only_truncate_guard"();
 
+-- pct_override_event: Recorded Percent Complete for Plan-grid edits (story 2.10, AD-25). Append-only; the head feeds schedule_run.inputs. FR-30's audited override ceremony is Epic 6.
+DROP TRIGGER IF EXISTS "append_only_guard" ON public."pct_override_event";
+CREATE TRIGGER "append_only_guard"
+  BEFORE UPDATE OR DELETE ON public."pct_override_event"
+  FOR EACH ROW EXECUTE FUNCTION public."momo_append_only_guard"();
+DROP TRIGGER IF EXISTS "append_only_truncate_guard" ON public."pct_override_event";
+CREATE TRIGGER "append_only_truncate_guard"
+  BEFORE TRUNCATE ON public."pct_override_event"
+  FOR EACH STATEMENT EXECUTE FUNCTION public."momo_append_only_truncate_guard"();
+
 -- holiday_calendar_version: A resolved non-working-day set over a range (AD-29). A Baseline re-derives against the version it pinned, so a version is never edited.
 DROP TRIGGER IF EXISTS "append_only_guard" ON public."holiday_calendar_version";
 CREATE TRIGGER "append_only_guard"

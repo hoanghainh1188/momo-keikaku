@@ -728,9 +728,28 @@ export const UNREACHED_TENANT_OWNED_TABLES: readonly UnreachedTable[] = [
   {
     table: 'wp_dependency',
     why:
-      'Created by story 2.1\'s migration (AD-30) with no writer and no reader yet: edges are ' +
-      'written through app/schedule\'s fence (2.10, 2.14) and read by the tree grid and the ' +
-      'recalculation (2.9, 2.13). The first read use case over it must remove this entry.',
+      'Written through app/schedule\'s fence (stories 2.9 / 2.10); no READ use case yet — the tree ' +
+      'grid (2.13) and schedule strip are the first readers. The first read use case over it must ' +
+      'remove this entry.',
+  },
+  {
+    table: 'pct_override_event',
+    why:
+      'Created by story 2.10 as append-only Recorded %; written through the fence. No READ use ' +
+      'case yet — resolveScheduleInputs loads heads inside the fence, and the Plan grid (2.13) ' +
+      'will surface them. The first read use case removes this entry.',
+  },
+  {
+    table: 'custom_field_definition',
+    why:
+      'Created by story 2.10 (FR-8); written through the fence with no definition UX yet. The ' +
+      'first read use case (Plan columns / grouping) removes this entry.',
+  },
+  {
+    table: 'custom_field_value',
+    why:
+      'Created by story 2.10 (FR-8); written through the fence. No READ use case yet — Plan grid ' +
+      'columns (2.13+) are the first readers. The first read use case removes this entry.',
   },
   {
     table: 'holiday_calendar_version',
@@ -742,14 +761,14 @@ export const UNREACHED_TENANT_OWNED_TABLES: readonly UnreachedTable[] = [
   {
     table: 'schedule_run',
     why:
-      'Created by story 2.1 (AD-26) with no writer and no reader yet: app/schedule appends runs ' +
-      '(2.9) and the schedule strip and exception rail read them (2.15, 2.16). The first read of ' +
-      'it removes this entry.',
+      'Created by story 2.1 (AD-26); app/schedule appends runs (2.9) and the schedule strip and ' +
+      'exception rail read them (2.15, 2.16). No READ use case yet — the first read of it removes ' +
+      'this entry.',
   },
   {
     table: 'wp_schedule',
     why:
-      'Created by story 2.1 (AD-26) with no writer and no reader yet: app/schedule rebuilds it ' +
-      '(2.9) and the tree grid reads it (2.13). The first read of it removes this entry.',
+      'Created by story 2.1 (AD-26); app/schedule rebuilds it (2.9) and the tree grid reads it ' +
+      '(2.13). No READ use case yet — the first read of it removes this entry.',
   },
 ] as const;

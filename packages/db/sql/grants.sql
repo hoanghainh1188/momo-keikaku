@@ -61,6 +61,16 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON public."wp_dependency" TO "momo_app";
 GRANT SELECT, INSERT ON public."wp_status_event" TO "momo_app";
 GRANT SELECT, UPDATE, DELETE ON public."wp_status_event" TO "momo_maintenance";
 
+-- pct_override_event (append-only)
+GRANT SELECT, INSERT ON public."pct_override_event" TO "momo_app";
+GRANT SELECT, UPDATE, DELETE ON public."pct_override_event" TO "momo_maintenance";
+
+-- custom_field_definition (mutable-audited)
+GRANT SELECT, INSERT, UPDATE, DELETE ON public."custom_field_definition" TO "momo_app";
+
+-- custom_field_value (mutable-audited)
+GRANT SELECT, INSERT, UPDATE, DELETE ON public."custom_field_value" TO "momo_app";
+
 -- holiday_calendar_version (append-only)
 GRANT SELECT, INSERT ON public."holiday_calendar_version" TO "momo_app";
 GRANT SELECT, UPDATE, DELETE ON public."holiday_calendar_version" TO "momo_maintenance";

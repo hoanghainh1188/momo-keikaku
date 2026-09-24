@@ -491,6 +491,111 @@ export const wpStatusEvent = pgTable(
 );
 
 /**
+ * Recorded Percent Complete (AD-25 / FR-6b / story 2.10). Append-only; the head (max `seq` per
+ * WP) is the value `resolveScheduleInputs` feeds the engine. FR-30's mandatory-reason ceremony
+ * is Epic 6 — this table is the ordinary Plan-grid writer path.
+ */
+export const pctOverrideEvent = pgTable(
+  'pct_override_event',
+  {
+    seq: bigint('seq', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+    tenantId: text('tenant_id').notNull(),
+    projectId: text('project_id').notNull(),
+    wpId: text('wp_id').notNull(),
+    /** Unreduced Ratio numerator (AD-4). */
+    recordedPctNum: bigint('recorded_pct_num', { mode: 'bigint' }).notNull(),
+    /** Unreduced Ratio denominator; never zero. */
+    recordedPctDen: bigint('recorded_pct_den', { mode: 'bigint' }).notNull(),
+    actor: text('actor').notNull(),
+    at: timestamp('at', { withTimezone: true }).notNull(),
+  },
+  (t) => ({
+    byWp: index('pct_override_event_wp_idx').on(t.tenantId, t.projectId, t.wpId, t.seq),
+    denPositive: check('pct_override_event_den_check', sql`${t.recordedPctDen} <> 0`),
+    workPackage: foreignKey({
+      name: 'pct_override_event_work_package_fk',
+      columns: [t.tenantId, t.projectId, t.wpId],
+      foreignColumns: [workPackage.tenantId, workPackage.projectId, workPackage.id],
+    }),
+  }),
+);
+
+/**
+ * Custom Field definitions per Project (FR-8 / story 2.10). Mutable plan state (AD-5); written
+ * only through the fence. Four types: text / number / date / single-select. NFR-P1 bound is 100
+ * definitions per Project (101st warned, not blocked).
+ */
+export const customFieldDefinition = pgTable(
+  'custom_field_definition',
+  {
+    id: text('id').primaryKey(),
+    tenantId: text('tenant_id').notNull(),
+    projectId: text('project_id').notNull(),
+    name: text('name').notNull(),
+    fieldType: text('field_type').notNull(),
+    /** Options for `single_select`; empty for other types. */
+    options: text('options').array().notNull().default([]),
+    ordinal: integer('ordinal').notNull().default(0),
+  },
+  (t) => ({
+    projectKey: unique('custom_field_definition_tenant_project_id_key').on(
+      t.tenantId,
+      t.projectId,
+      t.id,
+    ),
+    nameKey: unique('custom_field_definition_name_key').on(t.tenantId, t.projectId, t.name),
+    fieldType: check(
+      'custom_field_definition_type_check',
+      sql`${t.fieldType} IN ('text', 'number', 'date', 'single_select')`,
+    ),
+    project: foreignKey({
+      name: 'custom_field_definition_project_fk',
+      columns: [t.tenantId, t.projectId],
+      foreignColumns: [project.tenantId, project.id],
+    }),
+  }),
+);
+
+/**
+ * Custom Field values on Work Packages (FR-8). Mutable plan state; not a scheduling input.
+ * Exactly one of the typed value columns is set, matching the definition's `field_type`
+ * (enforced by the fence writer; a CHECK cannot see the definition row).
+ */
+export const customFieldValue = pgTable(
+  'custom_field_value',
+  {
+    tenantId: text('tenant_id').notNull(),
+    projectId: text('project_id').notNull(),
+    wpId: text('wp_id').notNull(),
+    definitionId: text('definition_id').notNull(),
+    textValue: text('text_value'),
+    numberValue: bigint('number_value', { mode: 'bigint' }),
+    dateValue: date('date_value'),
+    selectValue: text('select_value'),
+  },
+  (t) => ({
+    pk: primaryKey({
+      name: 'custom_field_value_pk',
+      columns: [t.tenantId, t.projectId, t.wpId, t.definitionId],
+    }),
+    workPackage: foreignKey({
+      name: 'custom_field_value_work_package_fk',
+      columns: [t.tenantId, t.projectId, t.wpId],
+      foreignColumns: [workPackage.tenantId, workPackage.projectId, workPackage.id],
+    }),
+    definition: foreignKey({
+      name: 'custom_field_value_definition_fk',
+      columns: [t.tenantId, t.projectId, t.definitionId],
+      foreignColumns: [
+        customFieldDefinition.tenantId,
+        customFieldDefinition.projectId,
+        customFieldDefinition.id,
+      ],
+    }),
+  }),
+);
+
+/**
  * A Holiday Calendar version (AD-29): the FULLY RESOLVED non-working-day set over
  * `[range_start, range_end]`, national tables and Project days already merged. Never edited.
  */
@@ -905,6 +1010,9 @@ export const schemaTables = {
   workPackage,
   wpDependency,
   wpStatusEvent,
+  pctOverrideEvent,
+  customFieldDefinition,
+  customFieldValue,
   holidayCalendarVersion,
   scheduleRun,
   wpSchedule,

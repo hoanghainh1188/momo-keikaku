@@ -94,18 +94,19 @@ export interface TableEntry {
 }
 
 /**
- * The 29 tables of this release (story 1.3 slice 2 added `program`; story 1.4 slice 1 removed
+ * The 32 tables of this release (story 1.3 slice 2 added `program`; story 1.4 slice 1 removed
  * `app_user` and added the four Better Auth tables and `tenant_membership`; slice 4 added
- * `identity_event`; story 1.6 `project_default_rate_entry`; story 2.1 the five scheduling tables),
+ * `identity_event`; story 1.6 `project_default_rate_entry`; story 2.1 the five scheduling tables;
+ * story 2.10 `pct_override_event` + Custom Field definition/value),
  * in DEPENDENCY ORDER: every table comes after each table its foreign keys reference, so this order
  * is an insert order and its reverse is a delete order (`probe-tenants.ts` deletes by it). Story
  * 2.1's composite foreign keys made that load-bearing: `schedule_run` before `baseline_version`,
  * `mapping_rule` before `mapping_event`.
  *
- * Thirteen are insert-only and are classed `append-only` accordingly:
- * rate_entry, project_default_rate_entry, wp_status_event, holiday_calendar_version,
- * schedule_run, baseline_version, baseline_wp, tracker_snapshot, ticket_observation,
- * actuals_ledger_entry, mapping_event, disposition_event, audit_log.
+ * Fourteen are insert-only and are classed `append-only` accordingly:
+ * rate_entry, project_default_rate_entry, wp_status_event, pct_override_event,
+ * holiday_calendar_version, schedule_run, baseline_version, baseline_wp, tracker_snapshot,
+ * ticket_observation, actuals_ledger_entry, mapping_event, disposition_event, audit_log.
  */
 export const TABLE_REGISTRY: readonly TableEntry[] = [
   {
@@ -214,6 +215,24 @@ export const TABLE_REGISTRY: readonly TableEntry[] = [
     class: 'append-only',
     tenantColumn: 'tenant_id',
     why: 'The single home of a WP\'s actual start and actual finish (AD-25). Each row restates the full actual state; the head is the latest seq. A correction is a new row.',
+  },
+  {
+    table: 'pct_override_event',
+    class: 'append-only',
+    tenantColumn: 'tenant_id',
+    why: 'Recorded Percent Complete for Plan-grid edits (story 2.10, AD-25). Append-only; the head feeds schedule_run.inputs. FR-30\'s audited override ceremony is Epic 6.',
+  },
+  {
+    table: 'custom_field_definition',
+    class: 'mutable-audited',
+    tenantColumn: 'tenant_id',
+    why: 'Custom Field schema per Project (FR-8). Edited through the fence; NFR-P1 tested bound is 100 definitions.',
+  },
+  {
+    table: 'custom_field_value',
+    class: 'mutable-audited',
+    tenantColumn: 'tenant_id',
+    why: 'Custom Field values on Work Packages (FR-8). Plan inputs, not scheduling inputs; still written only through the fence.',
   },
   {
     table: 'holiday_calendar_version',
