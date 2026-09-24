@@ -137,7 +137,9 @@ type Recorder = <Landed>(member: string, landed: Landed) => () => Promise<Landed
  * and record nothing (reading is not a change).
  */
 const FAKE_FAMILIES: {
-  readonly [Family in Exclude<keyof WriteScope, 'audit'>]: (write: Recorder) => WriteScope[Family];
+  readonly [Family in Exclude<keyof WriteScope, 'audit' | 'bound'>]: (
+    write: Recorder,
+  ) => WriteScope[Family];
 } = {
   projectWrite: (write): ProjectWriteRepository => ({
     projectAnchor: async () => AT,
@@ -212,6 +214,7 @@ async function drive(invoke: InvokeWrite, sabotage: Sabotage = {}): Promise<Run>
         org: FAKE_FAMILIES.org(write),
         membership: FAKE_FAMILIES.membership(write),
         resources: FAKE_FAMILIES.resources(write),
+        bound: { tx: { marker: 'fake-tx' }, tenantId: 'ten-gate' },
         audit: {
           append: async (auditEntry) => {
             pendingRecords.push({ transaction: index, entry: auditEntry });

@@ -279,6 +279,9 @@ importers:
 
   packages/app:
     dependencies:
+      '@momo/db':
+        specifier: workspace:*
+        version: link:../db
       '@momo/domain':
         specifier: workspace:*
         version: link:../domain

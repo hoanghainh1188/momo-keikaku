@@ -227,6 +227,7 @@ describe('recalculate — the I/O matrix (FR-6b)', () => {
       floatDays: null,
       isCritical: false,
       drivingPredecessors: [],
+      cause: null,
     });
     expect(row(out, '1.3')).toMatchObject({ state: null, plannedMh: 4_000n, earlyStart: '2026-10-07' });
     // A summary whose descendants are all unschedulable has no dates.
@@ -381,10 +382,14 @@ describe('recalculate — the I/O matrix (FR-6b)', () => {
     expect(out.wps.map((w) => w.wpId)).toEqual(['A']);
   });
 
-  it('never reads prevInputs', () => {
+  it('derives FR-28 causes from prevInputs without changing dates', () => {
     const current = inputs([wp('A', { durationDays: 3 })]);
     const previous = inputs([wp('A', { durationDays: 9 }), wp('B')]);
-    expect(recalculate(current, previous)).toEqual(recalculate(current, null));
+    const withPrev = scheduled(recalculate(current, previous));
+    const firstRun = scheduled(recalculate(current, null));
+    expect(withPrev.wps.map((r) => ({ ...r, cause: null }))).toEqual(firstRun.wps);
+    expect(withPrev.wps[0]!.cause).toBe('edited');
+    expect(firstRun.wps[0]!.cause).toBeNull();
   });
 });
 

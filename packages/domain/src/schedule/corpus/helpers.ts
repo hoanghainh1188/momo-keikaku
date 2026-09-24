@@ -35,5 +35,7 @@ export function out(
     floatDays: fields.floatDays ?? null,
     isCritical: fields.isCritical ?? false,
     drivingPredecessors: fields.drivingPredecessors ?? [],
+    // Corpus cases run with `prevInputs` null — every cause is null (story 2.9).
+    cause: null,
   };
 }

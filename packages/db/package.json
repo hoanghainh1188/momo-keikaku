@@ -1,2 +1,8 @@
 { "name": "@momo/db", "version": "0.0.0", "private": true, "type": "module", "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./bound": "./src/bound.ts",
+    "./repositories/plan-input": "./src/repositories/plan-input/index.ts",
+    "./repositories/schedule": "./src/repositories/schedule/index.ts"
+  },
   "dependencies": { "drizzle-orm": "0.45.2", "pg": "8.23.0", "@momo/domain": "workspace:*" } }

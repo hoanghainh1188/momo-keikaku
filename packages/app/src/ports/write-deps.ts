@@ -5,6 +5,7 @@ import type { MembershipWriteScope } from './membership-write';
 import type { OrgWriteScope } from './org-write';
 import type { ProjectWriteScope } from './project-write';
 import type { ResourceWriteScope } from './resource-write';
+import type { SchedulingScope } from './schedule-write';
 
 /**
  * EVERY WRITE USE CASE'S DEPS, IN ONE VALUE — what a composition root builds once and hands to
@@ -17,11 +18,15 @@ import type { ResourceWriteScope } from './resource-write';
  * web composition root, the write harness and the audit gate each build one of these and drive
  * every write with it. A new repository family joins `WriteScope` here, and the `satisfies` at
  * each composition root then names what is missing.
+ *
+ * Story 2.9 adds `SchedulingScope.bound` so `app/schedule` can construct the scheduling
+ * repositories inside the fence (AR-43: composition must not import them).
  */
 export type WriteScope = ProjectWriteScope &
   OrgWriteScope &
   MembershipWriteScope &
-  ResourceWriteScope;
+  ResourceWriteScope &
+  SchedulingScope;
 
 export type WriteDeps<Handle> = AuditedWriteDeps<Handle, WriteScope> & {
   readonly clock: Clock;

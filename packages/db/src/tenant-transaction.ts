@@ -19,7 +19,9 @@ import { withTenant } from './with-tenant';
  *   * `membership` — the tenant-membership bridge's one writer (`repo-membership-write.ts`, story
  *     1.4 slice 2): revocation, role and Project changes. The bridge has no row-level security,
  *     so that writer filters by the bound Tenant itself;
- *   * `audit` — the one writer of `audit_log` (`audit-sink.ts`).
+ *   * `audit` — the one writer of `audit_log` (`audit-sink.ts`);
+ *   * `bound` — the `{ tx, tenantId }` pair story 2.9's `app/schedule` hands to the scheduling
+ *     repositories (which only it may import — AR-43). Composition never imports those repos.
  *
  * Slice 1 built a project-shaped scope here. Slice 2 composes every repository family into the
  * one scope instead of opening a transaction per family: a use case's port names only the members
@@ -42,6 +44,7 @@ function writeScopeOn(bound: Bound) {
     resources: resourceWriteRepositoryOn(bound),
     membership: membershipWriterOn(bound),
     audit: auditSinkOn(bound),
+    bound,
   };
 }
 
