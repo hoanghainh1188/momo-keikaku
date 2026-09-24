@@ -1109,3 +1109,7 @@ above can see where it went.
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-8-the-golden-scheduler-corpus.md`
   summary: Keep corpus cases off the unratified 2.5 implementer edges until the founder ratifies them: actual finish on a non-working day; complete WP with null duration; actual finish without actual start; milestone remaining-duration edge cases from the 2.5 Implementation Notes.
   evidence: Founder decision Q2 → B, 2026-09-24 (story 2.8). The golden corpus pins only ratified 2.5 date conventions; locking the four edges early would freeze arithmetic the founder has not signed.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-11-the-three-project-schedule-settings.md`
+  summary: Localize Story 2.11 Project settings and Plan no-start product copy (NO_PROJECT_START_YET, PROJECT_FINISH_TEACHING, dataDateAdvancePreview month labels, settings form labels) into packages/i18n so a Japanese session is not English-only on those surfaces.
+  evidence: Review BH8 (2026-09-24): ja.json only gained shell nav strings for settings; teaching/preview/no-start band remain English constants. Fence and schedule behavior are correct; this is the i18n product-copy backlog, not a 2.11 correctness defect. Natural pickup with the broader i18n/layout gate work or when 2.15 polishes strip chrome that reuses the same strings.

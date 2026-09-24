@@ -146,5 +146,12 @@ export {
   getWpDeleteConfirm,
   proposedCompleteDay,
   refuseDerivedDateEdit,
+  setProjectStart,
+  clearProjectStart,
+  patchProjectFinishSetting,
+  patchDataDateSetting,
+  dataDateAdvancePreview,
   DERIVED_DATE_TEACHING,
+  PROJECT_FINISH_TEACHING,
+  NO_PROJECT_START_YET,
 } from './schedule/plan-edit';

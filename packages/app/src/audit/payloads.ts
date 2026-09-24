@@ -114,8 +114,25 @@ export const AUDIT_PAYLOAD_BY_ACTION = {
   'schedule.apply_plan_change': z
     .object({
       kind: z.string(),
-      runSeq: z.number().int(),
+      runSeq: z.number().int().nullable(),
       haltedReason: z.string().nullable(),
+      warnings: z.array(z.string()).optional(),
+      before: z
+        .object({
+          projectStart: z.string().nullable(),
+          projectFinish: z.string().nullable(),
+          dataDate: z.string().nullable(),
+        })
+        .strict()
+        .optional(),
+      after: z
+        .object({
+          projectStart: z.string().nullable(),
+          projectFinish: z.string().nullable(),
+          dataDate: z.string().nullable(),
+        })
+        .strict()
+        .optional(),
     })
     .strict(),
 } as const;

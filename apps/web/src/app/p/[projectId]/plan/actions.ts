@@ -8,6 +8,7 @@ import {
   planChange,
   refuseDerivedDate,
   requestContext,
+  setProjectStartSetting,
   wpDeleteConfirm,
   DERIVED_DATE_TEACHING,
 } from '@/server/composition';
@@ -108,6 +109,18 @@ export async function loadDeleteConfirmAction(
   const result = await wpDeleteConfirm({ projectId, wpId }, ctx);
   if (!result.ok) return [];
   return result.value.edges;
+}
+
+/** *Set Project start* from the Plan no-start band (2.11). */
+export async function setProjectStartPlanAction(formData: FormData): Promise<PlanWriteOutcome> {
+  const projectId = String(formData.get('projectId') ?? '');
+  const projectStart = String(formData.get('projectStart') ?? '');
+  const ctx = await requestContext();
+  const result = await setProjectStartSetting({ projectId, projectStart }, ctx);
+  if (!result.ok) return refuseOutcome(result);
+  revalidatePath(`/p/${projectId}/plan`);
+  revalidatePath(`/p/${projectId}/settings`);
+  return { ok: true };
 }
 
 /** Generic fence pass-through for thin patches (duration / pct / name). */

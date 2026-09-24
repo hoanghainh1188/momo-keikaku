@@ -48,8 +48,8 @@ export interface RecalculateProjectArgs {
 }
 
 export interface RecalculateProjectResult {
-  readonly seq: number;
-  readonly kind: 'scheduled' | 'halted';
+  readonly seq: number | null;
+  readonly kind: 'scheduled' | 'halted' | 'cleared';
   readonly haltedReason: string | null;
   readonly outputs: ScheduleOutputs | null;
 }
@@ -108,6 +108,10 @@ export async function resolveScheduleInputs(
   if (plan.project.projectStart === null) {
     refuse('invalid_input', { projectStart: ['required'] });
   }
+  if (plan.project.dataDate === null) {
+    // After 2.11, Data Date is written with Project start — never invent one on resolve.
+    refuse('invalid_input', { dataDate: ['required'] });
+  }
 
   // Synthetic calendar until 2.12 — weekends must be listed explicitly (domain applies none).
   let calendarVersionSeq = plan.calendar?.seq ?? null;
@@ -135,7 +139,7 @@ export async function resolveScheduleInputs(
     };
   }
 
-  const dataDate = plan.project.dataDate ?? stamp.at.toISOString().slice(0, 10);
+  const dataDate = plan.project.dataDate;
   const milestoneIds = new Set(plan.wps.filter((w) => w.isMilestone).map((w) => w.id));
 
   const wps: ScheduleWp[] = plan.wps.map((w) => {

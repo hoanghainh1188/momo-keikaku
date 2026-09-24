@@ -7,6 +7,7 @@ import {
   loadDeleteConfirmAction,
   loadFirstObservedAction,
   refuseDerivedDateAction,
+  setProjectStartPlanAction,
   type PlanWriteOutcome,
 } from '@/app/p/[projectId]/plan/actions';
 
@@ -211,8 +212,12 @@ export function DeleteWpForm({
 /** Derived-date cell: teaching refuse; focus moves to the constraint control. */
 export function DerivedDateCell({
   constraintInputId,
+  noProjectStart = false,
+  noProjectStartLabel,
 }: {
   readonly constraintInputId: string;
+  readonly noProjectStart?: boolean;
+  readonly noProjectStartLabel?: string;
 }) {
   const [message, setMessage] = useState<string | null>(null);
 
@@ -220,7 +225,12 @@ export function DerivedDateCell({
     <div data-testid="derived-date-cell">
       <input
         type="date"
-        aria-label="Derived date (not editable)"
+        aria-label={
+          noProjectStart && noProjectStartLabel
+            ? noProjectStartLabel
+            : 'Derived date (not editable)'
+        }
+        disabled={noProjectStart}
         onChange={async () => {
           const result = await refuseDerivedDateAction();
           setMessage(result.message);
@@ -235,5 +245,52 @@ export function DerivedDateCell({
         </p>
       ) : null}
     </div>
+  );
+}
+
+/** Plan strip action: *Set Project start* when the Project has none (2.11 / Q1→B). */
+export function SetProjectStartForm({
+  projectId,
+  proposedStart,
+}: {
+  readonly projectId: string;
+  readonly proposedStart: string;
+}) {
+  const [pending, start] = useTransition();
+  const [refuse, setRefuse] = useState<string | null>(null);
+  const [value, setValue] = useState(proposedStart);
+
+  return (
+    <form
+      style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginTop: 8 }}
+      data-testid="set-project-start"
+      action={(fd) => {
+        start(async () => {
+          setRefuse(null);
+          const outcome = await setProjectStartPlanAction(fd);
+          if (!outcome.ok) setRefuse(refuseMessage(outcome));
+        });
+      }}
+    >
+      <input type="hidden" name="projectId" value={projectId} />
+      <label>
+        Set Project start{' '}
+        <input
+          type="date"
+          name="projectStart"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          required
+        />
+      </label>
+      <button type="submit" disabled={pending}>
+        Set Project start
+      </button>
+      {refuse !== null ? (
+        <p className="caption" role="alert">
+          {refuse}
+        </p>
+      ) : null}
+    </form>
   );
 }

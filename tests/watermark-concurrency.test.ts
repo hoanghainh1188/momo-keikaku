@@ -63,8 +63,8 @@ const reachable = await connectWriteHarness({
   requireDb: process.env.REQUIRE_DB === '1',
 });
 
-const PROBE_A = buildProbeTenant('xtprobe-wma', 940_000_000);
-const PROBE_B = buildProbeTenant('xtprobe-wmb', 950_000_000);
+const PROBE_A = buildProbeTenant('xtprobe-wma', 952_000_000);
+const PROBE_B = buildProbeTenant('xtprobe-wmb', 953_000_000);
 assertProbeTenantsDisjoint([PROBE_A, PROBE_B]);
 
 const IDS = idPort('xtwm-id');
