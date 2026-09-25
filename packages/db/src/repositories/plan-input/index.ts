@@ -178,6 +178,26 @@ export interface EdgeEndpoint {
   readonly successorWpId: string;
 }
 
+/** Live WP row fields the Plan grid needs (story 2.13) — no derived dates. */
+export interface GridWorkPackageRow {
+  readonly id: string;
+  readonly wbsCode: string;
+  readonly name: string;
+  readonly parentId: string | null;
+  readonly isLeaf: boolean;
+  readonly isMilestone: boolean;
+  readonly isCatchAll: boolean;
+  readonly durationDays: number | null;
+  readonly constraintType: string;
+  readonly constraintDate: string | null;
+}
+
+export interface GridDependencyRow {
+  readonly predecessorWpId: string;
+  readonly successorWpId: string;
+  readonly lagDays: number;
+}
+
 async function requireProject(bound: Bound, projectId: string): Promise<void> {
   const [row] = await bound.tx.select({ id: s.project.id }).from(s.project).where(eq(s.project.id, projectId));
   if (!row) throw projectNotFound(projectId);
@@ -579,6 +599,47 @@ export function planInputRepositoryOn(bound: Bound) {
     async listEdgeEndpoints(projectId: string, wpId: string): Promise<readonly EdgeEndpoint[]> {
       await requireProject(bound, projectId);
       return listEdgesForWp(bound, projectId, wpId);
+    },
+
+    /** Story 2.13: live Work Packages for the Plan tree grid (inputs only). */
+    async listLiveWorkPackages(projectId: string): Promise<readonly GridWorkPackageRow[]> {
+      await requireProject(bound, projectId);
+      return tx
+        .select({
+          id: s.workPackage.id,
+          wbsCode: s.workPackage.wbsCode,
+          name: s.workPackage.name,
+          parentId: s.workPackage.parentId,
+          isLeaf: s.workPackage.isLeaf,
+          isMilestone: s.workPackage.isMilestone,
+          isCatchAll: s.workPackage.isCatchAll,
+          durationDays: s.workPackage.durationDays,
+          constraintType: s.workPackage.constraintType,
+          constraintDate: s.workPackage.constraintDate,
+        })
+        .from(s.workPackage)
+        .where(
+          and(
+            eq(s.workPackage.tenantId, tenantId),
+            eq(s.workPackage.projectId, projectId),
+            isNull(s.workPackage.deletedAt),
+          ),
+        );
+    },
+
+    /** Story 2.13: all live FS edges for predecessor cell text. */
+    async listLiveDependencies(projectId: string): Promise<readonly GridDependencyRow[]> {
+      await requireProject(bound, projectId);
+      return tx
+        .select({
+          predecessorWpId: s.wpDependency.predecessorWpId,
+          successorWpId: s.wpDependency.successorWpId,
+          lagDays: s.wpDependency.lagDays,
+        })
+        .from(s.wpDependency)
+        .where(
+          and(eq(s.wpDependency.tenantId, tenantId), eq(s.wpDependency.projectId, projectId)),
+        );
     },
 
     async reparentWp(command: ReparentWpCommand): Promise<void> {

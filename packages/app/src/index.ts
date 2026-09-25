@@ -155,6 +155,21 @@ export {
   PROJECT_FINISH_TEACHING,
   NO_PROJECT_START_YET,
 } from './schedule/plan-edit';
+export {
+  getPlanGridState,
+  formatPlanDate,
+  formatConstraintLabel,
+  formatPredecessorsText,
+  floatAnchorHeader,
+  inkTone,
+  formatFloatDisplay,
+  recordedPctDisplay,
+  resolveException,
+  SUMMARY_NA_LABEL,
+  type PlanGridState,
+  type PlanGridRow,
+  type PlanGridException,
+} from './schedule/plan-grid';
 
 export {
   publishCalendarVersion,

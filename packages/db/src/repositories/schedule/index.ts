@@ -74,6 +74,30 @@ export function scheduleRepositoryOn(bound: Bound) {
       return row ?? null;
     },
 
+    /**
+     * Story 2.13: read published `wp_schedule` projection for the Plan grid (dates, Float,
+     * Critical, state, stale). Writers stay fence-only — this is read-only.
+     */
+    async loadWpSchedule(projectId: string): Promise<
+      readonly (WpScheduleRow & { readonly stale: boolean })[]
+    > {
+      return tx
+        .select({
+          wpId: s.wpSchedule.wpId,
+          earlyStart: s.wpSchedule.earlyStart,
+          earlyFinish: s.wpSchedule.earlyFinish,
+          lateStart: s.wpSchedule.lateStart,
+          lateFinish: s.wpSchedule.lateFinish,
+          floatDays: s.wpSchedule.floatDays,
+          isCritical: s.wpSchedule.isCritical,
+          state: s.wpSchedule.state,
+          notSchedulableReason: s.wpSchedule.notSchedulableReason,
+          stale: s.wpSchedule.stale,
+        })
+        .from(s.wpSchedule)
+        .where(and(eq(s.wpSchedule.tenantId, tenantId), eq(s.wpSchedule.projectId, projectId)));
+    },
+
     async latestCalendarVersionSeq(projectId: string): Promise<number | null> {
       const [row] = await tx
         .select({ seq: s.holidayCalendarVersion.seq })

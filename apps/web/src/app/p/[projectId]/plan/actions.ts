@@ -133,3 +133,63 @@ export async function applyPlanMutationAction(input: unknown): Promise<PlanWrite
   }
   return { ok: true };
 }
+
+async function fenceMutation(
+  projectId: string,
+  mutation: unknown,
+): Promise<PlanWriteOutcome> {
+  const ctx = await requestContext();
+  const result = await planChange(mutation, ctx);
+  if (!result.ok) return refuseOutcome(result);
+  revalidatePath(`/p/${projectId}/plan`);
+  return { ok: true };
+}
+
+/** Inline name edit (story 2.13 / Q2→B) — JSON-safe wrapper around the fence. */
+export async function patchWpNameAction(input: {
+  readonly projectId: string;
+  readonly wpId: string;
+  readonly name: string;
+}): Promise<PlanWriteOutcome> {
+  return fenceMutation(input.projectId, {
+    kind: 'patch_wp_name',
+    projectId: input.projectId,
+    wpId: input.wpId,
+    name: input.name,
+  });
+}
+
+/** Inline duration edit (story 2.13 / Q2→B). */
+export async function patchWpDurationAction(input: {
+  readonly projectId: string;
+  readonly wpId: string;
+  readonly durationDays: number | null;
+}): Promise<PlanWriteOutcome> {
+  return fenceMutation(input.projectId, {
+    kind: 'patch_duration',
+    projectId: input.projectId,
+    wpId: input.wpId,
+    durationDays: input.durationDays,
+  });
+}
+
+/**
+ * Inline Recorded % edit (story 2.13 / Q2→B). Accepts whole-percent 0–100; converts to a
+ * ratio for the fence (`num/100`). BigInt cannot cross the RSC action boundary.
+ */
+export async function patchWpRecordedPctAction(input: {
+  readonly projectId: string;
+  readonly wpId: string;
+  readonly percent: number;
+}): Promise<PlanWriteOutcome> {
+  if (!Number.isInteger(input.percent) || input.percent < 0 || input.percent > 100) {
+    return { ok: false, code: 'invalid_input', messageKey: 'errors.invalid_input' };
+  }
+  return fenceMutation(input.projectId, {
+    kind: 'patch_recorded_pct',
+    projectId: input.projectId,
+    wpId: input.wpId,
+    recordedPctNum: BigInt(input.percent),
+    recordedPctDen: 100n,
+  });
+}

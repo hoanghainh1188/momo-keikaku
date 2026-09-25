@@ -116,6 +116,7 @@ import {
   deleteWorkPackage,
   getFirstObservedActivity,
   getPlanThinUiState,
+  getPlanGridState,
   getWpDeleteConfirm,
   proposedCompleteDay,
   refuseDerivedDateEdit,
@@ -609,6 +610,12 @@ export async function wpDeleteConfirm(
 export async function planThinUiState(projectId: string, ctx?: RequestContext) {
   const context = ctx ?? (await requestContext());
   return getPlanThinUiState(writeDeps(), context, { projectId });
+}
+
+/** Story 2.13 — Plan tree grid rows (compareWp order + schedule projection). */
+export async function planGridState(projectId: string, ctx?: RequestContext) {
+  const context = ctx ?? (await requestContext());
+  return getPlanGridState(writeDeps(), context, { projectId });
 }
 
 export {
