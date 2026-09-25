@@ -1,4 +1,63 @@
-# Handoff — 2026-09-25 (stories 2.10 + 2.11 closed: fence authoring and Project schedule settings)
+# Handoff — 2026-09-25 (story 2.12 closed: Holiday Calendar and dated versions)
+
+**Latest (2026-09-25): story 2.12 merged via PR #76 (`b1ed332`) and is `done`.** Epic 2 remains
+`in-progress` (2.13–2.17 backlog). Engine slice 2.3–2.12 is complete; the plan **surface** line
+(2.13–2.16) starts here.
+
+## Story 2.12 (recap) — Holiday Calendar and its dated versions
+- `calendar_day_event` (append_only, add/remove tombstones) + registry/RLS/grants/triggers;
+  migration `0003_calendar_day_event` (+ `meta/0003_snapshot.json` for the drift gate).
+- Domain: versioned JP/VN national dataset **`national-2025-2028-v1`**, default publish range
+  **`2025-01-01` … `2028-12-31`** (Q3 → B); `resolveCalendarVersion` merges weekends + nationals +
+  live Project days into an exhaustive `nonWorkingDays` (no weekend rule in the engine).
+- `app/calendar.publishCalendarVersion` (+ flag patch / add-day / remove-day / serial fan-out):
+  one Project lock at a time; append version; `recalculateProject` with run cause **`calendar`**
+  (WP FR-28 cause remains **`calendar changed`**). Per-Project `audit_log` only.
+- **Q1 → B:** `operator_audit` deferred to Epic 8 (`deferred-work.md`).
+- **Q2 → A:** Project settings — JP/VN toggles + Project non-working-day list; each commit
+  publishes for that Project.
+- Synthetic weekends-only bootstrap **retired**; resolve refuses when no version
+  (`details.calendar: ['required']`). Seed materialises a real version; `createProject` still
+  does **not** auto-publish (first version via seed or settings/publish).
+- Review patches: out-of-range day refuse; inverted range → `invalid_input`; fan-out try/catch;
+  seed `lockWatermark`; thin-UI / cleared / halt-continuation / custom-range fence cases.
+- Deferred from review: calendar settings i18n (BH6); full range-halt banner chrome stays **2.16**.
+- Spec: `spec-2-12-the-holiday-calendar-and-its-dated-versions.md`. Corpus `CAL_JP` / `CAL_VN` stay
+  hand-built (2.8 Q3).
+
+## Carried forward
+- **2.13 (next):** Plan tree grid + Schedule preset (ARIA treegrid; frozen WBS/Name/state; Schedule
+  columns; Data Date ink split; summary em dash; negative Float; Critical word+glyph; Recorded %).
+  Progress preset Epic-2 columns ship here; Observed/Gap/Evidence → Epics 5–6; Baseline compare →
+  Epic 4; All = Comfort. Strip chrome / What-moved = **2.15**; exceptions rail = **2.16**;
+  deps+constraints typing = **2.14**.
+- **2.14–2.17:** deps+constraints UX; strip + What-moved; exceptions rail; Organisation UI.
+- **Still open (unchanged):** unratified 2.5 corpus edges; Epic 6 / FR-31 health vs actuals;
+  `applyPlanChange` on use-cases barrel / audit gate enumeration; COMMIT-time 23503 audit-absence
+  probe residue (PARTIAL from 2.9/2.10); settings/Plan English product copy (2.11 BH8 + 2.12 BH6).
+
+## Next: story 2.13 — The Plan tree grid and its Schedule preset
+Things to know before starting:
+- **Surface line, not engine.** Engine + fence + calendar publish are done. 2.13 is the first
+  real Plan grid; today's `plan/page.tsx` is still the thin 2.10/2.11 shell.
+- **Layout order (UX-DR2):** schedule strip → toolbar → tree grid (+ exceptions rail right);
+  What-moved between toolbar and grid after recalc. Strip polish and What-moved behaviour stay
+  **2.15** — size 2.13 for grid + Schedule preset (and Progress Epic-2 columns) without pulling
+  full strip chrome unless the founder keeps the full epic AC.
+- **Planned dates are never typed** (FR-5 / UX-DR12). Inline edit commits through the existing
+  fence; FR-6a rejects change nothing and trigger no recalc. Derived-date teaching refuse already
+  exists from 2.10 — reuse it.
+- **ARIA treegrid** with `aria-level` / `expanded` / `posinset` / `setsize`; frozen leading three
+  columns are visual-only (same reading order).
+- **Manual checks deferred from 2.5–2.7** land on this grid: slip moves the chain; milestone after
+  Friday → Monday; Float with anchor; negative Float; Critical; calendar-range halt banner (full
+  rail still 2.16).
+- Spec does not exist yet — Build creates it. Epics AC: `epics.md` § Story 2.13. Continuity from
+  `spec-2-12-…` (done) + thin Plan/`settings` surfaces.
+- Kickoff: `/bmad-build Story 2.13 — The Plan tree grid and its Schedule preset`
+  Sprint key: `2-13-the-plan-tree-grid-and-its-schedule-preset`
+
+## Earlier: Handoff — 2026-09-25 (stories 2.10 + 2.11 closed: fence authoring and Project schedule settings)
 
 **Latest (2026-09-25): story 2.11 merged via PR #73 (`f07adcf`) + docs #74 (`911e841`); story 2.10
 merged via PR #72 (`5ff76f6`). Both are `done`.** Epic 2 remains `in-progress` (2.12–2.17 backlog).
