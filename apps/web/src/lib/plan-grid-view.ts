@@ -19,8 +19,14 @@ export function toPlanGridViewModel(
     setSize: r.setSize,
     hasChildren: r.hasChildren,
     durationDays: r.durationDays,
+    constraintType: r.constraintType,
+    constraintDate: r.constraintDate,
     constraintLabel: r.constraintLabel,
     predecessorsText: r.predecessorsText,
+    predecessorEdges: r.predecessorEdges.map((e) => ({
+      predecessorWpId: e.predecessorWpId,
+      lagDays: e.lagDays,
+    })),
     earlyStart: r.earlyStart,
     earlyFinish: r.earlyFinish,
     floatDays: r.floatDays,
@@ -47,6 +53,11 @@ export function toPlanGridViewModel(
     floatAnchorLabel: grid.floatAnchorLabel,
     scheduleStale: grid.scheduleStale,
     haltedReason: grid.haltedReason,
+    leafCandidates: grid.leafCandidates.map((c) => ({
+      wpId: c.wpId,
+      wbsCode: c.wbsCode,
+      name: c.name,
+    })),
     rows,
   };
 }

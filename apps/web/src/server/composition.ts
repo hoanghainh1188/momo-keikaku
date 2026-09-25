@@ -112,6 +112,7 @@ import {
   type UnassignMemberProjectInput,
   type WriteDeps,
   applyPlanChange,
+  applyPredecessorSet,
   completeWorkPackage,
   deleteWorkPackage,
   getFirstObservedActivity,
@@ -526,6 +527,15 @@ export async function mapTicket(input: MapTicketInput, ctx?: RequestContext) {
 export async function planChange(input: unknown, ctx?: RequestContext) {
   const context = ctx ?? (await requestContext());
   return applyPlanChange(writeDeps(), context, input);
+}
+
+/** Story 2.14 — predecessor-set commit (parse + FR-6a explain + fence fan-out). */
+export async function applyPredecessors(
+  input: { readonly projectId: string; readonly successorWpId: string; readonly text: string },
+  ctx?: RequestContext,
+) {
+  const context = ctx ?? (await requestContext());
+  return applyPredecessorSet(writeDeps(), context, input);
 }
 
 /** Mark-complete through the fence (actual finish, optional first-observed accept). */

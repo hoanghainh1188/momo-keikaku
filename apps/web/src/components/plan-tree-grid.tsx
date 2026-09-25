@@ -12,6 +12,8 @@ import {
   type ReactNode,
 } from 'react';
 import {
+  applyPredecessorsAction,
+  patchWpConstraintAction,
   patchWpDurationAction,
   patchWpNameAction,
   patchWpRecordedPctAction,
@@ -23,7 +25,11 @@ import {
   DeleteWpForm,
   SetProjectStartForm,
 } from '@/components/plan-thin-edit';
-import type { PlanGridRowView, PlanGridViewModel } from '@/components/plan-grid-types';
+import type {
+  PlanGridLeafCandidateView,
+  PlanGridRowView,
+  PlanGridViewModel,
+} from '@/components/plan-grid-types';
 import {
   capturePresetFocusRestore,
   dateInkClassName,
@@ -44,6 +50,8 @@ import {
 } from '@/lib/plan-grid-view';
 
 function refuseMessage(outcome: Extract<PlanWriteOutcome, { ok: false }>): string {
+  const refuse = outcome.details?.refuse?.[0];
+  if (refuse) return refuse;
   if (outcome.details !== undefined) {
     const parts = Object.entries(outcome.details).map(
       ([key, values]) => `${key}: ${values.join(', ')}`,
@@ -51,6 +59,30 @@ function refuseMessage(outcome: Extract<PlanWriteOutcome, { ok: false }>): strin
     if (parts.length > 0) return parts.join('; ');
   }
   return outcome.messageKey;
+}
+
+/** Leaf autocomplete over WBS + name; empty query → no picks (UX-DR6). */
+function filterLeafSuggestions(
+  query: string,
+  candidates: readonly PlanGridLeafCandidateView[],
+  excludeWpId: string,
+): readonly PlanGridLeafCandidateView[] {
+  const q = query.trim().toLowerCase();
+  if (q.length === 0) return [];
+  const out: PlanGridLeafCandidateView[] = [];
+  for (const c of candidates) {
+    if (c.wpId === excludeWpId) continue;
+    if (!`${c.wbsCode} ${c.name}`.toLowerCase().includes(q)) continue;
+    out.push(c);
+    if (out.length >= 8) break;
+  }
+  return out;
+}
+
+function currentToken(text: string, caret: number): { readonly start: number; readonly query: string } {
+  const before = text.slice(0, caret);
+  const start = before.lastIndexOf(',') + 1;
+  return { start, query: before.slice(start).trimStart() };
 }
 
 function StateGlyph({ state }: { readonly state: string | null }) {
@@ -322,6 +354,288 @@ function ExceptionCell({ row }: { readonly row: PlanGridRowView }) {
   return <span className={cls}>{row.exceptionLabel}</span>;
 }
 
+function PredecessorCell({
+  row,
+  leafCandidates,
+  onCommit,
+  onAssertiveRefuse,
+}: {
+  readonly row: PlanGridRowView;
+  readonly leafCandidates: readonly PlanGridLeafCandidateView[];
+  readonly onCommit: (text: string) => Promise<string | null>;
+  readonly onAssertiveRefuse: (message: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(row.predecessorsText);
+  const [error, setError] = useState<string | null>(null);
+  const [caret, setCaret] = useState(0);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const listId = useId();
+
+  useEffect(() => {
+    setDraft(row.predecessorsText);
+  }, [row.predecessorsText]);
+
+  useEffect(() => {
+    if (editing) inputRef.current?.focus();
+  }, [editing]);
+
+  const token = currentToken(draft, caret);
+  const suggestions = editing
+    ? filterLeafSuggestions(token.query, leafCandidates, row.wpId)
+    : [];
+
+  const pickSuggestion = (wbsCode: string) => {
+    const before = draft.slice(0, token.start);
+    const afterComma = draft.slice(token.start);
+    const rest = afterComma.includes(',')
+      ? afterComma.slice(afterComma.indexOf(','))
+      : '';
+    const prefix = before.trimEnd();
+    const next =
+      prefix.length === 0 ? `${wbsCode}${rest}` : `${prefix}, ${wbsCode}${rest}`;
+    setDraft(next);
+    setCaret(next.length - rest.length);
+    inputRef.current?.focus();
+  };
+
+  const commit = async () => {
+    if (draft.trim() === row.predecessorsText.trim()) {
+      setEditing(false);
+      setError(null);
+      return;
+    }
+    const refuse = await onCommit(draft);
+    if (refuse) {
+      setError(refuse);
+      onAssertiveRefuse(refuse);
+      return;
+    }
+    setError(null);
+    setEditing(false);
+  };
+
+  if (!editing) {
+    return (
+      <button
+        type="button"
+        className="plan-inline-btn plan-pred"
+        aria-label={`Predecessors for ${row.name}`}
+        data-testid={`pred-${row.wpId}`}
+        onClick={() => setEditing(true)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            setEditing(true);
+          }
+        }}
+      >
+        {row.predecessorsText || '—'}
+        {error ? <span className="plan-cell-error"> {error}</span> : null}
+      </button>
+    );
+  }
+
+  return (
+    <span className="plan-pred-edit">
+      <input
+        ref={inputRef}
+        className="plan-inline-input plan-pred"
+        aria-label={`Predecessors for ${row.name}`}
+        aria-autocomplete="list"
+        aria-controls={suggestions.length > 0 ? listId : undefined}
+        data-testid={`pred-input-${row.wpId}`}
+        value={draft}
+        onChange={(e) => {
+          setDraft(e.target.value);
+          setCaret(e.target.selectionStart ?? e.target.value.length);
+        }}
+        onSelect={(e) => {
+          const t = e.target as HTMLInputElement;
+          setCaret(t.selectionStart ?? t.value.length);
+        }}
+        onBlur={() => {
+          // Defer so suggestion mousedown can fire first.
+          window.setTimeout(() => void commit(), 120);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            void commit();
+          } else if (e.key === 'Escape') {
+            e.preventDefault();
+            setDraft(row.predecessorsText);
+            setError(null);
+            setEditing(false);
+          } else if (e.key === 'Tab') {
+            void commit();
+          }
+        }}
+      />
+      {suggestions.length > 0 ? (
+        <ul id={listId} className="plan-pred-suggest" role="listbox">
+          {suggestions.map((s) => (
+            <li key={s.wpId} role="option">
+              <button
+                type="button"
+                className="plan-pred-suggest-btn"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  pickSuggestion(s.wbsCode);
+                }}
+              >
+                {s.wbsCode} {s.name}
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {error ? <span className="plan-cell-error">{error}</span> : null}
+    </span>
+  );
+}
+
+function ConstraintCell({
+  row,
+  inputId,
+  onCommit,
+}: {
+  readonly row: PlanGridRowView;
+  readonly inputId: string;
+  readonly onCommit: (
+    constraintType: 'asap' | 'must_start_on' | 'must_finish_on',
+    constraintDate: string | null,
+  ) => Promise<string | null>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const typeFromRow =
+    row.constraintType === 'must_start_on' || row.constraintType === 'must_finish_on'
+      ? row.constraintType
+      : 'asap';
+  const [type, setType] = useState<'asap' | 'must_start_on' | 'must_finish_on'>(typeFromRow);
+  const [date, setDate] = useState(row.constraintDate ?? '');
+  const [error, setError] = useState<string | null>(null);
+  const typeRef = useRef<HTMLSelectElement>(null);
+
+  useEffect(() => {
+    setType(typeFromRow);
+    setDate(row.constraintDate ?? '');
+  }, [typeFromRow, row.constraintDate]);
+
+  useEffect(() => {
+    if (editing) typeRef.current?.focus();
+  }, [editing]);
+
+  const resetDraft = () => {
+    setType(typeFromRow);
+    setDate(row.constraintDate ?? '');
+    setError(null);
+    setEditing(false);
+  };
+
+  const commit = async () => {
+    const nextType = type === 'asap' || date.trim() === '' ? 'asap' : type;
+    const nextDate = nextType === 'asap' ? null : date.trim();
+    if (nextType !== 'asap' && !nextDate) {
+      setError('A date is required for this constraint');
+      return;
+    }
+    const sameType = nextType === (row.constraintType === 'asap' ? 'asap' : row.constraintType);
+    const sameDate = (nextDate ?? null) === (row.constraintDate ?? null);
+    if (sameType && sameDate) {
+      setEditing(false);
+      setError(null);
+      return;
+    }
+    const refuse = await onCommit(nextType, nextDate);
+    if (refuse) {
+      setError(refuse);
+      return;
+    }
+    setError(null);
+    setEditing(false);
+  };
+
+  if (!editing) {
+    return (
+      <button
+        type="button"
+        id={inputId}
+        className="plan-inline-btn plan-constraint"
+        aria-label={`Constraint for ${row.name}`}
+        data-testid={`constraint-${row.wpId}`}
+        onClick={() => setEditing(true)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            setEditing(true);
+          }
+        }}
+      >
+        {row.constraintLabel}
+        {error ? <span className="plan-cell-error"> {error}</span> : null}
+      </button>
+    );
+  }
+
+  return (
+    <span className="plan-constraint-edit">
+      <select
+        ref={typeRef}
+        id={inputId}
+        className="plan-constraint-type"
+        aria-label={`Constraint type for ${row.name}`}
+        value={type}
+        onChange={(e) => {
+          const next = e.target.value as 'asap' | 'must_start_on' | 'must_finish_on';
+          setType(next);
+          if (next === 'asap') setDate('');
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') {
+            e.preventDefault();
+            resetDraft();
+          } else if (e.key === 'Enter') {
+            e.preventDefault();
+            void commit();
+          }
+        }}
+      >
+        <option value="asap">As soon as possible</option>
+        <option value="must_start_on">Must start on</option>
+        <option value="must_finish_on">Must finish on</option>
+      </select>
+      {type !== 'asap' ? (
+        <input
+          type="date"
+          className="plan-inline-input plan-constraint-date"
+          aria-label={`Constraint date for ${row.name}`}
+          value={date}
+          onChange={(e) => setDate(e.target.value)}
+          onBlur={() => void commit()}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              void commit();
+            } else if (e.key === 'Escape') {
+              e.preventDefault();
+              resetDraft();
+            } else if (e.key === 'Tab') {
+              void commit();
+            }
+          }}
+        />
+      ) : null}
+      {type === 'asap' ? (
+        <button type="button" className="plan-constraint-done" onClick={() => void commit()}>
+          Done
+        </button>
+      ) : null}
+      {error ? <span className="plan-cell-error">{error}</span> : null}
+    </span>
+  );
+}
+
 export function PlanTreeGrid({
   model,
   proposedFinish,
@@ -342,6 +656,7 @@ export function PlanTreeGrid({
     model.rows[0]?.wpId ?? null,
   );
   const [teaching, setTeaching] = useState<string | null>(null);
+  const [assertiveRefuse, setAssertiveRefuse] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const focusRestore = useRef<string | null>(null);
   const tableRef = useRef<HTMLTableElement>(null);
@@ -444,6 +759,35 @@ export function PlanTreeGrid({
       });
     });
 
+  const patchPredecessors = (wpId: string, text: string) =>
+    new Promise<string | null>((resolve) => {
+      startTransition(async () => {
+        const outcome = await applyPredecessorsAction({
+          projectId: model.projectId,
+          successorWpId: wpId,
+          text,
+        });
+        resolve(outcome.ok ? null : refuseMessage(outcome));
+      });
+    });
+
+  const patchConstraint = (
+    wpId: string,
+    constraintType: 'asap' | 'must_start_on' | 'must_finish_on',
+    constraintDate: string | null,
+  ) =>
+    new Promise<string | null>((resolve) => {
+      startTransition(async () => {
+        const outcome = await patchWpConstraintAction({
+          projectId: model.projectId,
+          wpId,
+          constraintType,
+          constraintDate,
+        });
+        resolve(outcome.ok ? null : refuseMessage(outcome));
+      });
+    });
+
   const onGridKeyDown = (e: KeyboardEvent<HTMLTableElement>) => {
     const target = e.target as HTMLElement | null;
     if (target?.closest('input, textarea')) return;
@@ -523,21 +867,24 @@ export function PlanTreeGrid({
         </td>
         <td>
           {row.isLeaf ? (
-            <span className="plan-pred">{row.predecessorsText || '—'}</span>
+            <PredecessorCell
+              row={row}
+              leafCandidates={model.leafCandidates}
+              onCommit={(text) => patchPredecessors(row.wpId, text)}
+              onAssertiveRefuse={(message) => setAssertiveRefuse(message)}
+            />
           ) : (
             <SummaryDash />
           )}
         </td>
         <td>
           {row.isLeaf ? (
-            <input
-              id={constraintId}
-              type="text"
-              readOnly
-              className="plan-constraint"
-              value={row.constraintLabel}
-              aria-label={`Constraint for ${row.name}`}
-              data-testid={`constraint-${row.wpId}`}
+            <ConstraintCell
+              row={row}
+              inputId={constraintId}
+              onCommit={(constraintType, constraintDate) =>
+                patchConstraint(row.wpId, constraintType, constraintDate)
+              }
             />
           ) : (
             <SummaryDash />
@@ -682,6 +1029,15 @@ export function PlanTreeGrid({
             {teaching}
           </span>
         ) : null}
+        {/* Q2→C: assertive FR-6a refuse only — polite success announce deferred to 2.15 */}
+        <span
+          className="sr-only"
+          aria-live="assertive"
+          aria-atomic="true"
+          data-testid="fr6a-assertive-refuse"
+        >
+          {assertiveRefuse ?? ''}
+        </span>
       </div>
 
       {model.noProjectStart ? (

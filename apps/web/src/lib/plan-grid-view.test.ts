@@ -40,6 +40,7 @@ const sample: PlanGridState = {
       constraintDate: null,
       constraintLabel: 'As soon as possible',
       predecessorsText: '',
+      predecessorEdges: [],
       earlyStart: '2026-09-01',
       earlyFinish: '2026-10-01',
       floatDays: -3,
@@ -54,6 +55,7 @@ const sample: PlanGridState = {
       exception: { kind: 'violation', label: '▲ Late 6d', daysLate: 6 },
     },
   ],
+  leafCandidates: [{ wpId: 'leaf', wbsCode: '1.1', name: 'Leaf' }],
 };
 
 describe('plan-grid-view (story 2.13)', () => {
@@ -66,6 +68,8 @@ describe('plan-grid-view (story 2.13)', () => {
     expect(view.rows[0]!.floatDays).toBe(-3);
     expect(view.rows[0]!.isCritical).toBe(true);
     expect(view.rows[0]!.remainingDays).toBe(8);
+    expect(view.rows[0]!.constraintType).toBe('asap');
+    expect(view.leafCandidates).toEqual([{ wpId: 'leaf', wbsCode: '1.1', name: 'Leaf' }]);
   });
 
   it('names UX-DR2 slots and Schedule/Progress column sets (Q4→A)', () => {

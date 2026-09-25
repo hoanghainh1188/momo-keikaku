@@ -1153,3 +1153,11 @@ above can see where it went.
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-13-the-plan-tree-grid-and-its-schedule-preset.md`
   summary: Complete ARIA treegrid keyboard contract beyond expand/collapse and preset keys (e.g. Left on a leaf moves to parent; full gridcell navigation).
   evidence: Review BH15 (2026-09-25): Manual Verification promised fuller treegrid keyboard behaviour than the partial delivery; not a one-line fix.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-14-dependencies-and-constraints-are-created-and-explained-on-th.md`
+  summary: Comfort Links panel (`l`) listing the selected WP's predecessors and successors with picker/lag/remove, same FR-6a checks, sharing the exceptions-rail slot (UX-DR11).
+  evidence: Split at story 2.14 Open Questions gate — founder chose Q1→A (Core predecessor + constraint cells only). Cutting costs discoverability, not FR-6a/FR-7 access; panel would compete with the empty 2.16 rail slot.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-14-dependencies-and-constraints-are-created-and-explained-on-th.md`
+  summary: Polite live-region announce after a successful recalculation (UX-DR26 full sentence with moved count, computed finish, minimum Float).
+  evidence: Split at story 2.14 Open Questions gate — founder chose Q2→C (assertive FR-6a refuse only). Polite success belongs with the What-moved band in story 2.15 so the PM can inspect what moved.
