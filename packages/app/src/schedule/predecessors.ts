@@ -5,18 +5,13 @@
  * presentation — `checkPlanInvariants` still returns codes only.
  */
 import {
-  filterLeafCandidates,
   hasOffences,
   validate,
   type GraphOffences,
-  type LeafCandidate,
   type PlanGraph,
   type PlanGraphEdge,
   type PlanGraphWp,
 } from '@momo/domain';
-
-export type { LeafCandidate };
-export { filterLeafCandidates };
 
 /** One typed predecessor edge after parse (successor is the edited row). */
 export interface ParsedPredecessor {
@@ -51,6 +46,12 @@ export type PredecessorFenceMutation =
 export type ParsePredecessorsResult =
   | { readonly ok: true; readonly edges: readonly ParsedPredecessor[] }
   | { readonly ok: false; readonly message: string };
+
+export interface LeafCandidate {
+  readonly wpId: string;
+  readonly wbsCode: string;
+  readonly name: string;
+}
 
 /**
  * Parse MS-Project-shaped predecessor text: `2.3FS+2d, 2.4`.
@@ -228,6 +229,30 @@ export function explainProposedGraphRefuse<W extends PlanGraphWp>(
   const parentOf = new Map(plan.wps.map((w) => [w.id, w.parentId ?? null] as const));
   const lines = explainGraphOffences(offences, wbsById, parentOf);
   return lines.length > 0 ? lines.join('; ') : 'invalid dependency';
+}
+
+/**
+ * Leaf-only autocomplete over WBS code and name (UX-DR6).
+ * Empty query → no suggestions (no spurious picks).
+ * Web mirrors this in `apps/web/src/lib/plan-pred-suggest.ts` (client cannot import `@momo/app`).
+ */
+export function filterLeafCandidates(
+  query: string,
+  candidates: readonly LeafCandidate[],
+  options?: { readonly excludeWpId?: string; readonly limit?: number },
+): readonly LeafCandidate[] {
+  const q = query.trim().toLowerCase();
+  if (q.length === 0) return [];
+  const limit = options?.limit ?? 8;
+  const out: LeafCandidate[] = [];
+  for (const c of candidates) {
+    if (options?.excludeWpId !== undefined && c.wpId === options.excludeWpId) continue;
+    const hay = `${c.wbsCode} ${c.name}`.toLowerCase();
+    if (!hay.includes(q)) continue;
+    out.push(c);
+    if (out.length >= limit) break;
+  }
+  return out;
 }
 
 /** One token: `2.3`, `2.3FS`, `2.3FS+2d`, `2.3+2d`, `2.3FS-1d`. */
