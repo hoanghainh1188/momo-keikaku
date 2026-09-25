@@ -71,12 +71,12 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `packages/app/src/schedule/` — parse MS-Project predecessor text; diff edge set; FR-6a explainer from `validate` lists; leave fence kinds unchanged.
-- [ ] `packages/app/src/schedule/plan-grid.ts` (+ view model) — expose leaf autocomplete candidates, constraint type/date, edges needed for editors; keep display formatters.
-- [ ] `apps/web/.../plan/actions.ts` — wire predecessor-set + `patch_constraint` through existing `applyPlanChange`.
-- [ ] `apps/web/.../plan-tree-grid.tsx` — editable pred (autocomplete, keep-text refuse, assertive live region) + constraint (type+date); Exception same-interaction refresh; no Links panel; no polite success announce (Q1→A, Q2→C).
-- [ ] `tests/` — matrix cases + FR-6a wording/keep-text + constraint/milestone + impossible-constraint Exception.
-- [ ] `_bmad-output/implementation-artifacts/deferred-work.md` — append Links panel (Q1→A) and polite recalc announce (Q2→C) if not already present.
+- [x] `packages/app/src/schedule/` — parse MS-Project predecessor text; diff edge set; FR-6a explainer from `validate` lists; leave fence kinds unchanged.
+- [x] `packages/app/src/schedule/plan-grid.ts` (+ view model) — expose leaf autocomplete candidates, constraint type/date, edges needed for editors; keep display formatters.
+- [x] `apps/web/.../plan/actions.ts` — wire predecessor-set + `patch_constraint` through existing `applyPlanChange`.
+- [x] `apps/web/.../plan-tree-grid.tsx` — editable pred (autocomplete, keep-text refuse, assertive live region) + constraint (type+date); Exception same-interaction refresh; no Links panel; no polite success announce (Q1→A, Q2→C).
+- [x] `tests/` — matrix cases + FR-6a wording/keep-text + constraint/milestone + impossible-constraint Exception.
+- [x] `_bmad-output/implementation-artifacts/deferred-work.md` — append Links panel (Q1→A) and polite recalc announce (Q2→C) if not already present.
 
 **Acceptance Criteria:**
 - Given a leaf predecessor cell, when the PM types MS-Project text with optional `FS` and signed lag, then autocomplete offers leaf WPs only and commit diffs edges through the fence.
