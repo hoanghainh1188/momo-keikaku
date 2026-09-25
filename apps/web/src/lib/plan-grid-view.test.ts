@@ -89,4 +89,25 @@ describe('plan-grid-view (story 2.13)', () => {
       expect(SCHEDULE_COLUMNS).not.toContain(absent);
     }
   });
+
+  it('maps Schedule default fields for the matrix (dates, float, critical, exception)', () => {
+    const view = toPlanGridViewModel(sample, 'user-1');
+    const leaf = view.rows[0]!;
+    expect(leaf.earlyStart).toBe('2026-09-01');
+    expect(leaf.earlyFinish).toBe('2026-10-01');
+    expect(leaf.floatDays).toBe(-3);
+    expect(leaf.isCritical).toBe(true);
+    expect(leaf.exceptionLabel).toBe('▲ Late 6d');
+    expect([...SCHEDULE_COLUMNS]).toEqual([
+      'Start',
+      'Finish',
+      'Dur',
+      'Predecessors',
+      'Constraint',
+      'Float',
+      'Critical',
+      'Exception',
+      'Recorded %',
+    ]);
+  });
 });

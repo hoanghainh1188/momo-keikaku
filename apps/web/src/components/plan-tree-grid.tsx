@@ -25,9 +25,11 @@ import {
 } from '@/components/plan-thin-edit';
 import type { PlanGridRowView, PlanGridViewModel } from '@/components/plan-grid-types';
 import {
+  capturePresetFocusRestore,
   formatFloatDisplay,
   formatPlanDate,
   inkTone,
+  presetFromDigitKey,
   readStoredPreset,
   recordedPctDisplay,
   SUMMARY_NA_LABEL,
@@ -360,7 +362,7 @@ export function PlanTreeGrid({
 
   const setPresetKeepFocus = useCallback(
     (next: PlanPreset) => {
-      focusRestore.current = focusedWpId;
+      focusRestore.current = capturePresetFocusRestore(focusedWpId);
       setPreset(next);
       writeStoredPreset(model.userId, model.projectId, next);
     },
@@ -424,14 +426,10 @@ export function PlanTreeGrid({
     });
 
   const onGridKeyDown = (e: KeyboardEvent<HTMLTableElement>) => {
-    if (e.key === '1') {
+    const fromDigit = presetFromDigitKey(e.key);
+    if (fromDigit !== null) {
       e.preventDefault();
-      setPresetKeepFocus('schedule');
-      return;
-    }
-    if (e.key === '2') {
-      e.preventDefault();
-      setPresetKeepFocus('progress');
+      setPresetKeepFocus(fromDigit);
       return;
     }
     // 3 / 4 reserved for Baseline / All — no-op (Q4→A).

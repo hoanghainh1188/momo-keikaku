@@ -3,9 +3,11 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
+  capturePresetFocusRestore,
   formatFloatDisplay,
   formatPlanDate,
   inkTone,
+  presetFromDigitKey,
   presetStorageKey,
   readStoredPreset,
   recordedPctDisplay,
@@ -50,5 +52,14 @@ describe('plan-grid-format (web)', () => {
     expect(formatFloatDisplay(-5, false).negative).toBe(true);
     expect(recordedPctDisplay(null)).toContain('0%');
     expect(SUMMARY_NA_LABEL).toContain('rolled up');
+  });
+
+  it('keeps focused row id across preset switch and maps only keys 1/2', () => {
+    expect(capturePresetFocusRestore('wp-leaf')).toBe('wp-leaf');
+    expect(capturePresetFocusRestore(null)).toBeNull();
+    expect(presetFromDigitKey('1')).toBe('schedule');
+    expect(presetFromDigitKey('2')).toBe('progress');
+    expect(presetFromDigitKey('3')).toBeNull();
+    expect(presetFromDigitKey('4')).toBeNull();
   });
 });

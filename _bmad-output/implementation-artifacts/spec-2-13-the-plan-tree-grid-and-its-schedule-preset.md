@@ -107,8 +107,9 @@ context:
   - DB: `schedule.loadWpSchedule`, `plan-input.listLiveWorkPackages` / `listLiveDependencies`.
   - App: authorised `getPlanGridState` (`plan-grid.ts`) — `compareWp` order, Data Date + latest-run exceptions/anchor, remaining duration recomputed via `remainingDuration`.
   - Web: UX-DR2 slots (strip / toolbar / What-moved / treegrid / empty rail); visual sticky freeze; keys `1`/`2` + `localStorage` per user+project; `3`/`4` disabled; inline name/duration/Recorded % through fence; pred/constraint display-only; teaching refuse on derived dates.
-  - Tests: `plan-grid.test.ts`, `plan-grid-format.test.ts`, `plan-tree-grid.test.ts` smoke.
+  - Tests: `plan-grid.test.ts`, `plan-grid-format.test.ts`, `plan-grid-view.test.ts`, `fence-2-13.test.ts` (name/duration/% + grid read + teaching refuse + FR-6a summary refuse).
   - Deferred: formal NFR-P1 p75 harness, strip/What-moved behaviour (2.15), rail explainers (2.16), Baseline/All + Observed columns — appended to `deferred-work.md`.
+  - Matrix follow-up (2026-09-25): extracted `capturePresetFocusRestore` / `presetFromDigitKey`; added fence-2-13 coverage for inline name and remainingDays recompute.
 
 ## Spec Change Log
 

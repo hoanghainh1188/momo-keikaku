@@ -89,3 +89,18 @@ export function writeStoredPreset(
     // Quota / private mode — ignore; preset still works in-session.
   }
 }
+
+/**
+ * Preset switch keeps the focused row (UX-DR24). Capture the id before setState so the
+ * effect can restore DOM focus after the preset re-render.
+ */
+export function capturePresetFocusRestore(focusedWpId: string | null): string | null {
+  return focusedWpId;
+}
+
+/** Keys `1`/`2` map to Schedule/Progress; `3`/`4` are reserved (Q4→A). */
+export function presetFromDigitKey(key: string): PlanPreset | null {
+  if (key === '1') return 'schedule';
+  if (key === '2') return 'progress';
+  return null;
+}
