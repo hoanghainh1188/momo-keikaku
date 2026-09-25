@@ -600,10 +600,19 @@ describe.skipIf(!reachable)('500 WP / 500 edge payload measure (AR-50)', () => {
 
     const owner = getDb(OWNER_DATABASE_URL!);
     await createProbeTenant(owner, PROBE);
+    // Drop the seed's full 2025–2028 version so this measure only WAL-logs the probe inserts
+    // (story 2.12 seed materialises a real calendar; that row is not part of AR-50).
+    await withTenant(owner, PROBE.tenantId, async (tx) => {
+      await tx.execute(sql`select set_config('app.maintenance', 'on', true)`);
+      await tx
+        .delete(s.holidayCalendarVersion)
+        .where(eq(s.holidayCalendarVersion.projectId, PROBE.projectId));
+    });
     const at = new Date('2026-10-05T02:00:00.000Z');
     const scope = { tenantId: PROBE.tenantId, projectId: PROBE.projectId };
 
     // WAL must be measured across COMMIT — same-tx pg_wal_lsn_diff is 0.
+    // Start AFTER seed-calendar cleanup so the large delete is not part of AR-50.
     const beforeWal = await owner.execute<{ lsn: string }>(
       sql`SELECT pg_current_wal_lsn()::text AS lsn`,
     );

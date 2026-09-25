@@ -2,7 +2,7 @@
 title: 'Story 2.12 — The Holiday Calendar and its dated versions'
 type: 'feature'
 created: '2026-09-25'
-status: 'in-progress'
+status: 'review'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: 'f2f89038f76d5a050e9f790069184826bc90da5a'
@@ -80,14 +80,14 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `packages/db/drizzle/0003_*.sql` + `schema.ts` + `table-classes.ts` + generated SQL — create `calendar_day_event` (append_only); register; RLS/grants/triggers.
-- [ ] `packages/domain/src/calendar/**` — versioned JP/VN national dataset **2025–2028** + pure merge helper → exhaustive `nonWorkingDays` (weekends listed) over default `2025-01-01`…`2028-12-31`.
-- [ ] `packages/db/src/repositories/schedule/*` (+ calendar-day writer) — append version / append day events with `lockWatermark`; stop synthetic seed path.
-- [ ] `packages/app/src/calendar/publish-calendar-version.ts` (+ audit payloads) — per-Project publish + serial operator fan-out; cause `calendar`; per-Project `audit_log` only (no `operator_audit`).
-- [ ] `packages/app/src/schedule/recalculate-project.ts` — refuse missing calendar version (no weekends invent).
-- [ ] `apps/web/.../settings/` + plan-input/calendar writers — JP/VN toggles + Project day add/remove → append + publish for that Project (Q2→A).
-- [ ] `tests/schedule/fence-2-12*.test.ts` + `tests/schedule-closure.test.ts` — matrix + AR-52 allow-list + lock serialisation smoke.
-- [ ] `_bmad-output/implementation-artifacts/deferred-work.md` — `operator_audit` (Q1→B) already appended; annotate other residues (full range banner chrome) only if they surface.
+- [x] `packages/db/drizzle/0003_*.sql` + `schema.ts` + `table-classes.ts` + generated SQL — create `calendar_day_event` (append_only); register; RLS/grants/triggers.
+- [x] `packages/domain/src/calendar/**` — versioned JP/VN national dataset **2025–2028** + pure merge helper → exhaustive `nonWorkingDays` (weekends listed) over default `2025-01-01`…`2028-12-31`.
+- [x] `packages/db/src/repositories/schedule/*` (+ calendar-day writer) — append version / append day events with `lockWatermark`; stop synthetic seed path.
+- [x] `packages/app/src/calendar/publish-calendar-version.ts` (+ audit payloads) — per-Project publish + serial operator fan-out; cause `calendar`; per-Project `audit_log` only (no `operator_audit`).
+- [x] `packages/app/src/schedule/recalculate-project.ts` — refuse missing calendar version (no weekends invent).
+- [x] `apps/web/.../settings/` + plan-input/calendar writers — JP/VN toggles + Project day add/remove → append + publish for that Project (Q2→A).
+- [x] `tests/schedule/fence-2-12*.test.ts` + `tests/schedule-closure.test.ts` — matrix + AR-52 allow-list + lock serialisation smoke.
+- [x] `_bmad-output/implementation-artifacts/deferred-work.md` — `operator_audit` (Q1→B) already appended; annotate other residues (full range banner chrome) only if they surface.
 
 **Acceptance Criteria:**
 - Given Project settings calendar controls, when the PM toggles JP/VN or adds/removes a Project non-working day, then a new resolved version is published for that Project and recalculation uses it.
@@ -101,6 +101,19 @@ context:
 - Given `pnpm lint`, `pnpm typecheck`, `pnpm depcruise` and `pnpm test`, when they run, then all exit 0.
 
 ## Implementation Notes
+
+Implemented 2026-09-25 on `cursor/story-2-12-holiday-calendar-6085`.
+
+- Migration `0003_calendar_day_event`: append-only `calendar_day_event(day, effect add|remove)` with registry + generated RLS/grants/triggers.
+- Domain `packages/domain/src/calendar/`: `national-2025-2028-v1` JP/VN dataset + `resolveCalendarVersion` (weekends + nationals + Project days → exhaustive `nonWorkingDays`).
+- Schedule repo: `appendCalendarVersion` / `appendCalendarDayEvent` / `liveProjectNonWorkingDays` / `patchNationalFlags`; `ensureCalendarVersion` removed.
+- `publishCalendarVersion` (+ flags / add-day / remove-day / serial fan-out) under `packages/app/src/calendar/`; audit action `calendar.publish_version`; run cause `calendar`.
+- `resolveScheduleInputs` refuses when no version (`details.calendar: ['required']`).
+- Seed materialises a real version per Project; settings UI adds JP/VN toggles + Project day list.
+- Depcruise + AR-52 allow-list widened for `app/calendar`.
+- Verified: `pnpm lint`, `typecheck`, `depcruise`, `test` all exit 0 (1341 tests).
+
+Residues: full range-halt banner chrome stays 2.16; `operator_audit` stays Epic 8 (already in deferred-work). Org `createProject` does not auto-publish — seed or settings/publish must materialise the first version.
 
 ## Spec Change Log
 

@@ -46,7 +46,7 @@ if (REQUIRE_DB && !reachable) {
   throw new Error('REQUIRE_DB=1 but DATABASE_URL or APP_DATABASE_URL is unreachable.');
 }
 
-const PROBE = buildProbeTenant('xtprobe-s212', 952_000_000);
+const PROBE = buildProbeTenant('xtprobe-s212', 954_000_000);
 assertProbeTenantsDisjoint([PROBE]);
 
 if (reachable) {

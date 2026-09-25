@@ -657,17 +657,10 @@ export async function renameProgram(input: RenameProgramInput, ctx?: RequestCont
   return renameProgramUseCase(writeDeps(), context, input);
 }
 
-/** FR-1: a new Project. See `packages/app`'s `createProject`. Materialises a real calendar version. */
+/** FR-1: a new Project. See `packages/app`'s `createProject`. */
 export async function createProject(input: CreateProjectInput, ctx?: RequestContext) {
   const context = ctx ?? (await requestContext());
-  const created = await createProjectUseCase(writeDeps(), context, input);
-  if (!created.ok) return created;
-  const published = await publishCalendarVersion(writeDeps(), context, {
-    projectId: created.value.id,
-    reason: 'project created',
-  });
-  if (!published.ok) return published;
-  return created;
+  return createProjectUseCase(writeDeps(), context, input);
 }
 
 /** FR-1: renames a Project. See `packages/app`'s `renameProject`. */
