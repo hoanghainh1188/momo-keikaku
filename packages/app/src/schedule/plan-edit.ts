@@ -7,6 +7,7 @@ import { and, eq, isNull } from 'drizzle-orm';
 import { projectDate } from '@momo/domain';
 import type { Bound } from '../../../db/src/bound';
 import { planInputRepositoryOn } from '../../../db/src/repositories/plan-input';
+import { scheduleRepositoryOn } from '../../../db/src/repositories/schedule';
 import { projectNotFound } from '../../../db/src/project-not-found';
 import * as s from '../../../db/src/schema';
 import { authorize, PROJECT_REACH_ROLES } from '../authz/authorize';
@@ -71,6 +72,9 @@ export async function getPlanThinUiState<Handle>(
     readonly projectFinish: string | null;
     readonly dataDate: string | null;
     readonly tzOffsetMinutes: number;
+    readonly calendarJp: boolean;
+    readonly calendarVn: boolean;
+    readonly projectNonWorkingDays: readonly string[];
     readonly remainingLeafCount: number;
     readonly constraints: ReadonlyMap<
       string,
@@ -89,6 +93,8 @@ export async function getPlanThinUiState<Handle>(
         projectFinish: s.project.projectFinish,
         dataDate: s.project.dataDate,
         tzOffsetMinutes: s.project.tzOffsetMinutes,
+        calendarJp: s.project.calendarJp,
+        calendarVn: s.project.calendarVn,
       })
       .from(s.project)
       .where(and(eq(s.project.tenantId, bound.tenantId), eq(s.project.id, input.projectId)));
@@ -111,6 +117,8 @@ export async function getPlanThinUiState<Handle>(
 
     const planInput = planInputRepositoryOn(bound);
     const remainingLeafCount = await planInput.remainingLeafCount(input.projectId);
+    const schedule = scheduleRepositoryOn(bound);
+    const projectNonWorkingDays = await schedule.liveProjectNonWorkingDays(input.projectId);
 
     const constraints = new Map(
       rows.map(
@@ -126,6 +134,9 @@ export async function getPlanThinUiState<Handle>(
       projectFinish: project.projectFinish,
       dataDate: project.dataDate,
       tzOffsetMinutes: project.tzOffsetMinutes,
+      calendarJp: project.calendarJp,
+      calendarVn: project.calendarVn,
+      projectNonWorkingDays,
       remainingLeafCount,
       constraints,
     };

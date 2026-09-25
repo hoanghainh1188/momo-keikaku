@@ -1113,3 +1113,15 @@ above can see where it went.
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-11-the-three-project-schedule-settings.md`
   summary: Localize Story 2.11 Project settings and Plan no-start product copy (NO_PROJECT_START_YET, PROJECT_FINISH_TEACHING, dataDateAdvancePreview month labels, settings form labels) into packages/i18n so a Japanese session is not English-only on those surfaces.
   evidence: Review BH8 (2026-09-24): ja.json only gained shell nav strings for settings; teaching/preview/no-start band remain English constants. Fence and schedule behavior are correct; this is the i18n product-copy backlog, not a 2.11 correctness defect. Natural pickup with the broader i18n/layout gate work or when 2.15 polishes strip chrome that reuses the same strings.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-12-the-holiday-calendar-and-its-dated-versions.md`
+  summary: Create the non-tenant `operator_audit` table and writer, and have `app/calendar.publishCalendarVersion` record one operator_audit row on national-table fan-out (AR-57 / AD-29), in addition to each Project's `audit_log`.
+  evidence: Founder decision Q1 → B, 2026-09-25 at Build Checkpoint gates. Story 2.12 ships per-Project `audit_log` only so Epic 8's operator surface is not pulled into the scheduling epic; the AR-57 AC gap is accepted until Epic 8 lands the table.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-12-the-holiday-calendar-and-its-dated-versions.md`
+  summary: Generate `packages/db/drizzle/meta/0003_snapshot.json` so drizzle-kit meta history matches journal entry `0003_calendar_day_event`.
+  evidence: Review BH1 (2026-09-25): journal lists 0003 but only 0000–0002 snapshots exist. Runtime migration applies; kit history is incomplete. Defer regenerating the snapshot with drizzle-kit.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-12-the-holiday-calendar-and-its-dated-versions.md`
+  summary: Localize Story 2.12 Holiday Calendar settings copy (section title, JP/VN labels, Project non-working-day controls) into packages/i18n.
+  evidence: Review BH6 (2026-09-25): calendar settings strings are hardcoded English, parallel to 2.11 BH8 i18n backlog. Fence behaviour is correct.

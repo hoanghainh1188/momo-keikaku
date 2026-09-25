@@ -752,11 +752,19 @@ export const UNREACHED_TENANT_OWNED_TABLES: readonly UnreachedTable[] = [
       'columns (2.13+) are the first readers. The first read use case removes this entry.',
   },
   {
+    table: 'calendar_day_event',
+    why:
+      'Created by story 2.12 (FR-14) as append-only Project non-working days. Written by ' +
+      'publish/settings paths; heads feed publishCalendarVersion. No READ use case yet — Project ' +
+      'settings thin UI loads them inside the calendar writer path, not a declared read use case. ' +
+      'The first dedicated read removes this entry.',
+  },
+  {
     table: 'holiday_calendar_version',
     why:
-      'Created by story 2.1 (AD-29) with no writer and no reader yet: versions are published by ' +
-      'app/calendar (2.12) and resolved into a schedule_run by 2.9. The first read of it removes ' +
-      'this entry.',
+      'Append-only resolved versions (AD-29). Written by seed and app/calendar.publishCalendarVersion ' +
+      '(2.12); schedule resolve loads the latest inside the fence. No product READ use case yet — ' +
+      'the first one removes this entry.',
   },
   {
     table: 'schedule_run',

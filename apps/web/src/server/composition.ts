@@ -127,6 +127,10 @@ import {
   DERIVED_DATE_TEACHING,
   PROJECT_FINISH_TEACHING,
   NO_PROJECT_START_YET,
+  publishCalendarVersion,
+  patchNationalCalendarFlags,
+  addProjectNonWorkingDay,
+  removeProjectNonWorkingDay,
 } from '@momo/app';
 import { buildResetPasswordMail } from '@momo/i18n';
 import { mailerConsoleOn, productClockOn, systemClock, uuidV7IdsOn } from '@momo/adapters';
@@ -557,6 +561,30 @@ export async function patchProjectFinish(input: unknown, ctx?: RequestContext) {
 export async function patchDataDate(input: unknown, ctx?: RequestContext) {
   const context = ctx ?? (await requestContext());
   return patchDataDateSetting(writeDeps(), context, input);
+}
+
+/** Publish a Holiday Calendar version for one Project (story 2.12). */
+export async function publishProjectCalendar(input: unknown, ctx?: RequestContext) {
+  const context = ctx ?? (await requestContext());
+  return publishCalendarVersion(writeDeps(), context, input);
+}
+
+/** Toggle JP/VN national sets and publish. */
+export async function patchProjectNationalCalendars(input: unknown, ctx?: RequestContext) {
+  const context = ctx ?? (await requestContext());
+  return patchNationalCalendarFlags(writeDeps(), context, input);
+}
+
+/** Add a Project non-working day and publish. */
+export async function addProjectCalendarDay(input: unknown, ctx?: RequestContext) {
+  const context = ctx ?? (await requestContext());
+  return addProjectNonWorkingDay(writeDeps(), context, input);
+}
+
+/** Remove a Project non-working day (tombstone) and publish. */
+export async function removeProjectCalendarDay(input: unknown, ctx?: RequestContext) {
+  const context = ctx ?? (await requestContext());
+  return removeProjectNonWorkingDay(writeDeps(), context, input);
 }
 
 /** First-observed activity evidence for the complete flow (read-only). */

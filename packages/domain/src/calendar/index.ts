@@ -8,6 +8,17 @@
  * simplification in README-DEMO.md.
  */
 
+import {
+  DEFAULT_CALENDAR_RANGE_END,
+  DEFAULT_CALENDAR_RANGE_START,
+  JP_HOLIDAYS_2026,
+  JP_NATIONAL_HOLIDAYS,
+  NATIONAL_DATASET_VERSION,
+  VN_HOLIDAYS_2026,
+  VN_NATIONAL_HOLIDAYS,
+  type NationalSet,
+} from './national-dataset';
+
 export type IsoDate = string; // YYYY-MM-DD
 export type HolidayKind = 'jp' | 'vn';
 
@@ -17,16 +28,16 @@ export interface HolidayCalendar {
   holidays: Record<IsoDate, HolidayKind[]>;
 }
 
-/** FR-14: JP + VN national holidays. Demo dataset covers 2026 (extend to 2028 for production). */
-export const JP_HOLIDAYS_2026: IsoDate[] = [
-  '2026-01-01', '2026-01-12', '2026-02-11', '2026-02-23', '2026-03-20', '2026-04-29',
-  '2026-05-03', '2026-05-04', '2026-05-05', '2026-05-06', '2026-07-20', '2026-08-11',
-  '2026-09-21', '2026-09-22', '2026-09-23', '2026-10-12', '2026-11-03', '2026-11-23',
-];
-export const VN_HOLIDAYS_2026: IsoDate[] = [
-  '2026-01-01', '2026-02-16', '2026-02-17', '2026-02-18', '2026-02-19', '2026-02-20',
-  '2026-04-26', '2026-04-30', '2026-05-01', '2026-09-02',
-];
+export {
+  DEFAULT_CALENDAR_RANGE_END,
+  DEFAULT_CALENDAR_RANGE_START,
+  JP_HOLIDAYS_2026,
+  JP_NATIONAL_HOLIDAYS,
+  NATIONAL_DATASET_VERSION,
+  VN_HOLIDAYS_2026,
+  VN_NATIONAL_HOLIDAYS,
+  type NationalSet,
+};
 
 export function buildCalendar(
   id: string,
@@ -270,4 +281,73 @@ export function shiftWorkingDays(idx: WorkingDayIndex, d: IsoDate, n: number): I
     throw new RangeError(`shiftWorkingDays: ${d} is not a working day; roll it forward first`);
   }
   return workingDayAt(idx, idx.floorOf.get(d)! + n);
+}
+
+// --- resolve at publish (story 2.12) -----------------------------------------------------------
+
+
+export interface ResolveCalendarVersionArgs {
+  readonly rangeStart?: IsoDate;
+  readonly rangeEnd?: IsoDate;
+  readonly calendarJp: boolean;
+  readonly calendarVn: boolean;
+  /** Live Project non-working days (heads of `calendar_day_event` with effect `add`). */
+  readonly projectDays?: readonly IsoDate[];
+}
+
+export interface ResolvedCalendarVersion extends CalendarVersion {
+  readonly nationalSets: readonly NationalSet[];
+  readonly nationalDatasetVersion: typeof NATIONAL_DATASET_VERSION;
+}
+
+/**
+ * Build the fully resolved non-working-day set over `[rangeStart, rangeEnd]`: every weekend,
+ * selected national holidays that fall in range, and live Project days in range.
+ */
+export function resolveCalendarVersion(
+  args: ResolveCalendarVersionArgs,
+): ResolvedCalendarVersion {
+  const rangeStart = args.rangeStart ?? DEFAULT_CALENDAR_RANGE_START;
+  const rangeEnd = args.rangeEnd ?? DEFAULT_CALENDAR_RANGE_END;
+  assertIsoDate(rangeStart, 'calendar rangeStart');
+  assertIsoDate(rangeEnd, 'calendar rangeEnd');
+  if (rangeEnd < rangeStart) {
+    throw new RangeError(`calendar range ${rangeStart} – ${rangeEnd} ends before it starts`);
+  }
+
+  const nationalSets: NationalSet[] = [];
+  const nationals = new Set<IsoDate>();
+  if (args.calendarJp) {
+    nationalSets.push('jp');
+    for (const d of JP_NATIONAL_HOLIDAYS) {
+      if (d >= rangeStart && d <= rangeEnd) nationals.add(d);
+    }
+  }
+  if (args.calendarVn) {
+    nationalSets.push('vn');
+    for (const d of VN_NATIONAL_HOLIDAYS) {
+      if (d >= rangeStart && d <= rangeEnd) nationals.add(d);
+    }
+  }
+
+  const projectDays = new Set<IsoDate>();
+  for (const d of args.projectDays ?? []) {
+    assertIsoDate(d, 'project non-working day');
+    if (d >= rangeStart && d <= rangeEnd) projectDays.add(d);
+  }
+
+  const nonWorkingDays: IsoDate[] = [];
+  for (let d = rangeStart; d <= rangeEnd; d = addDays(d, 1)) {
+    if (isWeekend(d) || nationals.has(d) || projectDays.has(d)) {
+      nonWorkingDays.push(d);
+    }
+  }
+
+  return {
+    nonWorkingDays,
+    rangeStart,
+    rangeEnd,
+    nationalSets,
+    nationalDatasetVersion: NATIONAL_DATASET_VERSION,
+  };
 }

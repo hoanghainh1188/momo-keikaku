@@ -318,7 +318,8 @@ describe.skipIf(!reachable)('applyPlanChange fence (story 2.9)', () => {
     expect(priorProjection.length).toBeGreaterThan(0);
     expect(priorProjection.every((r) => r.stale === false)).toBe(true);
 
-    // Force calendar_range: must_finish_on after the synthetic calendar's rangeEnd (2030-12-31).
+    // Force calendar_range: must_finish_on after the published calendar's rangeEnd
+    // (default 2025-01-01…2028-12-31). 2031 is still past range_end.
     const halted = await applyPlanChange(
       { handle: app, transaction: inTenantTransaction },
       ctx(),
@@ -600,10 +601,19 @@ describe.skipIf(!reachable)('500 WP / 500 edge payload measure (AR-50)', () => {
 
     const owner = getDb(OWNER_DATABASE_URL!);
     await createProbeTenant(owner, PROBE);
+    // Drop the seed's full 2025–2028 version so this measure only WAL-logs the probe inserts
+    // (story 2.12 seed materialises a real calendar; that row is not part of AR-50).
+    await withTenant(owner, PROBE.tenantId, async (tx) => {
+      await tx.execute(sql`select set_config('app.maintenance', 'on', true)`);
+      await tx
+        .delete(s.holidayCalendarVersion)
+        .where(eq(s.holidayCalendarVersion.projectId, PROBE.projectId));
+    });
     const at = new Date('2026-10-05T02:00:00.000Z');
     const scope = { tenantId: PROBE.tenantId, projectId: PROBE.projectId };
 
     // WAL must be measured across COMMIT — same-tx pg_wal_lsn_diff is 0.
+    // Start AFTER seed-calendar cleanup so the large delete is not part of AR-50.
     const beforeWal = await owner.execute<{ lsn: string }>(
       sql`SELECT pg_current_wal_lsn()::text AS lsn`,
     );

@@ -155,3 +155,13 @@ export {
   PROJECT_FINISH_TEACHING,
   NO_PROJECT_START_YET,
 } from './schedule/plan-edit';
+
+export {
+  publishCalendarVersion,
+  publishCalendarVersionFanOut,
+  patchNationalCalendarFlags,
+  addProjectNonWorkingDay,
+  removeProjectNonWorkingDay,
+  type PublishCalendarResult,
+  type FanOutProjectResult,
+} from './calendar/publish-calendar-version';

@@ -10,7 +10,7 @@ import {
   workingDayIndex,
   type CalendarVersion,
   type IsoDate,
-} from './calendar';
+} from './index';
 
 /** A hand-built version: every weekend in range, plus `holidays`. */
 function version(rangeStart: IsoDate, rangeEnd: IsoDate, holidays: IsoDate[] = []): CalendarVersion {

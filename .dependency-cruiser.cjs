@@ -193,12 +193,14 @@ module.exports = {
       name: 'scheduling-repositories-only-from-app-schedule',
       severity: 'error',
       comment:
-        'AD-1 / AD-25 / AD-27: db/repositories/schedule and db/repositories/plan-input are ' +
-        "app/schedule's alone, so the scheduler stays the only writer of derived dates and " +
-        'every input write goes through its fence. (The two repositories may import each other.)',
+        'AD-1 / AD-25 / AD-27 / AR-54: db/repositories/schedule and db/repositories/plan-input are ' +
+        "app/schedule's and app/calendar's (publishCalendarVersion), so the scheduler stays the " +
+        'only writer of derived dates and every input write goes through its fence or calendar publish. ' +
+        '(The two repositories may import each other.)',
       from: {
         pathNot: [
           '^packages/app/src/schedule([.][a-z.]+$|/)',
+          '^packages/app/src/calendar([.][a-z.]+$|/)',
           SCHEDULING_REPOSITORIES,
         ],
       },

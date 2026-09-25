@@ -58,6 +58,20 @@ export const auditPayloadSchema = z.union([
       haltedReason: z.string().nullable(),
     })
     .strict(),
+  // Holiday Calendar publish (story 2.12).
+  z
+    .object({
+      calendarVersionSeq: z.number().int(),
+      runSeq: z.number().int().nullable(),
+      kind: z.string(),
+      haltedReason: z.string().nullable(),
+      reason: z.string().nullable().optional(),
+      calendarJp: z.boolean().optional(),
+      calendarVn: z.boolean().optional(),
+      day: z.string().optional(),
+      effect: z.enum(['add', 'remove']).optional(),
+    })
+    .strict(),
 ]);
 
 /**
@@ -133,6 +147,19 @@ export const AUDIT_PAYLOAD_BY_ACTION = {
         })
         .strict()
         .optional(),
+    })
+    .strict(),
+  'calendar.publish_version': z
+    .object({
+      calendarVersionSeq: z.number().int(),
+      runSeq: z.number().int().nullable(),
+      kind: z.string(),
+      haltedReason: z.string().nullable(),
+      reason: z.string().nullable().optional(),
+      calendarJp: z.boolean().optional(),
+      calendarVn: z.boolean().optional(),
+      day: z.string().optional(),
+      effect: z.enum(['add', 'remove']).optional(),
     })
     .strict(),
 } as const;

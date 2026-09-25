@@ -84,6 +84,16 @@ CREATE TRIGGER "append_only_truncate_guard"
   BEFORE TRUNCATE ON public."pct_override_event"
   FOR EACH STATEMENT EXECUTE FUNCTION public."momo_append_only_truncate_guard"();
 
+-- calendar_day_event: Project-specific non-working days (FR-14, story 2.12). Append-only; the head per day feeds publishCalendarVersion. A remove is a tombstone row.
+DROP TRIGGER IF EXISTS "append_only_guard" ON public."calendar_day_event";
+CREATE TRIGGER "append_only_guard"
+  BEFORE UPDATE OR DELETE ON public."calendar_day_event"
+  FOR EACH ROW EXECUTE FUNCTION public."momo_append_only_guard"();
+DROP TRIGGER IF EXISTS "append_only_truncate_guard" ON public."calendar_day_event";
+CREATE TRIGGER "append_only_truncate_guard"
+  BEFORE TRUNCATE ON public."calendar_day_event"
+  FOR EACH STATEMENT EXECUTE FUNCTION public."momo_append_only_truncate_guard"();
+
 -- holiday_calendar_version: A resolved non-working-day set over a range (AD-29). A Baseline re-derives against the version it pinned, so a version is never edited.
 DROP TRIGGER IF EXISTS "append_only_guard" ON public."holiday_calendar_version";
 CREATE TRIGGER "append_only_guard"

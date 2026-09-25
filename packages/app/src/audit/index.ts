@@ -58,6 +58,8 @@ export const AUDIT_ACTIONS = [
   'project_default_rate.append',
   // Scheduling fence (story 2.9): one record per applyPlanChange.
   'schedule.apply_plan_change',
+  // Holiday Calendar publish (story 2.12 / AR-57): per-Project audit on publish / fan-out.
+  'calendar.publish_version',
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];

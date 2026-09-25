@@ -596,6 +596,33 @@ export const customFieldValue = pgTable(
 );
 
 /**
+ * Project-specific non-working days (FR-14 / story 2.12). Append-only; the head per `day`
+ * (max `seq`) is live — `effect = 'add'` includes the day, `effect = 'remove'` is the tombstone.
+ * Versions merge live heads at publish time; this table is the audit + build input, not the pin.
+ */
+export const calendarDayEvent = pgTable(
+  'calendar_day_event',
+  {
+    seq: bigint('seq', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+    tenantId: text('tenant_id').notNull(),
+    projectId: text('project_id').notNull(),
+    day: date('day').notNull(),
+    effect: text('effect').notNull(),
+    actor: text('actor').notNull(),
+    at: timestamp('at', { withTimezone: true }).notNull(),
+  },
+  (t) => ({
+    byDay: index('calendar_day_event_day_idx').on(t.tenantId, t.projectId, t.day, t.seq),
+    effect: check('calendar_day_event_effect_check', sql`${t.effect} IN ('add', 'remove')`),
+    project: foreignKey({
+      name: 'calendar_day_event_project_fk',
+      columns: [t.tenantId, t.projectId],
+      foreignColumns: [project.tenantId, project.id],
+    }),
+  }),
+);
+
+/**
  * A Holiday Calendar version (AD-29): the FULLY RESOLVED non-working-day set over
  * `[range_start, range_end]`, national tables and Project days already merged. Never edited.
  */
@@ -1013,6 +1040,7 @@ export const schemaTables = {
   pctOverrideEvent,
   customFieldDefinition,
   customFieldValue,
+  calendarDayEvent,
   holidayCalendarVersion,
   scheduleRun,
   wpSchedule,
