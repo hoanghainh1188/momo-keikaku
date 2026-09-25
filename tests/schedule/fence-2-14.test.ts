@@ -170,10 +170,113 @@ describe.skipIf(!reachable)('predecessor set + constraint editors (story 2.14)',
     expect(after).toEqual(before);
   });
 
-  it('patches must_finish_on (milestone target) and clears to asap', async () => {
+  it('remove_dependency via empty predecessor text clears the edge', async () => {
+    const owner = getDb(OWNER_DATABASE_URL!);
+    const app = getDb(APP_DATABASE_URL!);
+    const [pred, succ] = await prepareTwoLeaves(owner);
+
+    const seeded = await applyPredecessorSet(
+      { handle: app, transaction: inTenantTransaction },
+      ctx(),
+      {
+        projectId: PROBE.projectId,
+        successorWpId: succ.id,
+        text: pred.wbsCode,
+      },
+    );
+    expect(seeded.ok).toBe(true);
+
+    const cleared = await applyPredecessorSet(
+      { handle: app, transaction: inTenantTransaction },
+      ctx(),
+      {
+        projectId: PROBE.projectId,
+        successorWpId: succ.id,
+        text: '',
+      },
+    );
+    expect(cleared.ok).toBe(true);
+
+    const grid = await getPlanGridState(
+      { handle: app, transaction: inTenantTransaction },
+      ctx(),
+      { projectId: PROBE.projectId },
+    );
+    expect(grid.ok).toBe(true);
+    if (!grid.ok) return;
+    const row = grid.value.rows.find((r) => r.wpId === succ.id);
+    expect(row?.predecessorEdges).toEqual([]);
+    expect(row?.predecessorsText).toBe('');
+  });
+
+  it('re_lag_dependency via typed lag updates lagDays and canonical text', async () => {
+    const owner = getDb(OWNER_DATABASE_URL!);
+    const app = getDb(APP_DATABASE_URL!);
+    const [pred, succ] = await prepareTwoLeaves(owner);
+
+    const seeded = await applyPredecessorSet(
+      { handle: app, transaction: inTenantTransaction },
+      ctx(),
+      {
+        projectId: PROBE.projectId,
+        successorWpId: succ.id,
+        text: `${pred.wbsCode}FS+1d`,
+      },
+    );
+    expect(seeded.ok).toBe(true);
+
+    const relagged = await applyPredecessorSet(
+      { handle: app, transaction: inTenantTransaction },
+      ctx(),
+      {
+        projectId: PROBE.projectId,
+        successorWpId: succ.id,
+        text: `${pred.wbsCode}FS+3d`,
+      },
+    );
+    expect(relagged.ok).toBe(true);
+
+    const grid = await getPlanGridState(
+      { handle: app, transaction: inTenantTransaction },
+      ctx(),
+      { projectId: PROBE.projectId },
+    );
+    expect(grid.ok).toBe(true);
+    if (!grid.ok) return;
+    const row = grid.value.rows.find((r) => r.wpId === succ.id);
+    expect(row?.predecessorEdges).toEqual([{ predecessorWpId: pred.id, lagDays: 3 }]);
+    expect(row?.predecessorsText).toBe(`${pred.wbsCode}FS+3d`);
+  });
+
+  it('patches must_start_on / must_finish_on and clears to asap', async () => {
     const owner = getDb(OWNER_DATABASE_URL!);
     const app = getDb(APP_DATABASE_URL!);
     const [leaf] = await prepareTwoLeaves(owner);
+
+    const startOn = await applyPlanChange(
+      { handle: app, transaction: inTenantTransaction },
+      ctx(),
+      {
+        kind: 'patch_constraint',
+        projectId: PROBE.projectId,
+        wpId: leaf.id,
+        constraintType: 'must_start_on',
+        constraintDate: '2026-10-08',
+      },
+    );
+    expect(startOn.ok).toBe(true);
+
+    let grid = await getPlanGridState(
+      { handle: app, transaction: inTenantTransaction },
+      ctx(),
+      { projectId: PROBE.projectId },
+    );
+    expect(grid.ok).toBe(true);
+    if (!grid.ok) return;
+    let row = grid.value.rows.find((r) => r.wpId === leaf.id);
+    expect(row?.constraintType).toBe('must_start_on');
+    expect(row?.constraintDate).toBe('2026-10-08');
+    expect(row?.constraintLabel).toMatch(/Must start on/);
 
     const set = await applyPlanChange(
       { handle: app, transaction: inTenantTransaction },
@@ -188,14 +291,14 @@ describe.skipIf(!reachable)('predecessor set + constraint editors (story 2.14)',
     );
     expect(set.ok).toBe(true);
 
-    let grid = await getPlanGridState(
+    grid = await getPlanGridState(
       { handle: app, transaction: inTenantTransaction },
       ctx(),
       { projectId: PROBE.projectId },
     );
     expect(grid.ok).toBe(true);
     if (!grid.ok) return;
-    const row = grid.value.rows.find((r) => r.wpId === leaf.id);
+    row = grid.value.rows.find((r) => r.wpId === leaf.id);
     expect(row?.constraintType).toBe('must_finish_on');
     expect(row?.constraintDate).toBe('2026-10-10');
     expect(row?.constraintLabel).toMatch(/Must finish on/);
@@ -224,6 +327,69 @@ describe.skipIf(!reachable)('predecessor set + constraint editors (story 2.14)',
     expect(clearedRow?.constraintType).toBe('asap');
     expect(clearedRow?.constraintDate).toBeNull();
     expect(clearedRow?.constraintLabel).toBe('As soon as possible');
+  });
+
+  it('edits a milestone target as must_finish_on in the constraint cell (no separate field)', async () => {
+    const owner = getDb(OWNER_DATABASE_URL!);
+    const app = getDb(APP_DATABASE_URL!);
+    await createProbeTenant(owner, PROBE);
+    const milestone = PROBE.state.wps.find((w) => w.isMilestone && w.isLeaf);
+    if (!milestone) throw new Error('need a milestone leaf');
+
+    await withTenant(owner, PROBE.tenantId, async (tx) => {
+      await tx
+        .update(s.project)
+        .set({ projectStart: '2026-09-01', dataDate: '2026-10-05', projectFinish: null })
+        .where(eq(s.project.id, PROBE.projectId));
+    });
+
+    const set = await applyPlanChange(
+      { handle: app, transaction: inTenantTransaction },
+      ctx(),
+      {
+        kind: 'patch_constraint',
+        projectId: PROBE.projectId,
+        wpId: milestone.id,
+        constraintType: 'must_finish_on',
+        constraintDate: '2026-10-15',
+      },
+    );
+    expect(set.ok).toBe(true);
+
+    const grid = await getPlanGridState(
+      { handle: app, transaction: inTenantTransaction },
+      ctx(),
+      { projectId: PROBE.projectId },
+    );
+    expect(grid.ok).toBe(true);
+    if (!grid.ok) return;
+    const row = grid.value.rows.find((r) => r.wpId === milestone.id);
+    expect(row?.isMilestone).toBe(true);
+    expect(row?.isLeaf).toBe(true);
+    expect(row?.constraintType).toBe('must_finish_on');
+    expect(row?.constraintDate).toBe('2026-10-15');
+    expect(row?.constraintLabel).toMatch(/Must finish on/);
+  });
+
+  it('summary rows stay non-leaf and never enter leaf autocomplete candidates', async () => {
+    const owner = getDb(OWNER_DATABASE_URL!);
+    const app = getDb(APP_DATABASE_URL!);
+    await prepareTwoLeaves(owner);
+
+    const grid = await getPlanGridState(
+      { handle: app, transaction: inTenantTransaction },
+      ctx(),
+      { projectId: PROBE.projectId },
+    );
+    expect(grid.ok).toBe(true);
+    if (!grid.ok) return;
+
+    const summary = grid.value.rows.find((r) => !r.isLeaf);
+    expect(summary).toBeDefined();
+    expect(summary?.isLeaf).toBe(false);
+    expect(grid.value.leafCandidates.some((c) => c.wpId === summary?.wpId)).toBe(false);
+    // Editors mount only for isLeaf; summaries keep named em-dash cells in the treegrid.
+    expect(grid.value.rows.some((r) => r.isLeaf)).toBe(true);
   });
 
   it('impossible must_finish_on paints Exception on the same grid read', async () => {

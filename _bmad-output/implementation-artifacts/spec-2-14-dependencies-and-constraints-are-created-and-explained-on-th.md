@@ -2,7 +2,7 @@
 title: 'Story 2.14 — Dependencies and constraints are created and explained on the grid'
 type: 'feature'
 created: '2026-09-25'
-status: 'in-progress'
+status: 'in-review'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '0924d5e2484b574444ec5a051a23070d1f01820e'
@@ -93,11 +93,41 @@ context:
 - 2026-09-25: `getPlanGridState` / view model expose `leafCandidates`, per-row `predecessorEdges`, and pass through `constraintType` / `constraintDate` for editors.
 - 2026-09-25: Thin actions `applyPredecessorsAction` + `patchWpConstraintAction` (clear date → asap). Grid: predecessor autocomplete (leaf-only), under-cell FR-6a keep-text refuse, assertive `aria-live` region (Q2→C); constraint type+date editor. No Links panel / `l` (Q1→A); no polite success announce.
 - 2026-09-25: Tests — `predecessors.test.ts` (parse/diff/explain/autocomplete); `fence-2-14.test.ts` (add+canonicalise, cycle refuse, must_finish_on/asap, impossible-constraint Exception, parse refuse). Deferred Links panel + polite announce already in `deferred-work.md`.
-- 2026-09-25: Verified `pnpm lint`, `pnpm typecheck`, `pnpm depcruise` exit 0; `pnpm test` — all new 2.14 coverage green. One unrelated flaky WAL budget assert in `fence.test.ts` (AR-50) failed once; not introduced by this story.
+- 2026-09-25: Review fixes — pickSuggestion trims trailing commas; committingRef blocks re-entrant blur; assertiveRefuse cleared on success/Escape; draft sync only when not editing; reuse `filterLeafCandidates` from `@momo/app`; fence-2-14 covers remove + re-lag; `planWriteRefuseMessage` extracted + unit-tested.
+
+- 2026-09-25: Matrix gap fill — fence covers `must_start_on` + milestone `must_finish_on` + summary non-leaf/leafCandidates; `explainProposedGraphRefuse` covers ancestor + cross-project prose. UI keep-text is structural (`PredecessorCell` leaves `draft` on refuse + assertive live region); no RTL harness in repo.
 
 ## Spec Change Log
 
 ## Review Triage Log
+
+| ID | Source | Verdict | Route | Evidence |
+|----|--------|---------|-------|----------|
+| BH1 | blind | false | reject | Spec is `in-review`; sprint → review is present-step process, not an implementation defect. |
+| BH2 | blind | false | reject | Empty Spec Change Log / Triage Log during first review pass is expected; this triage fills them. |
+| BH3 | blind | medium | patch | Verified: `pickSuggestion` keeps trailing comma in `prefix` (`before.trimEnd()`), yielding `2.3,, 2.4`. |
+| BH4 | blind | low | defer | Autocomplete exists (mouse); full ArrowUp/Down combobox is nicer than Core typing AC requires. |
+| BH5 | blind | false | reject | EXPERIENCE UX-DR6 example for cross-project is exactly "that work package is in another project" (no WP ids). |
+| BH6 | blind | low | reject | Non-leaf / missing successor refuse is unreachable from Schedule editors (leaf-only cells). |
+| BH7 | blind | medium | defer | Fan-out uses sequential `applyPlanChange`; mid-fail after pre-validate is rare (concurrency/DB). Atomic multi-mutation needs fence redesign, not a one-line patch. |
+| BH8 | blind | medium | patch | Verified: success path never clears `assertiveRefuse`; stale text can linger / block re-announce. |
+| BH9 | blind | low | reject | `predecessorEdges` supports server apply/tests; unused in cell render is dead weight, not user-facing. |
+| BH10 | blind | medium | patch | Verified: web duplicates `filterLeafCandidates` as `filterLeafSuggestions` — drift risk. |
+| BH11 | blind | medium | patch | Verified: fence-2-14 never exercises remove / re-lag through `applyPredecessorSet`. |
+| BH12 | blind | low | reject | Manual checklist gaps are documentation; Core AC covered by fence/unit where harness exists. |
+| BH13 | blind | low | defer | Unrelated `fence.test.ts` WAL flake noted in Implementation Notes; record in deferred-work. |
+| EC1 | edge | medium | defer | Same root as BH7 — partial fan-out. |
+| EC2 | edge | medium | patch | Verified: Enter/Tab commit then blur timeout can re-enter `commit` without a guard. |
+| EC3 | edge | medium | patch | Same root as BH8 — stale assertive region. |
+| EC4 | edge | medium | patch | Verified: `useEffect` syncs `draft` from `row.predecessorsText` even while `editing`. |
+| EC5 | edge | medium | patch | Verified: constraint `useEffect` syncs type/date while editing. |
+| EC6 | edge | false | reject | Same as BH5 — UX-DR6 exact cross-project sentence. |
+| EC7 | edge | medium | defer | Same as BH7/EC1. |
+| VG1 | verif-gap | medium | patch | Pre-verified: remove/re-lag apply path untested — same as BH11. |
+| VG2 | verif-gap | medium | patch | Pre-verified: grid does not adopt `filterLeafCandidates` — same as BH10. |
+| VG3 | verif-gap | medium | patch | Mapping already prefers `details.refuse`; missing pure unit test — extract + test. UI keep-text/RTL deferred (no harness). |
+
+Grouped routes: **patch** (double-comma pick; commit guard; clear assertive; draft sync while editing; adopt `filterLeafCandidates`; remove/re-lag fence tests; refuseMessage unit test). **defer** BH4, BH7/EC1/EC7, BH13, VG3 UI half. Rejected BH1/2/5/6/9/12, EC6.
 
 ## Design Notes
 

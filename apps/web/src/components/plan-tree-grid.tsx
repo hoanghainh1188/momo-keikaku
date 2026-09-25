@@ -48,35 +48,11 @@ import {
   PROGRESS_COLUMNS,
   SCHEDULE_COLUMNS,
 } from '@/lib/plan-grid-view';
+import { planWriteRefuseMessage } from '@/lib/plan-write-refuse';
+import { filterLeafCandidates } from '@momo/app';
 
 function refuseMessage(outcome: Extract<PlanWriteOutcome, { ok: false }>): string {
-  const refuse = outcome.details?.refuse?.[0];
-  if (refuse) return refuse;
-  if (outcome.details !== undefined) {
-    const parts = Object.entries(outcome.details).map(
-      ([key, values]) => `${key}: ${values.join(', ')}`,
-    );
-    if (parts.length > 0) return parts.join('; ');
-  }
-  return outcome.messageKey;
-}
-
-/** Leaf autocomplete over WBS + name; empty query → no picks (UX-DR6). */
-function filterLeafSuggestions(
-  query: string,
-  candidates: readonly PlanGridLeafCandidateView[],
-  excludeWpId: string,
-): readonly PlanGridLeafCandidateView[] {
-  const q = query.trim().toLowerCase();
-  if (q.length === 0) return [];
-  const out: PlanGridLeafCandidateView[] = [];
-  for (const c of candidates) {
-    if (c.wpId === excludeWpId) continue;
-    if (!`${c.wbsCode} ${c.name}`.toLowerCase().includes(q)) continue;
-    out.push(c);
-    if (out.length >= 8) break;
-  }
-  return out;
+  return planWriteRefuseMessage(outcome);
 }
 
 function currentToken(text: string, caret: number): { readonly start: number; readonly query: string } {
@@ -363,18 +339,19 @@ function PredecessorCell({
   readonly row: PlanGridRowView;
   readonly leafCandidates: readonly PlanGridLeafCandidateView[];
   readonly onCommit: (text: string) => Promise<string | null>;
-  readonly onAssertiveRefuse: (message: string) => void;
+  readonly onAssertiveRefuse: (message: string | null) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(row.predecessorsText);
   const [error, setError] = useState<string | null>(null);
   const [caret, setCaret] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const committingRef = useRef(false);
   const listId = useId();
 
   useEffect(() => {
-    setDraft(row.predecessorsText);
-  }, [row.predecessorsText]);
+    if (!editing) setDraft(row.predecessorsText);
+  }, [row.predecessorsText, editing]);
 
   useEffect(() => {
     if (editing) inputRef.current?.focus();
@@ -382,7 +359,7 @@ function PredecessorCell({
 
   const token = currentToken(draft, caret);
   const suggestions = editing
-    ? filterLeafSuggestions(token.query, leafCandidates, row.wpId)
+    ? filterLeafCandidates(token.query, leafCandidates, { excludeWpId: row.wpId })
     : [];
 
   const pickSuggestion = (wbsCode: string) => {
@@ -391,7 +368,8 @@ function PredecessorCell({
     const rest = afterComma.includes(',')
       ? afterComma.slice(afterComma.indexOf(','))
       : '';
-    const prefix = before.trimEnd();
+    // Drop trailing commas left on the prefix so picks never produce `2.3,, 2.4`.
+    const prefix = before.trimEnd().replace(/,+$/u, '').trimEnd();
     const next =
       prefix.length === 0 ? `${wbsCode}${rest}` : `${prefix}, ${wbsCode}${rest}`;
     setDraft(next);
@@ -400,19 +378,27 @@ function PredecessorCell({
   };
 
   const commit = async () => {
-    if (draft.trim() === row.predecessorsText.trim()) {
-      setEditing(false);
+    if (committingRef.current) return;
+    committingRef.current = true;
+    try {
+      if (draft.trim() === row.predecessorsText.trim()) {
+        setEditing(false);
+        setError(null);
+        onAssertiveRefuse(null);
+        return;
+      }
+      const refuse = await onCommit(draft);
+      if (refuse) {
+        setError(refuse);
+        onAssertiveRefuse(refuse);
+        return;
+      }
       setError(null);
-      return;
+      onAssertiveRefuse(null);
+      setEditing(false);
+    } finally {
+      committingRef.current = false;
     }
-    const refuse = await onCommit(draft);
-    if (refuse) {
-      setError(refuse);
-      onAssertiveRefuse(refuse);
-      return;
-    }
-    setError(null);
-    setEditing(false);
   };
 
   if (!editing) {
@@ -466,6 +452,7 @@ function PredecessorCell({
             e.preventDefault();
             setDraft(row.predecessorsText);
             setError(null);
+            onAssertiveRefuse(null);
             setEditing(false);
           } else if (e.key === 'Tab') {
             void commit();
@@ -518,9 +505,11 @@ function ConstraintCell({
   const typeRef = useRef<HTMLSelectElement>(null);
 
   useEffect(() => {
-    setType(typeFromRow);
-    setDate(row.constraintDate ?? '');
-  }, [typeFromRow, row.constraintDate]);
+    if (!editing) {
+      setType(typeFromRow);
+      setDate(row.constraintDate ?? '');
+    }
+  }, [typeFromRow, row.constraintDate, editing]);
 
   useEffect(() => {
     if (editing) typeRef.current?.focus();
