@@ -1,7 +1,18 @@
 /**
- * Serializable Plan grid row for the client treegrid (story 2.13).
+ * Serializable Plan grid row for the client treegrid (story 2.13 / 2.14).
  * BigInt ratios become strings for RSC → client props.
  */
+export interface PlanGridLeafCandidateView {
+  readonly wpId: string;
+  readonly wbsCode: string;
+  readonly name: string;
+}
+
+export interface PlanGridPredecessorEdgeView {
+  readonly predecessorWpId: string;
+  readonly lagDays: number;
+}
+
 export interface PlanGridRowView {
   readonly wpId: string;
   readonly wbsCode: string;
@@ -15,8 +26,11 @@ export interface PlanGridRowView {
   readonly setSize: number;
   readonly hasChildren: boolean;
   readonly durationDays: number | null;
+  readonly constraintType: string;
+  readonly constraintDate: string | null;
   readonly constraintLabel: string;
   readonly predecessorsText: string;
+  readonly predecessorEdges: readonly PlanGridPredecessorEdgeView[];
   readonly earlyStart: string | null;
   readonly earlyFinish: string | null;
   readonly floatDays: number | null;
@@ -40,5 +54,6 @@ export interface PlanGridViewModel {
   readonly floatAnchorLabel: 'vs Project finish' | 'vs computed finish' | null;
   readonly scheduleStale: boolean;
   readonly haltedReason: string | null;
+  readonly leafCandidates: readonly PlanGridLeafCandidateView[];
   readonly rows: readonly PlanGridRowView[];
 }

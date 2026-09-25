@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import {
+  applyPredecessors,
   completeWp,
   deleteWp,
   firstObservedForWp,
@@ -193,5 +194,48 @@ export async function patchWpRecordedPctAction(input: {
     wpId: input.wpId,
     recordedPctNum: ratio.num,
     recordedPctDen: ratio.den,
+  });
+}
+
+/**
+ * Story 2.14 — commit MS-Project predecessor text. FR-6a refuse keeps typed text; prose in
+ * `details.refuse` for under-cell + assertive announce.
+ */
+export async function applyPredecessorsAction(input: {
+  readonly projectId: string;
+  readonly successorWpId: string;
+  readonly text: string;
+}): Promise<PlanWriteOutcome> {
+  const ctx = await requestContext();
+  const result = await applyPredecessors(input, ctx);
+  if (!result.ok) return refuseOutcome(result);
+  revalidatePath(`/p/${input.projectId}/plan`);
+  return { ok: true };
+}
+
+/** Story 2.14 — constraint type+date through `patch_constraint` (asap when date cleared). */
+export async function patchWpConstraintAction(input: {
+  readonly projectId: string;
+  readonly wpId: string;
+  readonly constraintType: 'asap' | 'must_start_on' | 'must_finish_on';
+  readonly constraintDate: string | null;
+}): Promise<PlanWriteOutcome> {
+  const cleared = input.constraintDate === null || input.constraintDate === '';
+  const constraintType = cleared ? 'asap' : input.constraintType;
+  const constraintDate = cleared ? null : input.constraintDate;
+  if (!cleared && constraintType === 'asap') {
+    return {
+      ok: false,
+      code: 'invalid_input',
+      messageKey: 'errors.invalid_input',
+      details: { refuse: ['As soon as possible cannot carry a date'] },
+    };
+  }
+  return fenceMutation(input.projectId, {
+    kind: 'patch_constraint',
+    projectId: input.projectId,
+    wpId: input.wpId,
+    constraintType,
+    constraintDate,
   });
 }

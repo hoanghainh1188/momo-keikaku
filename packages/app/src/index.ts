@@ -169,7 +169,22 @@ export {
   type PlanGridState,
   type PlanGridRow,
   type PlanGridException,
+  type PlanGridLeafCandidate,
+  type PlanGridPredecessorEdge,
 } from './schedule/plan-grid';
+export {
+  parsePredecessorsText,
+  diffPredecessorEdges,
+  replaceSuccessorEdges,
+  explainGraphOffences,
+  explainProposedGraphRefuse,
+  filterLeafCandidates,
+  type ParsedPredecessor,
+  type LivePredecessorEdge,
+  type PredecessorFenceMutation,
+  type LeafCandidate,
+} from './schedule/predecessors';
+export { applyPredecessorSet } from './schedule/apply-predecessor-set';
 
 export {
   publishCalendarVersion,

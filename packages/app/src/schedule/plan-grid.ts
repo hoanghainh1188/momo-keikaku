@@ -35,6 +35,18 @@ export interface PlanGridException {
   readonly daysLate?: number;
 }
 
+export interface PlanGridPredecessorEdge {
+  readonly predecessorWpId: string;
+  readonly lagDays: number;
+}
+
+/** Leaf WP chip for predecessor autocomplete (UX-DR6). */
+export interface PlanGridLeafCandidate {
+  readonly wpId: string;
+  readonly wbsCode: string;
+  readonly name: string;
+}
+
 export interface PlanGridRow {
   readonly wpId: string;
   readonly wbsCode: string;
@@ -52,6 +64,8 @@ export interface PlanGridRow {
   readonly constraintDate: string | null;
   readonly constraintLabel: string;
   readonly predecessorsText: string;
+  /** Live incoming edges for the predecessor editor (story 2.14). */
+  readonly predecessorEdges: readonly PlanGridPredecessorEdge[];
   readonly earlyStart: string | null;
   readonly earlyFinish: string | null;
   readonly floatDays: number | null;
@@ -78,6 +92,8 @@ export interface PlanGridState {
   readonly haltedReason: string | null;
   readonly scheduleStale: boolean;
   readonly floatAnchorLabel: 'vs Project finish' | 'vs computed finish' | null;
+  /** Leaf-only autocomplete candidates for predecessor cells (story 2.14). */
+  readonly leafCandidates: readonly PlanGridLeafCandidate[];
   readonly rows: readonly PlanGridRow[];
 }
 
@@ -317,6 +333,10 @@ export async function getPlanGridState<Handle>(
       anchor = { kind, date: latest.anchor };
     }
 
+    const leafCandidates: PlanGridLeafCandidate[] = ordered
+      .filter((w) => w.isLeaf)
+      .map((w) => ({ wpId: w.id, wbsCode: w.wbsCode, name: w.name }));
+
     const rows: PlanGridRow[] = ordered.map((wp) => {
       const sched = scheduleByWp.get(wp.id);
       const notSchedulable = sched?.notSchedulableReason === 'no_duration';
@@ -334,6 +354,9 @@ export async function getPlanGridState<Handle>(
           remaining = null;
         }
       }
+      const predecessorEdges: PlanGridPredecessorEdge[] = edges
+        .filter((e) => e.successorWpId === wp.id)
+        .map((e) => ({ predecessorWpId: e.predecessorWpId, lagDays: e.lagDays }));
       return {
         wpId: wp.id,
         wbsCode: wp.wbsCode,
@@ -351,6 +374,7 @@ export async function getPlanGridState<Handle>(
         constraintDate: wp.constraintDate,
         constraintLabel: formatConstraintLabel(wp.constraintType, wp.constraintDate),
         predecessorsText: formatPredecessorsText(wp.id, edges, wbsById),
+        predecessorEdges,
         earlyStart: blankDerived ? null : (sched?.earlyStart ?? null),
         earlyFinish: blankDerived ? null : (sched?.earlyFinish ?? null),
         floatDays: blankDerived ? null : (sched?.floatDays ?? null),
@@ -383,6 +407,7 @@ export async function getPlanGridState<Handle>(
       haltedReason,
       scheduleStale: anyStale || haltedReason !== null,
       floatAnchorLabel: floatAnchorHeader(anchor),
+      leafCandidates,
       rows,
     } satisfies PlanGridState;
   });

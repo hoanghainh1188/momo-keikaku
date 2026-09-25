@@ -1142,6 +1142,42 @@ thead .plan-fz3 {
   font-weight: 400;
 }
 
+.plan-pred-edit {
+  position: relative;
+  display: block;
+}
+
+.plan-pred-suggest {
+  position: absolute;
+  z-index: 5;
+  left: 0;
+  right: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  background: var(--surface, #fff);
+  border: 1px solid var(--rule, #ccc);
+  max-height: 10rem;
+  overflow: auto;
+}
+
+.plan-pred-suggest-btn {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 6px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.plan-pred-suggest-btn:hover,
+.plan-pred-suggest-btn:focus {
+  background: var(--primary-soft, #eef3f8);
+}
+
 .plan-constraint {
   font: inherit;
   font-size: 12px;
@@ -1149,6 +1185,30 @@ thead .plan-fz3 {
   background: transparent;
   width: 100%;
   color: inherit;
+  text-align: left;
+}
+
+.plan-constraint-edit {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+
+.plan-constraint-type {
+  font: inherit;
+  font-size: 12px;
+  max-width: 100%;
+}
+
+.plan-constraint-date {
+  width: 8.5em;
+}
+
+.plan-constraint-done {
+  font: inherit;
+  font-size: 11px;
+  padding: 1px 6px;
 }
 
 .plan-inline-input {
