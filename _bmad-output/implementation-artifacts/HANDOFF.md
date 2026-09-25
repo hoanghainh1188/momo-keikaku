@@ -1,4 +1,61 @@
-# Handoff — 2026-09-25 (story 2.12 closed: Holiday Calendar and dated versions)
+# Handoff — 2026-09-25 (story 2.13 closed: Plan tree grid and Schedule preset)
+
+**Latest (2026-09-25): story 2.13 merged via PR #78 (`a36a4ee`) and is `done`.** Epic 2 remains
+`in-progress` (2.14–2.17 backlog). Plan **surface** line continues: grid + Schedule/Progress are
+live; deps+constraints typing (2.14), strip/What-moved (2.15), and exceptions rail (2.16) remain.
+
+## Story 2.13 (recap) — The Plan tree grid and its Schedule preset
+- Authorised `getPlanGridState` joins live WPs/edges + `wp_schedule` + latest `schedule_run`
+  outputs; display order is **`compareWp`** (AD-28), never SQL `wbs_code` alone.
+- Plan page → ARIA **treegrid** with visually frozen WBS / Name / state; UX-DR2 **structural
+  slots** only (Q1→A): strip / toolbar / What-moved / rail — behaviour stays 2.15–2.16.
+- **Schedule** (default): derived start/finish, duration, predecessors, constraint, Float,
+  Critical, Exception, Recorded %. Data Date muted/full ink; summary named em dash; negative
+  Float keeps minus; Critical = word + bar + left rule; Exception = glyph+word+number.
+- **Progress** (Q4→A): actuals, Recorded %, remaining duration (recomputed via
+  `remainingDuration` — not stored). Observed/Gap/Evidence, Baseline compare, All = later.
+- Keys `1`/`2` switch presets without losing focused row; persist in **`localStorage`**
+  user+project (Q3→A). Keys `3`/`4` disabled.
+- Inline edit (Q2→B): **name** / **duration** / **Recorded %** through the fence; predecessors
+  and constraints stay **display-only** until 2.14. Derived-date teaching refuse reused from 2.10.
+- Halted/stale runs blank derived dates/Float/Critical on the grid (matrix); thin 2.10/2.11
+  complete/delete/no-start controls kept colocated.
+- Spec: `spec-2-13-the-plan-tree-grid-and-its-schedule-preset.md`.
+- Deferred from review: Plan grid i18n; helper dedupe (app vs web formatters); fuller treegrid
+  keyboard; formal NFR-P1 p75 harness (already in `deferred-work.md`).
+
+## Carried forward
+- **2.14 (next):** Predecessor + constraint typing on the grid (MS-Project-shaped text,
+  under-cell FR-6a refuse that keeps typed text, assertive announce; constraint type+date in one
+  column; milestone target in the constraint cell; violation in Exception cell same interaction).
+  Links panel (`l`) is **Comfort**.
+- **2.15–2.17:** strip + What-moved; exceptions rail + explainers; Organisation UI.
+- **Still open (unchanged):** unratified 2.5 corpus edges; Epic 6 / FR-31 health vs actuals;
+  `applyPlanChange` barrel / audit gate enumeration; COMMIT-time 23503 residue (PARTIAL);
+  English product copy backlog (2.11 BH8 + 2.12 BH6 + 2.13 Plan i18n).
+
+## Next: story 2.14 — Dependencies and constraints are created and explained on the grid
+Things to know before starting:
+- **Grid already shows pred/constraint as text.** 2.13 left them display-only on purpose (Q2→B).
+  Reuse the Schedule columns; do not invent a second editor surface.
+- **Fence already has the writers.** `applyPlanChange` kinds for dependency add/remove/re-lag and
+  constraint patches exist from 2.10 — 2.14 is the typing UX + FR-6a under-cell refuse, not a new
+  mutator. Graph invariants stay in `domain/schedule/validate` (2.4).
+- **MS-Project-shaped predecessors:** `2.3FS+2d, 2.4` — `FS` omittable; lag in working days may
+  be negative; autocomplete leaf WPs only (UX-DR6). On refuse, **keep the typed text**.
+- **Constraint cell:** one column for type + date ("Must finish on 18 Mar 2027"); clear date →
+  asap; milestone target is `must_finish_on` here, not a separate field (UX-DR7 / §3).
+- **Exception cell already exists.** When a committed constraint is already impossible, paint
+  the violation in that row's Exception cell in the same interaction (rail explainers still 2.16).
+- **Announcements:** FR-6a refuse assertive; successful recalc polite (UX-DR26).
+- **Comfort cut:** Links panel (`l`) sharing the rail slot — predecessor cell alone satisfies
+  Core. Size Core first unless the founder keeps Comfort.
+- Spec does not exist yet — Build creates it. Epics AC: `epics.md` § Story 2.14. Continuity from
+  `spec-2-13-…` (done) + Plan treegrid / fence.
+- Kickoff: `/bmad-build Story 2.14 — Dependencies and constraints are created and explained on the grid`
+  Sprint key: `2-14-dependencies-and-constraints-are-created-and-explained-on-th`
+
+## Earlier: Handoff — 2026-09-25 (story 2.12 closed: Holiday Calendar and dated versions)
 
 **Latest (2026-09-25): story 2.12 merged via PR #76 (`b1ed332`) and is `done`.** Epic 2 remains
 `in-progress` (2.13–2.17 backlog). Engine slice 2.3–2.12 is complete; the plan **surface** line
