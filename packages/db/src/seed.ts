@@ -41,6 +41,7 @@ import { buildDemoState, type DemoState } from './fixtures';
 import * as s from './schema';
 import { tenantMembership } from './schema-membership';
 import { MAINTENANCE_SETTING } from './table-classes';
+import { lockWatermark } from './watermark-lock';
 import { withTenant, type Tx } from './with-tenant';
 
 /**
@@ -272,6 +273,7 @@ export async function writeTenantRows(
     calendarJp: f.project.calendar.jp,
     calendarVn: f.project.calendar.vn,
   });
+  await lockWatermark({ tx, tenantId }, { kind: 'project', projectId: f.project.id });
   await tx.insert(s.holidayCalendarVersion).values({
     tenantId,
     projectId: f.project.id,

@@ -94,7 +94,7 @@ export interface TableEntry {
 }
 
 /**
- * The 32 tables of this release (story 1.3 slice 2 added `program`; story 1.4 slice 1 removed
+ * The 33 tables of this release (story 1.3 slice 2 added `program`; story 1.4 slice 1 removed
  * `app_user` and added the four Better Auth tables and `tenant_membership`; slice 4 added
  * `identity_event`; story 1.6 `project_default_rate_entry`; story 2.1 the five scheduling tables;
  * story 2.10 `pct_override_event` + Custom Field definition/value; story 2.12

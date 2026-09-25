@@ -12,6 +12,7 @@ import {
   removeProjectNonWorkingDay,
 } from '../../packages/app/src/calendar/publish-calendar-version';
 import { applyPlanChange } from '../../packages/app/src/schedule/apply-plan-change';
+import { getPlanThinUiState } from '../../packages/app/src/schedule/plan-edit';
 import { NATIONAL_DATASET_VERSION, resolveCalendarVersion } from '../../packages/domain/src/calendar';
 import { closeAllPools, getDb, getPool } from '../../packages/db/src/client';
 import {
@@ -61,13 +62,13 @@ afterAll(async () => {
   await closeAllPools();
 });
 
-function ctx(projectId = PROBE.projectId) {
+function ctx(projectIds: string | readonly string[] = PROBE.projectId) {
   return {
     tenantId: PROBE.tenantId,
     userId: 'user-s212',
     roles: ['pm'] as const,
     locale: 'en' as const,
-    projectIds: [projectId],
+    projectIds: typeof projectIds === 'string' ? [projectIds] : [...projectIds],
   };
 }
 
@@ -244,6 +245,16 @@ describe.skipIf(!reachable)('publishCalendarVersion (story 2.12)', () => {
         .where(eq(s.auditLog.action, 'calendar.publish_version')),
     );
     expect(audits.length).toBeGreaterThan(0);
+
+    const thin = await getPlanThinUiState(
+      { handle: app, transaction: inTenantTransaction },
+      ctx(),
+      { projectId: PROBE.projectId },
+    );
+    expect(thin.ok).toBe(true);
+    if (!thin.ok) return;
+    expect(thin.value.calendarJp).toBe(true);
+    expect(thin.value.calendarVn).toBe(true);
   });
 
   it('adds and removes Project days via append-only events and new versions', async () => {
@@ -258,6 +269,25 @@ describe.skipIf(!reachable)('publishCalendarVersion (story 2.12)', () => {
     );
     expect(added.ok).toBe(true);
     if (!added.ok) return;
+
+    const thinAfterAdd = await getPlanThinUiState(
+      { handle: app, transaction: inTenantTransaction },
+      ctx(),
+      { projectId: PROBE.projectId },
+    );
+    expect(thinAfterAdd.ok).toBe(true);
+    if (!thinAfterAdd.ok) return;
+    expect(thinAfterAdd.value.projectNonWorkingDays).toContain('2026-10-14');
+
+    const oob = await addProjectNonWorkingDay(
+      { handle: app, transaction: inTenantTransaction },
+      ctx(),
+      { projectId: PROBE.projectId, day: '2029-06-01' },
+    );
+    expect(oob.ok).toBe(false);
+    if (oob.ok) return;
+    expect(oob.error.code).toBe('invalid_input');
+    expect(oob.error.details?.day).toEqual(['out_of_range']);
 
     const [ver] = await withTenant(app, PROBE.tenantId, async (tx) =>
       tx
@@ -419,5 +449,142 @@ describe.skipIf(!reachable)('publishCalendarVersion (story 2.12)', () => {
     expect(ver?.nationalSets).toEqual([]);
     expect(ver?.nonWorkingDays).not.toContain('2026-01-01'); // JP New Year (Thu)
     expect(ver?.nonWorkingDays).toContain('2026-10-10'); // Saturday
+  });
+
+  it('publish with null projectStart/dataDate returns cleared and writes no schedule_run', async () => {
+    const owner = getDb(OWNER_DATABASE_URL!);
+    const app = getDb(APP_DATABASE_URL!);
+    await createProbeTenant(owner, PROBE);
+    await withTenant(owner, PROBE.tenantId, async (tx) => {
+      await tx
+        .update(s.project)
+        .set({ projectStart: null, dataDate: null, projectFinish: null })
+        .where(eq(s.project.id, PROBE.projectId));
+    });
+
+    const beforeVersions = await withTenant(app, PROBE.tenantId, async (tx) =>
+      tx
+        .select({ seq: s.holidayCalendarVersion.seq })
+        .from(s.holidayCalendarVersion)
+        .where(eq(s.holidayCalendarVersion.projectId, PROBE.projectId)),
+    );
+    const beforeRuns = await withTenant(app, PROBE.tenantId, async (tx) =>
+      tx
+        .select({ seq: s.scheduleRun.seq })
+        .from(s.scheduleRun)
+        .where(eq(s.scheduleRun.projectId, PROBE.projectId)),
+    );
+
+    const result = await publishCalendarVersion(
+      { handle: app, transaction: inTenantTransaction },
+      ctx(),
+      { projectId: PROBE.projectId, reason: 'cleared publish' },
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.run.kind).toBe('cleared');
+    expect(result.value.run.seq).toBeNull();
+    expect(result.value.calendarVersionSeq).toBeGreaterThan(
+      beforeVersions.length > 0 ? Math.max(...beforeVersions.map((v) => v.seq)) : 0,
+    );
+
+    const afterRuns = await withTenant(app, PROBE.tenantId, async (tx) =>
+      tx
+        .select({ seq: s.scheduleRun.seq })
+        .from(s.scheduleRun)
+        .where(eq(s.scheduleRun.projectId, PROBE.projectId)),
+    );
+    expect(afterRuns).toHaveLength(beforeRuns.length);
+  });
+
+  it('fan-out continues when the first Project is halted', async () => {
+    const owner = getDb(OWNER_DATABASE_URL!);
+    const app = getDb(APP_DATABASE_URL!);
+    const leaf = await prepareSchedulable(owner);
+
+    await withTenant(owner, PROBE.tenantId, async (tx) => {
+      await tx
+        .update(s.workPackage)
+        .set({ constraintType: 'must_finish_on', constraintDate: '2031-06-15' })
+        .where(
+          and(
+            eq(s.workPackage.tenantId, PROBE.tenantId),
+            eq(s.workPackage.projectId, PROBE.projectId),
+            eq(s.workPackage.id, leaf.id),
+          ),
+        );
+    });
+
+    const projectB = `${PROBE.projectId}-fan2`;
+    const f = PROBE.state.fixture;
+    await withTenant(owner, PROBE.tenantId, async (tx) => {
+      await tx.insert(s.project).values({
+        id: projectB,
+        tenantId: PROBE.tenantId,
+        departmentId: f.department.id,
+        programId: f.program.id,
+        name: 'Fan-out B',
+        clientName: f.project.clientName,
+        contractType: f.project.contractType,
+        tzOffsetMinutes: f.project.tzOffsetMinutes,
+        teireiWeekday: f.project.teireiWeekday,
+        defaultRateJpy: f.project.defaultRateYenPerHour,
+        eacMethod: 'typical',
+        calendarJp: true,
+        calendarVn: false,
+        demoAnchor: new Date(PROBE.state.anchor),
+        projectStart: null,
+        dataDate: null,
+      });
+    });
+
+    const fan = await publishCalendarVersionFanOut(
+      { handle: app, transaction: inTenantTransaction },
+      ctx([PROBE.projectId, projectB]),
+      {
+        projectIds: [PROBE.projectId, projectB],
+        reason: 'national dataset correction',
+      },
+    );
+    expect(fan.ok).toBe(true);
+    if (!fan.ok) return;
+    expect(fan.value.results).toHaveLength(2);
+    expect(fan.value.results[0]?.status).toBe('halted');
+    expect(['ok', 'failed']).toContain(fan.value.results[1]?.status);
+  });
+
+  it('publish with explicit rangeStart/rangeEnd stores those range columns', async () => {
+    const owner = getDb(OWNER_DATABASE_URL!);
+    const app = getDb(APP_DATABASE_URL!);
+    await prepareSchedulable(owner);
+
+    const result = await publishCalendarVersion(
+      { handle: app, transaction: inTenantTransaction },
+      ctx(),
+      {
+        projectId: PROBE.projectId,
+        reason: 'explicit range',
+        rangeStart: '2026-01-01',
+        rangeEnd: '2026-12-31',
+      },
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const [ver] = await withTenant(app, PROBE.tenantId, async (tx) =>
+      tx
+        .select({
+          rangeStart: s.holidayCalendarVersion.rangeStart,
+          rangeEnd: s.holidayCalendarVersion.rangeEnd,
+          seq: s.holidayCalendarVersion.seq,
+        })
+        .from(s.holidayCalendarVersion)
+        .where(eq(s.holidayCalendarVersion.projectId, PROBE.projectId))
+        .orderBy(desc(s.holidayCalendarVersion.seq))
+        .limit(1),
+    );
+    expect(ver?.seq).toBe(result.value.calendarVersionSeq);
+    expect(ver?.rangeStart).toBe('2026-01-01');
+    expect(ver?.rangeEnd).toBe('2026-12-31');
   });
 });

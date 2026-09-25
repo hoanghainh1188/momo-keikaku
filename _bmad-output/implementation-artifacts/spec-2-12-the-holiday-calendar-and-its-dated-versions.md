@@ -2,7 +2,7 @@
 title: 'Story 2.12 — The Holiday Calendar and its dated versions'
 type: 'feature'
 created: '2026-09-25'
-status: 'review'
+status: 'in-review'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: 'f2f89038f76d5a050e9f790069184826bc90da5a'
@@ -117,9 +117,38 @@ Residues: full range-halt banner chrome stays 2.16; `operator_audit` stays Epic 
 
 Matrix gap fixes (2026-09-25): fence-2-12 now asserts FR-28 WP cause `'calendar changed'` when a publish moves dates (run cause `'calendar'` alone is insufficient); both-flags-false resolves to weekends (+ Project days) only with `2026-01-01` absent; fence calendar-range comment updated for default `2025-01-01`…`2028-12-31` (2031 constraint kept).
 
+Review patches (2026-09-25): refuse out-of-range Project days before append; map RangeError on inverted/invalid publish range to `invalid_input` `{ range: ['invalid'] }`; fan-out try/catch so throws become `failed` and the loop continues; seed `lockWatermark` before `holiday_calendar_version` insert; table-classes header 33; journal trailing newline; fence asserts thin UI flags/days, cleared publish (no schedule_run), halted-then-continues fan-out, and explicit stored range columns.
+
 ## Spec Change Log
 
 ## Review Triage Log
+
+| ID | Source | Verdict | Route | Evidence |
+|----|--------|---------|-------|----------|
+| BH1 | blind | medium | defer | Verified: `drizzle/meta/` has 0000–0002 snapshots only; journal refs 0003. Kit history incomplete; regenerating full snapshot is tooling — defer. |
+| BH2 | blind | low | patch | Verified: header still says "32 tables" while registry expects 33. Trivial comment fix. |
+| BH3 | blind | medium | patch | Verified: `seed.ts` raw-inserts `holiday_calendar_version` without `lockWatermark`; Always requires lock on every INSERT. |
+| BH4 | blind | false | reject | Documented residue: createProject sets flags only; settings flag-save / add-day publishes. Not a silent defect. |
+| BH5 | blind | high | patch | Verified: `resolveCalendarVersion` drops projectDays outside range (`calendar/index.ts`); add path never refuses — UI can list a day the version omits. |
+| BH6 | blind | medium | defer | Calendar settings copy hardcoded English — same i18n backlog pattern as 2.11 BH8. |
+| BH7 | blind | false | reject | Empty triage at review start is process state; this log fills it. |
+| BH8 | blind | false | reject | Fan-out is serial by construction (tested). Concurrent lock smoke was aspirational, not an AC failure. |
+| BH9 | blind | low | patch | Journal missing trailing newline — trivial. |
+| BH10 | blind | low | reject | Orphan `remove` is harmless for live heads; refuse-not-live adds complexity without user-facing harm. |
+| BH11 | blind | medium | patch | Verified: inverted `rangeStart`/`rangeEnd` throws `RangeError` through `runAuditedWrite` (only catches Refusal) → 500. |
+| BH12 | blind | false | reject | Bare `publishProjectCalendar` unused by UI; flag-save/add-day still materialise a version. |
+| EC1 | edge | medium | patch | Same root as BH11 — inverted range → unhandled RangeError. |
+| EC2 | edge | medium | patch | Verified: fan-out has no try/catch; a thrown RangeError (or other) aborts remaining Projects. |
+| EC3 | edge | high | patch | Same root as BH5 — out-of-range Project day. |
+| EC4 | edge/claim | false | reject | Code already `continue`s on `halted`; gap is missing test (VG3), not missing behaviour. |
+| VG1 | verif-gap | medium | patch | Pre-verified: no test reads `getPlanThinUiState` calendar fields after writes. |
+| VG2 | verif-gap | medium | patch | Pre-verified: every publish path uses `prepareSchedulable`; `cleared` branch untested. |
+| VG3 | verif-gap | medium | patch | Pre-verified: fan-out test only covers `failed`, not `halted` continuation. |
+| VG4 | verif-gap | medium | patch | Pre-verified: optional custom `rangeStart`/`rangeEnd` never asserted. |
+| VG5 | verif-gap/other | false | reject | Matrix "missing start → refuse" names resolve refuse; publish intentionally returns `cleared` — code matches Design/Implementation Notes. |
+
+Grouped routes: patch groups (out-of-range day; range validation + fan-out try/catch; seed lock; comment/newline; VG1–4 tests). Defer BH1 + BH6. Rejected BH4/BH7/BH8/BH10/BH12/EC4/VG5.
+
 
 ## Design Notes
 

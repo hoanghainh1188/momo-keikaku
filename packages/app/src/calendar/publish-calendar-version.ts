@@ -8,7 +8,11 @@
  */
 import { z } from 'zod';
 import { and, eq } from 'drizzle-orm';
-import { resolveCalendarVersion } from '@momo/domain';
+import {
+  DEFAULT_CALENDAR_RANGE_END,
+  DEFAULT_CALENDAR_RANGE_START,
+  resolveCalendarVersion,
+} from '@momo/domain';
 import type { Bound } from '../../../db/src/bound';
 import { lockWatermark } from '../../../db/src/watermark-lock';
 import { scheduleRepositoryOn } from '../../../db/src/repositories/schedule';
@@ -97,13 +101,21 @@ async function publishInsideTx(
 
   const flags = await schedule.projectCalendarFlags(command.projectId);
   const projectDays = await schedule.liveProjectNonWorkingDays(command.projectId);
-  const resolved = resolveCalendarVersion({
-    calendarJp: flags.calendarJp,
-    calendarVn: flags.calendarVn,
-    projectDays,
-    ...(command.rangeStart !== undefined ? { rangeStart: command.rangeStart } : {}),
-    ...(command.rangeEnd !== undefined ? { rangeEnd: command.rangeEnd } : {}),
-  });
+  let resolved;
+  try {
+    resolved = resolveCalendarVersion({
+      calendarJp: flags.calendarJp,
+      calendarVn: flags.calendarVn,
+      projectDays,
+      ...(command.rangeStart !== undefined ? { rangeStart: command.rangeStart } : {}),
+      ...(command.rangeEnd !== undefined ? { rangeEnd: command.rangeEnd } : {}),
+    });
+  } catch (error) {
+    if (error instanceof RangeError) {
+      refuse('invalid_input', { range: ['invalid'] });
+    }
+    throw error;
+  }
 
   const calendarVersionSeq = await schedule.appendCalendarVersion(
     command.projectId,
@@ -202,35 +214,43 @@ export async function publishCalendarVersionFanOut<Handle>(
 
   const results: FanOutProjectResult[] = [];
   for (const projectId of parsed.data.projectIds) {
-    const one = await publishCalendarVersion(deps, ctx, {
-      projectId,
-      reason: parsed.data.reason ?? 'national dataset correction',
-      rangeStart: parsed.data.rangeStart,
-      rangeEnd: parsed.data.rangeEnd,
-    });
-    if (!one.ok) {
+    try {
+      const one = await publishCalendarVersion(deps, ctx, {
+        projectId,
+        reason: parsed.data.reason ?? 'national dataset correction',
+        rangeStart: parsed.data.rangeStart,
+        rangeEnd: parsed.data.rangeEnd,
+      });
+      if (!one.ok) {
+        results.push({
+          projectId,
+          status: 'failed',
+          error: one.error.code,
+        });
+        continue;
+      }
+      if (one.value.run.kind === 'halted') {
+        results.push({
+          projectId,
+          status: 'halted',
+          calendarVersionSeq: one.value.calendarVersionSeq,
+          haltedReason: one.value.run.haltedReason,
+        });
+        continue;
+      }
+      results.push({
+        projectId,
+        status: 'ok',
+        calendarVersionSeq: one.value.calendarVersionSeq,
+        runSeq: one.value.run.seq,
+      });
+    } catch (error) {
       results.push({
         projectId,
         status: 'failed',
-        error: one.error.code,
+        error: error instanceof Error ? error.message : 'unknown',
       });
-      continue;
     }
-    if (one.value.run.kind === 'halted') {
-      results.push({
-        projectId,
-        status: 'halted',
-        calendarVersionSeq: one.value.calendarVersionSeq,
-        haltedReason: one.value.run.haltedReason,
-      });
-      continue;
-    }
-    results.push({
-      projectId,
-      status: 'ok',
-      calendarVersionSeq: one.value.calendarVersionSeq,
-      runSeq: one.value.run.seq,
-    });
   }
   return ok({ results });
 }
@@ -304,6 +324,14 @@ export async function addProjectNonWorkingDay<Handle>(
     async (scope, stamp, command) => {
       const bound = asBound(scope.bound);
       const schedule = scheduleRepositoryOn(bound);
+      // Publish uses the default range when add-day does not pass one — refuse before append
+      // so an out-of-range day is never silently dropped at resolve.
+      if (
+        command.day < DEFAULT_CALENDAR_RANGE_START ||
+        command.day > DEFAULT_CALENDAR_RANGE_END
+      ) {
+        refuse('invalid_input', { day: ['out_of_range'] });
+      }
       try {
         await schedule.appendCalendarDayEvent({
           projectId: command.projectId,
