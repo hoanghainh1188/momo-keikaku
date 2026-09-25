@@ -110,6 +110,7 @@ context:
   - Tests: `plan-grid.test.ts`, `plan-grid-format.test.ts`, `plan-grid-view.test.ts`, `fence-2-13.test.ts` (name/duration/% + grid read + teaching refuse + FR-6a summary refuse).
   - Deferred: formal NFR-P1 p75 harness, strip/What-moved behaviour (2.15), rail explainers (2.16), Baseline/All + Observed columns — appended to `deferred-work.md`.
   - Matrix follow-up (2026-09-25): extracted `capturePresetFocusRestore` / `presetFromDigitKey`; added fence-2-13 coverage for inline name and remainingDays recompute.
+  - Review patches (2026-09-25): guard digit/arrow keys while editing; blank derived dates/Float/Critical when halted/stale; distinct DateCell aria-labels; safe remainingDuration + recordedPct den=0; focus reset/restore fallback; banners before What-moved; page sr-only only when no start + Schedule subtitle; PlanTreeGrid consumes PLAN_GRID_SLOTS/SCHEDULE_COLUMNS/PROGRESS_COLUMNS; tightened fence assertions + percent→ratio unit tests + date ink class test.
 
 ## Spec Change Log
 

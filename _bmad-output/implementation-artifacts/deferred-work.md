@@ -1141,3 +1141,15 @@ above can see where it went.
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-13-the-plan-tree-grid-and-its-schedule-preset.md`
   summary: Baseline-compare and Comfort All column presets, plus Observed % / Gap / Evidence Progress columns (Epics 4–6). 2.13 ships Schedule + Progress only (Q4→A); keys 3/4 are no-op/disabled.
   evidence: Founder decision Q4→A, 2026-09-25.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-13-the-plan-tree-grid-and-its-schedule-preset.md`
+  summary: Localize Story 2.13 Plan treegrid product copy (preset labels, column headers, Critical, Exception strings, stale/halt banners) into packages/i18n.
+  evidence: Review BH1 (2026-09-25): Schedule/Progress surface is hardcoded English, parallel to 2.11 BH8 / 2.12 BH6.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-13-the-plan-tree-grid-and-its-schedule-preset.md`
+  summary: Collapse duplicated Plan grid display helpers (`packages/app/.../plan-grid.ts` vs `apps/web/.../plan-grid-format.ts`) into one shared module so EN formatting and SUMMARY_NA_LABEL cannot drift.
+  evidence: Review BH8 (2026-09-25): web mirrors app formatters by hand; extracting a shared package is more than a trivial patch.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-13-the-plan-tree-grid-and-its-schedule-preset.md`
+  summary: Complete ARIA treegrid keyboard contract beyond expand/collapse and preset keys (e.g. Left on a leaf moves to parent; full gridcell navigation).
+  evidence: Review BH15 (2026-09-25): Manual Verification promised fuller treegrid keyboard behaviour than the partial delivery; not a one-line fix.
