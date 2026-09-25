@@ -123,6 +123,35 @@ describe('explainGraphOffences (story 2.14 / UX-DR6)', () => {
       ])),
     ).toBeNull();
   });
+
+  it('explainProposedGraphRefuse names ancestor and cross-project before any write', () => {
+    const plan = {
+      projectId: 'p',
+      wps: [
+        { id: 's', wbsCode: '4.2', projectId: 'p', parentId: null },
+        { id: 'l', wbsCode: '4.2.1', projectId: 'p', parentId: 's' },
+        { id: 'x', wbsCode: '9', projectId: 'other', parentId: null },
+      ],
+    };
+    const wbsById = new Map([
+      ['s', '4.2'],
+      ['l', '4.2.1'],
+      ['x', '9'],
+    ]);
+    const ancestor = explainProposedGraphRefuse(
+      plan,
+      [{ predecessorId: 's', successorId: 'l' }],
+      wbsById,
+    );
+    expect(ancestor).toMatch(/ancestor|summary work package/);
+
+    const cross = explainProposedGraphRefuse(
+      plan,
+      [{ predecessorId: 'l', successorId: 'x' }],
+      wbsById,
+    );
+    expect(cross).toMatch(/another project/);
+  });
 });
 
 describe('filterLeafCandidates / replaceSuccessorEdges', () => {

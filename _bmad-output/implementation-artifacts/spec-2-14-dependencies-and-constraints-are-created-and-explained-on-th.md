@@ -2,7 +2,7 @@
 title: 'Story 2.14 — Dependencies and constraints are created and explained on the grid'
 type: 'feature'
 created: '2026-09-25'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '0924d5e2484b574444ec5a051a23070d1f01820e'
@@ -96,6 +96,7 @@ context:
 - 2026-09-25: Review fixes — pickSuggestion trims trailing commas; committingRef blocks re-entrant blur; assertiveRefuse cleared on success/Escape; draft sync only when not editing; reuse `filterLeafCandidates` from `@momo/app`; fence-2-14 covers remove + re-lag; `planWriteRefuseMessage` extracted + unit-tested.
 
 - 2026-09-25: Matrix gap fill — fence covers `must_start_on` + milestone `must_finish_on` + summary non-leaf/leafCandidates; `explainProposedGraphRefuse` covers ancestor + cross-project prose. UI keep-text is structural (`PredecessorCell` leaves `draft` on refuse + assertive live region); no RTL harness in repo.
+- 2026-09-25: Review patches — trim comma in autocomplete pick; committingRef; clear assertive on success/Esc; draft sync only when not editing; adopt `filterLeafCandidates`; refuseMessage helper + unit test; fence remove/re-lag coverage. Deferred: combobox keyboard, atomic fan-out, WAL flake, RTL keep-text.
 
 ## Spec Change Log
 

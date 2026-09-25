@@ -1161,3 +1161,19 @@ above can see where it went.
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-14-dependencies-and-constraints-are-created-and-explained-on-th.md`
   summary: Polite live-region announce after a successful recalculation (UX-DR26 full sentence with moved count, computed finish, minimum Float).
   evidence: Split at story 2.14 Open Questions gate — founder chose Q2→C (assertive FR-6a refuse only). Polite success belongs with the What-moved band in story 2.15 so the PM can inspect what moved.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-14-dependencies-and-constraints-are-created-and-explained-on-th.md`
+  summary: Full keyboard combobox for predecessor autocomplete (ArrowUp/Down, aria-activedescendant, Enter accepts highlight).
+  evidence: Review BH4 (2026-09-25): mouse autocomplete ships; fuller combobox keyboard is beyond Core typing AC.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-14-dependencies-and-constraints-are-created-and-explained-on-th.md`
+  summary: Atomic all-or-nothing apply of multi-edge predecessor fan-out (single transaction / compensate mid-fail across sequential applyPlanChange calls).
+  evidence: Review BH7/EC1/EC7 (2026-09-25): pre-validate blocks FR-6a before writes; mid-fail after partial success is a rare concurrency/DB path and needs fence redesign, not a trivial patch.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-14-dependencies-and-constraints-are-created-and-explained-on-th.md`
+  summary: Unrelated flaky WAL budget assert in tests/schedule/fence.test.ts (AR-50).
+  evidence: Review BH13 (2026-09-25): noted during 2.14 verification; not introduced by predecessor/constraint editors.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-14-dependencies-and-constraints-are-created-and-explained-on-th.md`
+  summary: RTL/component harness proving predecessor keep-typed-text + assertive aria-live wiring end-to-end.
+  evidence: Review VG3 UI half (2026-09-25): repo has no testing-library/jsdom; pure refuse mapping is unit-tested; UI keep-text remains structural.
