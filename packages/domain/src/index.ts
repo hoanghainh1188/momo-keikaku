@@ -19,3 +19,4 @@ export * from './schedule/engine-version';
 export * from './schedule/cause';
 export * from './schedule/stored-run';
 export * from './schedule/retention';
+export * from './schedule/leaf-candidates';

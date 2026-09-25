@@ -49,7 +49,7 @@ import {
   SCHEDULE_COLUMNS,
 } from '@/lib/plan-grid-view';
 import { planWriteRefuseMessage } from '@/lib/plan-write-refuse';
-import { filterLeafCandidates } from '@momo/app';
+import { filterLeafCandidates } from '@momo/domain';
 
 function refuseMessage(outcome: Extract<PlanWriteOutcome, { ok: false }>): string {
   return planWriteRefuseMessage(outcome);
