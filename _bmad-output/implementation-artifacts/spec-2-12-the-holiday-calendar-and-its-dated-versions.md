@@ -2,7 +2,7 @@
 title: 'Story 2.12 — The Holiday Calendar and its dated versions'
 type: 'feature'
 created: '2026-09-25'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: 'f2f89038f76d5a050e9f790069184826bc90da5a'
