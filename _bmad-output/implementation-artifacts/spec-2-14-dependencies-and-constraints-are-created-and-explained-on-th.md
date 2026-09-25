@@ -93,10 +93,9 @@ context:
 - 2026-09-25: `getPlanGridState` / view model expose `leafCandidates`, per-row `predecessorEdges`, and pass through `constraintType` / `constraintDate` for editors.
 - 2026-09-25: Thin actions `applyPredecessorsAction` + `patchWpConstraintAction` (clear date → asap). Grid: predecessor autocomplete (leaf-only), under-cell FR-6a keep-text refuse, assertive `aria-live` region (Q2→C); constraint type+date editor. No Links panel / `l` (Q1→A); no polite success announce.
 - 2026-09-25: Tests — `predecessors.test.ts` (parse/diff/explain/autocomplete); `fence-2-14.test.ts` (add+canonicalise, cycle refuse, must_finish_on/asap, impossible-constraint Exception, parse refuse). Deferred Links panel + polite announce already in `deferred-work.md`.
-- 2026-09-25: Review fixes — pickSuggestion trims trailing commas; committingRef blocks re-entrant blur; assertiveRefuse cleared on success/Escape; draft sync only when not editing; reuse `filterLeafCandidates` from `@momo/app`; fence-2-14 covers remove + re-lag; `planWriteRefuseMessage` extracted + unit-tested.
+- 2026-09-25: Review fixes — pickSuggestion trims trailing commas; committingRef blocks re-entrant blur; assertiveRefuse cleared on success/Escape; draft sync only when not editing; reuse `filterLeafCandidates` from `@momo/app`; fence-2-14 covers remove + re-lag; `planWriteRefuseMessage` extracted + unit-tested. Deferred: combobox keyboard, atomic fan-out, WAL flake, RTL keep-text.
 
 - 2026-09-25: Matrix gap fill — fence covers `must_start_on` + milestone `must_finish_on` + summary non-leaf/leafCandidates; `explainProposedGraphRefuse` covers ancestor + cross-project prose. UI keep-text is structural (`PredecessorCell` leaves `draft` on refuse + assertive live region); no RTL harness in repo.
-- 2026-09-25: Review patches — trim comma in autocomplete pick; committingRef; clear assertive on success/Esc; draft sync only when not editing; adopt `filterLeafCandidates`; refuseMessage helper + unit test; fence remove/re-lag coverage. Deferred: combobox keyboard, atomic fan-out, WAL flake, RTL keep-text.
 
 ## Spec Change Log
 
