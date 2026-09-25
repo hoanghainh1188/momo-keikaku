@@ -2,9 +2,12 @@
 
 import { revalidatePath } from 'next/cache';
 import {
+  addProjectCalendarDay,
   clearProjectStartSetting,
   patchDataDate,
   patchProjectFinish,
+  patchProjectNationalCalendars,
+  removeProjectCalendarDay,
   setProjectStartSetting,
   requestContext,
 } from '@/server/composition';
@@ -84,6 +87,39 @@ export async function patchDataDateAction(formData: FormData): Promise<SettingsW
   const dataDate = String(formData.get('dataDate') ?? '');
   const ctx = await requestContext();
   const result = await patchDataDate({ projectId, dataDate }, ctx);
+  if (!result.ok) return refuseOutcome(result);
+  revalidateSettings(projectId);
+  return { ok: true };
+}
+
+export async function patchNationalCalendarsAction(
+  formData: FormData,
+): Promise<SettingsWriteOutcome> {
+  const projectId = String(formData.get('projectId') ?? '');
+  const calendarJp = formData.get('calendarJp') === '1';
+  const calendarVn = formData.get('calendarVn') === '1';
+  const ctx = await requestContext();
+  const result = await patchProjectNationalCalendars({ projectId, calendarJp, calendarVn }, ctx);
+  if (!result.ok) return refuseOutcome(result);
+  revalidateSettings(projectId);
+  return { ok: true };
+}
+
+export async function addProjectDayAction(formData: FormData): Promise<SettingsWriteOutcome> {
+  const projectId = String(formData.get('projectId') ?? '');
+  const day = String(formData.get('day') ?? '');
+  const ctx = await requestContext();
+  const result = await addProjectCalendarDay({ projectId, day }, ctx);
+  if (!result.ok) return refuseOutcome(result);
+  revalidateSettings(projectId);
+  return { ok: true };
+}
+
+export async function removeProjectDayAction(formData: FormData): Promise<SettingsWriteOutcome> {
+  const projectId = String(formData.get('projectId') ?? '');
+  const day = String(formData.get('day') ?? '');
+  const ctx = await requestContext();
+  const result = await removeProjectCalendarDay({ projectId, day }, ctx);
   if (!result.ok) return refuseOutcome(result);
   revalidateSettings(projectId);
   return { ok: true };

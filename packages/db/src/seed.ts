@@ -33,7 +33,7 @@
  * The composition root is `scripts/seed.ts`: this module takes its handle as an argument
  * because `packages/db` may not read the environment.
  */
-import { encode } from '@momo/domain';
+import { encode, resolveCalendarVersion } from '@momo/domain';
 import { sql } from 'drizzle-orm';
 import type { Db } from './client';
 import { actorOf, DEMO_USERS } from './demo-identities';
@@ -63,6 +63,7 @@ export const TRUNCATE_ORDER: readonly string[] = [
   'wp_schedule',
   'schedule_run',
   'holiday_calendar_version',
+  'calendar_day_event',
   'custom_field_value',
   'custom_field_definition',
   'pct_override_event',
@@ -264,6 +265,24 @@ export async function writeTenantRows(
     calendarJp: f.project.calendar.jp,
     calendarVn: f.project.calendar.vn,
     demoAnchor: stamp,
+  });
+
+  // Story 2.12: materialise a real resolved Holiday Calendar version (never synthetic-2.9).
+  const seededCalendar = resolveCalendarVersion({
+    calendarJp: f.project.calendar.jp,
+    calendarVn: f.project.calendar.vn,
+  });
+  await tx.insert(s.holidayCalendarVersion).values({
+    tenantId,
+    projectId: f.project.id,
+    nonWorkingDays: [...seededCalendar.nonWorkingDays],
+    rangeStart: seededCalendar.rangeStart,
+    rangeEnd: seededCalendar.rangeEnd,
+    nationalSets: [...seededCalendar.nationalSets],
+    nationalDatasetVersion: seededCalendar.nationalDatasetVersion,
+    reason: 'seed',
+    actor: actorOf(own(DEMO_USERS.linh.id)),
+    at: stamp,
   });
 
   // Story 1.6: the Project's default Rate history — head matches `project.default_rate_jpy`.

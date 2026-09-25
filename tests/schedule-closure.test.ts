@@ -1,8 +1,9 @@
 /**
  * AR-52 closure tests (story 2.9): writers, callers, reachability.
  *
- * Writers: every AD-25 scheduling input write lives under `repositories/plan-input` (or the
- * fence). Callers: `recalculateProject` is only reached from `applyPlanChange` (and itself).
+ * Writers: every AD-25 scheduling input write lives under `repositories/plan-input` or
+ * `repositories/schedule` (calendar versions / day events). Callers: `recalculateProject` is
+ * only reached from `applyPlanChange`, `publishCalendarVersion` (story 2.12 / AR-54), and itself.
  * Reachability: mapping / disposition / tracker-shaped modules do not import it.
  */
 import { describe, expect, it } from 'vitest';
@@ -39,6 +40,7 @@ function rel(path: string): string {
 
 function isAllowedAd25Helper(path: string): boolean {
   if (path.includes('repositories/plan-input')) return true;
+  if (path.includes('repositories/schedule')) return true;
   if (path.includes('schema-catalog.test')) return true;
   if (path.includes('baseline-read.test')) return true;
   if (path.includes('/tests/schedule/')) return true; // fence size probe inserts schedule_run only
@@ -151,11 +153,12 @@ describe('AR-52 writers — AD-25 input writes stay inside the fence', () => {
 });
 
 describe('AR-52 callers — recalculateProject callers are the FR-6b list present so far', () => {
-  it('is imported only from apply-plan-change and its own module / tests', () => {
+  it('is imported only from apply-plan-change, publish-calendar-version, and its own module', () => {
     const files = walk(join(ROOT, 'packages')).concat(walk(join(ROOT, 'apps')));
     const allowed = new Set([
       'packages/app/src/schedule/apply-plan-change.ts',
       'packages/app/src/schedule/recalculate-project.ts',
+      'packages/app/src/calendar/publish-calendar-version.ts',
     ]);
     const offenders: string[] = [];
     for (const file of files) {

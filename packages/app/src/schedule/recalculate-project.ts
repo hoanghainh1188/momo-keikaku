@@ -93,7 +93,7 @@ function wpScheduleRows(outputs: ScheduleOutputs) {
 export async function resolveScheduleInputs(
   bound: Bound,
   projectId: string,
-  stamp: { readonly actor: string; readonly at: Date },
+  _stamp: { readonly actor: string; readonly at: Date },
 ): Promise<{
   readonly inputs: ScheduleInputs;
   readonly prevInputs: ScheduleInputs | null;
@@ -113,30 +113,11 @@ export async function resolveScheduleInputs(
     refuse('invalid_input', { dataDate: ['required'] });
   }
 
-  // Synthetic calendar until 2.12 — weekends must be listed explicitly (domain applies none).
-  let calendarVersionSeq = plan.calendar?.seq ?? null;
-  let calendar = plan.calendar;
-  if (calendar === null) {
-    const rangeStart = plan.project.projectStart;
-    const rangeEnd = '2030-12-31';
-    const nonWorkingDays: string[] = [];
-    for (let d = new Date(`${rangeStart}T00:00:00Z`); d <= new Date(`${rangeEnd}T00:00:00Z`); ) {
-      const iso = d.toISOString().slice(0, 10);
-      const dow = d.getUTCDay();
-      if (dow === 0 || dow === 6) nonWorkingDays.push(iso);
-      d.setUTCDate(d.getUTCDate() + 1);
-    }
-    calendarVersionSeq = await schedule.ensureCalendarVersion(
-      projectId,
-      { nonWorkingDays, rangeStart, rangeEnd },
-      stamp,
-    );
-    calendar = {
-      seq: calendarVersionSeq,
-      nonWorkingDays,
-      rangeStart,
-      rangeEnd,
-    };
+  // Synthetic weekends-only bootstrap retired (story 2.12). Resolve refuses when no version.
+  const calendarVersionSeq = plan.calendar?.seq ?? null;
+  const calendar = plan.calendar;
+  if (calendar === null || calendarVersionSeq === null) {
+    refuse('invalid_input', { calendar: ['required'] });
   }
 
   const dataDate = plan.project.dataDate;
@@ -191,7 +172,7 @@ export async function resolveScheduleInputs(
   return {
     inputs,
     prevInputs,
-    calendarVersionSeq: calendarVersionSeq!,
+    calendarVersionSeq,
     milestoneIds,
     wpStatusSeqMax: plan.wpStatusSeqMax,
     pctOverrideSeqMax: plan.pctOverrideSeqMax,

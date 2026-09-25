@@ -90,27 +90,22 @@ export function scheduleRepositoryOn(bound: Bound) {
     },
 
     /**
-     * Seed a synthetic resolved calendar version so `schedule_run`'s FK is satisfied until 2.12.
-     * Returns the new seq. Takes no watermark of its own when the caller already holds the
-     * Project key; otherwise locks first.
+     * Append a resolved Holiday Calendar version (story 2.12 / AD-29). Always inserts — never
+     * edits. Takes the Project watermark first (no-op when the caller already holds it).
      */
-    async ensureCalendarVersion(
+    async appendCalendarVersion(
       projectId: string,
       calendar: {
         readonly nonWorkingDays: readonly string[];
         readonly rangeStart: string;
         readonly rangeEnd: string;
+        readonly nationalSets: readonly string[];
+        readonly nationalDatasetVersion: string;
+        readonly reason?: string | null;
       },
       stamp: { readonly actor: string; readonly at: Date },
     ): Promise<number> {
-      const existing = await this.latestCalendarVersionSeq(projectId);
-      if (existing !== null) return existing;
-
       await lockWatermark(bound, { kind: 'project', projectId });
-      // Re-check under the lock — a concurrent fence may have inserted first.
-      const raced = await this.latestCalendarVersionSeq(projectId);
-      if (raced !== null) return raced;
-
       const [row] = await tx
         .insert(s.holidayCalendarVersion)
         .values({
@@ -119,14 +114,105 @@ export function scheduleRepositoryOn(bound: Bound) {
           nonWorkingDays: [...calendar.nonWorkingDays],
           rangeStart: calendar.rangeStart,
           rangeEnd: calendar.rangeEnd,
-          nationalSets: [],
-          nationalDatasetVersion: 'synthetic-2.9',
-          reason: 'story 2.9 synthetic until publishCalendarVersion (2.12)',
+          nationalSets: [...calendar.nationalSets],
+          nationalDatasetVersion: calendar.nationalDatasetVersion,
+          reason: calendar.reason ?? null,
           actor: stamp.actor,
           at: stamp.at,
         })
         .returning({ seq: s.holidayCalendarVersion.seq });
       return row!.seq;
+    },
+
+    /** Live Project non-working days: head `effect = 'add'` per day (tombstones excluded). */
+    async liveProjectNonWorkingDays(projectId: string): Promise<readonly string[]> {
+      const rows = await tx
+        .select({
+          day: s.calendarDayEvent.day,
+          effect: s.calendarDayEvent.effect,
+          seq: s.calendarDayEvent.seq,
+        })
+        .from(s.calendarDayEvent)
+        .where(
+          and(
+            eq(s.calendarDayEvent.tenantId, tenantId),
+            eq(s.calendarDayEvent.projectId, projectId),
+          ),
+        );
+      const head = new Map<string, { readonly effect: string; readonly seq: number }>();
+      for (const row of rows) {
+        const prev = head.get(row.day);
+        if (prev === undefined || row.seq > prev.seq) {
+          head.set(row.day, { effect: row.effect, seq: row.seq });
+        }
+      }
+      return [...head.entries()]
+        .filter(([, v]) => v.effect === 'add')
+        .map(([day]) => day)
+        .sort();
+    },
+
+    /**
+     * Append a Project non-working-day event (`add` or tombstone `remove`). Refuses a duplicate
+     * live `add`. Locks the Project watermark first.
+     */
+    async appendCalendarDayEvent(
+      command: {
+        readonly projectId: string;
+        readonly day: string;
+        readonly effect: 'add' | 'remove';
+        readonly actor: string;
+        readonly at: Date;
+      },
+    ): Promise<{ readonly seq: number }> {
+      await lockWatermark(bound, { kind: 'project', projectId: command.projectId });
+      if (command.effect === 'add') {
+        const live = await this.liveProjectNonWorkingDays(command.projectId);
+        if (live.includes(command.day)) {
+          const err = new Error('duplicate live calendar day');
+          (err as { code?: string }).code = 'duplicate_calendar_day';
+          throw err;
+        }
+      }
+      const [row] = await tx
+        .insert(s.calendarDayEvent)
+        .values({
+          tenantId,
+          projectId: command.projectId,
+          day: command.day,
+          effect: command.effect,
+          actor: command.actor,
+          at: command.at,
+        })
+        .returning({ seq: s.calendarDayEvent.seq });
+      return { seq: row!.seq };
+    },
+
+    async patchNationalFlags(
+      projectId: string,
+      flags: { readonly calendarJp: boolean; readonly calendarVn: boolean },
+    ): Promise<void> {
+      const updated = await tx
+        .update(s.project)
+        .set({ calendarJp: flags.calendarJp, calendarVn: flags.calendarVn })
+        .where(and(eq(s.project.tenantId, tenantId), eq(s.project.id, projectId)))
+        .returning({ id: s.project.id });
+      if (updated.length === 0) throw projectNotFound(projectId);
+    },
+
+    async projectCalendarFlags(projectId: string): Promise<{
+      readonly calendarJp: boolean;
+      readonly calendarVn: boolean;
+    }> {
+      const [row] = await tx
+        .select({
+          calendarJp: s.project.calendarJp,
+          calendarVn: s.project.calendarVn,
+        })
+        .from(s.project)
+        .where(and(eq(s.project.tenantId, tenantId), eq(s.project.id, projectId)));
+      if (!row) throw projectNotFound(projectId);
+      return row;
     },
 
     async appendRun(command: AppendScheduleRun): Promise<{ readonly seq: number }> {

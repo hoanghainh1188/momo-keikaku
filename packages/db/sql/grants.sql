@@ -71,6 +71,10 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON public."custom_field_definition" TO "mom
 -- custom_field_value (mutable-audited)
 GRANT SELECT, INSERT, UPDATE, DELETE ON public."custom_field_value" TO "momo_app";
 
+-- calendar_day_event (append-only)
+GRANT SELECT, INSERT ON public."calendar_day_event" TO "momo_app";
+GRANT SELECT, UPDATE, DELETE ON public."calendar_day_event" TO "momo_maintenance";
+
 -- holiday_calendar_version (append-only)
 GRANT SELECT, INSERT ON public."holiday_calendar_version" TO "momo_app";
 GRANT SELECT, UPDATE, DELETE ON public."holiday_calendar_version" TO "momo_maintenance";

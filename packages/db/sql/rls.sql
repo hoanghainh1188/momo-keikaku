@@ -172,6 +172,20 @@ CREATE POLICY "maintenance_bypass" ON public."custom_field_value"
   USING (true)
   WITH CHECK (true);
 
+-- calendar_day_event (append-only): Project-specific non-working days (FR-14, story 2.12). Append-only; the head per day feeds publishCalendarVersion. A remove is a tombstone row.
+ALTER TABLE public."calendar_day_event" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public."calendar_day_event" FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "tenant_isolation" ON public."calendar_day_event";
+CREATE POLICY "tenant_isolation" ON public."calendar_day_event"
+  FOR ALL
+  USING ("tenant_id" = NULLIF(current_setting('app.tenant_id', true), ''))
+  WITH CHECK ("tenant_id" = NULLIF(current_setting('app.tenant_id', true), ''));
+DROP POLICY IF EXISTS "maintenance_bypass" ON public."calendar_day_event";
+CREATE POLICY "maintenance_bypass" ON public."calendar_day_event"
+  FOR ALL TO "momo_maintenance"
+  USING (true)
+  WITH CHECK (true);
+
 -- holiday_calendar_version (append-only): A resolved non-working-day set over a range (AD-29). A Baseline re-derives against the version it pinned, so a version is never edited.
 ALTER TABLE public."holiday_calendar_version" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public."holiday_calendar_version" FORCE ROW LEVEL SECURITY;

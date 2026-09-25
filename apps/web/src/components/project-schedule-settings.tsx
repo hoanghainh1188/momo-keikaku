@@ -2,9 +2,12 @@
 
 import { useEffect, useState, useTransition } from 'react';
 import {
+  addProjectDayAction,
   clearProjectStartAction,
   patchDataDateAction,
+  patchNationalCalendarsAction,
   patchProjectFinishAction,
+  removeProjectDayAction,
   setProjectStartAction,
   type SettingsWriteOutcome,
 } from '@/app/p/[projectId]/settings/actions';
@@ -41,7 +44,7 @@ function advancePreviewFor(dataDate: string, remainingCount: number): string {
 }
 
 /**
- * Story 2.11 Project settings (Q1→B): the three schedule settings with teaching confirms.
+ * Story 2.11 Project settings + story 2.12 Holiday Calendar (Q2→A).
  * Full schedule-strip chrome stays 2.15.
  */
 export function ProjectScheduleSettingsForm({
@@ -49,6 +52,9 @@ export function ProjectScheduleSettingsForm({
   projectStart,
   projectFinish,
   dataDate,
+  calendarJp,
+  calendarVn,
+  projectNonWorkingDays,
   remainingLeafCount,
   finishTeaching,
   proposedToday,
@@ -57,6 +63,9 @@ export function ProjectScheduleSettingsForm({
   readonly projectStart: string | null;
   readonly projectFinish: string | null;
   readonly dataDate: string | null;
+  readonly calendarJp: boolean;
+  readonly calendarVn: boolean;
+  readonly projectNonWorkingDays: readonly string[];
   readonly remainingLeafCount: number;
   readonly finishTeaching: string;
   readonly proposedToday: string;
@@ -67,6 +76,9 @@ export function ProjectScheduleSettingsForm({
   const [startValue, setStartValue] = useState(projectStart ?? proposedToday);
   const [finishValue, setFinishValue] = useState(projectFinish ?? '');
   const [dataDateValue, setDataDateValue] = useState(dataDate ?? proposedToday);
+  const [jp, setJp] = useState(calendarJp);
+  const [vn, setVn] = useState(calendarVn);
+  const [newDay, setNewDay] = useState('');
 
   // After revalidatePath, props change — resync controlled inputs (BH10).
   useEffect(() => {
@@ -78,6 +90,12 @@ export function ProjectScheduleSettingsForm({
   useEffect(() => {
     setDataDateValue(dataDate ?? proposedToday);
   }, [dataDate, proposedToday]);
+  useEffect(() => {
+    setJp(calendarJp);
+  }, [calendarJp]);
+  useEffect(() => {
+    setVn(calendarVn);
+  }, [calendarVn]);
 
   const liveAdvancePreview = advancePreviewFor(
     dataDateValue || proposedToday,
@@ -223,7 +241,7 @@ export function ProjectScheduleSettingsForm({
         </form>
       </section>
 
-      <section>
+      <section style={{ marginBottom: 24 }}>
         <h2 className="report-sub">Data Date</h2>
         <p className="caption">
           Current: <strong>{dataDate ?? 'not set'}</strong>
@@ -259,6 +277,116 @@ export function ProjectScheduleSettingsForm({
           </label>
           <button type="submit" disabled={pending || !hasStart}>
             Advance Data Date
+          </button>
+        </form>
+      </section>
+
+      <section data-testid="holiday-calendar-settings">
+        <h2 className="report-sub">Holiday Calendar</h2>
+        <p className="caption">
+          National sets and Project non-working days publish a new resolved version (2025–2028 by
+          default). Earlier versions stay pinned for Baselines.
+        </p>
+        <form
+          style={{ marginTop: 12 }}
+          action={(fd) => {
+            start(async () => {
+              setRefuse(null);
+              const outcome = await patchNationalCalendarsAction(fd);
+              if (!outcome.ok) setRefuse(refuseMessage(outcome));
+            });
+          }}
+        >
+          <input type="hidden" name="projectId" value={projectId} />
+          <input type="hidden" name="calendarJp" value={jp ? '1' : '0'} />
+          <input type="hidden" name="calendarVn" value={vn ? '1' : '0'} />
+          <label className="caption" style={{ display: 'block' }}>
+            <input
+              type="checkbox"
+              checked={jp}
+              onChange={(e) => setJp(e.target.checked)}
+              data-testid="settings-calendar-jp"
+            />{' '}
+            Japanese national holidays
+          </label>
+          <label className="caption" style={{ display: 'block', marginTop: 4 }}>
+            <input
+              type="checkbox"
+              checked={vn}
+              onChange={(e) => setVn(e.target.checked)}
+              data-testid="settings-calendar-vn"
+            />{' '}
+            Vietnamese national holidays (incl. Tết)
+          </label>
+          <button
+            type="submit"
+            disabled={pending}
+            style={{ marginTop: 8 }}
+            data-testid="settings-save-nationals"
+          >
+            Save national calendars
+          </button>
+        </form>
+
+        <h3 className="report-sub" style={{ marginTop: 20 }}>
+          Project non-working days
+        </h3>
+        {projectNonWorkingDays.length === 0 ? (
+          <p className="caption" data-testid="settings-no-project-days">
+            None yet
+          </p>
+        ) : (
+          <ul data-testid="settings-project-days">
+            {projectNonWorkingDays.map((day) => (
+              <li
+                key={day}
+                style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 4 }}
+              >
+                <span>{day}</span>
+                <form
+                  action={(fd) => {
+                    start(async () => {
+                      setRefuse(null);
+                      const outcome = await removeProjectDayAction(fd);
+                      if (!outcome.ok) setRefuse(refuseMessage(outcome));
+                    });
+                  }}
+                >
+                  <input type="hidden" name="projectId" value={projectId} />
+                  <input type="hidden" name="day" value={day} />
+                  <button type="submit" disabled={pending} data-testid={`settings-remove-day-${day}`}>
+                    Remove
+                  </button>
+                </form>
+              </li>
+            ))}
+          </ul>
+        )}
+        <form
+          style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginTop: 8 }}
+          action={(fd) => {
+            start(async () => {
+              setRefuse(null);
+              const outcome = await addProjectDayAction(fd);
+              if (!outcome.ok) setRefuse(refuseMessage(outcome));
+              else setNewDay('');
+            });
+          }}
+        >
+          <input type="hidden" name="projectId" value={projectId} />
+          <label>
+            Add day{' '}
+            <input
+              type="date"
+              name="day"
+              value={newDay}
+              onChange={(e) => setNewDay(e.target.value)}
+              required
+              data-testid="settings-add-day"
+            />
+          </label>
+          <button type="submit" disabled={pending || !newDay}>
+            Add Project non-working day
           </button>
         </form>
       </section>

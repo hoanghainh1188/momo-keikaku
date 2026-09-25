@@ -97,16 +97,18 @@ export interface TableEntry {
  * The 32 tables of this release (story 1.3 slice 2 added `program`; story 1.4 slice 1 removed
  * `app_user` and added the four Better Auth tables and `tenant_membership`; slice 4 added
  * `identity_event`; story 1.6 `project_default_rate_entry`; story 2.1 the five scheduling tables;
- * story 2.10 `pct_override_event` + Custom Field definition/value),
+ * story 2.10 `pct_override_event` + Custom Field definition/value; story 2.12
+ * `calendar_day_event`),
  * in DEPENDENCY ORDER: every table comes after each table its foreign keys reference, so this order
  * is an insert order and its reverse is a delete order (`probe-tenants.ts` deletes by it). Story
  * 2.1's composite foreign keys made that load-bearing: `schedule_run` before `baseline_version`,
  * `mapping_rule` before `mapping_event`.
  *
- * Fourteen are insert-only and are classed `append-only` accordingly:
+ * Fifteen are insert-only and are classed `append-only` accordingly:
  * rate_entry, project_default_rate_entry, wp_status_event, pct_override_event,
- * holiday_calendar_version, schedule_run, baseline_version, baseline_wp, tracker_snapshot,
- * ticket_observation, actuals_ledger_entry, mapping_event, disposition_event, audit_log.
+ * calendar_day_event, holiday_calendar_version, schedule_run, baseline_version, baseline_wp,
+ * tracker_snapshot, ticket_observation, actuals_ledger_entry, mapping_event, disposition_event,
+ * audit_log.
  */
 export const TABLE_REGISTRY: readonly TableEntry[] = [
   {
@@ -233,6 +235,12 @@ export const TABLE_REGISTRY: readonly TableEntry[] = [
     class: 'mutable-audited',
     tenantColumn: 'tenant_id',
     why: 'Custom Field values on Work Packages (FR-8). Plan inputs, not scheduling inputs; still written only through the fence.',
+  },
+  {
+    table: 'calendar_day_event',
+    class: 'append-only',
+    tenantColumn: 'tenant_id',
+    why: 'Project-specific non-working days (FR-14, story 2.12). Append-only; the head per day feeds publishCalendarVersion. A remove is a tombstone row.',
   },
   {
     table: 'holiday_calendar_version',
