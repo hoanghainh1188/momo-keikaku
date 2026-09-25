@@ -12,6 +12,7 @@ import {
   wpDeleteConfirm,
   DERIVED_DATE_TEACHING,
 } from '@/server/composition';
+import { recordedPercentToRatio } from '@/lib/plan-grid-format';
 
 /**
  * Story 2.10 thin plan UI — server actions wrapping the fence (Q1 → B).
@@ -132,4 +133,65 @@ export async function applyPlanMutationAction(input: unknown): Promise<PlanWrite
     revalidatePath(`/p/${String((input as { projectId: string }).projectId)}/plan`);
   }
   return { ok: true };
+}
+
+async function fenceMutation(
+  projectId: string,
+  mutation: unknown,
+): Promise<PlanWriteOutcome> {
+  const ctx = await requestContext();
+  const result = await planChange(mutation, ctx);
+  if (!result.ok) return refuseOutcome(result);
+  revalidatePath(`/p/${projectId}/plan`);
+  return { ok: true };
+}
+
+/** Inline name edit (story 2.13 / Q2→B) — JSON-safe wrapper around the fence. */
+export async function patchWpNameAction(input: {
+  readonly projectId: string;
+  readonly wpId: string;
+  readonly name: string;
+}): Promise<PlanWriteOutcome> {
+  return fenceMutation(input.projectId, {
+    kind: 'patch_wp_name',
+    projectId: input.projectId,
+    wpId: input.wpId,
+    name: input.name,
+  });
+}
+
+/** Inline duration edit (story 2.13 / Q2→B). */
+export async function patchWpDurationAction(input: {
+  readonly projectId: string;
+  readonly wpId: string;
+  readonly durationDays: number | null;
+}): Promise<PlanWriteOutcome> {
+  return fenceMutation(input.projectId, {
+    kind: 'patch_duration',
+    projectId: input.projectId,
+    wpId: input.wpId,
+    durationDays: input.durationDays,
+  });
+}
+
+/**
+ * Inline Recorded % edit (story 2.13 / Q2→B). Accepts whole-percent 0–100; converts to a
+ * ratio for the fence (`num/100`). BigInt cannot cross the RSC action boundary.
+ */
+export async function patchWpRecordedPctAction(input: {
+  readonly projectId: string;
+  readonly wpId: string;
+  readonly percent: number;
+}): Promise<PlanWriteOutcome> {
+  const ratio = recordedPercentToRatio(input.percent);
+  if (ratio === null) {
+    return { ok: false, code: 'invalid_input', messageKey: 'errors.invalid_input' };
+  }
+  return fenceMutation(input.projectId, {
+    kind: 'patch_recorded_pct',
+    projectId: input.projectId,
+    wpId: input.wpId,
+    recordedPctNum: ratio.num,
+    recordedPctDen: ratio.den,
+  });
 }
