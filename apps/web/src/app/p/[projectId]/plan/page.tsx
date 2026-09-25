@@ -30,16 +30,20 @@ export default async function PlanPage({
   return (
     <div className="sheet plan-sheet">
       <h1 className="report-title">{t('plan.plan_work_breakdown_structure')}</h1>
-      <div className="report-sub">{t('plan.the_baseline_is_never_edited')}</div>
+      <div className="report-sub">
+        Current Plan schedule — derived dates, Float, Critical, and progress.
+      </div>
       {grid.dataDate !== null ? (
         <div className="report-sub" style={{ marginTop: 8 }} data-testid="plan-data-date">
           Data Date {grid.dataDate}
           {grid.computedFinish ? ` · Computed finish ${grid.computedFinish}` : ''}
         </div>
       ) : null}
-      <span className="sr-only" aria-label={NO_PROJECT_START_YET}>
-        {grid.projectStart === null ? NO_PROJECT_START_YET : ''}
-      </span>
+      {grid.projectStart === null ? (
+        <span className="sr-only" aria-label={NO_PROJECT_START_YET}>
+          {NO_PROJECT_START_YET}
+        </span>
+      ) : null}
       <PlanTreeGrid model={model} proposedFinish={proposedFinish} />
     </div>
   );

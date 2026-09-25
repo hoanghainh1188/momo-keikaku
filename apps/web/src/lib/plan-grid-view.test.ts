@@ -88,6 +88,9 @@ describe('plan-grid-view (story 2.13)', () => {
       expect(PROGRESS_COLUMNS).not.toContain(absent);
       expect(SCHEDULE_COLUMNS).not.toContain(absent);
     }
+    // PlanTreeGrid imports these constants for headers + slot testids (story 2.13 review).
+    expect(PLAN_GRID_SLOTS.length).toBe(5);
+    expect(SCHEDULE_COLUMNS.length).toBe(9);
   });
 
   it('maps Schedule default fields for the matrix (dates, float, critical, exception)', () => {

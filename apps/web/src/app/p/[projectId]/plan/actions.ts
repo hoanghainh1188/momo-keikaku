@@ -12,6 +12,7 @@ import {
   wpDeleteConfirm,
   DERIVED_DATE_TEACHING,
 } from '@/server/composition';
+import { recordedPercentToRatio } from '@/lib/plan-grid-format';
 
 /**
  * Story 2.10 thin plan UI — server actions wrapping the fence (Q1 → B).
@@ -182,14 +183,15 @@ export async function patchWpRecordedPctAction(input: {
   readonly wpId: string;
   readonly percent: number;
 }): Promise<PlanWriteOutcome> {
-  if (!Number.isInteger(input.percent) || input.percent < 0 || input.percent > 100) {
+  const ratio = recordedPercentToRatio(input.percent);
+  if (ratio === null) {
     return { ok: false, code: 'invalid_input', messageKey: 'errors.invalid_input' };
   }
   return fenceMutation(input.projectId, {
     kind: 'patch_recorded_pct',
     projectId: input.projectId,
     wpId: input.wpId,
-    recordedPctNum: BigInt(input.percent),
-    recordedPctDen: 100n,
+    recordedPctNum: ratio.num,
+    recordedPctDen: ratio.den,
   });
 }

@@ -4,6 +4,7 @@
  */
 import { afterAll, describe, expect, it } from 'vitest';
 import { and, eq } from 'drizzle-orm';
+import { compareWp } from '../../packages/domain/src/schedule/order';
 import { applyPlanChange } from '../../packages/app/src/schedule/apply-plan-change';
 import { getPlanGridState } from '../../packages/app/src/schedule/plan-grid';
 import {
@@ -128,16 +129,26 @@ describe.skipIf(!reachable)('plan grid fence + read (story 2.13)', () => {
     expect(grid.ok).toBe(true);
     if (!grid.ok) return;
 
+    // No Project finish → Float measured against computed finish.
+    expect(grid.value.floatAnchorLabel).toBe('vs computed finish');
+    expect(grid.value.projectFinish).toBeNull();
+    expect(grid.value.haltedReason).toBeNull();
+    expect(grid.value.scheduleStale).toBe(false);
+
+    // Display order is compareWp, never SQL WBS alone.
+    const orderKeys = grid.value.rows.map((r) => ({ id: r.wpId, wbsCode: r.wbsCode }));
+    expect(orderKeys).toEqual([...orderKeys].sort(compareWp));
+
     const row = grid.value.rows.find((r) => r.wpId === leaf.id);
     expect(row?.name).toBe('Renamed leaf for 2.13');
     expect(row?.earlyStart).not.toBeNull();
+    expect(row?.earlyFinish).not.toBeNull();
     expect(row?.durationDays).toBe(3);
+    expect(row?.floatDays).not.toBeNull();
+    expect(typeof row?.isCritical).toBe('boolean');
+    // Simple ASAP leaf after a clean run has no exception cell.
+    expect(row?.exception).toBeNull();
     expect(grid.value.rows.length).toBeGreaterThan(0);
-    expect(
-      grid.value.floatAnchorLabel === 'vs computed finish' ||
-        grid.value.floatAnchorLabel === 'vs Project finish' ||
-        grid.value.floatAnchorLabel === null,
-    ).toBe(true);
   });
 
   it('patches duration then recorded %; remainingDays recomputes on the grid', async () => {
@@ -182,6 +193,52 @@ describe.skipIf(!reachable)('plan grid fence + read (story 2.13)', () => {
     expect(row?.durationDays).toBe(10);
     expect(row?.recordedPct).toEqual({ num: 25n, den: 100n });
     expect(row?.remainingDays).toBe(8);
+    expect(row?.floatDays).not.toBeNull();
+    expect(typeof row?.isCritical).toBe('boolean');
+  });
+
+  it('blanks derived dates/Float/Critical when wp_schedule rows are stale', async () => {
+    const owner = getDb(OWNER_DATABASE_URL!);
+    const app = getDb(APP_DATABASE_URL!);
+    const leaf = await prepareSchedulable(owner);
+
+    const seeded = await applyPlanChange(
+      { handle: app, transaction: inTenantTransaction },
+      ctx(),
+      {
+        kind: 'patch_duration',
+        projectId: PROBE.projectId,
+        wpId: leaf.id,
+        durationDays: 4,
+      },
+    );
+    expect(seeded.ok).toBe(true);
+
+    await withTenant(owner, PROBE.tenantId, async (tx) => {
+      await tx
+        .update(s.wpSchedule)
+        .set({ stale: true })
+        .where(
+          and(
+            eq(s.wpSchedule.tenantId, PROBE.tenantId),
+            eq(s.wpSchedule.projectId, PROBE.projectId),
+          ),
+        );
+    });
+
+    const grid = await getPlanGridState(
+      { handle: app, transaction: inTenantTransaction },
+      ctx(),
+      { projectId: PROBE.projectId },
+    );
+    expect(grid.ok).toBe(true);
+    if (!grid.ok) return;
+    expect(grid.value.scheduleStale).toBe(true);
+    const row = grid.value.rows.find((r) => r.wpId === leaf.id);
+    expect(row?.earlyStart).toBeNull();
+    expect(row?.earlyFinish).toBeNull();
+    expect(row?.floatDays).toBeNull();
+    expect(row?.isCritical).toBe(false);
   });
 
   it('summary FR-6a: patch_duration on a summary refuses and leaves the grid unchanged', async () => {

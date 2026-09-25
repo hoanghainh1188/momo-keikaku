@@ -4,6 +4,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   capturePresetFocusRestore,
+  dateInkClassName,
   formatFloatDisplay,
   formatPlanDate,
   inkTone,
@@ -11,6 +12,8 @@ import {
   presetStorageKey,
   readStoredPreset,
   recordedPctDisplay,
+  recordedPctWhole,
+  recordedPercentToRatio,
   writeStoredPreset,
   SUMMARY_NA_LABEL,
 } from './plan-grid-format';
@@ -52,6 +55,25 @@ describe('plan-grid-format (web)', () => {
     expect(formatFloatDisplay(-5, false).negative).toBe(true);
     expect(recordedPctDisplay(null)).toContain('0%');
     expect(SUMMARY_NA_LABEL).toContain('rolled up');
+  });
+
+  it('applies muted vs full ink classes for dates straddling Data Date', () => {
+    expect(dateInkClassName('2026-09-18', '2026-09-19')).toContain('plan-date-muted');
+    expect(dateInkClassName('2026-09-19', '2026-09-19')).toContain('plan-date-muted');
+    expect(dateInkClassName('2026-09-20', '2026-09-19')).toContain('plan-date-full');
+    expect(dateInkClassName('2026-09-20', '2026-09-19')).not.toContain('plan-date-muted');
+  });
+
+  it('guards recorded % whole-percent conversion and percent→ratio', () => {
+    expect(recordedPctWhole(null)).toBeNull();
+    expect(recordedPctWhole({ num: '1', den: '0' })).toBeNull();
+    expect(recordedPctWhole({ num: '25', den: '100' })).toBe(25);
+    expect(recordedPercentToRatio(25)).toEqual({ num: 25n, den: 100n });
+    expect(recordedPercentToRatio(0)).toEqual({ num: 0n, den: 100n });
+    expect(recordedPercentToRatio(100)).toEqual({ num: 100n, den: 100n });
+    expect(recordedPercentToRatio(-1)).toBeNull();
+    expect(recordedPercentToRatio(101)).toBeNull();
+    expect(recordedPercentToRatio(12.5)).toBeNull();
   });
 
   it('keeps focused row id across preset switch and maps only keys 1/2', () => {

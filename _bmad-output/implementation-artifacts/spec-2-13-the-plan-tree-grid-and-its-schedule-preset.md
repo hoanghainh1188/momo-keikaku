@@ -2,7 +2,7 @@
 title: 'Story 2.13 — The Plan tree grid and its Schedule preset'
 type: 'feature'
 created: '2026-09-25'
-status: 'in-progress'
+status: 'in-review'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '6c9f53371babaa1630b71d0886ab0ef96d446715'
@@ -114,6 +114,41 @@ context:
 ## Spec Change Log
 
 ## Review Triage Log
+
+| ID | Source | Verdict | Route | Evidence |
+|----|--------|---------|-------|----------|
+| BH1 | blind | medium | defer | Real: Plan grid copy is hardcoded EN; same i18n backlog as 2.11 BH8 / 2.12 BH6. |
+| BH2 | blind | false | reject | Schedule preset replaces the thin baseline-hours ledger; baseline columns are not in frozen AC. Subtitle leftover is cosmetic (see BH2b). |
+| BH2b | blind | low | patch | `plan.the_baseline_is_never_edited` still on page without baseline strip — remove or replace with Schedule-context copy. |
+| BH3 | blind | medium | patch | Verified: `DateCell` uses `aria-label="not schedulable"` for both `notSchedulable` and `date === null` (halted/missing). |
+| BH4 | blind | low | reject | Arrow keys update `focusedWpId` + selection class; full DOM focus move is nice-to-have and more than a one-line fix. |
+| BH5 | blind | medium | patch | Verified: `onGridKeyDown` has no `input/textarea` guard; digits bubble from inline editors. |
+| BH6 | blind | false | reject | Engine leaves complete WPs out of backward (`late` undefined) so `isCritical` is false; UI never shows Critical for complete. |
+| BH7 | blind | low | reject | Fixed 1229px canvas for Progress is cosmetic; no user-facing column loss. |
+| BH8 | blind | medium | defer | Helper duplication (app vs web) risks drift; extracting a shared package is out of this story's smallest fix. |
+| BH9 | blind | false | reject | Domain `NotSchedulableReason` is only `'no_duration'`; Exception mapping matches the only reason. |
+| BH10 | blind | false | reject | Dedicated `patchWp*` actions still call the same fence; Code Map preferred one path but behaviour matches Q2→B. |
+| BH11 | blind | medium | patch | Verified: no-start / stale banners sit between What-moved slot and treegrid body, breaking Q1→A slot adjacency. |
+| BH12 | blind | false | reject | Sprint `in-progress` during review is process state; present step syncs. |
+| BH13 | blind | medium | patch | Verified: page always mounts `sr-only` with `aria-label={NO_PROJECT_START_YET}` even when start is set (empty text). |
+| BH14 | blind | medium | patch | Pre-verified by VG1/VG6 — contract constants unused by `PlanTreeGrid`; no DateCell ink markup test. |
+| BH15 | blind | medium | defer | Full treegrid Left/parent keyboard contract beyond expand/collapse — partial delivery; not a one-line patch. |
+| EC1 | edge | medium | patch | Same root as BH5 — digit keys mid-edit. |
+| EC2 | edge | medium | patch | Arrow keys mid-edit move row focus while cell editing. |
+| EC3 | edge | medium | patch | Verified: Recorded % cell divides by `BigInt(den)` with no zero guard. |
+| EC4 | edge | medium | patch | Verified: `remainingDuration` can throw on bad pct heads and abort `getPlanGridState`. |
+| EC5 | edge | high | patch | Verified: halt marks `wp_schedule.stale` but does not clear dates; grid still paints prior early/Float/Critical while matrix wants "—". |
+| EC6 | edge | medium | patch | Verified: no effect resets `focusedWpId` when the focused WP leaves the row set. |
+| EC7 | edge | low | patch | Verified: focusRestore queries missing DOM node and does nothing; table focus fallback is one line. |
+| EC8 | edge | false | reject | With no project start, resolve refuses — `early*` stay null — `DateCell` already shows dash; old DerivedDateCell disable is moot. |
+| VG1 | verif-gap | medium | patch | Pre-verified: `PLAN_GRID_SLOTS` / column consts unused by `PlanTreeGrid`. |
+| VG2 | verif-gap | medium | patch | Pre-verified: fence `floatAnchorLabel` assertion is a tautology over all legal values. |
+| VG3 | verif-gap | medium | patch | Pre-verified: compareWp order never asserted on `getPlanGridState` rows. |
+| VG4 | verif-gap | medium | patch | Pre-verified: fence never asserts float/critical/exception from the read path. |
+| VG5 | verif-gap | medium | patch | Pre-verified: `patchWpRecordedPctAction` untested at the percent→ratio boundary. |
+| VG6 | verif-gap | medium | patch | Pre-verified: inkTone helpers tested; `DateCell` muted/full class never asserted. |
+
+Grouped routes: **patch** (halted blanking + DateCell a11y; keyboard edit guards; remainingDuration/den guards; focus restore; banner slot order; sr-only; baseline subtitle; VG1–6 tests). **defer** BH1, BH8, BH15. Rejected BH2/BH4/BH6/BH7/BH9/BH10/BH12/EC8.
 
 ## Design Notes
 

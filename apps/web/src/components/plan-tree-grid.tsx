@@ -26,16 +26,22 @@ import {
 import type { PlanGridRowView, PlanGridViewModel } from '@/components/plan-grid-types';
 import {
   capturePresetFocusRestore,
+  dateInkClassName,
   formatFloatDisplay,
   formatPlanDate,
-  inkTone,
   presetFromDigitKey,
   readStoredPreset,
   recordedPctDisplay,
+  recordedPctWhole,
   SUMMARY_NA_LABEL,
   writeStoredPreset,
   type PlanPreset,
 } from '@/lib/plan-grid-format';
+import {
+  PLAN_GRID_SLOTS,
+  PROGRESS_COLUMNS,
+  SCHEDULE_COLUMNS,
+} from '@/lib/plan-grid-view';
 
 function refuseMessage(outcome: Extract<PlanWriteOutcome, { ok: false }>): string {
   if (outcome.details !== undefined) {
@@ -81,18 +87,24 @@ function DateCell({
   readonly onRefuseDerived: () => void;
 }) {
   if (isSummary) return <SummaryDash />;
-  if (notSchedulable || date === null) {
+  if (notSchedulable) {
     return (
       <span className="plan-dash" aria-label="not schedulable">
         —
       </span>
     );
   }
-  const tone = inkTone(date, dataDate);
+  if (date === null) {
+    return (
+      <span className="plan-dash" aria-label="no derived date">
+        —
+      </span>
+    );
+  }
   return (
     <button
       type="button"
-      className={`plan-date-btn ${tone === 'muted' ? 'plan-date-muted' : 'plan-date-full'}`}
+      className={dateInkClassName(date, dataDate)}
       onClick={() => void onRefuseDerived()}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
@@ -339,11 +351,18 @@ export function PlanTreeGrid({
   }, [model.userId, model.projectId]);
 
   useEffect(() => {
+    if (focusedWpId !== null && !model.rows.some((r) => r.wpId === focusedWpId)) {
+      setFocusedWpId(model.rows[0]?.wpId ?? null);
+    }
+  }, [model.rows, focusedWpId]);
+
+  useEffect(() => {
     if (focusRestore.current === null) return;
     const id = focusRestore.current;
     focusRestore.current = null;
     const el = tableRef.current?.querySelector(`[data-wp-id="${id}"]`) as HTMLElement | null;
-    el?.focus();
+    if (el) el.focus();
+    else tableRef.current?.focus();
   }, [preset]);
 
   const visibleRows = useMemo(() => {
@@ -426,6 +445,9 @@ export function PlanTreeGrid({
     });
 
   const onGridKeyDown = (e: KeyboardEvent<HTMLTableElement>) => {
+    const target = e.target as HTMLElement | null;
+    if (target?.closest('input, textarea')) return;
+
     const fromDigit = presetFromDigitKey(e.key);
     if (fromDigit !== null) {
       e.preventDefault();
@@ -555,15 +577,7 @@ export function PlanTreeGrid({
         <td className="num">
           {row.isLeaf ? (
             <InlineNumberCell
-              value={
-                row.recordedPct
-                  ? Math.round(
-                      Number(
-                        (BigInt(row.recordedPct.num) * 1000n) / BigInt(row.recordedPct.den),
-                      ) / 10,
-                    )
-                  : null
-              }
+              value={recordedPctWhole(row.recordedPct)}
               ariaLabel={`Recorded percent for ${row.name}`}
               suffix="%"
               emptyLabel={pctLabel ?? 'none — scheduled as 0%'}
@@ -604,15 +618,7 @@ export function PlanTreeGrid({
       <td className="num">
         {row.isLeaf ? (
           <InlineNumberCell
-            value={
-              row.recordedPct
-                ? Math.round(
-                    Number(
-                      (BigInt(row.recordedPct.num) * 1000n) / BigInt(row.recordedPct.den),
-                    ) / 10,
-                  )
-                : null
-            }
+            value={recordedPctWhole(row.recordedPct)}
             ariaLabel={`Recorded percent for ${row.name}`}
             suffix="%"
             emptyLabel="none — scheduled as 0%"
@@ -642,9 +648,13 @@ export function PlanTreeGrid({
   return (
     <div className="plan-surface" data-testid="plan-surface" data-pending={pending ? '1' : '0'}>
       {/* Q1→A: structural slots only — behaviour in 2.15 / 2.16 */}
-      <div className="plan-schedule-strip-slot" data-testid="schedule-strip-slot" aria-hidden="true" />
+      <div
+        className="plan-schedule-strip-slot"
+        data-testid={PLAN_GRID_SLOTS[0]}
+        aria-hidden="true"
+      />
 
-      <div className="plan-toolbar" data-testid="plan-toolbar">
+      <div className="plan-toolbar" data-testid={PLAN_GRID_SLOTS[1]}>
         <div className="plan-seg" role="group" aria-label="Column preset">
           <button
             type="button"
@@ -674,8 +684,6 @@ export function PlanTreeGrid({
         ) : null}
       </div>
 
-      <div className="plan-what-moved-slot" data-testid="what-moved-slot" aria-hidden="true" />
-
       {model.noProjectStart ? (
         <div className="report-sub" style={{ margin: '8px 12px' }} data-testid="no-project-start-yet">
           <span aria-label="no project start yet">no project start yet</span>
@@ -691,15 +699,18 @@ export function PlanTreeGrid({
         </p>
       ) : null}
 
+      <div className="plan-what-moved-slot" data-testid={PLAN_GRID_SLOTS[2]} aria-hidden="true" />
+
       <div className="plan-body">
         <div className="plan-gridwrap">
           <table
             ref={tableRef}
             id={gridId}
             role="treegrid"
+            tabIndex={-1}
             aria-label="Work packages"
             className="plan-treegrid"
-            data-testid="plan-tree"
+            data-testid={PLAN_GRID_SLOTS[3]}
             data-preset={preset}
             onKeyDown={onGridKeyDown}
           >
@@ -737,37 +748,32 @@ export function PlanTreeGrid({
                     St
                   </span>
                 </th>
-                {preset === 'schedule' ? (
-                  <>
-                    <th>
-                      Start
-                      <span className="plan-anch">derived</span>
-                    </th>
-                    <th>
-                      Finish
-                      <span className="plan-anch">derived</span>
-                    </th>
-                    <th className="num">Dur</th>
-                    <th>Predecessors</th>
-                    <th>Constraint</th>
-                    <th className="num">
-                      Float
-                      {model.floatAnchorLabel ? (
-                        <span className="plan-anch">{model.floatAnchorLabel}</span>
-                      ) : null}
-                    </th>
-                    <th>Critical</th>
-                    <th>Exception</th>
-                    <th className="num">Recorded %</th>
-                  </>
-                ) : (
-                  <>
-                    <th>Actual start</th>
-                    <th>Actual finish</th>
-                    <th className="num">Recorded %</th>
-                    <th className="num">Remaining</th>
-                  </>
-                )}
+                {preset === 'schedule'
+                  ? SCHEDULE_COLUMNS.map((label) => {
+                      const num =
+                        label === 'Dur' || label === 'Float' || label === 'Recorded %';
+                      return (
+                        <th key={label} className={num ? 'num' : undefined}>
+                          {label}
+                          {label === 'Start' || label === 'Finish' ? (
+                            <span className="plan-anch">derived</span>
+                          ) : null}
+                          {label === 'Float' && model.floatAnchorLabel ? (
+                            <span className="plan-anch">{model.floatAnchorLabel}</span>
+                          ) : null}
+                        </th>
+                      );
+                    })
+                  : PROGRESS_COLUMNS.map((label) => (
+                      <th
+                        key={label}
+                        className={
+                          label === 'Recorded %' || label === 'Remaining' ? 'num' : undefined
+                        }
+                      >
+                        {label}
+                      </th>
+                    ))}
               </tr>
             </thead>
             <tbody>
@@ -840,7 +846,7 @@ export function PlanTreeGrid({
 
         <aside
           className="plan-exceptions-rail-slot"
-          data-testid="exceptions-rail-slot"
+          data-testid={PLAN_GRID_SLOTS[4]}
           aria-hidden="true"
         />
       </div>

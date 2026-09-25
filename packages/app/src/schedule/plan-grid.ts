@@ -324,10 +324,16 @@ export async function getPlanGridState<Handle>(
       const posInSet = siblings.findIndex((s) => s.id === wp.id) + 1;
       const status = planRows.statusHeads.get(wp.id);
       const pct = planRows.pctHeads.get(wp.id) ?? null;
-      const remaining =
-        wp.isLeaf && wp.durationDays !== null
-          ? remainingDuration(wp.durationDays, pct)
-          : null;
+      // Halted run or stale projection: matrix wants derived dates/Float/Critical as "—".
+      const blankDerived = haltedReason !== null || (sched?.stale ?? false);
+      let remaining: number | null = null;
+      if (wp.isLeaf && wp.durationDays !== null) {
+        try {
+          remaining = remainingDuration(wp.durationDays, pct);
+        } catch {
+          remaining = null;
+        }
+      }
       return {
         wpId: wp.id,
         wbsCode: wp.wbsCode,
@@ -345,10 +351,10 @@ export async function getPlanGridState<Handle>(
         constraintDate: wp.constraintDate,
         constraintLabel: formatConstraintLabel(wp.constraintType, wp.constraintDate),
         predecessorsText: formatPredecessorsText(wp.id, edges, wbsById),
-        earlyStart: sched?.earlyStart ?? null,
-        earlyFinish: sched?.earlyFinish ?? null,
-        floatDays: sched?.floatDays ?? null,
-        isCritical: sched?.isCritical ?? false,
+        earlyStart: blankDerived ? null : (sched?.earlyStart ?? null),
+        earlyFinish: blankDerived ? null : (sched?.earlyFinish ?? null),
+        floatDays: blankDerived ? null : (sched?.floatDays ?? null),
+        isCritical: blankDerived ? false : (sched?.isCritical ?? false),
         state: sched?.state ?? null,
         notSchedulable,
         stale: sched?.stale ?? false,

@@ -38,6 +38,33 @@ export function inkTone(
   return date <= dataDate ? 'muted' : 'full';
 }
 
+/** CSS classes for a derived-date cell (Data Date ink). */
+export function dateInkClassName(date: string, dataDate: string | null): string {
+  const tone = inkTone(date, dataDate);
+  return `plan-date-btn ${tone === 'muted' ? 'plan-date-muted' : 'plan-date-full'}`;
+}
+
+/** Whole percent for inline editors; null when missing or den is 0. */
+export function recordedPctWhole(
+  pct: { readonly num: string; readonly den: string } | null,
+): number | null {
+  if (pct === null) return null;
+  const den = BigInt(pct.den);
+  if (den === 0n) return null;
+  return Math.round(Number((BigInt(pct.num) * 1000n) / den) / 10);
+}
+
+/**
+ * Whole-percent 0–100 → fence ratio. Returns null when invalid (not written).
+ */
+export function recordedPercentToRatio(
+  percent: number,
+): { readonly num: bigint; readonly den: bigint } | null {
+  if (!Number.isInteger(percent) || percent < 0 || percent > 100) return null;
+  return { num: BigInt(percent), den: 100n };
+}
+
+
 export function formatFloatDisplay(floatDays: number | null, notSchedulable: boolean): {
   readonly text: string;
   readonly negative: boolean;
