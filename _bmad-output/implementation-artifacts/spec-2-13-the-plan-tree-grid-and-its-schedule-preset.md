@@ -2,7 +2,7 @@
 title: 'Story 2.13 — The Plan tree grid and its Schedule preset'
 type: 'feature'
 created: '2026-09-25'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '6c9f53371babaa1630b71d0886ab0ef96d446715'
