@@ -318,7 +318,8 @@ describe.skipIf(!reachable)('applyPlanChange fence (story 2.9)', () => {
     expect(priorProjection.length).toBeGreaterThan(0);
     expect(priorProjection.every((r) => r.stale === false)).toBe(true);
 
-    // Force calendar_range: must_finish_on after the synthetic calendar's rangeEnd (2030-12-31).
+    // Force calendar_range: must_finish_on after the published calendar's rangeEnd
+    // (default 2025-01-01…2028-12-31). 2031 is still past range_end.
     const halted = await applyPlanChange(
       { handle: app, transaction: inTenantTransaction },
       ctx(),

@@ -111,6 +111,21 @@ describe('resolveCalendarVersion (pure)', () => {
     // An unlisted weekday Monday in range is working (not in the set).
     expect(resolved.nonWorkingDays).not.toContain('2026-10-05');
   });
+
+  it('with both national flags false stores weekends (+ project days) only — no JP/VN nationals', () => {
+    const resolved = resolveCalendarVersion({
+      calendarJp: false,
+      calendarVn: false,
+      projectDays: ['2026-10-14'],
+    });
+    expect(resolved.nationalSets).toEqual([]);
+    // JP New Year 2026 is a Thursday — not a weekend; must be absent when flags are off.
+    expect(resolved.nonWorkingDays).not.toContain('2026-01-01');
+    // VN Liberation Day 2026 is a Thursday — same.
+    expect(resolved.nonWorkingDays).not.toContain('2026-04-30');
+    expect(resolved.nonWorkingDays).toContain('2026-10-10'); // Saturday
+    expect(resolved.nonWorkingDays).toContain('2026-10-14'); // Project day
+  });
 });
 
 describe.skipIf(!reachable)('publishCalendarVersion (story 2.12)', () => {
@@ -323,5 +338,86 @@ describe.skipIf(!reachable)('publishCalendarVersion (story 2.12)', () => {
     if (!result.ok) return;
     expect(result.value.calendarVersionSeq).toBeGreaterThan(0);
     expect(result.value.run.kind === 'scheduled' || result.value.run.kind === 'halted').toBe(true);
+  });
+
+  it('when calendar publish moves WP dates, at least one WP carries FR-28 cause calendar changed', async () => {
+    const owner = getDb(OWNER_DATABASE_URL!);
+    const app = getDb(APP_DATABASE_URL!);
+    const leaf = await prepareSchedulable(owner);
+
+    // First run: establish prevInputs / prevOutputs so FR-28 can name a move cause.
+    const first = await applyPlanChange(
+      { handle: app, transaction: inTenantTransaction },
+      ctx(),
+      {
+        kind: 'patch_duration',
+        projectId: PROBE.projectId,
+        wpId: leaf.id,
+        durationDays: 5,
+      },
+    );
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+    expect(first.value.kind).toBe('scheduled');
+    const finishBefore = first.value.outputs?.wps.find((w) => w.wpId === leaf.id)?.earlyFinish;
+    expect(finishBefore).toBeTruthy();
+
+    // Punch a hole in the leaf's working span (dataDate 2026-10-05 Mon + duration 5 →
+    // mid-week). Making Wednesday non-working shifts early finish → calendar changed.
+    const published = await addProjectNonWorkingDay(
+      { handle: app, transaction: inTenantTransaction },
+      ctx(),
+      { projectId: PROBE.projectId, day: '2026-10-07' },
+    );
+    expect(published.ok).toBe(true);
+    if (!published.ok) return;
+    expect(published.value.run.kind).toBe('scheduled');
+    expect(published.value.run.outputs).not.toBeNull();
+
+    const runs = await withTenant(app, PROBE.tenantId, async (tx) =>
+      tx
+        .select({ cause: s.scheduleRun.cause })
+        .from(s.scheduleRun)
+        .where(eq(s.scheduleRun.projectId, PROBE.projectId))
+        .orderBy(desc(s.scheduleRun.seq))
+        .limit(1),
+    );
+    expect(runs[0]?.cause).toBe('calendar');
+
+    const leafOut = published.value.run.outputs!.wps.find((w) => w.wpId === leaf.id);
+    expect(leafOut?.earlyFinish).not.toBe(finishBefore);
+    expect(leafOut?.cause).toBe('calendar changed');
+    expect(
+      published.value.run.outputs!.wps.some((w) => w.cause === 'calendar changed'),
+    ).toBe(true);
+  });
+
+  it('toggling both national flags off publishes weekends (+ project days) only', async () => {
+    const owner = getDb(OWNER_DATABASE_URL!);
+    const app = getDb(APP_DATABASE_URL!);
+    await prepareSchedulable(owner);
+
+    const result = await patchNationalCalendarFlags(
+      { handle: app, transaction: inTenantTransaction },
+      ctx(),
+      { projectId: PROBE.projectId, calendarJp: false, calendarVn: false },
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const [ver] = await withTenant(app, PROBE.tenantId, async (tx) =>
+      tx
+        .select({
+          nonWorkingDays: s.holidayCalendarVersion.nonWorkingDays,
+          nationalSets: s.holidayCalendarVersion.nationalSets,
+        })
+        .from(s.holidayCalendarVersion)
+        .where(eq(s.holidayCalendarVersion.projectId, PROBE.projectId))
+        .orderBy(desc(s.holidayCalendarVersion.seq))
+        .limit(1),
+    );
+    expect(ver?.nationalSets).toEqual([]);
+    expect(ver?.nonWorkingDays).not.toContain('2026-01-01'); // JP New Year (Thu)
+    expect(ver?.nonWorkingDays).toContain('2026-10-10'); // Saturday
   });
 });

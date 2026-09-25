@@ -115,6 +115,8 @@ Implemented 2026-09-25 on `cursor/story-2-12-holiday-calendar-6085`.
 
 Residues: full range-halt banner chrome stays 2.16; `operator_audit` stays Epic 8 (already in deferred-work). Org `createProject` does not auto-publish — seed or settings/publish must materialise the first version.
 
+Matrix gap fixes (2026-09-25): fence-2-12 now asserts FR-28 WP cause `'calendar changed'` when a publish moves dates (run cause `'calendar'` alone is insufficient); both-flags-false resolves to weekends (+ Project days) only with `2026-01-01` absent; fence calendar-range comment updated for default `2025-01-01`…`2028-12-31` (2031 constraint kept).
+
 ## Spec Change Log
 
 ## Review Triage Log
