@@ -1,4 +1,62 @@
-# Handoff — 2026-09-26 (story 2.14 closed: Dependencies and constraints on the grid)
+# Handoff — 2026-09-26 (story 2.15 closed: Schedule strip and What-moved band)
+
+**Latest (2026-09-26): story 2.15 merged via PR #81 (`b4a3c95`) and is `done`.** Epic 2 remains
+`in-progress` (2.16–2.17 backlog). Plan **surface** line continues: grid + Schedule/Progress +
+pred/constraint typing + strip/What-moved are live; exceptions rail (2.16) remains.
+
+## Story 2.15 (recap) — The schedule strip and the What-moved band
+- Sticky schedule strip fills the 2.13 slot: Project start / finish / Data Date, computed finish,
+  min Float, and the Float **anchor as a sentence** (UX-DR5). Inline settings edits reuse fence
+  kinds only (`set_project_start` / `clear_project_start` / `patch_project_finish` /
+  `patch_data_date`); finish teaching confirm reused from 2.11.
+- What-moved band: one-liner + FR-28 cause groups with old/new dates; dismiss/persist; polite
+  `aria-live` (completes 2.14 Q2→C); 300 ms `primary-soft` cell highlight (reduced-motion: no
+  transition); other-PM attribution; **no Undo**.
+- In-flight recalc blanks affected derived dates with "…" (UX-DR23 / Q3→A). Plan write success
+  re-reads grid state for strip/What-moved scalars (`successFromGrid` refuses wipe on re-read fail).
+- `actorUserIdOf` strips the `user:` audit stamp so attribution compares to `RequestContext.userId`
+  and `auth_user` lookup works.
+- Settings page chrome aligned with Mapping/Connectors (`Section` + `.btn`) in the same PR.
+- **Q1→A:** Core only — no *Undo this edit*. **Q2→A:** strip Data Date = fence date edit only (no
+  advance-to-period CTA). **Q3→A:** ship in-flight "…".
+- Spec: `spec-2-15-the-schedule-strip-and-the-what-moved-band.md`.
+- Deferred from review / OQ: Undo Comfort; strip advance-to-period CTA; helper dedupe (app vs web
+  formatters, BH10); DateCell RTL harness (VG3).
+
+## Carried forward
+- **2.16 (next):** Schedule-exceptions rail + three explainers (constraint violations / out-of-
+  sequence / not-schedulable). Empty `exceptions-rail-slot` already mounts (2.13 Q1→A); Exception
+  cell already paints glyph+word+number — fill rail behaviour + drawer + keyboard.
+- **2.17:** Organisation UI (Tenant Admin screens for Departments / Programs / Projects /
+  Resources & Rates).
+- **Still open (unchanged):** unratified 2.5 corpus edges; Epic 6 / FR-31 health vs actuals;
+  `applyPlanChange` barrel / audit gate enumeration; COMMIT-time 23503 residue (PARTIAL);
+  English product copy backlog (2.11 BH8 + 2.12 BH6 + 2.13 Plan i18n + helper dedupe).
+
+## Next: story 2.16 — The schedule-exceptions rail and its three explainers
+Things to know before starting:
+- **Slot already mounts.** 2.13 left an empty `exceptions-rail-slot` in UX-DR2 order (strip →
+  toolbar → What-moved → grid → rail). Do not invent a second layout; fill the rail.
+- **Exception cell already paints.** Schedule rows show glyph+word+number for Late / Out of
+  sequence / No duration (UX-DR12). Rail items must match that vocabulary — no colour-only marks.
+- **Three groups, fixed order** (UX-DR8): Constraint violations (days-late worst first) →
+  Out-of-sequence → Not schedulable yet. Empty rail says "No schedule exceptions", never vanishes.
+  Below 1680px the rail is a drawer; toolbar toggle **always carries the total count**.
+- **Three explainers** (UX-DR9): violation names asked/derived dates, working days late, calendar
+  version, predecessor chain, and the honesty line that Float on other WPs is unchanged; OOS is
+  neutral fact with no fix; not-schedulable states exclusion + offers a duration field in the
+  popover. Walkable chain per-WP focus is **Comfort**.
+- **Keyboard** (UX-DR24): `j`/`k` walk the whole rail; `Enter` scrolls grid + focuses row + opens
+  explainer; `e` opens explainer on focused row; `x` toggles drawer.
+- **Illegal-edge band** (UX-DR23 / FR-6a): structural edit that left invalid deps → top band naming
+  edges + fixes; grid shows last good schedule with derived dates marked stale — never blank guesses.
+- Spec does not exist yet — Build creates it. Epics AC: `epics.md` § Story 2.16. Continuity from
+  `spec-2-15-…` (done) + Plan treegrid Exception cell + empty rail slot + domain violations /
+  outOfSequence / notSchedulable outputs.
+- Kickoff: `/bmad-build Story 2.16 — The schedule-exceptions rail and its three explainers`
+  Sprint key: `2-16-the-schedule-exceptions-rail-and-its-three-explainers`
+
+## Earlier: Handoff — 2026-09-26 (story 2.14 closed: Dependencies and constraints on the grid)
 
 **Latest (2026-09-26): story 2.14 merged via PR #80 (`b9439c8`) and is `done`.** Epic 2 remains
 `in-progress` (2.15–2.17 backlog). Plan **surface** line continues: grid + Schedule/Progress +
