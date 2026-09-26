@@ -27,6 +27,13 @@ import { ok, type Result } from '../result';
 import type { ApplyPlanChangeDeps } from './apply-plan-change';
 import { PROJECT_FINISH_TEACHING } from './plan-edit';
 
+/** Audit / schedule_run actor stamps are `user:<id>`; bare id for auth lookup + UI compare. */
+const USER_ACTOR = /^user:(.+)$/;
+
+export function actorUserIdOf(actor: string): string {
+  return USER_ACTOR.exec(actor)?.[1] ?? actor;
+}
+
 export const SUMMARY_NA_LABEL =
   'not applicable — summary work package, rolled up from its children';
 
@@ -617,12 +624,13 @@ export async function getPlanGridState<Handle>(
           }
         }
 
-        let actorName = latest.actor;
+        const actorUserId = actorUserIdOf(latest.actor);
+        let actorName = actorUserId;
         try {
           const [user] = await bound.tx
             .select({ name: s.authUser.name })
             .from(s.authUser)
-            .where(eq(s.authUser.id, latest.actor));
+            .where(eq(s.authUser.id, actorUserId));
           if (user?.name) actorName = user.name;
         } catch {
           // Global table may be unreachable under some RLS setups — fall back to actor id.
@@ -630,7 +638,7 @@ export async function getPlanGridState<Handle>(
 
         whatMoved = buildWhatMovedBand({
           runSeq: latest.seq,
-          actorUserId: latest.actor,
+          actorUserId,
           actorName,
           at: latest.at,
           latest: {

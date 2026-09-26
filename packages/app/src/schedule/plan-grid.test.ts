@@ -4,6 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import { compareWp } from '@momo/domain';
 import {
+  actorUserIdOf,
   buildWhatMovedBand,
   floatAnchorHeader,
   floatAnchorSentence,
@@ -19,6 +20,14 @@ import {
   stripDerivedScalars,
   SUMMARY_NA_LABEL,
 } from './plan-grid';
+
+describe('actorUserIdOf (story 2.15)', () => {
+  it('strips the user: audit stamp so UI can compare to RequestContext.userId', () => {
+    expect(actorUserIdOf('user:user-s215')).toBe('user-s215');
+    expect(actorUserIdOf('user:user-s215-other')).toBe('user-s215-other');
+    expect(actorUserIdOf('legacy-bare')).toBe('legacy-bare');
+  });
+});
 
 describe('plan-grid display helpers (story 2.13)', () => {
   it('formats EN plan dates', () => {

@@ -157,6 +157,7 @@ export {
 } from './schedule/plan-edit';
 export {
   getPlanGridState,
+  actorUserIdOf,
   formatPlanDate,
   formatPlanDateShort,
   formatPlanDateLong,
