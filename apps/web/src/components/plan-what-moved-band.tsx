@@ -8,6 +8,7 @@ import {
   readWhatMovedDismissed,
   writeWhatMovedDismissed,
 } from '@/lib/plan-strip-what-moved';
+import { PLAN_GRID_SLOTS } from '@/lib/plan-grid-view';
 
 export interface PlanWhatMovedBandProps {
   readonly projectId: string;
@@ -22,7 +23,7 @@ export interface PlanWhatMovedBandProps {
 
 /**
  * What-moved band (UX-DR10) — summary, FR-28 groups, dismiss/persist, attribution.
- * No Undo (Q1→A).
+ * No Undo (Q1→A). Polite announce goes only through onPoliteAnnounce (toolbar aria-live).
  */
 export function PlanWhatMovedBand({
   projectId,
@@ -35,7 +36,7 @@ export function PlanWhatMovedBand({
 }: PlanWhatMovedBandProps) {
   const [expanded, setExpanded] = useState(false);
   const [dismissed, setDismissed] = useState(false);
-  const [seenAnnounce, setSeenAnnounce] = useState<number | null>(null);
+  const [announcedRunSeq, setAnnouncedRunSeq] = useState<number | null>(null);
 
   useEffect(() => {
     if (band === null) {
@@ -49,20 +50,21 @@ export function PlanWhatMovedBand({
 
   useEffect(() => {
     if (band === null || announceToken === 0) return;
-    if (seenAnnounce === announceToken) return;
-    setSeenAnnounce(announceToken);
+    // Same runSeq must not re-announce/highlight when the token bumps again.
+    if (announcedRunSeq === band.runSeq) return;
+    setAnnouncedRunSeq(band.runSeq);
     onPoliteAnnounce(band.politeAnnounce);
     if (!band.nothingMoved) {
       const ids = band.groups.flatMap((g) => g.entries.map((e) => e.wpId));
       onHighlightWps(ids);
     }
-  }, [announceToken, band, onHighlightWps, onPoliteAnnounce, seenAnnounce]);
+  }, [announceToken, announcedRunSeq, band, onHighlightWps, onPoliteAnnounce]);
 
   if (band === null || dismissed) {
     return (
       <div
         className="plan-what-moved-slot"
-        data-testid="what-moved-slot"
+        data-testid={PLAN_GRID_SLOTS[2]}
         aria-hidden="true"
       />
     );
@@ -79,11 +81,7 @@ export function PlanWhatMovedBand({
   });
 
   return (
-    <div
-      className="plan-what-moved"
-      data-testid="what-moved-slot"
-      role="status"
-    >
+    <div className="plan-what-moved" data-testid={PLAN_GRID_SLOTS[2]}>
       <div className="plan-what-moved-line">
         <span data-testid="what-moved-summary">
           {band.summaryLine}

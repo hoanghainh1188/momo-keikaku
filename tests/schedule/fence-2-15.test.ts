@@ -202,26 +202,22 @@ describe.skipIf(!reachable)('plan strip + What-moved (story 2.15)', () => {
     const band = grid.value.whatMoved;
     expect(band).not.toBeNull();
     if (!band) return;
-    if (band.nothingMoved) {
-      // Finish-only or no early-date delta still answers explicitly.
-      expect(band.summaryLine).toBe('No dates moved');
-    } else {
-      expect(band.movedCount).toBeGreaterThan(0);
-      expect(band.groups.length).toBeGreaterThan(0);
-      for (const group of band.groups) {
-        expect([
-          'edited',
-          'moved by a predecessor',
-          'calendar changed',
-          'data date advanced',
-          'actual dates recorded',
-          'progress changed',
-          'project dates changed',
-        ]).toContain(group.cause);
-      }
-      expect(band.summaryLine).toMatch(/work package/);
-      expect(band.politeAnnounce).toMatch(/Computed finish/);
+    expect(band.nothingMoved).toBe(false);
+    expect(band.movedCount).toBeGreaterThan(0);
+    expect(band.groups.length).toBeGreaterThan(0);
+    for (const group of band.groups) {
+      expect([
+        'edited',
+        'moved by a predecessor',
+        'calendar changed',
+        'data date advanced',
+        'actual dates recorded',
+        'progress changed',
+        'project dates changed',
+      ]).toContain(group.cause);
     }
+    expect(band.summaryLine).toMatch(/work package/);
+    expect(band.politeAnnounce).toMatch(/Computed finish/);
     expect(band.actorUserId).toBe('user-s215-other');
   });
 

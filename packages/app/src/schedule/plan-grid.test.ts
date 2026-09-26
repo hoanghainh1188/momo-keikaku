@@ -127,6 +127,34 @@ describe('plan-grid display helpers (story 2.13)', () => {
     expect(first.summaryLine).toBe('No dates moved');
     expect(first.politeAnnounce).toBe('No dates moved.');
 
+    // Parse-failure / missing previous with causes still present — keep groups, null old dates.
+    const orphanPrev = buildWhatMovedBand({
+      runSeq: 3,
+      actorUserId: 'u1',
+      actorName: 'Hoang',
+      at: new Date('2026-09-26T10:10:00Z'),
+      latest: {
+        computedFinish: '2027-03-26',
+        minFloat: 2,
+        wps: [
+          {
+            wpId: 'a',
+            wbsCode: '1.1',
+            name: 'Leaf',
+            earlyStart: '2026-10-08',
+            earlyFinish: '2026-10-12',
+            cause: 'edited',
+          },
+        ],
+      },
+      previous: null,
+    });
+    expect(orphanPrev.nothingMoved).toBe(false);
+    expect(orphanPrev.movedCount).toBe(1);
+    expect(orphanPrev.groups).toHaveLength(1);
+    expect(orphanPrev.groups[0]!.entries[0]!.oldEarlyStart).toBeNull();
+    expect(orphanPrev.summaryLine).toContain('1 work package moved');
+
     const moved = buildWhatMovedBand({
       runSeq: 2,
       actorUserId: 'u2',

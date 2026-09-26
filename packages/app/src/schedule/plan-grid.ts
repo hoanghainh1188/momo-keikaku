@@ -359,7 +359,7 @@ export function buildWhatMovedBand(input: {
   }
 
   const movedCount = entries.length;
-  const nothingMoved = movedCount === 0 || input.previous === null;
+  const nothingMoved = movedCount === 0;
   const prevFinish = input.previous?.computedFinish ?? null;
   const nextFinish = input.latest.computedFinish;
   const prevMin = input.previous?.minFloat ?? null;
@@ -375,7 +375,7 @@ export function buildWhatMovedBand(input: {
 
   return {
     runSeq: input.runSeq,
-    movedCount: nothingMoved ? 0 : movedCount,
+    movedCount,
     nothingMoved,
     summaryLine,
     politeAnnounce,
@@ -636,16 +636,19 @@ export async function getPlanGridState<Handle>(
           latest: {
             computedFinish,
             minFloat,
-            wps: storedOutputs.wps.map((row, i) => {
-              const wpId = orderedIds[i] ?? '';
-              return {
-                wpId,
-                wbsCode: wbsById.get(wpId) ?? storedInputs.wps[i]?.wbsCode ?? '',
-                name: nameById.get(wpId) ?? '',
-                earlyStart: row.earlyStart,
-                earlyFinish: row.earlyFinish,
-                cause: row.cause,
-              };
+            wps: storedOutputs.wps.flatMap((row, i) => {
+              const wpId = orderedIds[i];
+              if (wpId === undefined) return [];
+              return [
+                {
+                  wpId,
+                  wbsCode: wbsById.get(wpId) ?? storedInputs.wps[i]?.wbsCode ?? '',
+                  name: nameById.get(wpId) ?? '',
+                  earlyStart: row.earlyStart,
+                  earlyFinish: row.earlyFinish,
+                  cause: row.cause,
+                },
+              ];
             }),
           },
           previous: previousPayload,

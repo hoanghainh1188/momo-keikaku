@@ -2,7 +2,7 @@
 title: 'Story 2.15 — The schedule strip and the What-moved band'
 type: 'feature'
 created: '2026-09-26'
-status: 'in-progress'
+status: 'in-review'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: 'd37ea58653ffc84a8d65e84bd523a56176e6d182'
@@ -104,9 +104,41 @@ context:
 
 - **2026-09-26 (matrix coverage):** Extracted `blankDerivedWhilePending`, `formatWhatMovedAttribution`, `stripDerivedScalars`; strengthened dismiss sessionStorage read/write; fence set/clear Project start strip-scalar refresh; halted/missing strip "—" honesty. No Undo / no advance CTA.
 
+- **2026-09-26 (review fixes):** `successFromGrid` refuses `read_after_write` instead of empty success; single polite aria-live (no band `role=status`); PLAN_GRID_SLOTS testids; fence requires real moved band; drop `movedWpIds`; Cancel resets finish confirm; start `plan-strip-notset`; What-moved keeps groups when previous missing but entries exist; skip ghost wpIds; clear highlight timeout; announce once per runSeq; pure `plan-write-success` tests.
+
 ## Spec Change Log
 
 ## Review Triage Log
+
+| ID | Source | Verdict | Route | Evidence |
+|----|--------|---------|-------|----------|
+| BH1 | blind | false | reject | Sprint → review is present-step process; code review does not require yaml sync mid-loop. |
+| BH2 | blind | false | reject | Empty triage/changelog during first review pass is expected; this triage fills them. |
+| BH3 | blind | low | reject | Blanking all non-null leaf early dates while any recalc is pending is a conservative reading of UX-DR23; tracking per-WP “affected” needs mutation fan-out IDs and is not a one-line fix. |
+| BH4 | blind | high | patch | Verified: `successFromGrid` returns `ok: true` with null strip/What-moved when re-read fails — wipes client state after a successful write. |
+| BH5 | blind | medium | patch | Verified: band `role="status"` plus grid `aria-live="polite"` can double-announce. |
+| BH6 | blind | medium | patch | Verified: strip/What-moved hard-code testids instead of `PLAN_GRID_SLOTS[0]/[2]`. |
+| BH7 | blind | medium | patch | Verified: fence-2-15 soft-accepts `nothingMoved` for the finish-edit case — moved band not required for green. |
+| BH8 | blind | low | reject | Absence of Undo/advance CTA is enforced by Never + deferred-work; no everyday user meets a missing negative test. |
+| BH9 | blind | low | patch | `movedWpIds` is computed and unused — delete dead field from success payload. |
+| BH10 | blind | low | defer | Formatter duplication app vs web — same backlog as 2.13 helper dedupe. |
+| BH11 | blind | low | reject | Announce/highlight on initial load of another PM’s prior band is not required by the settle AC. |
+| BH12 | blind | low | reject | 50 ms reduced-motion clear is still a highlight; unlikely everyday defect. |
+| BH13 | blind | medium | patch | Verified: Cancel leaves `finishConfirmed` checked so reopen can skip teaching confirm. |
+| BH14 | blind | low | patch | Project start uses plain “not set” while finish uses `plan-strip-notset` — align class. |
+| EC1 | edge | high | patch | Same root as BH4 — wipe after re-read fail. |
+| EC2 | edge | medium | patch | Verified: `previous === null` (incl. parse throw) forces `nothingMoved` and drops groups — keep groups with null old dates when entries exist. |
+| EC3 | edge | medium | patch | Verified: outputs longer than orderedIds can emit empty wpId — skip missing ids. |
+| EC4 | edge | medium | patch | Verified: highlight timeout not cleared before reschedule — clear prior timer. |
+| EC5 | edge | medium | patch | Verified: announceToken bump for same runSeq can re-announce — gate on runSeq. |
+| EC6 | edge | false | reject | `Date.now()` is fine; `performance` missing is not a realistic web runtime here. |
+| EC7 | edge | high | patch | Same as BH4/EC1. |
+| EC8 | edge | medium | patch | Same as EC2. |
+| VG1 | verif-gap | medium | patch | Pre-verified: no forced `nothingMoved === false` after second run — same as BH7. |
+| VG2 | verif-gap | medium | patch | Pre-verified: `successFromGrid` / strip actions untested — add mocked action test. |
+| VG3 | verif-gap | medium | defer | DateCell wiring needs RTL harness the repo lacks; helper coverage stays. |
+
+Grouped routes: **patch** (successFromGrid fail path; double announce; PLAN_GRID_SLOTS testids; harden fence moved-band; drop movedWpIds; finishConfirmed reset; start not-set class; previous parse keep groups; orderedIds guard; highlight timer; announce runSeq gate; action payload test). **defer** BH10, VG3. Rejected BH1/2/3/8/11/12, EC6.
 
 ## Design Notes
 

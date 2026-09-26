@@ -19,33 +19,20 @@ import {
 } from '@/server/composition';
 import { recordedPercentToRatio } from '@/lib/plan-grid-format';
 import { toPlanGridViewModel } from '@/lib/plan-grid-view';
-import type { WhatMovedBandView } from '@/components/plan-grid-types';
+import {
+  readAfterWriteRefuse,
+  toPlanWriteSuccess,
+  type PlanWriteRefuse,
+  type PlanWriteSuccess,
+} from '@/lib/plan-write-success';
 
 /**
  * Story 2.10 thin plan UI — server actions wrapping the fence (Q1 → B).
  * Story 2.15 widens success with What-moved + strip scalars for the band.
  */
 
-export type PlanWriteSuccess = {
-  readonly ok: true;
-  readonly whatMoved: WhatMovedBandView | null;
-  readonly projectStart: string | null;
-  readonly projectFinish: string | null;
-  readonly dataDate: string | null;
-  readonly computedFinish: string | null;
-  readonly minFloat: number | null;
-  readonly floatAnchorSentence: string | null;
-  readonly movedWpIds: readonly string[];
-};
-
-export type PlanWriteOutcome =
-  | PlanWriteSuccess
-  | {
-      readonly ok: false;
-      readonly code: string;
-      readonly messageKey: string;
-      readonly details?: Readonly<Record<string, readonly string[]>>;
-    };
+export type { PlanWriteSuccess };
+export type PlanWriteOutcome = PlanWriteSuccess | PlanWriteRefuse;
 
 function refuseOutcome(result: {
   readonly ok: false;
@@ -63,38 +50,11 @@ function refuseOutcome(result: {
   };
 }
 
-async function successFromGrid(projectId: string): Promise<PlanWriteSuccess> {
+async function successFromGrid(projectId: string): Promise<PlanWriteOutcome> {
   const ctx = await requestContext();
   const grid = await planGridState(projectId, ctx);
-  if (!grid.ok) {
-    return {
-      ok: true,
-      whatMoved: null,
-      projectStart: null,
-      projectFinish: null,
-      dataDate: null,
-      computedFinish: null,
-      minFloat: null,
-      floatAnchorSentence: null,
-      movedWpIds: [],
-    };
-  }
-  const view = toPlanGridViewModel(grid.value, ctx.userId);
-  const movedWpIds =
-    view.whatMoved === null || view.whatMoved.nothingMoved
-      ? []
-      : view.whatMoved.groups.flatMap((g) => g.entries.map((e) => e.wpId));
-  return {
-    ok: true,
-    whatMoved: view.whatMoved,
-    projectStart: view.projectStart,
-    projectFinish: view.projectFinish,
-    dataDate: view.dataDate,
-    computedFinish: view.computedFinish,
-    minFloat: view.minFloat,
-    floatAnchorSentence: view.floatAnchorSentence,
-    movedWpIds,
-  };
+  if (!grid.ok) return readAfterWriteRefuse();
+  return toPlanWriteSuccess(toPlanGridViewModel(grid.value, ctx.userId));
 }
 
 export async function completeWorkPackageAction(formData: FormData): Promise<PlanWriteOutcome> {
@@ -187,19 +147,15 @@ export async function applyPlanMutationAction(input: unknown): Promise<PlanWrite
     projectId = String((input as { projectId: string }).projectId);
     revalidatePath(`/p/${projectId}/plan`);
   }
-  return projectId === ''
-    ? {
-        ok: true,
-        whatMoved: null,
-        projectStart: null,
-        projectFinish: null,
-        dataDate: null,
-        computedFinish: null,
-        minFloat: null,
-        floatAnchorSentence: null,
-        movedWpIds: [],
-      }
-    : successFromGrid(projectId);
+  if (projectId === '') {
+    return {
+      ok: false,
+      code: 'invalid_input',
+      messageKey: 'errors.invalid_input',
+      details: { refuse: ['Missing projectId'] },
+    };
+  }
+  return successFromGrid(projectId);
 }
 
 async function fenceMutation(

@@ -682,6 +682,7 @@ export function PlanTreeGrid({
   const focusRestore = useRef<string | null>(null);
   const tableRef = useRef<HTMLTableElement>(null);
   const goChord = useRef<string | null>(null);
+  const highlightClearRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const recalcPending = pending || stripPending;
 
@@ -762,12 +763,22 @@ export function PlanTreeGrid({
   }, []);
 
   const onHighlightWps = useCallback((wpIds: readonly string[]) => {
+    if (highlightClearRef.current !== null) {
+      clearTimeout(highlightClearRef.current);
+      highlightClearRef.current = null;
+    }
     setHighlightedWpIds(new Set(wpIds));
     const reduced =
       typeof window !== 'undefined' &&
       window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const clearMs = reduced ? 0 : 300;
-    window.setTimeout(() => setHighlightedWpIds(new Set()), clearMs === 0 ? 50 : 350);
+    highlightClearRef.current = setTimeout(
+      () => {
+        highlightClearRef.current = null;
+        setHighlightedWpIds(new Set());
+      },
+      clearMs === 0 ? 50 : 350,
+    );
   }, []);
 
   const settleOrRefuse = (outcome: PlanWriteOutcome): string | null => {

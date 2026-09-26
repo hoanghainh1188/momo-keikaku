@@ -10,6 +10,7 @@ import {
 } from '@/app/p/[projectId]/plan/actions';
 import { planWriteRefuseMessage } from '@/lib/plan-write-refuse';
 import { formatMinFloat, formatPlanDate } from '@/lib/plan-strip-what-moved';
+import { PLAN_GRID_SLOTS } from '@/lib/plan-grid-view';
 
 export interface PlanScheduleStripProps {
   readonly projectId: string;
@@ -67,6 +68,11 @@ export function PlanScheduleStrip({
     onPendingChange(pending);
   }, [pending, onPendingChange]);
 
+  const cancelEdit = () => {
+    setEditing(null);
+    setFinishConfirmed(false);
+  };
+
   const run = (fn: () => Promise<PlanWriteOutcome>) => {
     start(async () => {
       const outcome = await fn();
@@ -86,7 +92,7 @@ export function PlanScheduleStrip({
   return (
     <div
       className="plan-schedule-strip"
-      data-testid="schedule-strip-slot"
+      data-testid={PLAN_GRID_SLOTS[0]}
       role="region"
       aria-label="Schedule strip"
     >
@@ -123,14 +129,14 @@ export function PlanScheduleStrip({
                 Clear
               </button>
             ) : null}
-            <button type="button" onClick={() => setEditing(null)} disabled={pending}>
+            <button type="button" onClick={cancelEdit} disabled={pending}>
               Cancel
             </button>
           </form>
         ) : (
           <button
             type="button"
-            className="plan-strip-value"
+            className={`plan-strip-value ${projectStart === null ? 'plan-strip-notset' : ''}`}
             data-testid="strip-project-start-display"
             onClick={() => setEditing('start')}
           >
@@ -208,7 +214,7 @@ export function PlanScheduleStrip({
             >
               Clear
             </button>
-            <button type="button" onClick={() => setEditing(null)} disabled={pending}>
+            <button type="button" onClick={cancelEdit} disabled={pending}>
               Cancel
             </button>
           </form>
@@ -248,7 +254,7 @@ export function PlanScheduleStrip({
             <button type="submit" disabled={pending || projectStart === null}>
               Set
             </button>
-            <button type="button" onClick={() => setEditing(null)} disabled={pending}>
+            <button type="button" onClick={cancelEdit} disabled={pending}>
               Cancel
             </button>
           </form>
@@ -295,4 +301,3 @@ export function PlanScheduleStrip({
     </div>
   );
 }
-
