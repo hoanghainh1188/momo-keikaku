@@ -1,4 +1,56 @@
-# Handoff — 2026-09-25 (story 2.13 closed: Plan tree grid and Schedule preset)
+# Handoff — 2026-09-26 (story 2.14 closed: Dependencies and constraints on the grid)
+
+**Latest (2026-09-26): story 2.14 merged via PR #80 (`b9439c8`) and is `done`.** Epic 2 remains
+`in-progress` (2.15–2.17 backlog). Plan **surface** line continues: grid + Schedule/Progress +
+pred/constraint typing are live; strip/What-moved (2.15) and exceptions rail (2.16) remain.
+
+## Story 2.14 (recap) — Dependencies and constraints are created and explained on the grid
+- Schedule predecessor + constraint columns are editable through the existing fence only
+  (`add_dependency` / `remove_dependency` / `re_lag_dependency` / `patch_constraint`) — no new
+  mutator (AR-43).
+- Pure helpers in `packages/app/src/schedule/predecessors.ts`: MS-Project parse
+  (`2.3FS+2d, 2.4`, FS optional, signed lag), edge diff, UX-DR6 FR-6a explainer from `validate`.
+- `applyPredecessorSet` parse → validate proposed graph → fan fence kinds; refuse carries
+  `details.refuse` prose so the cell **keeps typed text**.
+- Grid: leaf-only autocomplete (web helper in `plan-pred-suggest.ts` — client cannot import
+  `@momo/app` / full `@momo/domain`); under-cell refuse + assertive `aria-live` (Q2→C); constraint
+  type+date in one column; milestone target = `must_finish_on` here; impossible constraint paints
+  Exception in the same interaction.
+- **Q1→A:** Core cells only — no Links panel / `l`. **Q2→C:** no polite success announce (→ 2.15).
+- Spec: `spec-2-14-dependencies-and-constraints-are-created-and-explained-on-th.md`.
+- Deferred from review / OQ: Links panel Comfort; polite UX-DR26 announce; combobox keyboard;
+  atomic multi-edge fan-out; RTL keep-text harness; unrelated WAL AR-50 flake.
+
+## Carried forward
+- **2.15 (next):** Schedule strip (sticky context + Float anchor sentence + inline Project
+  settings through the fence) and What-moved band (moved count / finish / min Float, FR-28 cause
+  groups, polite announce, cell highlight, attribution, no Undo for others). Slots already exist
+  from 2.13 (Q1→A) — fill behaviour.
+- **2.16–2.17:** exceptions rail + explainers; Organisation UI.
+- **Still open (unchanged):** unratified 2.5 corpus edges; Epic 6 / FR-31 health vs actuals;
+  `applyPlanChange` barrel / audit gate enumeration; COMMIT-time 23503 residue (PARTIAL);
+  English product copy backlog (2.11 BH8 + 2.12 BH6 + 2.13 Plan i18n + helper dedupe).
+
+## Next: story 2.15 — The schedule strip and the What-moved band
+Things to know before starting:
+- **Slots already mount.** 2.13 left empty strip / What-moved / rail slots in UX-DR2 order. Do not
+  invent a second layout; fill the strip and What-moved band behaviour.
+- **Strip is the Float context.** Sticky above the grid: Project start, Project finish or *not
+  set*, Data Date, computed finish, minimum Float, and the Float **anchor as a sentence**
+  (UX-DR5). Inline edits of the three Project settings go through the same fence as settings.
+- **What-moved answers OQ-11.** After each recalc: one line summary + *See what moved* grouped
+  under FR-28's seven causes; persist until next recalc or dismiss; "No dates moved" when
+  nothing moved; polite aria-live (pairs with 2.14 Q2→C deferral); 300 ms cell highlight
+  (respect reduced-motion).
+- **Attribution / Undo.** Other PM's recalc is attributed and carries **no Undo**; *Undo this
+  edit* for own edit is Comfort — size Core first unless the founder keeps it.
+- **Rail stays empty.** Exceptions rail + explainers remain 2.16.
+- Spec does not exist yet — Build creates it. Epics AC: `epics.md` § Story 2.15. Continuity from
+  `spec-2-14-…` (done) + Plan treegrid slots + fence Project-settings kinds from 2.11.
+- Kickoff: `/bmad-build Story 2.15 — The schedule strip and the What-moved band`
+  Sprint key: `2-15-the-schedule-strip-and-the-what-moved-band`
+
+## Earlier: Handoff — 2026-09-25 (story 2.13 closed: Plan tree grid and Schedule preset)
 
 **Latest (2026-09-25): story 2.13 merged via PR #78 (`a36a4ee`) and is `done`.** Epic 2 remains
 `in-progress` (2.14–2.17 backlog). Plan **surface** line continues: grid + Schedule/Progress are
