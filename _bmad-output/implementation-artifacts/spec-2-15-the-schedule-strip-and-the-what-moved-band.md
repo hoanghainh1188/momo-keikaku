@@ -2,7 +2,7 @@
 title: 'Story 2.15 — The schedule strip and the What-moved band'
 type: 'feature'
 created: '2026-09-26'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: 'd37ea58653ffc84a8d65e84bd523a56176e6d182'
