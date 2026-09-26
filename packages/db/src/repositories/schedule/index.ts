@@ -6,7 +6,7 @@
  * `schedule_run` INSERT (AD-20). `schedule_run` is INSERT-only; `wp_schedule` is rebuilt
  * (DELETE + INSERT) on success or stale-marked on a calendar-range halt.
  */
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, isNotNull, isNull, lt, sql } from 'drizzle-orm';
 import type { Bound } from '../../bound';
 import { projectNotFound } from '../../project-not-found';
 import * as s from '../../schema';
@@ -44,11 +44,27 @@ export interface LatestRunRow {
   readonly outputs: unknown;
   readonly engineVersion: string;
   readonly cause: string;
+  readonly actor: string;
+  readonly at: Date;
   readonly haltedReason: string | null;
   readonly anchor: string | null;
   readonly computedFinish: string | null;
   readonly holidayCalendarVersionSeq: number;
 }
+
+const runSelect = {
+  seq: s.scheduleRun.seq,
+  inputs: s.scheduleRun.inputs,
+  outputs: s.scheduleRun.outputs,
+  engineVersion: s.scheduleRun.engineVersion,
+  cause: s.scheduleRun.cause,
+  actor: s.scheduleRun.actor,
+  at: s.scheduleRun.at,
+  haltedReason: s.scheduleRun.haltedReason,
+  anchor: s.scheduleRun.anchor,
+  computedFinish: s.scheduleRun.computedFinish,
+  holidayCalendarVersionSeq: s.scheduleRun.holidayCalendarVersionSeq,
+} as const;
 
 export function scheduleRepositoryOn(bound: Bound) {
   const { tx, tenantId } = bound;
@@ -56,19 +72,34 @@ export function scheduleRepositoryOn(bound: Bound) {
   return {
     async latestRun(projectId: string): Promise<LatestRunRow | null> {
       const [row] = await tx
-        .select({
-          seq: s.scheduleRun.seq,
-          inputs: s.scheduleRun.inputs,
-          outputs: s.scheduleRun.outputs,
-          engineVersion: s.scheduleRun.engineVersion,
-          cause: s.scheduleRun.cause,
-          haltedReason: s.scheduleRun.haltedReason,
-          anchor: s.scheduleRun.anchor,
-          computedFinish: s.scheduleRun.computedFinish,
-          holidayCalendarVersionSeq: s.scheduleRun.holidayCalendarVersionSeq,
-        })
+        .select(runSelect)
         .from(s.scheduleRun)
         .where(and(eq(s.scheduleRun.tenantId, tenantId), eq(s.scheduleRun.projectId, projectId)))
+        .orderBy(desc(s.scheduleRun.seq))
+        .limit(1);
+      return row ?? null;
+    },
+
+    /**
+     * Story 2.15: previous successful (non-halted, outputs present) run before `beforeSeq`,
+     * for What-moved before→after join. Null when this is the first successful run.
+     */
+    async previousSuccessfulRun(
+      projectId: string,
+      beforeSeq: number,
+    ): Promise<LatestRunRow | null> {
+      const [row] = await tx
+        .select(runSelect)
+        .from(s.scheduleRun)
+        .where(
+          and(
+            eq(s.scheduleRun.tenantId, tenantId),
+            eq(s.scheduleRun.projectId, projectId),
+            lt(s.scheduleRun.seq, beforeSeq),
+            isNull(s.scheduleRun.haltedReason),
+            isNotNull(s.scheduleRun.outputs),
+          ),
+        )
         .orderBy(desc(s.scheduleRun.seq))
         .limit(1);
       return row ?? null;

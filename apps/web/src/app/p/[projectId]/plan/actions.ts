@@ -3,10 +3,14 @@
 import { revalidatePath } from 'next/cache';
 import {
   applyPredecessors,
+  clearProjectStartSetting,
   completeWp,
   deleteWp,
   firstObservedForWp,
   planChange,
+  planGridState,
+  patchDataDate,
+  patchProjectFinish,
   refuseDerivedDate,
   requestContext,
   setProjectStartSetting,
@@ -14,14 +18,28 @@ import {
   DERIVED_DATE_TEACHING,
 } from '@/server/composition';
 import { recordedPercentToRatio } from '@/lib/plan-grid-format';
+import { toPlanGridViewModel } from '@/lib/plan-grid-view';
+import type { WhatMovedBandView } from '@/components/plan-grid-types';
 
 /**
  * Story 2.10 thin plan UI — server actions wrapping the fence (Q1 → B).
- * Full tree grid stays 2.13+.
+ * Story 2.15 widens success with What-moved + strip scalars for the band.
  */
 
+export type PlanWriteSuccess = {
+  readonly ok: true;
+  readonly whatMoved: WhatMovedBandView | null;
+  readonly projectStart: string | null;
+  readonly projectFinish: string | null;
+  readonly dataDate: string | null;
+  readonly computedFinish: string | null;
+  readonly minFloat: number | null;
+  readonly floatAnchorSentence: string | null;
+  readonly movedWpIds: readonly string[];
+};
+
 export type PlanWriteOutcome =
-  | { readonly ok: true }
+  | PlanWriteSuccess
   | {
       readonly ok: false;
       readonly code: string;
@@ -42,6 +60,40 @@ function refuseOutcome(result: {
     code: result.error.code,
     messageKey: result.error.messageKey,
     ...(result.error.details !== undefined ? { details: result.error.details } : {}),
+  };
+}
+
+async function successFromGrid(projectId: string): Promise<PlanWriteSuccess> {
+  const ctx = await requestContext();
+  const grid = await planGridState(projectId, ctx);
+  if (!grid.ok) {
+    return {
+      ok: true,
+      whatMoved: null,
+      projectStart: null,
+      projectFinish: null,
+      dataDate: null,
+      computedFinish: null,
+      minFloat: null,
+      floatAnchorSentence: null,
+      movedWpIds: [],
+    };
+  }
+  const view = toPlanGridViewModel(grid.value, ctx.userId);
+  const movedWpIds =
+    view.whatMoved === null || view.whatMoved.nothingMoved
+      ? []
+      : view.whatMoved.groups.flatMap((g) => g.entries.map((e) => e.wpId));
+  return {
+    ok: true,
+    whatMoved: view.whatMoved,
+    projectStart: view.projectStart,
+    projectFinish: view.projectFinish,
+    dataDate: view.dataDate,
+    computedFinish: view.computedFinish,
+    minFloat: view.minFloat,
+    floatAnchorSentence: view.floatAnchorSentence,
+    movedWpIds,
   };
 }
 
@@ -71,7 +123,7 @@ export async function completeWorkPackageAction(formData: FormData): Promise<Pla
   );
   if (!result.ok) return refuseOutcome(result);
   revalidatePath(`/p/${projectId}/plan`);
-  return { ok: true };
+  return successFromGrid(projectId);
 }
 
 export async function deleteWorkPackageAction(formData: FormData): Promise<PlanWriteOutcome> {
@@ -81,7 +133,7 @@ export async function deleteWorkPackageAction(formData: FormData): Promise<PlanW
   const result = await deleteWp({ projectId, wpId }, ctx);
   if (!result.ok) return refuseOutcome(result);
   revalidatePath(`/p/${projectId}/plan`);
-  return { ok: true };
+  return successFromGrid(projectId);
 }
 
 /** Teaching refuse — derived dates are never written (UX-DR12). */
@@ -122,7 +174,7 @@ export async function setProjectStartPlanAction(formData: FormData): Promise<Pla
   if (!result.ok) return refuseOutcome(result);
   revalidatePath(`/p/${projectId}/plan`);
   revalidatePath(`/p/${projectId}/settings`);
-  return { ok: true };
+  return successFromGrid(projectId);
 }
 
 /** Generic fence pass-through for thin patches (duration / pct / name). */
@@ -130,10 +182,24 @@ export async function applyPlanMutationAction(input: unknown): Promise<PlanWrite
   const ctx = await requestContext();
   const result = await planChange(input, ctx);
   if (!result.ok) return refuseOutcome(result);
+  let projectId = '';
   if (typeof input === 'object' && input !== null && 'projectId' in input) {
-    revalidatePath(`/p/${String((input as { projectId: string }).projectId)}/plan`);
+    projectId = String((input as { projectId: string }).projectId);
+    revalidatePath(`/p/${projectId}/plan`);
   }
-  return { ok: true };
+  return projectId === ''
+    ? {
+        ok: true,
+        whatMoved: null,
+        projectStart: null,
+        projectFinish: null,
+        dataDate: null,
+        computedFinish: null,
+        minFloat: null,
+        floatAnchorSentence: null,
+        movedWpIds: [],
+      }
+    : successFromGrid(projectId);
 }
 
 async function fenceMutation(
@@ -144,7 +210,7 @@ async function fenceMutation(
   const result = await planChange(mutation, ctx);
   if (!result.ok) return refuseOutcome(result);
   revalidatePath(`/p/${projectId}/plan`);
-  return { ok: true };
+  return successFromGrid(projectId);
 }
 
 /** Inline name edit (story 2.13 / Q2→B) — JSON-safe wrapper around the fence. */
@@ -210,7 +276,7 @@ export async function applyPredecessorsAction(input: {
   const result = await applyPredecessors(input, ctx);
   if (!result.ok) return refuseOutcome(result);
   revalidatePath(`/p/${input.projectId}/plan`);
-  return { ok: true };
+  return successFromGrid(input.projectId);
 }
 
 /** Story 2.14 — constraint type+date through `patch_constraint` (asap when date cleared). */
@@ -238,4 +304,71 @@ export async function patchWpConstraintAction(input: {
     constraintType,
     constraintDate,
   });
+}
+
+/** Story 2.15 — strip Project start via fence. */
+export async function setProjectStartStripAction(input: {
+  readonly projectId: string;
+  readonly projectStart: string;
+}): Promise<PlanWriteOutcome> {
+  const ctx = await requestContext();
+  const result = await setProjectStartSetting(input, ctx);
+  if (!result.ok) return refuseOutcome(result);
+  revalidatePath(`/p/${input.projectId}/plan`);
+  revalidatePath(`/p/${input.projectId}/settings`);
+  return successFromGrid(input.projectId);
+}
+
+/** Story 2.15 — strip clear Project start. */
+export async function clearProjectStartStripAction(input: {
+  readonly projectId: string;
+}): Promise<PlanWriteOutcome> {
+  const ctx = await requestContext();
+  const result = await clearProjectStartSetting(input, ctx);
+  if (!result.ok) return refuseOutcome(result);
+  revalidatePath(`/p/${input.projectId}/plan`);
+  revalidatePath(`/p/${input.projectId}/settings`);
+  return successFromGrid(input.projectId);
+}
+
+/** Story 2.15 — strip Project finish (teaching confirm required). */
+export async function patchProjectFinishStripAction(input: {
+  readonly projectId: string;
+  readonly projectFinish: string | null;
+  readonly confirmed: boolean;
+}): Promise<PlanWriteOutcome> {
+  if (!input.confirmed) {
+    return {
+      ok: false,
+      code: 'invalid_input',
+      messageKey: 'errors.invalid_input',
+      details: { confirmed: ['required'] },
+    };
+  }
+  const ctx = await requestContext();
+  const result = await patchProjectFinish(
+    {
+      projectId: input.projectId,
+      projectFinish: input.projectFinish,
+      confirmed: true,
+    },
+    ctx,
+  );
+  if (!result.ok) return refuseOutcome(result);
+  revalidatePath(`/p/${input.projectId}/plan`);
+  revalidatePath(`/p/${input.projectId}/settings`);
+  return successFromGrid(input.projectId);
+}
+
+/** Story 2.15 — strip Data Date date-edit only (Q2→A; no advance-to-period CTA). */
+export async function patchDataDateStripAction(input: {
+  readonly projectId: string;
+  readonly dataDate: string;
+}): Promise<PlanWriteOutcome> {
+  const ctx = await requestContext();
+  const result = await patchDataDate(input, ctx);
+  if (!result.ok) return refuseOutcome(result);
+  revalidatePath(`/p/${input.projectId}/plan`);
+  revalidatePath(`/p/${input.projectId}/settings`);
+  return successFromGrid(input.projectId);
 }

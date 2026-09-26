@@ -4,12 +4,16 @@
 import { describe, expect, it } from 'vitest';
 import { compareWp } from '@momo/domain';
 import {
+  buildWhatMovedBand,
   floatAnchorHeader,
+  floatAnchorSentence,
   formatConstraintLabel,
   formatFloatDisplay,
   formatPlanDate,
   formatPredecessorsText,
+  formatRelativeAgo,
   inkTone,
+  minFloatFromRows,
   recordedPctDisplay,
   resolveException,
   SUMMARY_NA_LABEL,
@@ -43,6 +47,96 @@ describe('plan-grid display helpers (story 2.13)', () => {
       'vs computed finish',
     );
     expect(floatAnchorHeader(null)).toBeNull();
+  });
+
+  it('writes the UX-DR5 Float anchor as a sentence', () => {
+    expect(
+      floatAnchorSentence({ kind: 'project_finish', date: '2027-03-31' }, '2027-03-31'),
+    ).toBe('Float measured against the Project finish, 31 Mar 2027');
+    expect(
+      floatAnchorSentence({ kind: 'computed_finish', date: '2027-03-12' }, null),
+    ).toBe(
+      'Float measured against the computed finish, 12 Mar 2027 — relative, because no Project finish is set',
+    );
+  });
+
+  it('derives min Float and builds What-moved nothing-moved / groups', () => {
+    expect(minFloatFromRows([{ floatDays: 4 }, { floatDays: -3 }, { floatDays: null }])).toBe(
+      -3,
+    );
+    const first = buildWhatMovedBand({
+      runSeq: 1,
+      actorUserId: 'u1',
+      actorName: 'Hoang',
+      at: new Date('2026-09-26T10:00:00Z'),
+      latest: {
+        computedFinish: '2027-03-26',
+        minFloat: 4,
+        wps: [
+          {
+            wpId: 'a',
+            wbsCode: '1.1',
+            name: 'Leaf',
+            earlyStart: '2026-10-01',
+            earlyFinish: '2026-10-05',
+            cause: null,
+          },
+        ],
+      },
+      previous: null,
+    });
+    expect(first.nothingMoved).toBe(true);
+    expect(first.summaryLine).toBe('No dates moved');
+    expect(first.politeAnnounce).toBe('No dates moved.');
+
+    const moved = buildWhatMovedBand({
+      runSeq: 2,
+      actorUserId: 'u2',
+      actorName: 'Hoang Linh',
+      at: new Date('2026-09-26T10:05:00Z'),
+      latest: {
+        computedFinish: '2027-03-26',
+        minFloat: -3,
+        wps: [
+          {
+            wpId: 'a',
+            wbsCode: '1.1',
+            name: 'Leaf',
+            earlyStart: '2026-10-08',
+            earlyFinish: '2026-10-12',
+            cause: 'edited',
+          },
+          {
+            wpId: 'b',
+            wbsCode: '1.2',
+            name: 'Succ',
+            earlyStart: '2026-10-13',
+            earlyFinish: '2026-10-20',
+            cause: 'moved by a predecessor',
+          },
+        ],
+      },
+      previous: {
+        computedFinish: '2027-03-12',
+        minFloat: 4,
+        earlyByWp: new Map([
+          ['a', { earlyStart: '2026-10-01', earlyFinish: '2026-10-05' }],
+          ['b', { earlyStart: '2026-10-06', earlyFinish: '2026-10-13' }],
+        ]),
+      },
+    });
+    expect(moved.nothingMoved).toBe(false);
+    expect(moved.movedCount).toBe(2);
+    expect(moved.summaryLine).toContain('2 work packages moved');
+    expect(moved.summaryLine).toContain('minimum Float +4 → -3');
+    expect(moved.groups.map((g) => g.cause)).toEqual([
+      'edited',
+      'moved by a predecessor',
+    ]);
+    expect(moved.politeAnnounce).toMatch(/Minimum Float minus 3/);
+    expect(formatRelativeAgo(new Date('2026-09-26T10:02:00Z'), new Date('2026-09-26T10:05:00Z'))).toBe(
+      '3 min ago',
+    );
   });
 
   it('formats constraint and predecessor cells', () => {

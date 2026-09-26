@@ -158,9 +158,17 @@ export {
 export {
   getPlanGridState,
   formatPlanDate,
+  formatPlanDateShort,
+  formatPlanDateLong,
   formatConstraintLabel,
   formatPredecessorsText,
   floatAnchorHeader,
+  floatAnchorSentence,
+  minFloatFromRows,
+  formatMinFloat,
+  speakFloat,
+  formatRelativeAgo,
+  buildWhatMovedBand,
   inkTone,
   formatFloatDisplay,
   recordedPctDisplay,
@@ -171,6 +179,9 @@ export {
   type PlanGridException,
   type PlanGridLeafCandidate,
   type PlanGridPredecessorEdge,
+  type WhatMovedBand,
+  type WhatMovedCauseGroup,
+  type WhatMovedEntry,
 } from './schedule/plan-grid';
 export {
   parsePredecessorsText,
