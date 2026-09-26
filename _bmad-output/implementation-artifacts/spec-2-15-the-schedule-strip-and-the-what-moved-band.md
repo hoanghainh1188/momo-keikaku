@@ -102,6 +102,8 @@ context:
   - `deferred-work.md`: appended Q1→A Undo and Q2→A advance-to-period; marked 2.14 polite-announce deferral resolved YES by this story.
   - Verified: `pnpm lint`, `pnpm typecheck`, `pnpm depcruise`, `pnpm test` all exit 0 (DB fence cases skip when Postgres unreachable).
 
+- **2026-09-26 (matrix coverage):** Extracted `blankDerivedWhilePending`, `formatWhatMovedAttribution`, `stripDerivedScalars`; strengthened dismiss sessionStorage read/write; fence set/clear Project start strip-scalar refresh; halted/missing strip "—" honesty. No Undo / no advance CTA.
+
 ## Spec Change Log
 
 ## Review Triage Log

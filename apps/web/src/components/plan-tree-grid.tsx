@@ -54,6 +54,7 @@ import {
 } from '@/lib/plan-grid-view';
 import { planWriteRefuseMessage } from '@/lib/plan-write-refuse';
 import { filterLeafCandidates } from '@/lib/plan-pred-suggest';
+import { blankDerivedWhilePending } from '@/lib/plan-strip-what-moved';
 
 function refuseMessage(outcome: Extract<PlanWriteOutcome, { ok: false }>): string {
   return planWriteRefuseMessage(outcome);
@@ -111,7 +112,7 @@ function DateCell({
     );
   }
   // UX-DR23: never paint stale derived values as current while recalc is pending.
-  if (inFlight && date !== null) {
+  if (blankDerivedWhilePending(inFlight === true, date)) {
     return (
       <span className="plan-date-inflight" aria-label="recalculating">
         …

@@ -247,4 +247,82 @@ describe.skipIf(!reachable)('plan strip + What-moved (story 2.15)', () => {
     );
     expect(refused.ok).toBe(false);
   });
+
+  it('set_project_start then clear_project_start refreshes strip scalars (same fence path as strip)', async () => {
+    const owner = getDb(OWNER_DATABASE_URL!);
+    const app = getDb(APP_DATABASE_URL!);
+    await createProbeTenant(owner, PROBE);
+    await withTenant(owner, PROBE.tenantId, async (tx) => {
+      await tx
+        .update(s.project)
+        .set({ projectStart: null, dataDate: null, projectFinish: null })
+        .where(eq(s.project.id, PROBE.projectId));
+      const leaf = PROBE.state.wps.find((w) => w.isLeaf && !w.isMilestone);
+      if (!leaf) throw new Error('fixture needs a leaf WP');
+      await tx
+        .update(s.workPackage)
+        .set({ durationDays: 3, constraintType: 'asap', constraintDate: null })
+        .where(
+          and(
+            eq(s.workPackage.tenantId, PROBE.tenantId),
+            eq(s.workPackage.projectId, PROBE.projectId),
+            eq(s.workPackage.id, leaf.id),
+          ),
+        );
+    });
+
+    const before = await getPlanGridState(
+      { handle: app, transaction: inTenantTransaction },
+      ctx(),
+      { projectId: PROBE.projectId },
+    );
+    expect(before.ok).toBe(true);
+    if (!before.ok) return;
+    expect(before.value.projectStart).toBeNull();
+    expect(before.value.computedFinish).toBeNull();
+    expect(before.value.minFloat).toBeNull();
+
+    const setStart = await applyPlanChange(
+      { handle: app, transaction: inTenantTransaction },
+      ctx(),
+      {
+        kind: 'set_project_start',
+        projectId: PROBE.projectId,
+        projectStart: '2026-09-01',
+      },
+    );
+    expect(setStart.ok).toBe(true);
+
+    const afterSet = await getPlanGridState(
+      { handle: app, transaction: inTenantTransaction },
+      ctx(),
+      { projectId: PROBE.projectId },
+    );
+    expect(afterSet.ok).toBe(true);
+    if (!afterSet.ok) return;
+    expect(afterSet.value.projectStart).toBe('2026-09-01');
+    expect(afterSet.value.dataDate).not.toBeNull();
+    expect(afterSet.value.computedFinish).not.toBeNull();
+    expect(afterSet.value.minFloat).not.toBeNull();
+    expect(afterSet.value.floatAnchorSentence).toMatch(/Float measured against/);
+
+    const cleared = await applyPlanChange(
+      { handle: app, transaction: inTenantTransaction },
+      ctx(),
+      {
+        kind: 'clear_project_start',
+        projectId: PROBE.projectId,
+      },
+    );
+    expect(cleared.ok).toBe(true);
+
+    const afterClear = await getPlanGridState(
+      { handle: app, transaction: inTenantTransaction },
+      ctx(),
+      { projectId: PROBE.projectId },
+    );
+    expect(afterClear.ok).toBe(true);
+    if (!afterClear.ok) return;
+    expect(afterClear.value.projectStart).toBeNull();
+  });
 });

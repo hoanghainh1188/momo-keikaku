@@ -4,9 +4,8 @@ import { useEffect, useState } from 'react';
 import type { WhatMovedBandView } from '@/components/plan-grid-types';
 import {
   formatPlanDate,
-  formatRelativeAgo,
+  formatWhatMovedAttribution,
   readWhatMovedDismissed,
-  shortActorName,
   writeWhatMovedDismissed,
 } from '@/lib/plan-strip-what-moved';
 
@@ -69,13 +68,15 @@ export function PlanWhatMovedBand({
     );
   }
 
-  const otherActor = band.actorUserId !== currentUserId;
   const nowMs =
     typeof performance !== 'undefined' ? performance.timeOrigin + performance.now() : 0;
-  const ago = formatRelativeAgo(band.atIso, nowMs);
-  const attribution = otherActor
-    ? ` · edited by ${shortActorName(band.actorName)}${ago ? `, ${ago}` : ''}`
-    : '';
+  const attribution = formatWhatMovedAttribution({
+    currentUserId,
+    actorUserId: band.actorUserId,
+    actorName: band.actorName,
+    atIso: band.atIso,
+    nowMs,
+  });
 
   return (
     <div

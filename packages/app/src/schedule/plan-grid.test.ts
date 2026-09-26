@@ -16,6 +16,7 @@ import {
   minFloatFromRows,
   recordedPctDisplay,
   resolveException,
+  stripDerivedScalars,
   SUMMARY_NA_LABEL,
 } from './plan-grid';
 
@@ -58,6 +59,43 @@ describe('plan-grid display helpers (story 2.13)', () => {
     ).toBe(
       'Float measured against the computed finish, 12 Mar 2027 — relative, because no Project finish is set',
     );
+  });
+
+  it('blanks strip computed finish / min Float / anchor when the run is halted', () => {
+    const halted = stripDerivedScalars({
+      haltedReason: 'calendar_range',
+      computedFinish: '2027-03-26',
+      minFloat: 4,
+      anchor: { kind: 'computed_finish', date: '2027-03-26' },
+      projectFinish: null,
+    });
+    expect(halted).toEqual({
+      computedFinish: null,
+      minFloat: null,
+      floatAnchorSentence: null,
+    });
+
+    const ok = stripDerivedScalars({
+      haltedReason: null,
+      computedFinish: '2027-03-26',
+      minFloat: 4,
+      anchor: { kind: 'computed_finish', date: '2027-03-26' },
+      projectFinish: null,
+    });
+    expect(ok.computedFinish).toBe('2027-03-26');
+    expect(ok.minFloat).toBe(4);
+    expect(ok.floatAnchorSentence).toMatch(/relative, because no Project finish is set/);
+
+    const missing = stripDerivedScalars({
+      haltedReason: null,
+      computedFinish: null,
+      minFloat: null,
+      anchor: null,
+      projectFinish: null,
+    });
+    expect(missing.computedFinish).toBeNull();
+    expect(missing.minFloat).toBeNull();
+    expect(missing.floatAnchorSentence).toBeNull();
   });
 
   it('derives min Float and builds What-moved nothing-moved / groups', () => {

@@ -390,6 +390,31 @@ export function buildWhatMovedBand(input: {
   };
 }
 
+/**
+ * Strip derived scalars: halted/missing run → honest "—" (null), never a stale finish/Float.
+ * Used by getPlanGridState so the strip and What-moved cannot disagree with the matrix.
+ */
+export function stripDerivedScalars(input: {
+  readonly haltedReason: string | null;
+  readonly computedFinish: string | null;
+  readonly minFloat: number | null;
+  readonly anchor: ScheduleAnchor | null;
+  readonly projectFinish: string | null;
+}): {
+  readonly computedFinish: string | null;
+  readonly minFloat: number | null;
+  readonly floatAnchorSentence: string | null;
+} {
+  if (input.haltedReason !== null) {
+    return { computedFinish: null, minFloat: null, floatAnchorSentence: null };
+  }
+  return {
+    computedFinish: input.computedFinish,
+    minFloat: input.minFloat,
+    floatAnchorSentence: floatAnchorSentence(input.anchor, input.projectFinish),
+  };
+}
+
 export function inkTone(
   date: string | null,
   dataDate: string | null,
@@ -713,6 +738,14 @@ export async function getPlanGridState<Handle>(
       };
     });
 
+    const strip = stripDerivedScalars({
+      haltedReason,
+      computedFinish,
+      minFloat,
+      anchor,
+      projectFinish: project.projectFinish,
+    });
+
     return {
       projectId: input.projectId,
       projectStart: project.projectStart,
@@ -720,9 +753,9 @@ export async function getPlanGridState<Handle>(
       dataDate: project.dataDate,
       tzOffsetMinutes: project.tzOffsetMinutes,
       anchor,
-      computedFinish,
-      minFloat: haltedReason !== null ? null : minFloat,
-      floatAnchorSentence: floatAnchorSentence(anchor, project.projectFinish),
+      computedFinish: strip.computedFinish,
+      minFloat: strip.minFloat,
+      floatAnchorSentence: strip.floatAnchorSentence,
       haltedReason,
       scheduleStale: anyStale || haltedReason !== null,
       floatAnchorLabel: floatAnchorHeader(anchor),

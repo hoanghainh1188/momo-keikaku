@@ -169,6 +169,7 @@ export {
   speakFloat,
   formatRelativeAgo,
   buildWhatMovedBand,
+  stripDerivedScalars,
   inkTone,
   formatFloatDisplay,
   recordedPctDisplay,

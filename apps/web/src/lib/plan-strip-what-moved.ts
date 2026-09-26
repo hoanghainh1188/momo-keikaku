@@ -31,6 +31,18 @@ export function formatMinFloat(minFloat: number | null): string {
   return `${sign}${minFloat}`;
 }
 
+/**
+ * UX-DR23: blank derived date cells with "…" while a recalc is in flight — never paint
+ * the previous early* value as if it were still current. Only blanks when there was a
+ * date to replace (null stays "—").
+ */
+export function blankDerivedWhilePending(
+  recalcPending: boolean,
+  date: string | null,
+): boolean {
+  return recalcPending && date !== null;
+}
+
 export function formatRelativeAgo(atIso: string, nowMs: number): string {
   const at = Date.parse(atIso);
   if (Number.isNaN(at)) return '';
@@ -45,6 +57,30 @@ export function formatRelativeAgo(atIso: string, nowMs: number): string {
   const days = Math.floor(hours / 24);
   if (days === 1) return '1 day ago';
   return `${days} days ago`;
+}
+
+/** Prefer given name's first token for "edited by Hoang". */
+export function shortActorName(name: string): string {
+  const trimmed = name.trim();
+  if (!trimmed) return 'someone';
+  return trimmed.split(/\s+/)[0] ?? trimmed;
+}
+
+/**
+ * Exact What-moved attribution suffix for another PM's run (UX-DR23).
+ * Own edit → empty string (no attribution). Other → ` · edited by Hoang, 3 min ago`.
+ */
+export function formatWhatMovedAttribution(input: {
+  readonly currentUserId: string;
+  readonly actorUserId: string;
+  readonly actorName: string;
+  readonly atIso: string;
+  readonly nowMs: number;
+}): string {
+  if (input.actorUserId === input.currentUserId) return '';
+  const ago = formatRelativeAgo(input.atIso, input.nowMs);
+  const who = shortActorName(input.actorName);
+  return ago ? ` · edited by ${who}, ${ago}` : ` · edited by ${who}`;
 }
 
 export function whatMovedDismissKey(projectId: string, runSeq: number): string {
@@ -67,11 +103,4 @@ export function writeWhatMovedDismissed(projectId: string, runSeq: number): void
   } catch {
     // private mode — dismiss stays in-component only
   }
-}
-
-/** Prefer given name's first token for "edited by Hoang". */
-export function shortActorName(name: string): string {
-  const trimmed = name.trim();
-  if (!trimmed) return 'someone';
-  return trimmed.split(/\s+/)[0] ?? trimmed;
 }
