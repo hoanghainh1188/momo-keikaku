@@ -1,5 +1,39 @@
-import type { PlanGridState } from '@momo/app';
-import type { PlanGridRowView, PlanGridViewModel } from '@/components/plan-grid-types';
+import type { PlanGridState, WhatMovedBand } from '@momo/app';
+import type {
+  PlanGridRowView,
+  PlanGridViewModel,
+  WhatMovedBandView,
+} from '@/components/plan-grid-types';
+
+function toWhatMovedView(band: WhatMovedBand): WhatMovedBandView {
+  return {
+    runSeq: band.runSeq,
+    movedCount: band.movedCount,
+    nothingMoved: band.nothingMoved,
+    summaryLine: band.summaryLine,
+    politeAnnounce: band.politeAnnounce,
+    previousComputedFinish: band.previousComputedFinish,
+    computedFinish: band.computedFinish,
+    previousMinFloat: band.previousMinFloat,
+    minFloat: band.minFloat,
+    groups: band.groups.map((g) => ({
+      cause: g.cause,
+      entries: g.entries.map((e) => ({
+        wpId: e.wpId,
+        wbsCode: e.wbsCode,
+        name: e.name,
+        cause: e.cause,
+        oldEarlyStart: e.oldEarlyStart,
+        oldEarlyFinish: e.oldEarlyFinish,
+        newEarlyStart: e.newEarlyStart,
+        newEarlyFinish: e.newEarlyFinish,
+      })),
+    })),
+    actorUserId: band.actorUserId,
+    actorName: band.actorName,
+    atIso: band.atIso,
+  };
+}
 
 /** Map authorised plan-grid state → client props (BigInt → string). */
 export function toPlanGridViewModel(
@@ -49,10 +83,16 @@ export function toPlanGridViewModel(
     userId,
     dataDate: grid.dataDate,
     projectStart: grid.projectStart,
+    projectFinish: grid.projectFinish,
+    computedFinish: grid.computedFinish,
+    minFloat: grid.minFloat,
+    floatAnchorSentence: grid.floatAnchorSentence,
+    finishTeaching: grid.finishTeaching,
     noProjectStart: grid.projectStart === null,
     floatAnchorLabel: grid.floatAnchorLabel,
     scheduleStale: grid.scheduleStale,
     haltedReason: grid.haltedReason,
+    whatMoved: grid.whatMoved === null ? null : toWhatMovedView(grid.whatMoved),
     leafCandidates: grid.leafCandidates.map((c) => ({
       wpId: c.wpId,
       wbsCode: c.wbsCode,

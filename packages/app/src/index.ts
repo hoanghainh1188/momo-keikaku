@@ -157,10 +157,20 @@ export {
 } from './schedule/plan-edit';
 export {
   getPlanGridState,
+  actorUserIdOf,
   formatPlanDate,
+  formatPlanDateShort,
+  formatPlanDateLong,
   formatConstraintLabel,
   formatPredecessorsText,
   floatAnchorHeader,
+  floatAnchorSentence,
+  minFloatFromRows,
+  formatMinFloat,
+  speakFloat,
+  formatRelativeAgo,
+  buildWhatMovedBand,
+  stripDerivedScalars,
   inkTone,
   formatFloatDisplay,
   recordedPctDisplay,
@@ -171,6 +181,9 @@ export {
   type PlanGridException,
   type PlanGridLeafCandidate,
   type PlanGridPredecessorEdge,
+  type WhatMovedBand,
+  type WhatMovedCauseGroup,
+  type WhatMovedEntry,
 } from './schedule/plan-grid';
 export {
   parsePredecessorsText,

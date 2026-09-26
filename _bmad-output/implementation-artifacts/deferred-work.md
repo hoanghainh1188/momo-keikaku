@@ -1161,6 +1161,7 @@ above can see where it went.
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-14-dependencies-and-constraints-are-created-and-explained-on-th.md`
   summary: Polite live-region announce after a successful recalculation (UX-DR26 full sentence with moved count, computed finish, minimum Float).
   evidence: Split at story 2.14 Open Questions gate — founder chose Q2→C (assertive FR-6a refuse only). Polite success belongs with the What-moved band in story 2.15 so the PM can inspect what moved.
+  resolved: YES, 2026-09-26 in `spec-2-15-the-schedule-strip-and-the-what-moved-band.md` — polite `aria-live` on Plan beside assertive FR-6a, fired from the What-moved band after each successful recalc.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-14-dependencies-and-constraints-are-created-and-explained-on-th.md`
   summary: Full keyboard combobox for predecessor autocomplete (ArrowUp/Down, aria-activedescendant, Enter accepts highlight).
@@ -1177,3 +1178,11 @@ above can see where it went.
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-14-dependencies-and-constraints-are-created-and-explained-on-th.md`
   summary: RTL/component harness proving predecessor keep-typed-text + assertive aria-live wiring end-to-end.
   evidence: Review VG3 UI half (2026-09-25): repo has no testing-library/jsdom; pure refuse mapping is unit-tested; UI keep-text remains structural.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-15-the-schedule-strip-and-the-what-moved-band.md`
+  summary: Comfort *Undo this edit* on the What-moved band for the current user's last recalculation.
+  evidence: Split at story 2.15 Open Questions gate — founder chose Q1→A (Core band without Undo). Cutting costs recovery speed, not schedule correctness.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-15-the-schedule-strip-and-the-what-moved-band.md`
+  summary: Advance Data Date to the Reporting Period boundary CTA on the Plan schedule strip (EXPERIENCE Data Date panel).
+  evidence: Split at story 2.15 Open Questions gate — founder chose Q2→A (strip fence date edit only). Advance-to-period remains on Project settings / Review.

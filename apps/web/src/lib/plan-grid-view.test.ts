@@ -19,9 +19,15 @@ const sample: PlanGridState = {
   tzOffsetMinutes: 540,
   anchor: { kind: 'computed_finish', date: '2027-03-26' },
   computedFinish: '2027-03-26',
+  minFloat: 4,
+  floatAnchorSentence:
+    'Float measured against the computed finish, 26 Mar 2027 — relative, because no Project finish is set',
   haltedReason: null,
   scheduleStale: false,
   floatAnchorLabel: 'vs computed finish',
+  finishTeaching:
+    'This moves no work package. It changes what Float is measured against, and lets Float go negative',
+  whatMoved: null,
   rows: [
     {
       wpId: 'leaf',
@@ -63,6 +69,10 @@ describe('plan-grid-view (story 2.13)', () => {
     const view = toPlanGridViewModel(sample, 'user-1');
     expect(view.userId).toBe('user-1');
     expect(view.floatAnchorLabel).toBe('vs computed finish');
+    expect(view.floatAnchorSentence).toMatch(/Float measured against the computed finish/);
+    expect(view.minFloat).toBe(4);
+    expect(view.projectFinish).toBeNull();
+    expect(view.whatMoved).toBeNull();
     expect(view.rows[0]!.recordedPct).toEqual({ num: '1', den: '4' });
     expect(view.rows[0]!.exceptionLabel).toBe('▲ Late 6d');
     expect(view.rows[0]!.floatDays).toBe(-3);

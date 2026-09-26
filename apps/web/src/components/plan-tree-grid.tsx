@@ -19,16 +19,20 @@ import {
   patchWpRecordedPctAction,
   refuseDerivedDateAction,
   type PlanWriteOutcome,
+  type PlanWriteSuccess,
 } from '@/app/p/[projectId]/plan/actions';
 import {
   CompleteWpForm,
   DeleteWpForm,
   SetProjectStartForm,
 } from '@/components/plan-thin-edit';
+import { PlanScheduleStrip } from '@/components/plan-schedule-strip';
+import { PlanWhatMovedBand } from '@/components/plan-what-moved-band';
 import type {
   PlanGridLeafCandidateView,
   PlanGridRowView,
   PlanGridViewModel,
+  WhatMovedBandView,
 } from '@/components/plan-grid-types';
 import {
   capturePresetFocusRestore,
@@ -50,6 +54,7 @@ import {
 } from '@/lib/plan-grid-view';
 import { planWriteRefuseMessage } from '@/lib/plan-write-refuse';
 import { filterLeafCandidates } from '@/lib/plan-pred-suggest';
+import { blankDerivedWhilePending } from '@/lib/plan-strip-what-moved';
 
 function refuseMessage(outcome: Extract<PlanWriteOutcome, { ok: false }>): string {
   return planWriteRefuseMessage(outcome);
@@ -86,12 +91,16 @@ function DateCell({
   dataDate,
   notSchedulable,
   isSummary,
+  inFlight,
+  highlighted,
   onRefuseDerived,
 }: {
   readonly date: string | null;
   readonly dataDate: string | null;
   readonly notSchedulable: boolean;
   readonly isSummary: boolean;
+  readonly inFlight?: boolean;
+  readonly highlighted?: boolean;
   readonly onRefuseDerived: () => void;
 }) {
   if (isSummary) return <SummaryDash />;
@@ -99,6 +108,14 @@ function DateCell({
     return (
       <span className="plan-dash" aria-label="not schedulable">
         —
+      </span>
+    );
+  }
+  // UX-DR23: never paint stale derived values as current while recalc is pending.
+  if (blankDerivedWhilePending(inFlight === true, date)) {
+    return (
+      <span className="plan-date-inflight" aria-label="recalculating">
+        …
       </span>
     );
   }
@@ -112,7 +129,7 @@ function DateCell({
   return (
     <button
       type="button"
-      className={dateInkClassName(date, dataDate)}
+      className={`${dateInkClassName(date, dataDate)}${highlighted ? ' plan-cell-moved' : ''}`}
       onClick={() => void onRefuseDerived()}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
@@ -646,9 +663,33 @@ export function PlanTreeGrid({
   );
   const [teaching, setTeaching] = useState<string | null>(null);
   const [assertiveRefuse, setAssertiveRefuse] = useState<string | null>(null);
+  const [politeAnnounce, setPoliteAnnounce] = useState('');
   const [pending, startTransition] = useTransition();
+  const [stripPending, setStripPending] = useState(false);
+  const [whatMoved, setWhatMoved] = useState<WhatMovedBandView | null>(model.whatMoved);
+  const [announceToken, setAnnounceToken] = useState(0);
+  const [highlightedWpIds, setHighlightedWpIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const [stripOverrides, setStripOverrides] = useState<{
+    projectStart: string | null;
+    projectFinish: string | null;
+    dataDate: string | null;
+    computedFinish: string | null;
+    minFloat: number | null;
+    floatAnchorSentence: string | null;
+  } | null>(null);
   const focusRestore = useRef<string | null>(null);
   const tableRef = useRef<HTMLTableElement>(null);
+  const goChord = useRef<string | null>(null);
+  const highlightClearRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const recalcPending = pending || stripPending;
+
+  useEffect(() => {
+    setWhatMoved(model.whatMoved);
+    setStripOverrides(null);
+  }, [model.whatMoved, model.projectStart, model.projectFinish, model.dataDate, model.computedFinish, model.minFloat, model.floatAnchorSentence]);
 
   useEffect(() => {
     setPreset(readStoredPreset(model.userId, model.projectId));
@@ -708,6 +749,47 @@ export function PlanTreeGrid({
     el?.focus();
   };
 
+  const onRecalcSettled = useCallback((outcome: PlanWriteSuccess) => {
+    setWhatMoved(outcome.whatMoved);
+    setStripOverrides({
+      projectStart: outcome.projectStart,
+      projectFinish: outcome.projectFinish,
+      dataDate: outcome.dataDate,
+      computedFinish: outcome.computedFinish,
+      minFloat: outcome.minFloat,
+      floatAnchorSentence: outcome.floatAnchorSentence,
+    });
+    setAnnounceToken((n) => n + 1);
+  }, []);
+
+  const onHighlightWps = useCallback((wpIds: readonly string[]) => {
+    if (highlightClearRef.current !== null) {
+      clearTimeout(highlightClearRef.current);
+      highlightClearRef.current = null;
+    }
+    setHighlightedWpIds(new Set(wpIds));
+    const reduced =
+      typeof window !== 'undefined' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const clearMs = reduced ? 0 : 300;
+    highlightClearRef.current = setTimeout(
+      () => {
+        highlightClearRef.current = null;
+        setHighlightedWpIds(new Set());
+      },
+      clearMs === 0 ? 50 : 350,
+    );
+  }, []);
+
+  const settleOrRefuse = (outcome: PlanWriteOutcome): string | null => {
+    if (!outcome.ok) {
+      setAssertiveRefuse(refuseMessage(outcome));
+      return refuseMessage(outcome);
+    }
+    onRecalcSettled(outcome);
+    return null;
+  };
+
   const patchName = (wpId: string, name: string) =>
     new Promise<string | null>((resolve) => {
       startTransition(async () => {
@@ -716,7 +798,7 @@ export function PlanTreeGrid({
           wpId,
           name,
         });
-        resolve(outcome.ok ? null : refuseMessage(outcome));
+        resolve(settleOrRefuse(outcome));
       });
     });
 
@@ -728,7 +810,7 @@ export function PlanTreeGrid({
           wpId,
           durationDays,
         });
-        resolve(outcome.ok ? null : refuseMessage(outcome));
+        resolve(settleOrRefuse(outcome));
       });
     });
 
@@ -744,7 +826,7 @@ export function PlanTreeGrid({
           wpId,
           percent: pct,
         });
-        resolve(outcome.ok ? null : refuseMessage(outcome));
+        resolve(settleOrRefuse(outcome));
       });
     });
 
@@ -756,7 +838,7 @@ export function PlanTreeGrid({
           successorWpId: wpId,
           text,
         });
-        resolve(outcome.ok ? null : refuseMessage(outcome));
+        resolve(settleOrRefuse(outcome));
       });
     });
 
@@ -773,13 +855,29 @@ export function PlanTreeGrid({
           constraintType,
           constraintDate,
         });
-        resolve(outcome.ok ? null : refuseMessage(outcome));
+        resolve(settleOrRefuse(outcome));
       });
     });
 
   const onGridKeyDown = (e: KeyboardEvent<HTMLTableElement>) => {
     const target = e.target as HTMLElement | null;
     if (target?.closest('input, textarea')) return;
+
+    // g d — focus Data Date on the schedule strip (EXPERIENCE).
+    if (e.key === 'g') {
+      goChord.current = 'g';
+      window.setTimeout(() => {
+        if (goChord.current === 'g') goChord.current = null;
+      }, 800);
+      return;
+    }
+    if (goChord.current === 'g' && e.key === 'd') {
+      e.preventDefault();
+      goChord.current = null;
+      document.getElementById('plan-strip-data-date')?.focus();
+      return;
+    }
+    goChord.current = null;
 
     const fromDigit = presetFromDigitKey(e.key);
     if (fromDigit !== null) {
@@ -826,18 +924,22 @@ export function PlanTreeGrid({
         <td>
           <DateCell
             date={row.earlyStart}
-            dataDate={model.dataDate}
+            dataDate={stripOverrides?.dataDate ?? model.dataDate}
             notSchedulable={row.notSchedulable}
             isSummary={!row.isLeaf}
+            inFlight={recalcPending}
+            highlighted={highlightedWpIds.has(row.wpId)}
             onRefuseDerived={() => void refuseDerived(constraintId)}
           />
         </td>
         <td>
           <DateCell
             date={row.earlyFinish}
-            dataDate={model.dataDate}
+            dataDate={stripOverrides?.dataDate ?? model.dataDate}
             notSchedulable={row.notSchedulable}
             isSummary={!row.isLeaf}
+            inFlight={recalcPending}
+            highlighted={highlightedWpIds.has(row.wpId)}
             onRefuseDerived={() => void refuseDerived(constraintId)}
           />
         </td>
@@ -982,12 +1084,22 @@ export function PlanTreeGrid({
   );
 
   return (
-    <div className="plan-surface" data-testid="plan-surface" data-pending={pending ? '1' : '0'}>
-      {/* Q1→A: structural slots only — behaviour in 2.15 / 2.16 */}
-      <div
-        className="plan-schedule-strip-slot"
-        data-testid={PLAN_GRID_SLOTS[0]}
-        aria-hidden="true"
+    <div className="plan-surface" data-testid="plan-surface" data-pending={recalcPending ? '1' : '0'}>
+      <PlanScheduleStrip
+        projectId={model.projectId}
+        projectStart={stripOverrides?.projectStart ?? model.projectStart}
+        projectFinish={stripOverrides?.projectFinish ?? model.projectFinish}
+        dataDate={stripOverrides?.dataDate ?? model.dataDate}
+        computedFinish={stripOverrides?.computedFinish ?? model.computedFinish}
+        minFloat={stripOverrides?.minFloat ?? model.minFloat}
+        floatAnchorSentence={
+          stripOverrides?.floatAnchorSentence ?? model.floatAnchorSentence
+        }
+        finishTeaching={model.finishTeaching}
+        proposedToday={proposedFinish}
+        onRecalcSettled={onRecalcSettled}
+        onRefuse={(message) => setAssertiveRefuse(message)}
+        onPendingChange={setStripPending}
       />
 
       <div className="plan-toolbar" data-testid={PLAN_GRID_SLOTS[1]}>
@@ -1018,7 +1130,6 @@ export function PlanTreeGrid({
             {teaching}
           </span>
         ) : null}
-        {/* Q2→C: assertive FR-6a refuse only — polite success announce deferred to 2.15 */}
         <span
           className="sr-only"
           aria-live="assertive"
@@ -1026,6 +1137,14 @@ export function PlanTreeGrid({
           data-testid="fr6a-assertive-refuse"
         >
           {assertiveRefuse ?? ''}
+        </span>
+        <span
+          className="sr-only"
+          aria-live="polite"
+          aria-atomic="true"
+          data-testid="recalc-polite-announce"
+        >
+          {politeAnnounce}
         </span>
       </div>
 
@@ -1044,7 +1163,22 @@ export function PlanTreeGrid({
         </p>
       ) : null}
 
-      <div className="plan-what-moved-slot" data-testid={PLAN_GRID_SLOTS[2]} aria-hidden="true" />
+      <PlanWhatMovedBand
+        projectId={model.projectId}
+        currentUserId={model.userId}
+        band={whatMoved}
+        announceToken={announceToken}
+        onFocusWp={(wpId) => {
+          setFocusedWpId(wpId);
+          const el = tableRef.current?.querySelector(
+            `[data-wp-id="${wpId}"]`,
+          ) as HTMLElement | null;
+          el?.focus();
+          el?.scrollIntoView({ block: 'nearest' });
+        }}
+        onHighlightWps={onHighlightWps}
+        onPoliteAnnounce={setPoliteAnnounce}
+      />
 
       <div className="plan-body">
         <div className="plan-gridwrap">

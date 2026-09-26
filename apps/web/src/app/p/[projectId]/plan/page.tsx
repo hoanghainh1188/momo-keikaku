@@ -13,7 +13,7 @@ export const dynamic = 'force-dynamic';
 
 /**
  * FR-5, FR-7: Plan ARIA treegrid with Schedule / Progress presets (story 2.13).
- * Thin 2.10/2.11 controls remain colocated. Strip / What-moved / rail behaviour → 2.15–2.16.
+ * Strip + What-moved (story 2.15). Exceptions rail → 2.16.
  */
 export default async function PlanPage({
   params,

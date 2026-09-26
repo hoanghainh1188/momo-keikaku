@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 09-20-2026 16:55
-last_updated: 09-26-2026 20:16
+last_updated: 09-26-2026 21:15
 project: momo-keikaku
 project_key: NOKEY
 tracking_system: file-system
@@ -62,7 +62,7 @@ development_status:
   2-12-the-holiday-calendar-and-its-dated-versions: done
   2-13-the-plan-tree-grid-and-its-schedule-preset: done
   2-14-dependencies-and-constraints-are-created-and-explained-on-th: done
-  2-15-the-schedule-strip-and-the-what-moved-band: backlog
+  2-15-the-schedule-strip-and-the-what-moved-band: review
   2-16-the-schedule-exceptions-rail-and-its-three-explainers: backlog
   2-17-the-tenant-admin-can-see-and-run-the-organisation: backlog
   epic-2-retrospective: optional
