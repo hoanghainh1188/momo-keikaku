@@ -1,7 +1,7 @@
 /**
- * UserChip audit-log menu (story 1.7): link present only when showAuditLog is true.
+ * UserChip Admin menu (stories 1.7 + 2.17): Organisation + Audit links only when showAuditLog.
  */
-import { createElement } from 'react';
+import { createElement, type ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -17,27 +17,47 @@ vi.mock('next/link', () => ({
   }) => createElement('a', { href, ...rest }, children as never),
 }));
 
-// Import after the mock so the chip sees the stub Link.
+vi.mock('next-intl', () => ({
+  useTranslations: () => (key: string) => {
+    const labels: Record<string, string> = {
+      'admin.org.departments': 'Departments',
+      'admin.org.programs': 'Programs',
+      'admin.org.projects': 'Projects',
+      'admin.audit.audit_log': 'Audit log',
+    };
+    return labels[key] ?? key;
+  },
+}));
+
 const { UserChip } = await import('./user-chip-menu');
 
-describe('UserChip audit-log link', () => {
+describe('UserChip Admin menu', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('renders audit-log-link when showAuditLog is true', () => {
+  it('renders Organisation and Audit links when showAuditLog is true', () => {
     const html = renderToStaticMarkup(
-      createElement(UserChip, { label: 'Hoang · Tenant Admin', showAuditLog: true }),
+      createElement(UserChip, { label: 'Hoang · Tenant Admin', showAuditLog: true }) as ReactNode,
     );
+    expect(html).toContain('data-testid="admin-departments-link"');
+    expect(html).toContain('href="/admin/departments"');
+    expect(html).toContain('data-testid="admin-programs-link"');
+    expect(html).toContain('href="/admin/programs"');
+    expect(html).toContain('data-testid="admin-projects-link"');
+    expect(html).toContain('href="/admin/projects"');
     expect(html).toContain('data-testid="audit-log-link"');
     expect(html).toContain('href="/admin/audit"');
   });
 
-  it('omits audit-log-link when showAuditLog is false', () => {
+  it('omits Admin links when showAuditLog is false', () => {
     const html = renderToStaticMarkup(
-      createElement(UserChip, { label: 'Linh · PM', showAuditLog: false }),
+      createElement(UserChip, { label: 'Linh · PM', showAuditLog: false }) as ReactNode,
     );
+    expect(html).not.toContain('admin-departments-link');
+    expect(html).not.toContain('admin-programs-link');
+    expect(html).not.toContain('admin-projects-link');
     expect(html).not.toContain('audit-log-link');
-    expect(html).not.toContain('/admin/audit');
+    expect(html).not.toContain('/admin/');
   });
 });

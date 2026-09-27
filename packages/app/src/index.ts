@@ -89,6 +89,18 @@ export type {
   AuditLogReadPort,
   AuditLogRow,
 } from './ports/audit-log-read';
+export type {
+  DepartmentListPage,
+  ProgramListPage,
+  ProjectListPage,
+} from './use-cases/list-org';
+export type {
+  DepartmentListRow,
+  OrgReadDeps,
+  OrgReadPort,
+  ProgramListRow,
+  ProjectListRow,
+} from './ports/org-read';
 export type { MembershipReader, MembershipRecord } from './ports/membership';
 export type {
   MappingRuleRow,

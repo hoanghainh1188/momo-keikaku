@@ -15,6 +15,12 @@ export * from './schema';
 export * from './repo';
 export { listAuditLog } from './repo-audit';
 export type { AuditLogListFilters, AuditLogListedRow } from './repo-audit';
+export { listDepartments, listPrograms, listProjects } from './repo-org-list';
+export type {
+  DepartmentListedRow,
+  ProgramListedRow,
+  ProjectListedRow,
+} from './repo-org-list';
 // The write side crosses as the tenant transaction and TYPES only: the repository builders
 // (`projectWriteRepositoryOn`, `orgRepositoryOn`) are reachable only through the scope
 // `inTenantTransaction` binds to one transaction, never as free functions a caller could run on a

@@ -31,7 +31,35 @@
       "filterError": "Those filters are not valid. Check the dates and action."
     },
     "momo_keikaku": "momo-keikaku",
-    "administration": "Administration"
+    "administration": "Administration",
+    "org": {
+      "departments": "Departments",
+      "programs": "Programs",
+      "projects": "Projects",
+      "departments_lede": "Create and rename Departments in this Tenant.",
+      "programs_lede": "Create and rename Programs under a Department.",
+      "projects_lede": "Create, rename and reassign Projects under a Department and optional Program.",
+      "create_department": "Create Department",
+      "create_program": "Create Program",
+      "create_project": "Create Project",
+      "name": "Name",
+      "department": "Department",
+      "program": "Program",
+      "program_optional": "Program (optional)",
+      "no_program": "No Program",
+      "choose_department": "Choose a Department",
+      "client_name": "Client name",
+      "contract_type": "Contract type",
+      "contract_ukeoi": "請負",
+      "contract_juninin": "準委任",
+      "rename": "Rename",
+      "reassign_program": "Reassign Program",
+      "reassign_department": "Reassign Department",
+      "save": "Save",
+      "no_departments": "No Departments yet.",
+      "no_programs": "No Programs yet.",
+      "no_projects": "No Projects yet."
+    }
   },
   "clientView": {
     "slipped": "slipped",

@@ -1,0 +1,268 @@
+'use client';
+
+/**
+ * Organisation Admin forms (story 2.17). Plain React text; refuse messages stay inline.
+ * Client so `useActionState` can show the use-case refuse without a full navigation.
+ */
+import { useTranslations } from 'next-intl';
+import { useActionState, type ReactNode } from 'react';
+import {
+  createDepartmentAction,
+  createProgramAction,
+  createProjectAction,
+  reassignProjectDepartmentAction,
+  reassignProjectProgramAction,
+  renameDepartmentAction,
+  renameProgramAction,
+  renameProjectAction,
+  type OrgActionState,
+} from './actions';
+
+const INITIAL: OrgActionState = { error: null };
+
+function Refuse({ error }: { error: string | null }) {
+  if (!error) return null;
+  return (
+    <p className="org-form-error" role="alert" data-testid="org-form-error">
+      {error}
+    </p>
+  );
+}
+
+function OrgForm({
+  action,
+  children,
+  testId,
+}: {
+  action: (prev: OrgActionState, formData: FormData) => Promise<OrgActionState>;
+  children: ReactNode;
+  testId: string;
+}) {
+  const [state, formAction, pending] = useActionState(action, INITIAL);
+  return (
+    <form action={formAction} className="org-form" data-testid={testId} noValidate>
+      {children}
+      <Refuse error={state.error} />
+      <button type="submit" className="btn" disabled={pending}>
+        {pending ? '…' : <SubmitLabel />}
+      </button>
+    </form>
+  );
+}
+
+function SubmitLabel() {
+  const t = useTranslations();
+  return <>{t('admin.org.save')}</>;
+}
+
+export function CreateDepartmentForm() {
+  const t = useTranslations();
+  return (
+    <OrgForm action={createDepartmentAction} testId="create-department-form">
+      <label>
+        {t('admin.org.name')}
+        <input name="name" type="text" required autoComplete="off" />
+      </label>
+    </OrgForm>
+  );
+}
+
+export function RenameDepartmentForm({
+  departmentId,
+  name,
+}: {
+  departmentId: string;
+  name: string;
+}) {
+  const t = useTranslations();
+  return (
+    <OrgForm action={renameDepartmentAction} testId={`rename-department-${departmentId}`}>
+      <input type="hidden" name="departmentId" value={departmentId} />
+      <label>
+        {t('admin.org.name')}
+        <input name="name" type="text" defaultValue={name} required autoComplete="off" />
+      </label>
+    </OrgForm>
+  );
+}
+
+export function CreateProgramForm({
+  departments,
+}: {
+  departments: readonly { id: string; name: string }[];
+}) {
+  const t = useTranslations();
+  return (
+    <OrgForm action={createProgramAction} testId="create-program-form">
+      <label>
+        {t('admin.org.department')}
+        <select name="departmentId" required defaultValue="">
+          <option value="" disabled>
+            {t('admin.org.choose_department')}
+          </option>
+          {departments.map((dep) => (
+            <option key={dep.id} value={dep.id}>
+              {dep.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        {t('admin.org.name')}
+        <input name="name" type="text" required autoComplete="off" />
+      </label>
+    </OrgForm>
+  );
+}
+
+export function RenameProgramForm({ programId, name }: { programId: string; name: string }) {
+  const t = useTranslations();
+  return (
+    <OrgForm action={renameProgramAction} testId={`rename-program-${programId}`}>
+      <input type="hidden" name="programId" value={programId} />
+      <label>
+        {t('admin.org.name')}
+        <input name="name" type="text" defaultValue={name} required autoComplete="off" />
+      </label>
+    </OrgForm>
+  );
+}
+
+export function CreateProjectForm({
+  departments,
+  programs,
+}: {
+  departments: readonly { id: string; name: string }[];
+  programs: readonly { id: string; departmentId: string; name: string }[];
+}) {
+  const t = useTranslations();
+  return (
+    <OrgForm action={createProjectAction} testId="create-project-form">
+      <label>
+        {t('admin.org.name')}
+        <input name="name" type="text" required autoComplete="off" />
+      </label>
+      <label>
+        {t('admin.org.client_name')}
+        <input name="clientName" type="text" required autoComplete="off" />
+      </label>
+      <label>
+        {t('admin.org.contract_type')}
+        <select name="contractType" defaultValue="請負">
+          <option value="請負">{t('admin.org.contract_ukeoi')}</option>
+          <option value="準委任">{t('admin.org.contract_juninin')}</option>
+        </select>
+      </label>
+      <label>
+        {t('admin.org.department')}
+        <select name="departmentId" required defaultValue="">
+          <option value="" disabled>
+            {t('admin.org.choose_department')}
+          </option>
+          {departments.map((dep) => (
+            <option key={dep.id} value={dep.id}>
+              {dep.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        {t('admin.org.program_optional')}
+        <select name="programId" defaultValue="">
+          <option value="">{t('admin.org.no_program')}</option>
+          {programs.map((prog) => (
+            <option key={prog.id} value={prog.id}>
+              {prog.name}
+            </option>
+          ))}
+        </select>
+      </label>
+    </OrgForm>
+  );
+}
+
+export function RenameProjectForm({ projectId, name }: { projectId: string; name: string }) {
+  const t = useTranslations();
+  return (
+    <OrgForm action={renameProjectAction} testId={`rename-project-${projectId}`}>
+      <input type="hidden" name="projectId" value={projectId} />
+      <label>
+        {t('admin.org.name')}
+        <input name="name" type="text" defaultValue={name} required autoComplete="off" />
+      </label>
+    </OrgForm>
+  );
+}
+
+export function ReassignProgramForm({
+  projectId,
+  departmentId,
+  programId,
+  programs,
+}: {
+  projectId: string;
+  departmentId: string;
+  programId: string | null;
+  programs: readonly { id: string; departmentId: string; name: string }[];
+}) {
+  const t = useTranslations();
+  const sameDept = programs.filter((p) => p.departmentId === departmentId);
+  return (
+    <OrgForm action={reassignProjectProgramAction} testId={`reassign-program-${projectId}`}>
+      <input type="hidden" name="projectId" value={projectId} />
+      <label>
+        {t('admin.org.program')}
+        <select name="programId" defaultValue={programId ?? ''}>
+          <option value="">{t('admin.org.no_program')}</option>
+          {sameDept.map((prog) => (
+            <option key={prog.id} value={prog.id}>
+              {prog.name}
+            </option>
+          ))}
+        </select>
+      </label>
+    </OrgForm>
+  );
+}
+
+export function ReassignDepartmentForm({
+  projectId,
+  departmentId,
+  programId,
+  departments,
+  programs,
+}: {
+  projectId: string;
+  departmentId: string;
+  programId: string | null;
+  departments: readonly { id: string; name: string }[];
+  programs: readonly { id: string; departmentId: string; name: string }[];
+}) {
+  const t = useTranslations();
+  return (
+    <OrgForm action={reassignProjectDepartmentAction} testId={`reassign-department-${projectId}`}>
+      <input type="hidden" name="projectId" value={projectId} />
+      <label>
+        {t('admin.org.department')}
+        <select name="departmentId" defaultValue={departmentId} required>
+          {departments.map((dep) => (
+            <option key={dep.id} value={dep.id}>
+              {dep.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        {t('admin.org.program_optional')}
+        <select name="programId" defaultValue={programId ?? ''}>
+          <option value="">{t('admin.org.no_program')}</option>
+          {programs.map((prog) => (
+            <option key={prog.id} value={prog.id}>
+              {prog.name}
+            </option>
+          ))}
+        </select>
+      </label>
+    </OrgForm>
+  );
+}

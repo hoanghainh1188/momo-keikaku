@@ -65,6 +65,9 @@ import {
   getProjectMapping as getProjectMappingUseCase,
   getProjectReview as getProjectReviewUseCase,
   listAuditLog as listAuditLogUseCase,
+  listDepartments as listDepartmentsUseCase,
+  listPrograms as listProgramsUseCase,
+  listProjects as listProjectsUseCase,
   mapTicket as mapTicketUseCase,
   mapTickets as mapTicketsUseCase,
   markChangeRequestCandidates as markChangeRequestCandidatesUseCase,
@@ -96,6 +99,7 @@ import {
   type MapTicketInput,
   type MapTicketsInput,
   type MembershipReader,
+  type OrgReadDeps,
   type PlanTicketsInput,
   type AuditLogReadDeps,
   type ProjectInput,
@@ -141,6 +145,9 @@ import {
   identityEventWriterOn,
   inTenantTransaction,
   listAuditLog as listAuditLogRows,
+  listDepartments as listDepartmentRows,
+  listPrograms as listProgramRows,
+  listProjects as listProjectRows,
   tenantCurrencyOn,
   loadProjectBundle,
   loadReview,
@@ -455,6 +462,38 @@ export async function listAuditLog(input: ListAuditLogInput = {}, ctx?: RequestC
   return listAuditLogUseCase(auditLogReadDeps(), context, input);
 }
 
+/**
+ * Organisation list read port (story 2.17). Three list SELECTs; Admin gate is in the use cases.
+ */
+function orgReadDeps() {
+  return {
+    handle: webDb(),
+    orgRead: {
+      listDepartments: listDepartmentRows,
+      listPrograms: listProgramRows,
+      listProjects: listProjectRows,
+    },
+  } satisfies OrgReadDeps<Db>;
+}
+
+/** FR-1: list Departments for the Tenant Admin. See `packages/app`'s `listDepartments`. */
+export async function listDepartments(ctx?: RequestContext) {
+  const context = ctx ?? (await requestContext());
+  return listDepartmentsUseCase(orgReadDeps(), context);
+}
+
+/** FR-1: list Programs for the Tenant Admin. See `packages/app`'s `listPrograms`. */
+export async function listPrograms(ctx?: RequestContext) {
+  const context = ctx ?? (await requestContext());
+  return listProgramsUseCase(orgReadDeps(), context);
+}
+
+/** FR-1: list Projects for the Tenant Admin. See `packages/app`'s `listProjects`. */
+export async function listProjects(ctx?: RequestContext) {
+  const context = ctx ?? (await requestContext());
+  return listProjectsUseCase(orgReadDeps(), context);
+}
+
 function tenantCurrencyDeps(): TenantCurrencyDeps {
   const port = tenantCurrencyOn(webDb());
   return {
@@ -645,10 +684,8 @@ export function proposedCompleteFinish(tzOffsetMinutes: number): string {
   return proposedCompleteDay(webClock().now(), tzOffsetMinutes);
 }
 
-// --- FR-1's organisation writes (story 1.3 slice 2). No page calls them yet: the Organisation
-// admin surface waits for a Users/Organisation screen. Each declares `tenant_admin` through
-// story 1.5's helper. Wired so the bindings, the Clock and the id port are pinned by
-// `tests/web-composition.test.ts` before a page can reach them.
+// --- FR-1's organisation writes (story 1.3 slice 2). Story 2.17's Admin pages call these
+// through server actions. Each declares `tenant_admin` through story 1.5's helper.
 
 /** FR-1: a new Department. See `packages/app`'s `createDepartment`. */
 export async function createDepartment(input: CreateDepartmentInput, ctx?: RequestContext) {

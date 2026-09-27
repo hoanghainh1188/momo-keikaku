@@ -230,6 +230,49 @@ a {
   word-break: break-word;
 }
 
+.org-create {
+  margin: 16px 0 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--rule);
+}
+.org-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: end;
+  margin: 8px 0;
+}
+.org-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.org-form input,
+.org-form select {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: normal;
+  text-transform: none;
+  color: var(--ink);
+  border: 1px solid var(--rule-strong);
+  border-radius: 2px;
+  padding: 4px 8px;
+  background: var(--sheet);
+  min-width: 10rem;
+}
+.org-form-error {
+  color: var(--health-red, #b00020);
+  font-size: 13px;
+  margin: 0;
+  flex: 1 1 100%;
+}
+
 /* Project settings forms — same density as audit filters / Mapping actions */
 .settings-fields {
   display: flex;
