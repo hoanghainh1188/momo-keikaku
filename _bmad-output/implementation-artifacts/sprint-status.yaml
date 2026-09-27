@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 09-20-2026 16:55
-last_updated: 09-27-2026 17:35
+last_updated: 09-27-2026 19:47
 project: momo-keikaku
 project_key: NOKEY
 tracking_system: file-system
@@ -47,7 +47,7 @@ development_status:
   1-9-every-string-is-externalised-and-the-currency-is-fixed: done
   epic-1-retrospective: done
 
-  epic-2: in-progress
+  epic-2: done
   2-1-the-scheduling-schema-lands-in-one-migration: done
   2-2-the-demo-spike-is-disposed-of-file-by-file: done
   2-3-one-canonical-order-for-everything-the-scheduler-reports: done
@@ -199,7 +199,7 @@ action_items:
     action: "Add an NFR-P1 fence-under-lock harness on the Epic 1 500-WP fixture (p95
       ≤ 300 ms under the per-Project lock) (retro F13)"
     owner: "dev"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-09-27.md"
   - id: "epic-2-retro-item-10-collapse-plan-display-helpers-into-one-s"
     epic: 2
@@ -220,7 +220,7 @@ action_items:
     action: "Ship or formally reconcile the story 2.16 Core illegal-edge band (This
       plan cannot be scheduled…) (retro F18)"
     owner: "founder"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-09-27.md"
   - id: "epic-2-retro-item-13-enforce-milestone-duration-pairing-at-th"
     epic: 2
@@ -248,7 +248,7 @@ action_items:
     action: "Record the NFR-P1 under-lock gap in deferred-work if the harness is not
       taken immediately (retro F13)"
     owner: "founder"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-09-27.md"
   - id: "epic-2-retro-item-17-extract-the-shared-fence-test-harness-re"
     epic: 2

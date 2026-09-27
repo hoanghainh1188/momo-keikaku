@@ -1191,6 +1191,12 @@ above can see where it went.
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-16-the-schedule-exceptions-rail-and-its-three-explainers.md`
   summary: Persisted illegal-edge "This plan cannot be scheduled…" band with named offending edges and last-good schedule marked stale (UX-DR23 / Story 2.16 AC).
   evidence: Split at story 2.16 Open Questions gate — founder chose Q1→A. Fence 2.9 refuses graph_invalid at write time (FR-6a); only calendar_range halt banner chrome ships in 2.16.
+  resolved: RECONCILED, 2026-09-27 in Epic 2 retrospective — `epics.md` story 2.16 AC amended from Core to Deferred (Q1→A). Band remains out of R0 unless a durable illegal-edge write path is later allowed; row kept so the deferral stays discoverable.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-9-one-path-writes-dates-and-the-run-is-the-record.md`
+  summary: NFR-P1 300 ms p95 full recalculation under the per-Project fence lock on the Epic 1 500-WP fixture (story 2.9 / AR-53 risk gate).
+  evidence: Epic 2 retrospective F13 (2026-09-27) — domain suite only had a single-sample 2,500-leaf wall-clock; fence.test timed lock_timeout contention only.
+  resolved: YES, 2026-09-27 in `tests/schedule/fence-nfr-p1.test.ts` — seeds the load-fixture 500-WP shape into a probe Project, samples 20 post-warmup `applyPlanChange` timings under the Project watermark, asserts empirical p95 < 300 ms.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-16-the-schedule-exceptions-rail-and-its-three-explainers.md`
   summary: Collapse duplicated calendar-range halt banner formatters (`packages/app` calendarRangeHaltBanner vs `apps/web` calendarRangeHaltBannerCopy) into one shared module.

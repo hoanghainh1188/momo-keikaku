@@ -1446,8 +1446,8 @@ So that a missed date comes with the chain that caused it instead of a badge nob
 **Then** it is **Comfort**: the chain can be listed as plain text without per-WP focus jumps (UX-DR9, **Comfort**)
 
 **Given** a structural edit that left an illegal edge
-**When** the Plan renders
-**Then** a band at the top reads "This plan cannot be scheduled. 2 dependencies are invalid." with the offending edges named and each one's fix, and the grid shows **the last good schedule with every derived date marked stale** — never a guess, never blanks (UX-DR23, FR-6a, **Core**)
+**When** it is considered for R0 Plan chrome
+**Then** it is **Deferred** (founder decision story 2.16 Q1→A, 2026-09-26, ratified at the Epic 2 retrospective 2026-09-27): the fence refuses `graph_invalid` at write time (FR-6a), so a persisted band reading "This plan cannot be scheduled…" with named offending edges and last-good dates marked stale is **not** an R0 Core acceptance criterion of this story. The Plan's plan-not-scheduled chrome for R0 is the `calendar_range` halt banner. Revisit only if a write path is later allowed to leave illegal edges durable (`deferred-work.md`, UX-DR23 / FR-6a)
 ### Story 2.17: The Tenant Admin can see and run the organisation
 
 As a Tenant Admin,
