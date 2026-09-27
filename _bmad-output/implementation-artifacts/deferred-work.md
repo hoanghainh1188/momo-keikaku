@@ -1234,3 +1234,7 @@ above can see where it went.
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-17-the-tenant-admin-can-see-and-run-the-organisation.md`
   summary: Japanese Admin chrome still leaves `admin.administration` and `admin.audit.*` in English while `admin.org.*` is localized.
   evidence: Build review `4d6707a..a43517e` (2026-09-27). Pre-existing mixed chrome; this slice only shipped Japanese `admin.org.*` copy.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-f21-milestone-duration-pairing.md`
+  summary: Non-milestone Work Packages can still carry durationDays === 0 via create_wp / patch_duration, so the engine treats them as milestones while the UI does not show ◆ (reverse of F21 pairing).
+  evidence: F21 review 2026-09-27 (BH/EC). Approach and matrix only enforce milestone ⇒ duration 0 and Q1→C on clear; refusing duration 0 on non-milestones was not decided and remains pre-existing.

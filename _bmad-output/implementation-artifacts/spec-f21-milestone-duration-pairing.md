@@ -2,7 +2,7 @@
 title: 'Epic 2 retro F21 — enforce milestone ↔ duration pairing at the fence'
 type: 'bugfix'
 created: '2026-09-27'
-status: 'review'
+status: 'in-review'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '498aefee695d7e8a34e99b90f619d93c3b79e144'
