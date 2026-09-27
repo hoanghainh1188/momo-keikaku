@@ -1,3 +1,59 @@
+# Handoff — 2026-09-27 (stories 2.16 + 2.17 hierarchy closed)
+
+**Latest (2026-09-27): `main` at `a43517e`.** Story **2.16** is `done` (PR #83 + review patches
+PR #84). Story **2.17 hierarchy** merged via PR #85 — spec `done`, sprint key still `review`
+(run `bmad-code-review` when ready). Epic 2 remains `in-progress`; `epic-2-retrospective` is
+`optional`. Plan surface line (2.13–2.16) and Organisation hierarchy admin pages are live.
+Resources & Rates / F21 / PM assignment stay deferred.
+
+## Story 2.17 (recap) — Organisation hierarchy (Tenant Admin)
+- Three User-menu links (Q1→B): Departments → `/admin/departments`, Programs →
+  `/admin/programs`, Projects → `/admin/projects`. Ledger-Paper tables; create/rename/reassign
+  only through existing `org-writes` (no new write paths).
+- New ADMIN_ONLY reads: `listDepartments` / `listPrograms` / `listProjects` (`ports/org-read`,
+  `repo-org-list`); registered in cross-tenant harness; `program` removed from
+  `UNREACHED_TENANT_OWNED_TABLES`.
+- Review patches: refuse invalid `contractType`; Program options filtered by selected Department;
+  FormData helpers + tests; `valueOrNotFound` on pages; real JP `admin.org` copy; form remount on
+  success; row aria-labels.
+- **Q2→B:** no PM-assignment UI. Resources & Rates + F21 `loadProjectBundle` narrowing deferred
+  at the multi-goal split.
+- Spec: `spec-2-17-the-tenant-admin-can-see-and-run-the-organisation.md`.
+- Deferred: Resources & Rates screens + F21; PM assignment UI; `showAuditLog` → Admin-menu rename
+  (BH8).
+
+## Story 2.16 (recap) — Schedule-exceptions rail and three explainers
+- Filled `exceptions-rail-slot`: three groups (violations → OOS → not-schedulable), pinned ≥1680 /
+  drawer below, toolbar `Exceptions · N`, `j`/`k`/`Enter`/`e`/`x`, three explainers (Q2→B chain
+  walk), Q1→A calendar-range halt banner.
+- Post-merge code-review (PR #84): last-good derived dates on `calendar_range` marked stale
+  (founder option 2); multi-hop chain lag fix; explainer autofocus chain list; Enter gated off
+  cell controls; breakpoint clears explainer; verification-gap asserts.
+- Spec: `spec-2-16-the-schedule-exceptions-rail-and-its-three-explainers.md` (`done`).
+- Deferred: illegal-edge band (Q1→A); banner formatter dedupe (BH5); national provenance (BH11);
+  `chainFocusActive` after recalc (maybe-false).
+
+## Carried forward
+- **2.17 code-review (optional next):** sprint key is `review` — `/bmad-code-review` on the
+  merged 2.17 build (`4d6707a` → `a43517e`) if you want the same post-merge pass as 2.16.
+- **2.17 follow-ups (deferred):** Resources & Rates Admin screens + F21 narrow
+  `loadProjectBundle`; PM assignment UI; rename `showAuditLog`.
+- **Epic 2 retrospective:** `optional` — run when Harry wants to close the epic formally.
+- **Epic 3 (backlog):** Excel import line starts at `3-1-prove-the-workbook-reader-against-real-client-files`.
+- **Still open (unchanged):** unratified 2.5 corpus edges; Epic 6 / FR-31 health vs actuals;
+  `applyPlanChange` barrel / audit gate enumeration; COMMIT-time 23503 residue (PARTIAL);
+  English product copy / helper-dedupe backlog (2.13–2.16).
+
+## Next options (pick one in a fresh session)
+1. `/bmad-code-review` — review the current (2.17) build; baseline `4d6707a` → tip `a43517e`.
+2. `/bmad-build Story 2.17 follow-up — Resources and Rates screens` (or similar) — pick up the
+   deferred Resources & Rates + F21 slice from `deferred-work.md`.
+3. `/bmad-retrospective` — Epic 2 retrospective when ready.
+4. `/bmad-build Story 3.1 — Prove the workbook reader against real client files` — start Epic 3.
+
+Working tree on `main` should be clean at `a43517e`. Prefer a **fresh context window**.
+
+## Earlier: Handoff — 2026-09-26 (story 2.15 closed: Schedule strip and What-moved band)
 # Handoff — 2026-09-26 (story 2.15 closed: Schedule strip and What-moved band)
 
 **Latest (2026-09-26): story 2.15 merged via PR #81 (`b4a3c95`) and is `done`.** Epic 2 remains
