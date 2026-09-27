@@ -116,6 +116,7 @@ export function toPlanGridViewModel(
     isCritical: r.isCritical,
     state: r.state,
     notSchedulable: r.notSchedulable,
+    stale: r.stale,
     actualStart: r.actualStart,
     actualFinish: r.actualFinish,
     recordedPct:

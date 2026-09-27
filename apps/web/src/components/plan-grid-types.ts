@@ -38,6 +38,8 @@ export interface PlanGridRowView {
   readonly isCritical: boolean;
   readonly state: string | null;
   readonly notSchedulable: boolean;
+  /** Last-good derived dates are stale (e.g. calendar_range halt). */
+  readonly stale: boolean;
   readonly actualStart: string | null;
   readonly actualFinish: string | null;
   readonly recordedPct: { readonly num: string; readonly den: string } | null;

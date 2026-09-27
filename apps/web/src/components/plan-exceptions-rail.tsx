@@ -325,24 +325,32 @@ function ExceptionExplainer({
     return () => document.removeEventListener('keydown', onDocKey);
   }, [onClose, onChainFocusActiveChange]);
 
+  const violationRow =
+    target.kind === 'violation'
+      ? (rail.violations.find((v) => v.wpId === target.wpId) ?? null)
+      : null;
+  // Q2→B: when a chain exists, the list owns Arrow keys — focus it, not the dialog shell.
+  const chainOwnsFocus = violationRow !== null && violationRow.chain.length > 0;
+
   useEffect(() => {
+    if (chainOwnsFocus) return;
     popRef.current?.focus();
-  }, [target]);
+  }, [target, chainOwnsFocus]);
 
   let body: ReactNode = null;
   let title = '';
   if (target.kind === 'violation') {
-    const row = rail.violations.find((v) => v.wpId === target.wpId);
-    if (!row) return null;
-    title = `${row.wbsCode} ${row.name} — constraint violation`;
+    if (!violationRow) return null;
+    title = `${violationRow.wbsCode} ${violationRow.name} — constraint violation`;
     body = (
       <ViolationExplainerBody
-        row={row}
+        row={violationRow}
         titleId={titleId}
         calendarVersionSeq={rail.holidayCalendarVersionSeq}
         onFocusWp={onFocusWp}
         chainFocusActive={chainFocusActive}
         onChainFocusActiveChange={onChainFocusActiveChange}
+        autoFocusChain
       />
     );
   } else if (target.kind === 'out_of_sequence') {
@@ -394,6 +402,7 @@ function ViolationExplainerBody({
   onFocusWp,
   chainFocusActive,
   onChainFocusActiveChange,
+  autoFocusChain = false,
 }: {
   readonly row: PlanExceptionsRailViolationView;
   readonly titleId: string;
@@ -401,6 +410,7 @@ function ViolationExplainerBody({
   readonly onFocusWp: (wpId: string) => void;
   readonly chainFocusActive: boolean;
   readonly onChainFocusActiveChange: (active: boolean) => void;
+  readonly autoFocusChain?: boolean;
 }) {
   // Display root-cause first (reverse of engine immediate-driver-first order).
   const displayChain = [...row.chain].reverse();
@@ -410,6 +420,12 @@ function ViolationExplainerBody({
   useEffect(() => {
     setChainIdx(firstPresentChainIndex([...row.chain].reverse()));
   }, [row.wpId, row.chain]);
+
+  useEffect(() => {
+    if (!autoFocusChain || displayChain.length === 0) return;
+    onChainFocusActiveChange(true);
+    listRef.current?.focus();
+  }, [autoFocusChain, row.wpId, displayChain.length, onChainFocusActiveChange]);
 
   const revealChainWp = (wpId: string) => {
     onChainFocusActiveChange(true);

@@ -178,6 +178,20 @@ describe('plan-exceptions helpers (story 2.16)', () => {
         formatDate: () => '—',
       }),
     ).toContain('range unavailable');
+    expect(
+      calendarRangeHaltBannerCopy({
+        rangeStart: '2026-01-01',
+        rangeEnd: null,
+        formatDate: (iso) => iso ?? '—',
+      }),
+    ).toContain('range unavailable');
+    expect(
+      calendarRangeHaltBannerCopy({
+        rangeStart: null,
+        rangeEnd: '2028-12-31',
+        formatDate: (iso) => iso ?? '—',
+      }),
+    ).toContain('range unavailable');
     expect(genericScheduleStaleCopy('graph_invalid')).toBe(
       'Schedule halted: graph_invalid. Derived dates are stale.',
     );

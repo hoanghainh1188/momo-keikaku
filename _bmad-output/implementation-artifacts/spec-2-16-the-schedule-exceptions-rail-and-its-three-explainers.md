@@ -121,6 +121,7 @@ context:
 - Illegal-edge persisted band already recorded in `deferred-work.md` (Q1→A). No optional `fence-2-16` integration test added — unit coverage covers the matrix rows without DB.
 - Matrix audit (2026-09-27): extracted pure `walkExceptionsRailKey` / `nextDrawerOpenForXKey` / `nextDrawerOpenForBreakpoint` / `scheduleStaleBannerKind` / `groupIdForRailKey`; wired into `plan-tree-grid` + rail expand; unit tests cover j/k empty no-op, expand group id, `x` pinned no-op, breakpoint pref restore, calendar vs generic banner, halted write-success empty rail.
 - Review patches (2026-09-27): auto-open drawer for explainers; chain walk without stealing focus; rebind rail selection; duration try/finally; empty-group collapse; fence asserts for rail + halt bounds. Deferred BH5 formatter dedupe + BH11 national provenance.
+- Code-review patches (2026-09-27, founder option 2): `blankDerivedDates` keeps last-good row dates on `calendar_range` with stale marker; multi-hop chain lag toward violated WP; explainer autofocuses chain list; Enter gated off cell controls; `j`/`k` scroll rail item; reveal/focus expand ancestors; breakpoint clears explainer; verification-gap asserts.
 
 ## Spec Change Log
 
@@ -182,3 +183,41 @@ Grouped routes: **patch** (auto-open drawer + keep explainer visible; chain focu
 - Narrow viewport — drawer + count on toggle; wide — pinned rail.
 - Open each explainer type; confirm honesty line / no OOS fix / duration commits.
 - `j`/`k` across groups; `Enter` focuses the row; `e` from grid; `x` toggles.
+
+### Review Findings
+
+Code review of `23cd19b` → `bf0bd51` (PR #83, 2026-09-27), mode full. Layers: blind-hunter, edge-case-hunter, verification-gap, acceptance-auditor. Build-review triage above already shipped; these are the post-merge findings.
+
+- [x] [Review][Patch] On `calendar_range` halt, surface last-good derived dates marked stale — founder chose option 2 (2026-09-27). Today `blankDerived` nulls early start/finish/float/critical whenever `haltedReason !== null`. For `calendar_range` only: keep `wp_schedule` values when present, leave `stale: true`, never invent dates; other halt reasons keep the 2.13 em dash. Strip scalars stay null. Add a unit assertion [packages/app/src/schedule/plan-grid.ts:1066]
+- [x] [Review][Patch] Multi-hop violation chain looks up lag on the wrong edge — immediate-driver-first `['P1','P0']` pairs P1 with P0 and P0 with the violated WP; successor of `chain[i]` is `chain[i-1]` when `i > 0`, else the violated WP. Add a two-link test. One-link chains still resolve [packages/app/src/schedule/plan-grid.ts:333]
+- [x] [Review][Patch] Violation explainer focuses the dialog shell, so ArrowUp/Down never reach the chain list until the user tabs to it — Q2→B walk misses on open. Focus the chain `<ul>` (or handle arrows on the dialog) [apps/web/src/components/plan-exceptions-rail.tsx:329]
+- [x] [Review][Patch] Table `Enter` opens the rail explainer whenever `railSelectedKey` is set, and date / inline cell `Enter` does not `stopPropagation`, so a cell commit also opens the explainer. Gate Enter-to-explainer to table-level focus, or stop the event in cell editors [apps/web/src/components/plan-tree-grid.tsx:1061]
+- [x] [Review][Patch] `j` / `k` set `railSelectedKey` (`aria-current`) and do not move DOM focus or scroll the rail item; the handler lives only on the grid table, so the shortcuts stop once focus is in the explainer [apps/web/src/components/plan-tree-grid.tsx:1050]
+- [x] [Review][Patch] `revealWpInGrid` scrolls a `[data-wp-id]` node and does not expand collapsed ancestors, so a hidden WP is not revealed [apps/web/src/components/plan-tree-grid.tsx:809]
+- [x] [Review][Patch] Breakpoint effect can set `drawerOpen` false without clearing `explainer` or `chainFocusActive` (`x` and the toolbar toggle already clear). Reopening the drawer shows a stale popover [apps/web/src/components/plan-tree-grid.tsx:767]
+- [x] [Review][Patch] Fence 2.14 asserts the rail violation label and `daysLate` and does not assert that stored chain indexes became live WP ids [tests/schedule/fence-2-14.test.ts:478]
+- [x] [Review][Patch] The one-link builder fixture sets lag 2 on `p→v` and never asserts `lagDays` (this assertion does not catch the multi-hop bug; the two-link test on the lag patch does) [packages/app/src/schedule/plan-grid.test.ts:398]
+- [x] [Review][Patch] `toPlanGridViewModel` serialisation does not assert `calendarRangeStart` / `calendarRangeEnd` [apps/web/src/lib/plan-grid-view.test.ts:184]
+- [x] [Review][Patch] The same serialisation fixture leaves `outOfSequence` empty, so `successorActualStart` / `predecessorFinish` are unasserted [apps/web/src/lib/plan-grid-view.test.ts:172]
+- [x] [Review][Patch] Web `calendarRangeHaltBannerCopy` tests both bounds and both-null; one-sided null is unasserted (the app helper already covers it) [apps/web/src/lib/plan-exceptions.test.ts:166]
+
+- [x] [Review][Defer] `chainFocusActive` may stay true after a recalc rebind closes the explainer, so `onGridKeyDown` keeps returning early and `j` / `k` stay dead [apps/web/src/components/plan-tree-grid.tsx:751] — deferred: maybe-false. Unmount usually blurs the chain list and `onBlur` clears the flag (`plan-exceptions-rail.tsx:490`). Settle with a runtime repro: recalc while the chain `<ul>` is focused and see whether grid `j` / `k` stay dead.
+
+Formatter dedupe (`calendarRangeHaltBanner` vs `calendarRangeHaltBannerCopy`) stays the existing BH5 defer; this pass does not re-file it.
+
+#### Rejected
+
+- Pinned explainer clipped / invisible (blind) — `false`: `.plan-ex-pop` is `position: absolute` and the pinned slot is not positioned, so the containing block is `.plan-body` (`globals.css:1153`, `:1305`). The slot's `overflow: auto` does not clip it.
+- Drawer popover covers the list (blind) — `low`: the popover is visible inside the drawer; a portal is more than a direct correction.
+- `resolveWpLabel` shows a short id when the name is missing (blind) — `false`: stored inputs carry `wbsCode` and no name; the spec fallback is the short id.
+- Group effect forces open whenever a group's length changes (edge) — `low`: Always says non-zero groups expand by default (`plan-exceptions-rail.tsx:73`).
+- Pinned toolbar Exceptions control is a click no-op (edge) — `false` as a defect: `x` and the toggle are specified no-ops while pinned; the count stays on the label.
+- Lag 0 and a missing edge both render an em dash (edge) — `low`: the spec does not require a third glyph.
+- Not-schedulable empty commit surfaces the raw token `invalid_input` (edge) — `low`: same machine-code pattern as other fence refuses; a display map is more than a direct correction (`plan-exceptions-rail.tsx:581`).
+- Duration above the Postgres integer max leaves the explainer pending (edge) — `false`: `commit` uses `try/finally` and clears `pending` (`plan-exceptions-rail.tsx:590`). The integer column overflow is pre-existing.
+- OOS cell can light when the predecessor index is missing and the rail drops that edge (acceptance) — `low`: only corrupt stored indexes (`plan-grid.ts:833` vs `:904`).
+- Sprint key `review` while the spec status is `done` (process) — bookkeeping for section 6 of this review, after the decision and the patch choice.
+- Empty Spec Change Log on the first pass (process) — `false`: the build triage already filled the log this story uses.
+- A user-collapsed group reopens when its length changes (edge) — `low`: matches expand-by-default.
+- SSR paints the rail pinned for one frame (edge) — `low`: one frame, same posture as the 2.15 reduced-motion flash.
+- `Enter` after `j` / `k` on the grid table is a hijack (blind) — `false` for that half: UX-DR24 Enter opens the selected rail item. The cell-bubbling half is the patch at `plan-tree-grid.tsx:1061`.

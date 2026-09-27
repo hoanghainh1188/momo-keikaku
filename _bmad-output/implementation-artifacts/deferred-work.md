@@ -1198,3 +1198,9 @@ above can see where it went.
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-16-the-schedule-exceptions-rail-and-its-three-explainers.md`
   summary: Show Holiday Calendar national provenance (JP/VN / dataset id) on the violation explainer when cheap from stored inputs.
   evidence: Review BH11 (2026-09-27): Design Notes optional polish; Always only requires versionSeq.
+
+## Deferred from: code review of spec-2-16-the-schedule-exceptions-rail-and-its-three-explainers.md (2026-09-27)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-16-the-schedule-exceptions-rail-and-its-three-explainers.md`
+  summary: Confirm whether `chainFocusActive` stays true after a recalc rebind unmounts the violation explainer, leaving grid `j` / `k` dead because `onGridKeyDown` returns early.
+  evidence: Code review (2026-09-27), maybe-false. `plan-tree-grid.tsx` rebind does not clear `chainFocusActive`. The chain list `onBlur` usually clears it on unmount. Settle with a runtime repro: recalc while the chain list is focused and see whether grid `j` / `k` stay dead.

@@ -1150,6 +1150,11 @@ span.plan-strip-value {
   color: var(--ink-muted);
 }
 
+/* Last-good derived dates after calendar_range halt — visible but not current. */
+.plan-date-stale {
+  opacity: 0.72;
+}
+
 .plan-body {
   display: grid;
   grid-template-columns: 1fr 0;

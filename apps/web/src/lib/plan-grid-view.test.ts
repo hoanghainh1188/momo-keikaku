@@ -142,7 +142,7 @@ describe('plan-grid-view (story 2.13)', () => {
     const withRail: PlanGridState = {
       ...sample,
       exceptions: {
-        totalCount: 2,
+        totalCount: 3,
         holidayCalendarVersionSeq: 3,
         calendarRangeStart: '2026-01-01',
         calendarRangeEnd: '2028-12-31',
@@ -169,7 +169,21 @@ describe('plan-grid-view (story 2.13)', () => {
             ],
           },
         ],
-        outOfSequence: [],
+        outOfSequence: [
+          {
+            predecessorWpId: 'pred',
+            successorWpId: 'leaf',
+            predecessorWbsCode: '1.0',
+            predecessorName: 'Pred',
+            successorWbsCode: '1.1',
+            successorName: 'Leaf',
+            label: '◇ Out of sequence',
+            successorActualStart: '2026-09-12',
+            predecessorFinish: '2026-09-20',
+            predecessorPresent: true,
+            successorPresent: true,
+          },
+        ],
         notSchedulable: [
           {
             wpId: 'ns',
@@ -182,9 +196,13 @@ describe('plan-grid-view (story 2.13)', () => {
       },
     };
     const view = toPlanGridViewModel(withRail, 'user-1');
-    expect(view.exceptions.totalCount).toBe(2);
+    expect(view.exceptions.totalCount).toBe(3);
+    expect(view.exceptions.calendarRangeStart).toBe('2026-01-01');
+    expect(view.exceptions.calendarRangeEnd).toBe('2028-12-31');
     expect(view.exceptions.violations[0]!.daysLate).toBe(6);
     expect(view.exceptions.violations[0]!.chain[0]!.lagDays).toBe(2);
+    expect(view.exceptions.outOfSequence[0]!.successorActualStart).toBe('2026-09-12');
+    expect(view.exceptions.outOfSequence[0]!.predecessorFinish).toBe('2026-09-20');
     expect(view.exceptions.notSchedulable[0]!.label).toBe('⊘ No duration');
     expect(view.exceptions.holidayCalendarVersionSeq).toBe(3);
   });
