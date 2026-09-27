@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 09-20-2026 16:55
-last_updated: 2026-09-27
+last_updated: 09-27-2026 17:35
 project: momo-keikaku
 project_key: NOKEY
 tracking_system: file-system
@@ -65,7 +65,7 @@ development_status:
   2-15-the-schedule-strip-and-the-what-moved-band: done
   2-16-the-schedule-exceptions-rail-and-its-three-explainers: done
   2-17-the-tenant-admin-can-see-and-run-the-organisation: done
-  epic-2-retrospective: optional
+  epic-2-retrospective: done
 
   epic-3: backlog
   3-1-prove-the-workbook-reader-against-real-client-files: backlog
@@ -194,3 +194,73 @@ action_items:
     owner: "founder"
     status: done
     ref: "_bmad-output/implementation-artifacts/epic-1-retro-2026-09-23.md"
+  - id: "epic-2-retro-item-9-add-an-nfr-p1-fence-under-lock-harness-o"
+    epic: 2
+    action: "Add an NFR-P1 fence-under-lock harness on the Epic 1 500-WP fixture (p95
+      ≤ 300 ms under the per-Project lock) (retro F13)"
+    owner: "dev"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-09-27.md"
+  - id: "epic-2-retro-item-10-collapse-plan-display-helpers-into-one-s"
+    epic: 2
+    action: "Collapse Plan display helpers into one shared module so formatPlanDate
+      / float / inkTone / SUMMARY_NA cannot drift between app and web (retro F2/F5)"
+    owner: "dev"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-09-27.md"
+  - id: "epic-2-retro-item-11-register-schedule-calendar-writes-in-the"
+    epic: 2
+    action: "Register schedule/calendar writes in the Epic 1 role and audit enumeration
+      gates (declare *_ROLES/*_AUDIT or widen the enumerated barrel) (retro F10)"
+    owner: "dev"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-09-27.md"
+  - id: "epic-2-retro-item-12-ship-or-formally-reconcile-the-story-2-1"
+    epic: 2
+    action: "Ship or formally reconcile the story 2.16 Core illegal-edge band (This
+      plan cannot be scheduled…) (retro F18)"
+    owner: "founder"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-09-27.md"
+  - id: "epic-2-retro-item-13-enforce-milestone-duration-pairing-at-th"
+    epic: 2
+    action: "Enforce milestone ↔ duration pairing at the fence (createWp / patchDuration
+      / refuse) with a regression test (retro F21)"
+    owner: "dev"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-09-27.md"
+  - id: "epic-2-retro-item-14-on-calendar_range-halt-clear-exception-c"
+    epic: 2
+    action: "On calendar_range halt, clear Exception cells as well as the rail (or
+      assert both in the fence halt test) (retro F23)"
+    owner: "dev"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-09-27.md"
+  - id: "epic-2-retro-item-15-close-the-stale-deferred-work-row-claimi"
+    epic: 2
+    action: "Close the stale deferred-work row claiming missing 0003_snapshot.json
+      (file exists) (retro F16)"
+    owner: "founder"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-09-27.md"
+  - id: "epic-2-retro-item-16-record-the-nfr-p1-under-lock-gap-in-defe"
+    epic: 2
+    action: "Record the NFR-P1 under-lock gap in deferred-work if the harness is not
+      taken immediately (retro F13)"
+    owner: "founder"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-09-27.md"
+  - id: "epic-2-retro-item-17-extract-the-shared-fence-test-harness-re"
+    epic: 2
+    action: "Extract the shared fence test harness (reachableAs / afterAll / prepareSchedulable)
+      before the next epic adds more fence files (retro F6)"
+    owner: "dev"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-09-27.md"
+  - id: "epic-2-retro-item-18-do-not-mark-a-story-done-while-a-core-ep"
+    epic: 2
+    action: "Do not mark a story done while a Core epics AC remains deferred without
+      an explicit founder reconcile note (retro F18 process)"
+    owner: "founder"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-09-27.md"
