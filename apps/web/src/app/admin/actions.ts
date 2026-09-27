@@ -17,43 +17,47 @@ import {
   requestContext,
 } from '@/server/composition';
 import { messageFromKey } from '@/server/error-message';
+import { field, optionalId, parseContractType } from './org-form-fields';
 
 export type OrgActionState = {
   readonly error: string | null;
+  /** Bumped on success so uncontrolled fields remount empty. */
+  readonly resetKey: number;
 };
 
-const OK: OrgActionState = { error: null };
+export const INITIAL_ORG_ACTION: OrgActionState = { error: null, resetKey: 0 };
 
-function refuse(result: {
-  readonly ok: false;
-  readonly error: { readonly messageKey: 'errors.not_found' | 'errors.invalid_input' };
-}): OrgActionState {
-  return { error: messageFromKey(result.error.messageKey) };
+function refuse(prev: OrgActionState, messageKey: 'errors.not_found' | 'errors.invalid_input'): OrgActionState {
+  return { error: messageFromKey(messageKey), resetKey: prev.resetKey };
 }
 
-function field(formData: FormData, name: string): string {
-  return String(formData.get(name) ?? '').trim();
+function refuseResult(
+  prev: OrgActionState,
+  result: {
+    readonly ok: false;
+    readonly error: { readonly messageKey: 'errors.not_found' | 'errors.invalid_input' };
+  },
+): OrgActionState {
+  return refuse(prev, result.error.messageKey);
 }
 
-/** Empty string → null (clear Program). */
-function optionalId(formData: FormData, name: string): string | null {
-  const value = field(formData, name);
-  return value === '' ? null : value;
+function ok(prev: OrgActionState): OrgActionState {
+  return { error: null, resetKey: prev.resetKey + 1 };
 }
 
 export async function createDepartmentAction(
-  _prev: OrgActionState,
+  prev: OrgActionState,
   formData: FormData,
 ): Promise<OrgActionState> {
   const ctx = await requestContext();
   const result = await createDepartment({ name: field(formData, 'name') }, ctx);
-  if (!result.ok) return refuse(result);
+  if (!result.ok) return refuseResult(prev, result);
   revalidatePath('/admin/departments');
-  return OK;
+  return ok(prev);
 }
 
 export async function renameDepartmentAction(
-  _prev: OrgActionState,
+  prev: OrgActionState,
   formData: FormData,
 ): Promise<OrgActionState> {
   const ctx = await requestContext();
@@ -61,13 +65,13 @@ export async function renameDepartmentAction(
     { departmentId: field(formData, 'departmentId'), name: field(formData, 'name') },
     ctx,
   );
-  if (!result.ok) return refuse(result);
+  if (!result.ok) return refuseResult(prev, result);
   revalidatePath('/admin/departments');
-  return OK;
+  return ok(prev);
 }
 
 export async function createProgramAction(
-  _prev: OrgActionState,
+  prev: OrgActionState,
   formData: FormData,
 ): Promise<OrgActionState> {
   const ctx = await requestContext();
@@ -75,13 +79,13 @@ export async function createProgramAction(
     { departmentId: field(formData, 'departmentId'), name: field(formData, 'name') },
     ctx,
   );
-  if (!result.ok) return refuse(result);
+  if (!result.ok) return refuseResult(prev, result);
   revalidatePath('/admin/programs');
-  return OK;
+  return ok(prev);
 }
 
 export async function renameProgramAction(
-  _prev: OrgActionState,
+  prev: OrgActionState,
   formData: FormData,
 ): Promise<OrgActionState> {
   const ctx = await requestContext();
@@ -89,18 +93,19 @@ export async function renameProgramAction(
     { programId: field(formData, 'programId'), name: field(formData, 'name') },
     ctx,
   );
-  if (!result.ok) return refuse(result);
+  if (!result.ok) return refuseResult(prev, result);
   revalidatePath('/admin/programs');
-  return OK;
+  return ok(prev);
 }
 
 export async function createProjectAction(
-  _prev: OrgActionState,
+  prev: OrgActionState,
   formData: FormData,
 ): Promise<OrgActionState> {
+  const contractType = parseContractType(field(formData, 'contractType'));
+  if (contractType === null) return refuse(prev, 'errors.invalid_input');
+
   const ctx = await requestContext();
-  const contractRaw = field(formData, 'contractType');
-  const contractType = contractRaw === '準委任' ? '準委任' : '請負';
   const result = await createProject(
     {
       name: field(formData, 'name'),
@@ -111,13 +116,13 @@ export async function createProjectAction(
     },
     ctx,
   );
-  if (!result.ok) return refuse(result);
+  if (!result.ok) return refuseResult(prev, result);
   revalidatePath('/admin/projects');
-  return OK;
+  return ok(prev);
 }
 
 export async function renameProjectAction(
-  _prev: OrgActionState,
+  prev: OrgActionState,
   formData: FormData,
 ): Promise<OrgActionState> {
   const ctx = await requestContext();
@@ -125,13 +130,13 @@ export async function renameProjectAction(
     { projectId: field(formData, 'projectId'), name: field(formData, 'name') },
     ctx,
   );
-  if (!result.ok) return refuse(result);
+  if (!result.ok) return refuseResult(prev, result);
   revalidatePath('/admin/projects');
-  return OK;
+  return ok(prev);
 }
 
 export async function reassignProjectProgramAction(
-  _prev: OrgActionState,
+  prev: OrgActionState,
   formData: FormData,
 ): Promise<OrgActionState> {
   const ctx = await requestContext();
@@ -142,13 +147,13 @@ export async function reassignProjectProgramAction(
     },
     ctx,
   );
-  if (!result.ok) return refuse(result);
+  if (!result.ok) return refuseResult(prev, result);
   revalidatePath('/admin/projects');
-  return OK;
+  return ok(prev);
 }
 
 export async function reassignProjectDepartmentAction(
-  _prev: OrgActionState,
+  prev: OrgActionState,
   formData: FormData,
 ): Promise<OrgActionState> {
   const ctx = await requestContext();
@@ -160,7 +165,7 @@ export async function reassignProjectDepartmentAction(
     },
     ctx,
   );
-  if (!result.ok) return refuse(result);
+  if (!result.ok) return refuseResult(prev, result);
   revalidatePath('/admin/projects');
-  return OK;
+  return ok(prev);
 }

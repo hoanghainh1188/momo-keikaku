@@ -2,8 +2,8 @@ import { getTranslations } from 'next-intl/server';
 /**
  * Admin: Programs (story 2.17). Ledger-Paper list + create/rename through existing org writes.
  */
-import { notFound } from 'next/navigation';
 import { listDepartments, listPrograms, requestContext } from '@/server/composition';
+import { valueOrNotFound } from '@/server/result';
 import { CreateProgramForm, RenameProgramForm } from '../org-forms';
 
 export const dynamic = 'force-dynamic';
@@ -11,16 +11,12 @@ export const dynamic = 'force-dynamic';
 export default async function ProgramsPage() {
   const t = await getTranslations();
   const ctx = await requestContext();
-  const [programsResult, departmentsResult] = await Promise.all([
+  const [programsPage, departmentsPage] = await Promise.all([
     listPrograms(ctx),
     listDepartments(ctx),
   ]);
-  if (!programsResult.ok || !departmentsResult.ok) {
-    return notFound();
-  }
-
-  const { rows } = programsResult.value;
-  const departments = departmentsResult.value.rows;
+  const { rows } = valueOrNotFound(programsPage);
+  const departments = valueOrNotFound(departmentsPage).rows;
   return (
     <div data-testid="admin-programs">
       <h1 className="page-title">{t('admin.org.programs')}</h1>

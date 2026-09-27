@@ -5,11 +5,12 @@
  * Client so `useActionState` can show the use-case refuse without a full navigation.
  */
 import { useTranslations } from 'next-intl';
-import { useActionState, type ReactNode } from 'react';
+import { useActionState, useState, type ReactNode } from 'react';
 import {
   createDepartmentAction,
   createProgramAction,
   createProjectAction,
+  INITIAL_ORG_ACTION,
   reassignProjectDepartmentAction,
   reassignProjectProgramAction,
   renameDepartmentAction,
@@ -17,8 +18,6 @@ import {
   renameProjectAction,
   type OrgActionState,
 } from './actions';
-
-const INITIAL: OrgActionState = { error: null };
 
 function Refuse({ error }: { error: string | null }) {
   if (!error) return null;
@@ -33,26 +32,31 @@ function OrgForm({
   action,
   children,
   testId,
+  ariaLabel,
 }: {
   action: (prev: OrgActionState, formData: FormData) => Promise<OrgActionState>;
   children: ReactNode;
   testId: string;
+  ariaLabel?: string;
 }) {
-  const [state, formAction, pending] = useActionState(action, INITIAL);
+  const t = useTranslations();
+  const [state, formAction, pending] = useActionState(action, INITIAL_ORG_ACTION);
   return (
-    <form action={formAction} className="org-form" data-testid={testId} noValidate>
+    <form
+      key={state.resetKey}
+      action={formAction}
+      className="org-form"
+      data-testid={testId}
+      noValidate
+      aria-label={ariaLabel}
+    >
       {children}
       <Refuse error={state.error} />
       <button type="submit" className="btn" disabled={pending}>
-        {pending ? '…' : <SubmitLabel />}
+        {pending ? t('admin.org.saving') : t('admin.org.save')}
       </button>
     </form>
   );
-}
-
-function SubmitLabel() {
-  const t = useTranslations();
-  return <>{t('admin.org.save')}</>;
 }
 
 export function CreateDepartmentForm() {
@@ -76,7 +80,11 @@ export function RenameDepartmentForm({
 }) {
   const t = useTranslations();
   return (
-    <OrgForm action={renameDepartmentAction} testId={`rename-department-${departmentId}`}>
+    <OrgForm
+      action={renameDepartmentAction}
+      testId={`rename-department-${departmentId}`}
+      ariaLabel={t('admin.org.rename_named', { name })}
+    >
       <input type="hidden" name="departmentId" value={departmentId} />
       <label>
         {t('admin.org.name')}
@@ -118,7 +126,11 @@ export function CreateProgramForm({
 export function RenameProgramForm({ programId, name }: { programId: string; name: string }) {
   const t = useTranslations();
   return (
-    <OrgForm action={renameProgramAction} testId={`rename-program-${programId}`}>
+    <OrgForm
+      action={renameProgramAction}
+      testId={`rename-program-${programId}`}
+      ariaLabel={t('admin.org.rename_named', { name })}
+    >
       <input type="hidden" name="programId" value={programId} />
       <label>
         {t('admin.org.name')}
@@ -128,7 +140,7 @@ export function RenameProgramForm({ programId, name }: { programId: string; name
   );
 }
 
-export function CreateProjectForm({
+function CreateProjectFields({
   departments,
   programs,
 }: {
@@ -136,8 +148,10 @@ export function CreateProjectForm({
   programs: readonly { id: string; departmentId: string; name: string }[];
 }) {
   const t = useTranslations();
+  const [departmentId, setDepartmentId] = useState('');
+  const programsInDept = programs.filter((p) => p.departmentId === departmentId);
   return (
-    <OrgForm action={createProjectAction} testId="create-project-form">
+    <>
       <label>
         {t('admin.org.name')}
         <input name="name" type="text" required autoComplete="off" />
@@ -155,7 +169,12 @@ export function CreateProjectForm({
       </label>
       <label>
         {t('admin.org.department')}
-        <select name="departmentId" required defaultValue="">
+        <select
+          name="departmentId"
+          required
+          value={departmentId}
+          onChange={(event) => setDepartmentId(event.target.value)}
+        >
           <option value="" disabled>
             {t('admin.org.choose_department')}
           </option>
@@ -168,15 +187,29 @@ export function CreateProjectForm({
       </label>
       <label>
         {t('admin.org.program_optional')}
-        <select name="programId" defaultValue="">
+        <select name="programId" key={departmentId} defaultValue="">
           <option value="">{t('admin.org.no_program')}</option>
-          {programs.map((prog) => (
+          {programsInDept.map((prog) => (
             <option key={prog.id} value={prog.id}>
               {prog.name}
             </option>
           ))}
         </select>
       </label>
+    </>
+  );
+}
+
+export function CreateProjectForm({
+  departments,
+  programs,
+}: {
+  departments: readonly { id: string; name: string }[];
+  programs: readonly { id: string; departmentId: string; name: string }[];
+}) {
+  return (
+    <OrgForm action={createProjectAction} testId="create-project-form">
+      <CreateProjectFields departments={departments} programs={programs} />
     </OrgForm>
   );
 }
@@ -184,7 +217,11 @@ export function CreateProjectForm({
 export function RenameProjectForm({ projectId, name }: { projectId: string; name: string }) {
   const t = useTranslations();
   return (
-    <OrgForm action={renameProjectAction} testId={`rename-project-${projectId}`}>
+    <OrgForm
+      action={renameProjectAction}
+      testId={`rename-project-${projectId}`}
+      ariaLabel={t('admin.org.rename_named', { name })}
+    >
       <input type="hidden" name="projectId" value={projectId} />
       <label>
         {t('admin.org.name')}
@@ -199,16 +236,22 @@ export function ReassignProgramForm({
   departmentId,
   programId,
   programs,
+  projectName,
 }: {
   projectId: string;
   departmentId: string;
   programId: string | null;
   programs: readonly { id: string; departmentId: string; name: string }[];
+  projectName: string;
 }) {
   const t = useTranslations();
   const sameDept = programs.filter((p) => p.departmentId === departmentId);
   return (
-    <OrgForm action={reassignProjectProgramAction} testId={`reassign-program-${projectId}`}>
+    <OrgForm
+      action={reassignProjectProgramAction}
+      testId={`reassign-program-${projectId}`}
+      ariaLabel={t('admin.org.reassign_program_named', { name: projectName })}
+    >
       <input type="hidden" name="projectId" value={projectId} />
       <label>
         {t('admin.org.program')}
@@ -225,26 +268,32 @@ export function ReassignProgramForm({
   );
 }
 
-export function ReassignDepartmentForm({
-  projectId,
+function ReassignDepartmentFields({
   departmentId,
   programId,
   departments,
   programs,
 }: {
-  projectId: string;
   departmentId: string;
   programId: string | null;
   departments: readonly { id: string; name: string }[];
   programs: readonly { id: string; departmentId: string; name: string }[];
 }) {
   const t = useTranslations();
+  const [selectedDepartmentId, setSelectedDepartmentId] = useState(departmentId);
+  const programsInDept = programs.filter((p) => p.departmentId === selectedDepartmentId);
+  const initialProgram =
+    programId !== null && programsInDept.some((p) => p.id === programId) ? programId : '';
   return (
-    <OrgForm action={reassignProjectDepartmentAction} testId={`reassign-department-${projectId}`}>
-      <input type="hidden" name="projectId" value={projectId} />
+    <>
       <label>
         {t('admin.org.department')}
-        <select name="departmentId" defaultValue={departmentId} required>
+        <select
+          name="departmentId"
+          required
+          value={selectedDepartmentId}
+          onChange={(event) => setSelectedDepartmentId(event.target.value)}
+        >
           {departments.map((dep) => (
             <option key={dep.id} value={dep.id}>
               {dep.name}
@@ -254,15 +303,48 @@ export function ReassignDepartmentForm({
       </label>
       <label>
         {t('admin.org.program_optional')}
-        <select name="programId" defaultValue={programId ?? ''}>
+        <select name="programId" key={selectedDepartmentId} defaultValue={initialProgram}>
           <option value="">{t('admin.org.no_program')}</option>
-          {programs.map((prog) => (
+          {programsInDept.map((prog) => (
             <option key={prog.id} value={prog.id}>
               {prog.name}
             </option>
           ))}
         </select>
       </label>
+    </>
+  );
+}
+
+export function ReassignDepartmentForm({
+  projectId,
+  departmentId,
+  programId,
+  departments,
+  programs,
+  projectName,
+}: {
+  projectId: string;
+  departmentId: string;
+  programId: string | null;
+  departments: readonly { id: string; name: string }[];
+  programs: readonly { id: string; departmentId: string; name: string }[];
+  projectName: string;
+}) {
+  const t = useTranslations();
+  return (
+    <OrgForm
+      action={reassignProjectDepartmentAction}
+      testId={`reassign-department-${projectId}`}
+      ariaLabel={t('admin.org.reassign_department_named', { name: projectName })}
+    >
+      <input type="hidden" name="projectId" value={projectId} />
+      <ReassignDepartmentFields
+        departmentId={departmentId}
+        programId={programId}
+        departments={departments}
+        programs={programs}
+      />
     </OrgForm>
   );
 }

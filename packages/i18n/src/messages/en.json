@@ -58,7 +58,11 @@
       "save": "Save",
       "no_departments": "No Departments yet.",
       "no_programs": "No Programs yet.",
-      "no_projects": "No Projects yet."
+      "no_projects": "No Projects yet.",
+      "saving": "Saving…",
+      "rename_named": "Rename {name}",
+      "reassign_program_named": "Reassign Program for {name}",
+      "reassign_department_named": "Reassign Department for {name}"
     }
   },
   "clientView": {

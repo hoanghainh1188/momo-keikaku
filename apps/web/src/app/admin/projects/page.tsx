@@ -3,13 +3,13 @@ import { getTranslations } from 'next-intl/server';
  * Admin: Projects (story 2.17). Ledger-Paper list + create/rename/reassign through existing
  * org writes. PM assignment stays deferred (Q2→B).
  */
-import { notFound } from 'next/navigation';
 import {
   listDepartments,
   listPrograms,
   listProjects,
   requestContext,
 } from '@/server/composition';
+import { valueOrNotFound } from '@/server/result';
 import {
   CreateProjectForm,
   ReassignDepartmentForm,
@@ -22,18 +22,14 @@ export const dynamic = 'force-dynamic';
 export default async function ProjectsPage() {
   const t = await getTranslations();
   const ctx = await requestContext();
-  const [projectsResult, departmentsResult, programsResult] = await Promise.all([
+  const [projectsPage, departmentsPage, programsPage] = await Promise.all([
     listProjects(ctx),
     listDepartments(ctx),
     listPrograms(ctx),
   ]);
-  if (!projectsResult.ok || !departmentsResult.ok || !programsResult.ok) {
-    return notFound();
-  }
-
-  const { rows } = projectsResult.value;
-  const departments = departmentsResult.value.rows;
-  const programs = programsResult.value.rows.map((p) => ({
+  const { rows } = valueOrNotFound(projectsPage);
+  const departments = valueOrNotFound(departmentsPage).rows;
+  const programs = valueOrNotFound(programsPage).rows.map((p) => ({
     id: p.id,
     departmentId: p.departmentId,
     name: p.name,
@@ -85,6 +81,7 @@ export default async function ProjectsPage() {
                     departmentId={row.departmentId}
                     programId={row.programId}
                     programs={programs}
+                    projectName={row.name}
                   />
                 </td>
                 <td>
@@ -94,6 +91,7 @@ export default async function ProjectsPage() {
                     programId={row.programId}
                     departments={departments}
                     programs={programs}
+                    projectName={row.name}
                   />
                 </td>
               </tr>

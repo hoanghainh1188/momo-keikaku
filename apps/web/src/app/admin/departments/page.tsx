@@ -2,8 +2,8 @@ import { getTranslations } from 'next-intl/server';
 /**
  * Admin: Departments (story 2.17). Ledger-Paper list + create/rename through existing org writes.
  */
-import { notFound } from 'next/navigation';
 import { listDepartments, requestContext } from '@/server/composition';
+import { valueOrNotFound } from '@/server/result';
 import { CreateDepartmentForm, RenameDepartmentForm } from '../org-forms';
 
 export const dynamic = 'force-dynamic';
@@ -11,13 +11,7 @@ export const dynamic = 'force-dynamic';
 export default async function DepartmentsPage() {
   const t = await getTranslations();
   const ctx = await requestContext();
-  const result = await listDepartments(ctx);
-  if (!result.ok) {
-    if (result.error.code === 'not_found') return notFound();
-    return notFound();
-  }
-
-  const { rows } = result.value;
+  const { rows } = valueOrNotFound(await listDepartments(ctx));
   return (
     <div data-testid="admin-departments">
       <h1 className="page-title">{t('admin.org.departments')}</h1>
