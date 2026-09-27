@@ -1218,3 +1218,13 @@ above can see where it went.
   summary: Rename `UserChip` / layout prop `showAuditLog` to something that means "show Admin menu" now that it also gates Departments / Programs / Projects.
   evidence: Review BH8 (2026-09-27): flag semantics widened; rename touches multiple call sites and tests — more than a trivial patch.
 
+
+## Deferred from: code review of spec-2-17-the-tenant-admin-can-see-and-run-the-organisation.md (2026-09-27)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-17-the-tenant-admin-can-see-and-run-the-organisation.md`
+  summary: Admin org pages’ `valueOrNotFound` → `notFound()` path is not exercised by a page/route test.
+  evidence: Build review `4d6707a..a43517e` (2026-09-27). Use-case PM→`not_found` and `result.test.ts` cover the helper; per-page tests would be a new convention shared with other admin pages.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-17-the-tenant-admin-can-see-and-run-the-organisation.md`
+  summary: Japanese Admin chrome still leaves `admin.administration` and `admin.audit.*` in English while `admin.org.*` is localized.
+  evidence: Build review `4d6707a..a43517e` (2026-09-27). Pre-existing mixed chrome; this slice only shipped Japanese `admin.org.*` copy.

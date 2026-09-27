@@ -2,7 +2,7 @@
  * Organisation Admin FormData helpers (story 2.17).
  */
 import { describe, expect, it } from 'vitest';
-import { field, optionalId, parseContractType } from './org-form-fields';
+import { field, optionalId, parseContractType, programsForDepartment } from './org-form-fields';
 
 function form(entries: Record<string, FormDataEntryValue>): FormData {
   const data = new FormData();
@@ -52,5 +52,25 @@ describe('parseContractType', () => {
     expect(parseContractType('')).toBeNull();
     expect(parseContractType('ukeoi')).toBeNull();
     expect(parseContractType('請負 ')).toBeNull();
+  });
+});
+
+describe('programsForDepartment', () => {
+  const programs = [
+    { id: 'p1', departmentId: 'd1', name: 'Alpha' },
+    { id: 'p2', departmentId: 'd2', name: 'Beta' },
+    { id: 'p3', departmentId: 'd1', name: 'Gamma' },
+  ] as const;
+
+  it('keeps only Programs in the selected Department', () => {
+    expect(programsForDepartment(programs, 'd1').map((p) => p.id)).toEqual(['p1', 'p3']);
+  });
+
+  it('returns none when the Department has no Programs', () => {
+    expect(programsForDepartment(programs, 'd-missing')).toEqual([]);
+  });
+
+  it('returns none when no Department is selected yet', () => {
+    expect(programsForDepartment(programs, '')).toEqual([]);
   });
 });

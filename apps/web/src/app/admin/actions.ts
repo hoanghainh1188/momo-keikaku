@@ -27,6 +27,13 @@ export type OrgActionState = {
 
 export const INITIAL_ORG_ACTION: OrgActionState = { error: null, resetKey: 0 };
 
+/** Sibling admin pages show parent names and feed dropdowns — invalidate all three. */
+function revalidateOrgAdminPaths(): void {
+  revalidatePath('/admin/departments');
+  revalidatePath('/admin/programs');
+  revalidatePath('/admin/projects');
+}
+
 function refuse(prev: OrgActionState, messageKey: 'errors.not_found' | 'errors.invalid_input'): OrgActionState {
   return { error: messageFromKey(messageKey), resetKey: prev.resetKey };
 }
@@ -52,7 +59,7 @@ export async function createDepartmentAction(
   const ctx = await requestContext();
   const result = await createDepartment({ name: field(formData, 'name') }, ctx);
   if (!result.ok) return refuseResult(prev, result);
-  revalidatePath('/admin/departments');
+  revalidateOrgAdminPaths();
   return ok(prev);
 }
 
@@ -66,7 +73,7 @@ export async function renameDepartmentAction(
     ctx,
   );
   if (!result.ok) return refuseResult(prev, result);
-  revalidatePath('/admin/departments');
+  revalidateOrgAdminPaths();
   return ok(prev);
 }
 
@@ -80,7 +87,7 @@ export async function createProgramAction(
     ctx,
   );
   if (!result.ok) return refuseResult(prev, result);
-  revalidatePath('/admin/programs');
+  revalidateOrgAdminPaths();
   return ok(prev);
 }
 
@@ -94,7 +101,7 @@ export async function renameProgramAction(
     ctx,
   );
   if (!result.ok) return refuseResult(prev, result);
-  revalidatePath('/admin/programs');
+  revalidateOrgAdminPaths();
   return ok(prev);
 }
 
@@ -117,7 +124,7 @@ export async function createProjectAction(
     ctx,
   );
   if (!result.ok) return refuseResult(prev, result);
-  revalidatePath('/admin/projects');
+  revalidateOrgAdminPaths();
   return ok(prev);
 }
 
@@ -131,7 +138,7 @@ export async function renameProjectAction(
     ctx,
   );
   if (!result.ok) return refuseResult(prev, result);
-  revalidatePath('/admin/projects');
+  revalidateOrgAdminPaths();
   return ok(prev);
 }
 
@@ -148,7 +155,7 @@ export async function reassignProjectProgramAction(
     ctx,
   );
   if (!result.ok) return refuseResult(prev, result);
-  revalidatePath('/admin/projects');
+  revalidateOrgAdminPaths();
   return ok(prev);
 }
 
@@ -166,6 +173,6 @@ export async function reassignProjectDepartmentAction(
     ctx,
   );
   if (!result.ok) return refuseResult(prev, result);
-  revalidatePath('/admin/projects');
+  revalidateOrgAdminPaths();
   return ok(prev);
 }

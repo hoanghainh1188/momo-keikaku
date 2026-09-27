@@ -21,3 +21,11 @@ export function parseContractType(raw: string): '請負' | '準委任' | null {
   if (raw === '請負' || raw === '準委任') return raw;
   return null;
 }
+
+/** Programs offered in Create/Reassign selects — same Department only. */
+export function programsForDepartment<T extends { readonly departmentId: string }>(
+  programs: readonly T[],
+  departmentId: string,
+): readonly T[] {
+  return programs.filter((program) => program.departmentId === departmentId);
+}

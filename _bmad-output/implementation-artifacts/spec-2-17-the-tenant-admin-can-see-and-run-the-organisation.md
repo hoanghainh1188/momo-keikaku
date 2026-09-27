@@ -96,6 +96,7 @@ context:
 
 - 2026-09-27: Added `listDepartments` / `listPrograms` / `listProjects` (ADMIN_ONLY) with `ports/org-read` + `repo-org-list` SELECTs (not FOR UPDATE). Registered in harness; removed `program` from `UNREACHED_TENANT_OWNED_TABLES`. Wired composition bindings + server actions wrapping the eight existing org writes. Three `/admin/{departments,programs,projects}` pages with Ledger-Paper tables; User menu adds three links beside Audit log. PM assignment + Resources & Rates already recorded in deferred-work.md (Q2→B / Build split).
 - Verified: `pnpm lint`, `pnpm typecheck`, `pnpm depcruise`, `pnpm test` (1454 passed with local Postgres).
+- Build review patches (2026-09-27, `4d6707a..a43517e`): revalidate all three org admin paths; remountToken on forms; empty-Department create hint; action-boundary + programsForDepartment tests; EN contract glosses; create vs save submit labels.
 - Review patches (2026-09-27): refuse invalid contractType; Program filter by Department; FormData helpers + tests; `valueOrNotFound`; JP `admin.org` copy; form remount on success; aria-labels; pending i18n. Deferred BH8 `showAuditLog` rename.
 
 ## Spec Change Log
@@ -123,6 +124,34 @@ context:
 | VG3 | verif-gap | medium | patch | Pages use `valueOrNotFound` (covered by `result.test.ts`). |
 | VG4 | verif-gap | low | patch | `field()` treats non-string FormData as `''`. |
 | VG5 | verif-gap | medium | patch | Same as BH2. |
+
+### Review Findings
+
+_Build review `4d6707a..a43517e` (2026-09-27)._
+
+- [x] [Review][Patch] Revalidate all three admin org paths on every org mutation [`apps/web/src/app/admin/actions.ts:55`] — Department/Program mutations only revalidate their own route; Programs/Projects pages show parent names and feed dropdown options, so sibling caches can stay stale after rename/create.
+- [x] [Review][Patch] Remount rename/reassign forms when server props change [`apps/web/src/app/admin/org-forms.tsx:46`] — form `key` is only `resetKey`; after RSC refresh, uncontrolled `defaultValue` / program selects can keep pre-refresh values. Include `name` / `programId` / `departmentId` in the key.
+- [x] [Review][Patch] Empty-Department create UX [`apps/web/src/app/admin/org-forms.tsx:104`] — `noValidate` lets Create Program/Project submit with empty `departmentId` when no Departments exist; show an empty-state message instead of a disabled-only select.
+- [x] [Review][Patch] Action-boundary tests for org FormData shaping [`apps/web/src/app/admin/actions.ts:105`] — helpers are unit-tested, but `createProjectAction` / reassign actions never assert empty `programId`→`null`, invalid `contractType` refuse (no invent), or `resetKey` bump-only-on-success.
+- [x] [Review][Patch] Unit-test Department-scoped Program options [`apps/web/src/app/admin/org-forms.tsx:152`] — extract `programsForDepartment` (or equivalent) and cover Create/Reassign filters; deleting the three `.filter` calls would leave UI offering cross-Department Programs with no failing test.
+- [x] [Review][Patch] English glosses for contract-type options [`packages/i18n/src/messages/en.json:53`] — `contract_ukeoi` / `contract_juninin` are bare Japanese terms in the EN catalog; R0 English UI needs a gloss.
+- [x] [Review][Patch] Distinguish create vs rename submit labels [`apps/web/src/app/admin/org-forms.tsx:56`] — every form uses `admin.org.save`; create sections already have `create_*` copy but the control the Admin presses does not.
+- [x] [Review][Defer] Admin org pages’ `valueOrNotFound` → `notFound()` path untested [`apps/web/src/app/admin/departments/page.tsx:14`] — deferred: use-case + `result.test.ts` cover the boundary; per-page tests would be a new convention (same as other admin pages).
+- [x] [Review][Defer] Japanese Admin chrome still mixed English [`packages/i18n/src/messages/ja.json:20`] — deferred: pre-existing `admin.administration` / `admin.audit.*` English strings; this slice only added `admin.org.*` JP copy.
+
+#### Rejected
+
+- BH: list omits `clientName`/`contractType` — false: AC requires names + parent links needed to act, not create-only fields.
+- BH: no deferred follow-up for view/edit client/contract — false: out of frozen scope; no org-write exists for those fields and inventing one is Never.
+- BH: spec `status: done` vs sprint `review` — rejected: fix is editing the spec/tracker under review.
+- BH: empty Spec Change Log / `review_loop_iteration: 0` — rejected: fix is editing the spec under review.
+- BH: no direct `repo-org-list` SQL tests — false: harness + faked ports match the audit-list pattern.
+- BH: empty-state inline `--ink-muted` — false: `/admin/audit` uses the same pattern.
+- BH: create forms lack `ariaLabel` — low: section `aria-labelledby` already names the create block; everyday impact negligible.
+- BH: Projects table unusable on narrow viewports — false: EXPERIENCE is desktop-first for Admin; not an R0 AC.
+- BH: file-level comments between imports — low: style nit, not worth a drive-by layout churn.
+- ECH: double-submit creates duplicates — false: domain allows duplicate names (Never invent uniqueness); `pending` already disables the button.
+- AA: (none raised)
 
 ## Design Notes
 
