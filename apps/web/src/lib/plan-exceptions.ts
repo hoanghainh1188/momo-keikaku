@@ -159,6 +159,23 @@ export function rebindExplainer(
     : null;
 }
 
+/** Keep the walk selection only when the key still exists on the rail. */
+export function rebindRailSelectedKey(
+  current: ExceptionsRailItemKey | null,
+  rail: PlanExceptionsRailView,
+): ExceptionsRailItemKey | null {
+  if (current === null) return null;
+  return flattenExceptionsRailKeys(rail).includes(current) ? current : null;
+}
+
+/** First walkable chain entry for Comfort Arrow/click focus; 0 when none present. */
+export function firstPresentChainIndex(
+  chain: readonly { readonly presentInLiveTree: boolean }[],
+): number {
+  const idx = chain.findIndex((c) => c.presentInLiveTree);
+  return idx >= 0 ? idx : 0;
+}
+
 export function oosExplainerProse(input: {
   readonly successorWbsCode: string;
   readonly successorName: string;

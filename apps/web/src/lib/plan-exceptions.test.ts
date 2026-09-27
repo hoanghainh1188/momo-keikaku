@@ -18,6 +18,8 @@ import {
   oosItemKey,
   railKeyForGridException,
   rebindExplainer,
+  rebindRailSelectedKey,
+  firstPresentChainIndex,
   scheduleStaleBannerKind,
   VIOLATION_HONESTY_LINE,
   violationItemKey,
@@ -131,6 +133,34 @@ describe('plan-exceptions helpers (story 2.16)', () => {
       notSchedulable: [],
     };
     expect(rebindExplainer({ kind: 'not_schedulable', wpId: 'n1' }, empty)).toBeNull();
+  });
+
+  it('rebinds or clears the rail walk key so Enter cannot target a ghost', () => {
+    expect(rebindRailSelectedKey(violationItemKey('v1'), sampleRail)).toBe(
+      violationItemKey('v1'),
+    );
+    expect(rebindRailSelectedKey(violationItemKey('gone'), sampleRail)).toBeNull();
+    expect(rebindRailSelectedKey(null, sampleRail)).toBeNull();
+    const emptied: PlanExceptionsRailView = {
+      ...sampleRail,
+      totalCount: 0,
+      violations: [],
+      outOfSequence: [],
+      notSchedulable: [],
+    };
+    expect(rebindRailSelectedKey(oosItemKey('p', 's'), emptied)).toBeNull();
+  });
+
+  it('initialises Comfort chain walk on the first presentInLiveTree entry', () => {
+    expect(
+      firstPresentChainIndex([
+        { presentInLiveTree: false },
+        { presentInLiveTree: true },
+        { presentInLiveTree: true },
+      ]),
+    ).toBe(1);
+    expect(firstPresentChainIndex([{ presentInLiveTree: false }])).toBe(0);
+    expect(firstPresentChainIndex([])).toBe(0);
   });
 
   it('uses calendar-range banner only for that halt; other stale keeps thin copy', () => {

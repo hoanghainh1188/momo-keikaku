@@ -17,6 +17,7 @@ import {
   registeredEngineVersions,
 } from '@momo/domain';
 import { applyPlanChange } from '../../packages/app/src/schedule/apply-plan-change';
+import { getPlanGridState } from '../../packages/app/src/schedule/plan-grid';
 import { closeAllPools, getDb, getPool } from '../../packages/db/src/client';
 import {
   assertProbeTenantsDisjoint,
@@ -365,6 +366,22 @@ describe.skipIf(!reachable)('applyPlanChange fence (story 2.9)', () => {
     );
     expect(afterProjection.length).toBe(priorProjection.length);
     expect(afterProjection.every((r) => r.stale === true)).toBe(true);
+
+    // Story 2.16 Q1→A — halted run contributes no rail rows; calendar bounds stay for the banner.
+    const grid = await getPlanGridState(
+      { handle: app, transaction: inTenantTransaction },
+      ctx(),
+      { projectId: PROBE.projectId },
+    );
+    expect(grid.ok).toBe(true);
+    if (!grid.ok) return;
+    expect(grid.value.haltedReason).toBe('calendar_range');
+    expect(grid.value.exceptions.totalCount).toBe(0);
+    expect(grid.value.exceptions.violations).toEqual([]);
+    expect(grid.value.exceptions.outOfSequence).toEqual([]);
+    expect(grid.value.exceptions.notSchedulable).toEqual([]);
+    expect(grid.value.exceptions.calendarRangeStart).toBeTruthy();
+    expect(grid.value.exceptions.calendarRangeEnd).toBeTruthy();
   });
 
   it('contending applyPlanChange with lock_timeout fails retryably (does not block forever)', async () => {

@@ -20,6 +20,7 @@ import {
   EXCEPTIONS_RAIL_BREAKPOINT_PX,
   NOT_SCHEDULABLE_COPY,
   VIOLATION_HONESTY_LINE,
+  firstPresentChainIndex,
   groupIdForRailKey,
   notSchedulableItemKey,
   oosExplainerProse,
@@ -70,9 +71,9 @@ export function PlanExceptionsRail({
   const [nsOpen, setNsOpen] = useState(rail.notSchedulable.length > 0);
 
   useEffect(() => {
-    if (rail.violations.length > 0) setViolationsOpen(true);
-    if (rail.outOfSequence.length > 0) setOosOpen(true);
-    if (rail.notSchedulable.length > 0) setNsOpen(true);
+    setViolationsOpen(rail.violations.length > 0);
+    setOosOpen(rail.outOfSequence.length > 0);
+    setNsOpen(rail.notSchedulable.length > 0);
   }, [rail.violations.length, rail.outOfSequence.length, rail.notSchedulable.length]);
 
   // j/k into a collapsed non-empty group expands it.
@@ -403,15 +404,32 @@ function ViolationExplainerBody({
 }) {
   // Display root-cause first (reverse of engine immediate-driver-first order).
   const displayChain = [...row.chain].reverse();
-  const [chainIdx, setChainIdx] = useState(0);
+  const [chainIdx, setChainIdx] = useState(() => firstPresentChainIndex(displayChain));
   const listRef = useRef<HTMLUListElement>(null);
 
   useEffect(() => {
-    setChainIdx(0);
+    setChainIdx(firstPresentChainIndex([...row.chain].reverse()));
+    // Reset when the violation WP changes; chain contents travel with that DTO.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: rebind on wpId only
   }, [row.wpId]);
+
+  const revealChainWp = (wpId: string) => {
+    onChainFocusActiveChange(true);
+    onFocusWp(wpId);
+    // Keep keyboard on the chain list (onFocusWp must not steal DOM focus).
+    listRef.current?.focus();
+  };
 
   const onChainKeyDown = (e: KeyboardEvent<HTMLUListElement>) => {
     if (displayChain.length === 0) return;
+    if (e.key === 'Enter') {
+      const entry = displayChain[chainIdx];
+      if (!entry?.presentInLiveTree) return;
+      e.preventDefault();
+      e.stopPropagation();
+      revealChainWp(entry.wpId);
+      return;
+    }
     if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
     e.preventDefault();
     e.stopPropagation();
@@ -423,7 +441,7 @@ function ViolationExplainerBody({
       const entry = displayChain[next]!;
       if (entry.presentInLiveTree) {
         setChainIdx(next);
-        onFocusWp(entry.wpId);
+        revealChainWp(entry.wpId);
         return;
       }
     }
@@ -471,7 +489,12 @@ function ViolationExplainerBody({
             data-testid="violation-chain"
             data-chain-focus={chainFocusActive ? '1' : '0'}
             onFocus={() => onChainFocusActiveChange(true)}
-            onBlur={() => onChainFocusActiveChange(false)}
+            onBlur={(e) => {
+              // Only clear when focus leaves the list (not when we briefly re-focus ourselves).
+              if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+                onChainFocusActiveChange(false);
+              }
+            }}
             onKeyDown={onChainKeyDown}
           >
             {displayChain.map((c, i) => (
@@ -481,6 +504,11 @@ function ViolationExplainerBody({
                 aria-selected={i === chainIdx}
                 className={i === chainIdx ? 'plan-ex-pop-chain-f' : undefined}
                 data-present={c.presentInLiveTree ? '1' : '0'}
+                onClick={() => {
+                  if (!c.presentInLiveTree) return;
+                  setChainIdx(i);
+                  revealChainWp(c.wpId);
+                }}
               >
                 <span className="plan-ex-pop-chain-w">
                   {c.wbsCode} {c.name}
@@ -561,13 +589,16 @@ function NotSchedulableExplainerBody({
       return;
     }
     setPending(true);
-    const refuse = await onPatchDuration(row.wpId, next);
-    setPending(false);
-    if (refuse) {
-      setError(refuse);
-      return;
+    try {
+      const refuse = await onPatchDuration(row.wpId, next);
+      if (refuse) {
+        setError(refuse);
+        return;
+      }
+      setError(null);
+    } finally {
+      setPending(false);
     }
-    setError(null);
   };
 
   return (

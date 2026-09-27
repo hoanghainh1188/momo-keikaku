@@ -51,6 +51,7 @@ import {
   nextDrawerOpenForXKey,
   railKeyForGridException,
   rebindExplainer,
+  rebindRailSelectedKey,
   scheduleStaleBannerKind,
   walkExceptionsRailKey,
 } from '@/lib/plan-exceptions';
@@ -748,6 +749,7 @@ export function PlanTreeGrid({
     setHaltedReason(model.haltedReason);
     setStripOverrides(null);
     setExplainer((prev) => rebindExplainer(prev, model.exceptions));
+    setRailSelectedKey((prev) => rebindRailSelectedKey(prev, model.exceptions));
   }, [
     model.whatMoved,
     model.exceptions,
@@ -803,17 +805,48 @@ export function PlanTreeGrid({
     el?.scrollIntoView({ block: 'nearest' });
   }, []);
 
+  /** Chain walk / Comfort: scroll+select without stealing DOM focus from the chain list. */
+  const revealWpInGrid = useCallback((wpId: string) => {
+    setFocusedWpId(wpId);
+    const el = tableRef.current?.querySelector(`[data-wp-id="${wpId}"]`) as HTMLElement | null;
+    el?.scrollIntoView({ block: 'nearest' });
+  }, []);
+
   const openExplainerForKey = useCallback(
     (key: ExceptionsRailItemKey) => {
       const target = explainerFromRailKey(key);
       if (!target) return;
+      // Below 1680 the rail (and explainer) only mounts when the drawer is open.
+      if (!pinned) {
+        setDrawerOpen(true);
+        drawerPrefRef.current = true;
+      }
       setRailSelectedKey(key);
       const focusId = focusWpIdForRailKey(key, exceptions);
       if (focusId) focusWpInGrid(focusId);
       setExplainer(target);
     },
-    [exceptions, focusWpInGrid],
+    [exceptions, focusWpInGrid, pinned],
   );
+
+  const closeDrawer = useCallback(() => {
+    drawerPrefRef.current = false;
+    setDrawerOpen(false);
+    setChainFocusActive(false);
+    setExplainer(null);
+  }, []);
+
+  const toggleDrawer = useCallback(() => {
+    setDrawerOpen((open) => {
+      const next = !open;
+      drawerPrefRef.current = next;
+      if (!next) {
+        setChainFocusActive(false);
+        setExplainer(null);
+      }
+      return next;
+    });
+  }, []);
 
   const openExplainerForGridRow = useCallback(
     (wpId: string) => {
@@ -871,6 +904,7 @@ export function PlanTreeGrid({
     setScheduleStale(outcome.scheduleStale);
     setHaltedReason(outcome.haltedReason);
     setExplainer((prev) => rebindExplainer(prev, outcome.exceptions));
+    setRailSelectedKey((prev) => rebindRailSelectedKey(prev, outcome.exceptions));
     setStripOverrides({
       projectStart: outcome.projectStart,
       projectFinish: outcome.projectFinish,
@@ -1038,8 +1072,12 @@ export function PlanTreeGrid({
       const next = nextDrawerOpenForXKey({ pinned, drawerOpen });
       if (!next.changed) return; // no-op when pinned (≥1680)
       e.preventDefault();
-      drawerPrefRef.current = next.drawerOpen;
-      setDrawerOpen(next.drawerOpen);
+      if (next.drawerOpen) {
+        drawerPrefRef.current = true;
+        setDrawerOpen(true);
+      } else {
+        closeDrawer();
+      }
       return;
     }
 
@@ -1287,13 +1325,7 @@ export function PlanTreeGrid({
           totalCount={exceptions.totalCount}
           pinned={pinned}
           drawerOpen={drawerOpen}
-          onToggle={() => {
-            setDrawerOpen((open) => {
-              const next = !open;
-              drawerPrefRef.current = next;
-              return next;
-            });
-          }}
+          onToggle={toggleDrawer}
         />
         {teaching ? (
           <span className="plan-teaching" role="status" data-testid="derived-date-teaching">
@@ -1355,11 +1387,7 @@ export function PlanTreeGrid({
       />
 
       <div
-        className={[
-          'plan-body',
-          pinned ? 'plan-body--rail-pinned' : '',
-          !pinned && drawerOpen ? 'plan-body--rail-drawer-open' : '',
-        ]
+        className={['plan-body', pinned ? 'plan-body--rail-pinned' : '']
           .filter(Boolean)
           .join(' ')}
       >
@@ -1517,7 +1545,7 @@ export function PlanTreeGrid({
             setExplainer(null);
           }}
           onActivateItem={openExplainerForKey}
-          onFocusWp={focusWpInGrid}
+          onFocusWp={revealWpInGrid}
           onPatchDuration={patchDuration}
           chainFocusActive={chainFocusActive}
           onChainFocusActiveChange={setChainFocusActive}
