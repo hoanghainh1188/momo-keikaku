@@ -28,6 +28,15 @@ const sample: PlanGridState = {
   finishTeaching:
     'This moves no work package. It changes what Float is measured against, and lets Float go negative',
   whatMoved: null,
+  exceptions: {
+    totalCount: 0,
+    holidayCalendarVersionSeq: null,
+    calendarRangeStart: null,
+    calendarRangeEnd: null,
+    violations: [],
+    outOfSequence: [],
+    notSchedulable: [],
+  },
   rows: [
     {
       wpId: 'leaf',
@@ -115,6 +124,7 @@ describe('plan-grid-view (story 2.13)', () => {
     expect(leaf.floatDays).toBe(-3);
     expect(leaf.isCritical).toBe(true);
     expect(leaf.exceptionLabel).toBe('▲ Late 6d');
+    expect(view.exceptions.totalCount).toBe(0);
     expect([...SCHEDULE_COLUMNS]).toEqual([
       'Start',
       'Finish',
@@ -126,5 +136,56 @@ describe('plan-grid-view (story 2.13)', () => {
       'Exception',
       'Recorded %',
     ]);
+  });
+
+  it('serialises the exceptions rail lists for the client (story 2.16)', () => {
+    const withRail: PlanGridState = {
+      ...sample,
+      exceptions: {
+        totalCount: 2,
+        holidayCalendarVersionSeq: 3,
+        calendarRangeStart: '2026-01-01',
+        calendarRangeEnd: '2028-12-31',
+        violations: [
+          {
+            wpId: 'leaf',
+            wbsCode: '1.1',
+            name: 'Leaf',
+            label: '▲ Late 6d',
+            isMilestone: false,
+            constraintType: 'must_finish_on',
+            askedDate: '2027-03-18',
+            derivedDate: '2027-03-26',
+            daysLate: 6,
+            chain: [
+              {
+                wpId: 'pred',
+                wbsCode: '1.0',
+                name: 'Pred',
+                finish: '2027-03-20',
+                lagDays: 2,
+                presentInLiveTree: true,
+              },
+            ],
+          },
+        ],
+        outOfSequence: [],
+        notSchedulable: [
+          {
+            wpId: 'ns',
+            wbsCode: '1.2',
+            name: 'No dur',
+            label: '⊘ No duration',
+            reason: 'no_duration',
+          },
+        ],
+      },
+    };
+    const view = toPlanGridViewModel(withRail, 'user-1');
+    expect(view.exceptions.totalCount).toBe(2);
+    expect(view.exceptions.violations[0]!.daysLate).toBe(6);
+    expect(view.exceptions.violations[0]!.chain[0]!.lagDays).toBe(2);
+    expect(view.exceptions.notSchedulable[0]!.label).toBe('⊘ No duration');
+    expect(view.exceptions.holidayCalendarVersionSeq).toBe(3);
   });
 });

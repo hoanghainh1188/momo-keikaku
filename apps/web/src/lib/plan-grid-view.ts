@@ -1,5 +1,6 @@
-import type { PlanGridState, WhatMovedBand } from '@momo/app';
+import type { PlanGridState, PlanExceptionsRail, WhatMovedBand } from '@momo/app';
 import type {
+  PlanExceptionsRailView,
   PlanGridRowView,
   PlanGridViewModel,
   WhatMovedBandView,
@@ -32,6 +33,54 @@ function toWhatMovedView(band: WhatMovedBand): WhatMovedBandView {
     actorUserId: band.actorUserId,
     actorName: band.actorName,
     atIso: band.atIso,
+  };
+}
+
+function toExceptionsView(rail: PlanExceptionsRail): PlanExceptionsRailView {
+  return {
+    totalCount: rail.totalCount,
+    holidayCalendarVersionSeq: rail.holidayCalendarVersionSeq,
+    calendarRangeStart: rail.calendarRangeStart,
+    calendarRangeEnd: rail.calendarRangeEnd,
+    violations: rail.violations.map((v) => ({
+      wpId: v.wpId,
+      wbsCode: v.wbsCode,
+      name: v.name,
+      label: v.label,
+      isMilestone: v.isMilestone,
+      constraintType: v.constraintType,
+      askedDate: v.askedDate,
+      derivedDate: v.derivedDate,
+      daysLate: v.daysLate,
+      chain: v.chain.map((c) => ({
+        wpId: c.wpId,
+        wbsCode: c.wbsCode,
+        name: c.name,
+        finish: c.finish,
+        lagDays: c.lagDays,
+        presentInLiveTree: c.presentInLiveTree,
+      })),
+    })),
+    outOfSequence: rail.outOfSequence.map((e) => ({
+      predecessorWpId: e.predecessorWpId,
+      successorWpId: e.successorWpId,
+      predecessorWbsCode: e.predecessorWbsCode,
+      predecessorName: e.predecessorName,
+      successorWbsCode: e.successorWbsCode,
+      successorName: e.successorName,
+      label: e.label,
+      successorActualStart: e.successorActualStart,
+      predecessorFinish: e.predecessorFinish,
+      predecessorPresent: e.predecessorPresent,
+      successorPresent: e.successorPresent,
+    })),
+    notSchedulable: rail.notSchedulable.map((n) => ({
+      wpId: n.wpId,
+      wbsCode: n.wbsCode,
+      name: n.name,
+      label: n.label,
+      reason: n.reason,
+    })),
   };
 }
 
@@ -93,6 +142,7 @@ export function toPlanGridViewModel(
     scheduleStale: grid.scheduleStale,
     haltedReason: grid.haltedReason,
     whatMoved: grid.whatMoved === null ? null : toWhatMovedView(grid.whatMoved),
+    exceptions: toExceptionsView(grid.exceptions),
     leafCandidates: grid.leafCandidates.map((c) => ({
       wpId: c.wpId,
       wbsCode: c.wbsCode,

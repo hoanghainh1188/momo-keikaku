@@ -473,6 +473,13 @@ describe.skipIf(!reachable)('predecessor set + constraint editors (story 2.14)',
     const row = grid.value.rows.find((r) => r.wpId === succ.id);
     expect(row?.exception?.kind).toBe('violation');
     expect(row?.exception?.label).toMatch(/Late \d+d/);
+    // Story 2.16 — rail surfaces the same violation with full fields.
+    expect(grid.value.exceptions.totalCount).toBeGreaterThanOrEqual(1);
+    const railV = grid.value.exceptions.violations.find((v) => v.wpId === succ.id);
+    expect(railV).toBeDefined();
+    expect(railV?.label).toBe(row?.exception?.label);
+    expect(railV?.daysLate).toBeGreaterThan(0);
+    expect(typeof railV?.daysLate).toBe('number');
   });
 
   it('parse refuse for malformed predecessor text does not write', async () => {

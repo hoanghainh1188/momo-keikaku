@@ -51,6 +51,15 @@ const sampleView: PlanGridViewModel = {
     actorName: 'Hoang',
     atIso: '2026-09-26T10:00:00.000Z',
   },
+  exceptions: {
+    totalCount: 0,
+    holidayCalendarVersionSeq: 3,
+    calendarRangeStart: '2026-01-01',
+    calendarRangeEnd: '2028-12-31',
+    violations: [],
+    outOfSequence: [],
+    notSchedulable: [],
+  },
   leafCandidates: [],
   rows: [],
 };
@@ -65,6 +74,8 @@ describe('plan-write-success (story 2.15)', () => {
     expect(success.computedFinish).toBe('2027-03-26');
     expect(success.minFloat).toBe(4);
     expect(success.floatAnchorSentence).toMatch(/Float measured against/);
+    expect(success.exceptions.totalCount).toBe(0);
+    expect(success.exceptions.holidayCalendarVersionSeq).toBe(3);
     expect(success).not.toHaveProperty('movedWpIds');
   });
 
@@ -73,5 +84,32 @@ describe('plan-write-success (story 2.15)', () => {
     expect(refuse.ok).toBe(false);
     expect(refuse.code).toBe('read_after_write');
     expect(refuse.details?.refuse?.[0]).toMatch(/could not be re-read/);
+  });
+
+  it('preserves empty exceptions + calendar range on a halted re-read (story 2.16)', () => {
+    const halted: PlanGridViewModel = {
+      ...sampleView,
+      scheduleStale: true,
+      haltedReason: 'calendar_range',
+      computedFinish: null,
+      minFloat: null,
+      floatAnchorSentence: null,
+      whatMoved: null,
+      exceptions: {
+        totalCount: 0,
+        holidayCalendarVersionSeq: null,
+        calendarRangeStart: '2026-01-01',
+        calendarRangeEnd: '2028-12-31',
+        violations: [],
+        outOfSequence: [],
+        notSchedulable: [],
+      },
+    };
+    const success = toPlanWriteSuccess(halted);
+    expect(success.ok).toBe(true);
+    expect(success.exceptions.totalCount).toBe(0);
+    expect(success.exceptions.calendarRangeStart).toBe('2026-01-01');
+    expect(success.scheduleStale).toBe(true);
+    expect(success.haltedReason).toBe('calendar_range');
   });
 });

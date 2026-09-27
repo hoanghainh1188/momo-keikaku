@@ -1,10 +1,16 @@
-import type { WhatMovedBandView } from '@/components/plan-grid-types';
-import type { PlanGridViewModel } from '@/components/plan-grid-types';
+import type {
+  PlanExceptionsRailView,
+  PlanGridViewModel,
+  WhatMovedBandView,
+} from '@/components/plan-grid-types';
 
-/** Success payload after a plan write + re-read (story 2.15). */
+/** Success payload after a plan write + re-read (story 2.15 / 2.16). */
 export type PlanWriteSuccess = {
   readonly ok: true;
   readonly whatMoved: WhatMovedBandView | null;
+  readonly exceptions: PlanExceptionsRailView;
+  readonly scheduleStale: boolean;
+  readonly haltedReason: string | null;
   readonly projectStart: string | null;
   readonly projectFinish: string | null;
   readonly dataDate: string | null;
@@ -25,6 +31,9 @@ export function toPlanWriteSuccess(view: PlanGridViewModel): PlanWriteSuccess {
   return {
     ok: true,
     whatMoved: view.whatMoved,
+    exceptions: view.exceptions,
+    scheduleStale: view.scheduleStale,
+    haltedReason: view.haltedReason,
     projectStart: view.projectStart,
     projectFinish: view.projectFinish,
     dataDate: view.dataDate,

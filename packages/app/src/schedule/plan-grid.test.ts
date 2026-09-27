@@ -5,7 +5,10 @@ import { describe, expect, it } from 'vitest';
 import { compareWp } from '@momo/domain';
 import {
   actorUserIdOf,
+  buildExceptionsRail,
   buildWhatMovedBand,
+  calendarRangeHaltBanner,
+  emptyExceptionsRail,
   floatAnchorHeader,
   floatAnchorSentence,
   formatConstraintLabel,
@@ -304,5 +307,135 @@ describe('plan-grid display helpers (story 2.13)', () => {
     ];
     const sorted = [...rows].sort(compareWp);
     expect(sorted.map((r) => r.wbsCode)).toEqual(['2', '10']);
+  });
+});
+
+describe('exceptions rail builders (story 2.16)', () => {
+  it('writes the Q1→A calendar-range halt banner with loaded range or unavailable', () => {
+    expect(
+      calendarRangeHaltBanner({
+        rangeStart: '2026-01-01',
+        rangeEnd: '2028-12-31',
+      }),
+    ).toBe(
+      'Schedule halted: calendar range. Loaded 1 Jan 2026–31 Dec 2028. Derived dates are stale — extend the Holiday Calendar range in Project settings.',
+    );
+    expect(calendarRangeHaltBanner({ rangeStart: null, rangeEnd: null })).toContain(
+      'range unavailable',
+    );
+    expect(calendarRangeHaltBanner({ rangeStart: '2026-01-01', rangeEnd: null })).toContain(
+      'range unavailable',
+    );
+  });
+
+  it('returns an empty rail for halted / no-run and ranks multi-kind + multi-edge', () => {
+    expect(emptyExceptionsRail().totalCount).toBe(0);
+
+    const rail = buildExceptionsRail({
+      orderedIds: ['v', 'm', 'p', 's1', 's2', 'n'],
+      wbsById: new Map([
+        ['v', '5.4'],
+        ['m', '5.2'],
+        ['p', '3.5'],
+        ['s1', '3.6'],
+        ['s2', '3.7'],
+        ['n', '4.7'],
+      ]),
+      nameById: new Map([
+        ['v', 'Warranty'],
+        ['m', 'Final'],
+        ['p', 'Pred'],
+        ['s1', 'SuccA'],
+        ['s2', 'SuccB'],
+        ['n', 'Report'],
+      ]),
+      liveWpIds: new Set(['v', 'm', 'p', 's1', 's2', 'n']),
+      milestoneIds: new Set(['m']),
+      holidayCalendarVersionSeq: 3,
+      calendarRangeStart: '2026-01-01',
+      calendarRangeEnd: '2028-12-31',
+      violations: [
+        {
+          wpId: 'v',
+          constraintType: 'must_finish_on',
+          askedDate: '2027-04-02',
+          derivedDate: '2027-04-09',
+          daysLate: 5,
+          chain: ['p'],
+        },
+        {
+          wpId: 'm',
+          constraintType: 'must_finish_on',
+          askedDate: '2027-03-18',
+          derivedDate: '2027-03-26',
+          daysLate: 6,
+          chain: [],
+        },
+        // Same WP also Late + will appear in OOS below (multi-kind).
+        {
+          wpId: 's1',
+          constraintType: 'must_start_on',
+          askedDate: '2026-09-01',
+          derivedDate: '2026-09-08',
+          daysLate: 5,
+          chain: ['missing'],
+        },
+      ],
+      outOfSequence: [
+        { predecessorId: 'p', successorId: 's1' },
+        { predecessorId: 'p', successorId: 's2' },
+      ],
+      notSchedulable: [{ wpId: 'n', reason: 'no_duration' }],
+      actualByWp: new Map([
+        ['s1', { actualStart: '2026-09-07', actualFinish: null }],
+        ['s2', { actualStart: '2026-09-08', actualFinish: null }],
+        ['p', { actualStart: '2026-08-01', actualFinish: '2026-09-14' }],
+      ]),
+      earlyFinishByWp: new Map([
+        ['p', '2026-09-14'],
+        ['v', '2027-04-09'],
+      ]),
+      lagByEdge: new Map([['p\0v', 2]]),
+    });
+
+    expect(rail.totalCount).toBe(6); // 3 violations + 2 OOS + 1 NS
+    // Worst-late first; tie on daysLate → compareWp (3.6 before 5.4).
+    expect(rail.violations.map((v) => v.wpId)).toEqual(['m', 's1', 'v']);
+    expect(rail.violations[0]!.label).toBe('◆ Late 6d');
+    expect(rail.violations[0]!.chain).toEqual([]);
+    expect(rail.violations[1]!.chain[0]!.presentInLiveTree).toBe(false);
+    expect(rail.violations[1]!.chain[0]!.wbsCode).toMatch(/missing|miss/);
+    expect(rail.outOfSequence).toHaveLength(2);
+    expect(rail.outOfSequence[0]!.successorActualStart).toBe('2026-09-07');
+    expect(rail.outOfSequence[0]!.predecessorFinish).toBe('2026-09-14');
+    expect(rail.notSchedulable[0]!.label).toBe('⊘ No duration');
+    expect(rail.holidayCalendarVersionSeq).toBe(3);
+  });
+
+  it('omits invented OOS dates when actual/finish are missing', () => {
+    const rail = buildExceptionsRail({
+      orderedIds: ['p', 's'],
+      wbsById: new Map([
+        ['p', '2.3'],
+        ['s', '2.4'],
+      ]),
+      nameById: new Map([
+        ['p', 'Pred'],
+        ['s', 'Succ'],
+      ]),
+      liveWpIds: new Set(['p', 's']),
+      milestoneIds: new Set(),
+      holidayCalendarVersionSeq: 1,
+      calendarRangeStart: null,
+      calendarRangeEnd: null,
+      violations: [],
+      outOfSequence: [{ predecessorId: 'p', successorId: 's' }],
+      notSchedulable: [],
+      actualByWp: new Map(),
+      earlyFinishByWp: new Map(),
+      lagByEdge: new Map(),
+    });
+    expect(rail.outOfSequence[0]!.successorActualStart).toBeNull();
+    expect(rail.outOfSequence[0]!.predecessorFinish).toBeNull();
   });
 });
