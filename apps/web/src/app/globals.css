@@ -272,6 +272,11 @@ a {
   margin: 0;
   flex: 1 1 100%;
 }
+.org-form-hint {
+  color: var(--ink-muted);
+  font-size: 13px;
+  margin: 8px 0;
+}
 
 /* Project settings forms — same density as audit filters / Mapping actions */
 .settings-fields {

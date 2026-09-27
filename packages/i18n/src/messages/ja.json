@@ -60,6 +60,7 @@
       "no_departments": "部門はまだありません。",
       "no_programs": "プログラムはまだありません。",
       "no_projects": "プロジェクトはまだありません。",
+      "needs_department_first": "プログラムやプロジェクトを追加する前に、先に部門を作成してください。",
       "rename_named": "{name} を改名",
       "reassign_program_named": "{name} のプログラムを変更",
       "reassign_department_named": "{name} の部門を変更"

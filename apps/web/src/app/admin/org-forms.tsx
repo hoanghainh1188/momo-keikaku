@@ -18,6 +18,7 @@ import {
   renameProjectAction,
   type OrgActionState,
 } from './actions';
+import { programsForDepartment } from './org-form-fields';
 
 function Refuse({ error }: { error: string | null }) {
   if (!error) return null;
@@ -33,17 +34,22 @@ function OrgForm({
   children,
   testId,
   ariaLabel,
+  remountToken,
+  submitLabel,
 }: {
   action: (prev: OrgActionState, formData: FormData) => Promise<OrgActionState>;
   children: ReactNode;
   testId: string;
   ariaLabel?: string;
+  /** Server props that must remount uncontrolled fields when RSC refreshes. */
+  remountToken?: string;
+  submitLabel: string;
 }) {
   const t = useTranslations();
   const [state, formAction, pending] = useActionState(action, INITIAL_ORG_ACTION);
   return (
     <form
-      key={state.resetKey}
+      key={`${state.resetKey}-${remountToken ?? ''}`}
       action={formAction}
       className="org-form"
       data-testid={testId}
@@ -53,7 +59,7 @@ function OrgForm({
       {children}
       <Refuse error={state.error} />
       <button type="submit" className="btn" disabled={pending}>
-        {pending ? t('admin.org.saving') : t('admin.org.save')}
+        {pending ? t('admin.org.saving') : submitLabel}
       </button>
     </form>
   );
@@ -62,7 +68,11 @@ function OrgForm({
 export function CreateDepartmentForm() {
   const t = useTranslations();
   return (
-    <OrgForm action={createDepartmentAction} testId="create-department-form">
+    <OrgForm
+      action={createDepartmentAction}
+      testId="create-department-form"
+      submitLabel={t('admin.org.create_department')}
+    >
       <label>
         {t('admin.org.name')}
         <input name="name" type="text" required autoComplete="off" />
@@ -84,6 +94,8 @@ export function RenameDepartmentForm({
       action={renameDepartmentAction}
       testId={`rename-department-${departmentId}`}
       ariaLabel={t('admin.org.rename_named', { name })}
+      remountToken={name}
+      submitLabel={t('admin.org.save')}
     >
       <input type="hidden" name="departmentId" value={departmentId} />
       <label>
@@ -100,8 +112,19 @@ export function CreateProgramForm({
   departments: readonly { id: string; name: string }[];
 }) {
   const t = useTranslations();
+  if (departments.length === 0) {
+    return (
+      <p className="org-form-hint" data-testid="create-program-needs-department">
+        {t('admin.org.needs_department_first')}
+      </p>
+    );
+  }
   return (
-    <OrgForm action={createProgramAction} testId="create-program-form">
+    <OrgForm
+      action={createProgramAction}
+      testId="create-program-form"
+      submitLabel={t('admin.org.create_program')}
+    >
       <label>
         {t('admin.org.department')}
         <select name="departmentId" required defaultValue="">
@@ -130,6 +153,8 @@ export function RenameProgramForm({ programId, name }: { programId: string; name
       action={renameProgramAction}
       testId={`rename-program-${programId}`}
       ariaLabel={t('admin.org.rename_named', { name })}
+      remountToken={name}
+      submitLabel={t('admin.org.save')}
     >
       <input type="hidden" name="programId" value={programId} />
       <label>
@@ -149,7 +174,7 @@ function CreateProjectFields({
 }) {
   const t = useTranslations();
   const [departmentId, setDepartmentId] = useState('');
-  const programsInDept = programs.filter((p) => p.departmentId === departmentId);
+  const programsInDept = programsForDepartment(programs, departmentId);
   return (
     <>
       <label>
@@ -207,8 +232,20 @@ export function CreateProjectForm({
   departments: readonly { id: string; name: string }[];
   programs: readonly { id: string; departmentId: string; name: string }[];
 }) {
+  const t = useTranslations();
+  if (departments.length === 0) {
+    return (
+      <p className="org-form-hint" data-testid="create-project-needs-department">
+        {t('admin.org.needs_department_first')}
+      </p>
+    );
+  }
   return (
-    <OrgForm action={createProjectAction} testId="create-project-form">
+    <OrgForm
+      action={createProjectAction}
+      testId="create-project-form"
+      submitLabel={t('admin.org.create_project')}
+    >
       <CreateProjectFields departments={departments} programs={programs} />
     </OrgForm>
   );
@@ -221,6 +258,8 @@ export function RenameProjectForm({ projectId, name }: { projectId: string; name
       action={renameProjectAction}
       testId={`rename-project-${projectId}`}
       ariaLabel={t('admin.org.rename_named', { name })}
+      remountToken={name}
+      submitLabel={t('admin.org.save')}
     >
       <input type="hidden" name="projectId" value={projectId} />
       <label>
@@ -245,12 +284,14 @@ export function ReassignProgramForm({
   projectName: string;
 }) {
   const t = useTranslations();
-  const sameDept = programs.filter((p) => p.departmentId === departmentId);
+  const sameDept = programsForDepartment(programs, departmentId);
   return (
     <OrgForm
       action={reassignProjectProgramAction}
       testId={`reassign-program-${projectId}`}
       ariaLabel={t('admin.org.reassign_program_named', { name: projectName })}
+      remountToken={`${departmentId}:${programId ?? ''}`}
+      submitLabel={t('admin.org.save')}
     >
       <input type="hidden" name="projectId" value={projectId} />
       <label>
@@ -281,7 +322,7 @@ function ReassignDepartmentFields({
 }) {
   const t = useTranslations();
   const [selectedDepartmentId, setSelectedDepartmentId] = useState(departmentId);
-  const programsInDept = programs.filter((p) => p.departmentId === selectedDepartmentId);
+  const programsInDept = programsForDepartment(programs, selectedDepartmentId);
   const initialProgram =
     programId !== null && programsInDept.some((p) => p.id === programId) ? programId : '';
   return (
@@ -337,6 +378,8 @@ export function ReassignDepartmentForm({
       action={reassignProjectDepartmentAction}
       testId={`reassign-department-${projectId}`}
       ariaLabel={t('admin.org.reassign_department_named', { name: projectName })}
+      remountToken={`${departmentId}:${programId ?? ''}`}
+      submitLabel={t('admin.org.save')}
     >
       <input type="hidden" name="projectId" value={projectId} />
       <ReassignDepartmentFields
