@@ -409,9 +409,7 @@ function ViolationExplainerBody({
 
   useEffect(() => {
     setChainIdx(firstPresentChainIndex([...row.chain].reverse()));
-    // Reset when the violation WP changes; chain contents travel with that DTO.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: rebind on wpId only
-  }, [row.wpId]);
+  }, [row.wpId, row.chain]);
 
   const revealChainWp = (wpId: string) => {
     onChainFocusActiveChange(true);
