@@ -1190,3 +1190,11 @@ above can see where it went.
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-16-the-schedule-exceptions-rail-and-its-three-explainers.md`
   summary: Persisted illegal-edge "This plan cannot be scheduled…" band with named offending edges and last-good schedule marked stale (UX-DR23 / Story 2.16 AC).
   evidence: Split at story 2.16 Open Questions gate — founder chose Q1→A. Fence 2.9 refuses graph_invalid at write time (FR-6a); only calendar_range halt banner chrome ships in 2.16.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-16-the-schedule-exceptions-rail-and-its-three-explainers.md`
+  summary: Collapse duplicated calendar-range halt banner formatters (`packages/app` calendarRangeHaltBanner vs `apps/web` calendarRangeHaltBannerCopy) into one shared module.
+  evidence: Review BH5 (2026-09-27): two formatters can drift; same helper-dedupe backlog as 2.13 BH8 / 2.15 BH10.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-16-the-schedule-exceptions-rail-and-its-three-explainers.md`
+  summary: Show Holiday Calendar national provenance (JP/VN / dataset id) on the violation explainer when cheap from stored inputs.
+  evidence: Review BH11 (2026-09-27): Design Notes optional polish; Always only requires versionSeq.

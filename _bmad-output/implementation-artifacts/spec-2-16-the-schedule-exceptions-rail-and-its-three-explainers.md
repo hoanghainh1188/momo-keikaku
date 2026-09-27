@@ -2,7 +2,7 @@
 title: 'Story 2.16 — The schedule-exceptions rail and its three explainers'
 type: 'feature'
 created: '2026-09-26'
-status: 'in-progress'
+status: 'in-review'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '23cd19b1a0da3f5c3a8641cdfaf50149d78dbd6b'
@@ -119,12 +119,43 @@ context:
 - Client: `PlanExceptionsRail` + three non-modal explainers; `≥1680` pinned via `matchMedia`; drawer preference restored on breakpoint exit; toolbar `Exceptions · N` toggle is outside the preset segment.
 - Explainer rebind after recalc uses `rebindExplainer` against the settle payload's `exceptions` (and model refresh).
 - Illegal-edge persisted band already recorded in `deferred-work.md` (Q1→A). No optional `fence-2-16` integration test added — unit coverage covers the matrix rows without DB.
+- Matrix audit (2026-09-27): extracted pure `walkExceptionsRailKey` / `nextDrawerOpenForXKey` / `nextDrawerOpenForBreakpoint` / `scheduleStaleBannerKind` / `groupIdForRailKey`; wired into `plan-tree-grid` + rail expand; unit tests cover j/k empty no-op, expand group id, `x` pinned no-op, breakpoint pref restore, calendar vs generic banner, halted write-success empty rail.
 
 ## Spec Change Log
 
 ## Review Triage Log
 
+| ID | Source | Verdict | Route | Evidence |
+|----|--------|---------|-------|----------|
+| BH1 | blind | high | patch | Verified: `PlanExceptionsRail` early-returns hidden aside when `!pinned && !drawerOpen`, so `ExceptionExplainer` never mounts — cell/`e`/Enter set state with no visible popover. |
+| BH2 | blind | medium | patch | Verified: model refresh calls `rebindExplainer` but leaves `railSelectedKey` pointing at removed keys. |
+| BH3 | blind | false | reject | `StoredScheduleWp` has `wbsCode` only (no name). Code already seeds WBS from stored inputs; name cannot exist for deleted-only ids — short-id fallback is honest. |
+| BH4 | blind | low | patch | Verified: `plan-body--rail-drawer-open` set in JSX; no CSS rule — delete unused className. |
+| BH5 | blind | low | defer | App vs web banner formatter duplication — same helper-dedupe backlog as 2.13 BH8 / 2.15 BH10. |
+| BH6 | blind | medium | patch | Verified: chain `<li>` has no click/Enter handler; only ArrowUp/Down call `onFocusWp`. |
+| BH7 | blind | medium | patch | Verified: `chainIdx` resets to 0; skip-present only inside Arrow loop — first paint can highlight a missing WP. |
+| BH8 | blind | false | reject | UX-DR24 Enter-after-`j`/`k` is intended to open the selected rail item; editing cells already ignore keys. |
+| BH9 | blind | low | reject | SSR default pinned→effect correct is a one-frame flash; unlikely everyday defect; matching 2.15 reduced-motion posture. |
+| BH10 | blind | false | reject | After `latest === null` sets `minFloat = null`, lines 1050–1051 refill from `wpSchedules` when not halted. |
+| BH11 | blind | low | defer | National provenance “when cheap” is Design Notes optional polish, not Always. |
+| BH12 | blind | false | reject | Empty triage/changelog mid first review pass is expected; this triage fills them. |
+| BH13 | blind | medium | patch | Same root as BH1/VG — drawer×explainer + fence `getPlanGridState.exceptions` gap. |
+| BH14 | blind | low | patch | Verified: length effect only forces open; empty groups can stay `aria-expanded={true}` — collapse when count hits 0. |
+| EC1 | edge | high | patch | Verified: `focusWpInGrid` calls `.focus()`; chain `onBlur` clears `chainFocusActive` — Q2→B keyboard ownership lost after first Arrow. |
+| EC2 | edge | high | patch | Same as BH1 — explainer gated behind drawer visibility. |
+| EC3 | edge | medium | patch | Verified: `x` toggles drawer without clearing `explainer`. |
+| EC4 | edge | medium | patch | Same as BH2 — stale `railSelectedKey` + Enter. |
+| EC5 | edge | low | reject | Force-open non-empty groups matches Always “expand by default”; user re-collapse after is not everyday failure. |
+| EC6 | edge | medium | patch | Verified: `commit` awaits without try/finally — throw leaves `pending` true. |
+| EC7 | edge | high | patch | Same root as EC1 (filed as claim). |
+| EC8 | edge | high | patch | Same root as BH1/EC2 (filed as claim). |
+| VG1 | verif-gap | medium | patch | Pre-verified: no `getPlanGridState` assertion on `exceptions` lists; cell path alone stays green if rail assignment skipped. |
+| VG2 | verif-gap | medium | patch | Pre-verified: halted calendar bounds for banner never asserted from `getPlanGridState`. |
+
+Grouped routes: **patch** (auto-open drawer + keep explainer visible; chain focus without stealing DOM focus / restore list; clear explainer+selection on drawer close / rebind; chain click + first present idx; duration try/finally; drop dead CSS class; collapse empty groups; fence asserts for exceptions + halt bounds). **defer** BH5, BH11. Rejected BH3/8/9/10/12, EC5.
+
 ## Design Notes
+
 
 **Slot, not a new page.** Rail behaviour fills the 2.13 mount. Exception cell already ships UX-DR12 marks — rail items must echo `resolveException` labels.
 
