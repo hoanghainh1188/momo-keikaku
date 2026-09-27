@@ -2,7 +2,7 @@
 title: 'Story 2.17 — The Tenant Admin can see and run the organisation (hierarchy)'
 type: 'feature'
 created: '2026-09-27'
-status: 'in-progress'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '4d6707a80c2f0170764b61e3c67e33ffa971fe52'
@@ -96,10 +96,33 @@ context:
 
 - 2026-09-27: Added `listDepartments` / `listPrograms` / `listProjects` (ADMIN_ONLY) with `ports/org-read` + `repo-org-list` SELECTs (not FOR UPDATE). Registered in harness; removed `program` from `UNREACHED_TENANT_OWNED_TABLES`. Wired composition bindings + server actions wrapping the eight existing org writes. Three `/admin/{departments,programs,projects}` pages with Ledger-Paper tables; User menu adds three links beside Audit log. PM assignment + Resources & Rates already recorded in deferred-work.md (Q2→B / Build split).
 - Verified: `pnpm lint`, `pnpm typecheck`, `pnpm depcruise`, `pnpm test` (1454 passed with local Postgres).
+- Review patches (2026-09-27): refuse invalid contractType; Program filter by Department; FormData helpers + tests; `valueOrNotFound`; JP `admin.org` copy; form remount on success; aria-labels; pending i18n. Deferred BH8 `showAuditLog` rename.
 
 ## Spec Change Log
 
 ## Review Triage Log
+
+| ID | Source | Verdict | Route | Evidence |
+|----|--------|---------|-------|----------|
+| BH1 | blind | high | patch | Verified: `ja.json` `admin.org.*` was English paste — fixed with Japanese copy. |
+| BH2 | blind | medium | patch | Verified: Create/Reassign-Dept Program lists unfiltered — fixed to filter by selected Department. |
+| BH3 | blind | false | reject | Spec/sprint status mid first review pass is process bookkeeping. |
+| BH4 | blind | low | patch | Hardcoded pending `…` — fixed via `admin.org.saving`. |
+| BH5 | blind | low | reject | Dead `not_found` branch; removed by `valueOrNotFound`. |
+| BH6 | blind | medium | patch | Admin actions FormData shaping untested — helpers + `org-form-fields.test.ts`. |
+| BH7 | blind | medium | patch | Forms kept values after success — remount via `resetKey`. |
+| BH8 | blind | low | defer | `showAuditLog` means Admin menu — rename deferred. |
+| BH9 | blind | low | reject | Dense Projects columns — layout redesign more than a direct fix. |
+| BH10 | blind | false | reject | PM `not_found` covered at use-case boundary; pages use `valueOrNotFound`. |
+| BH11 | blind | low | reject | Inline empty-state color — cosmetic. |
+| BH12 | blind | medium | patch | Per-row forms lacked accessible names — aria-labels added. |
+| EC1 | edge | high | patch | `contractType` defaulted to 請負 — now refuses unless 請負/準委任. |
+| EC2 | edge | high | patch | Same root as EC1. |
+| VG1 | verif-gap | medium | patch | `optionalId` empty→null covered in unit tests. |
+| VG2 | verif-gap | medium | patch | `parseContractType` covered in unit tests. |
+| VG3 | verif-gap | medium | patch | Pages use `valueOrNotFound` (covered by `result.test.ts`). |
+| VG4 | verif-gap | low | patch | `field()` treats non-string FormData as `''`. |
+| VG5 | verif-gap | medium | patch | Same as BH2. |
 
 ## Design Notes
 
