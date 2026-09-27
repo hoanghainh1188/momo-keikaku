@@ -1186,3 +1186,7 @@ above can see where it went.
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-15-the-schedule-strip-and-the-what-moved-band.md`
   summary: Advance Data Date to the Reporting Period boundary CTA on the Plan schedule strip (EXPERIENCE Data Date panel).
   evidence: Split at story 2.15 Open Questions gate — founder chose Q2→A (strip fence date edit only). Advance-to-period remains on Project settings / Review.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-16-the-schedule-exceptions-rail-and-its-three-explainers.md`
+  summary: Persisted illegal-edge "This plan cannot be scheduled…" band with named offending edges and last-good schedule marked stale (UX-DR23 / Story 2.16 AC).
+  evidence: Split at story 2.16 Open Questions gate — founder chose Q1→A. Fence 2.9 refuses graph_invalid at write time (FR-6a); only calendar_range halt banner chrome ships in 2.16.

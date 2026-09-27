@@ -51,6 +51,15 @@ const sampleView: PlanGridViewModel = {
     actorName: 'Hoang',
     atIso: '2026-09-26T10:00:00.000Z',
   },
+  exceptions: {
+    totalCount: 0,
+    holidayCalendarVersionSeq: 3,
+    calendarRangeStart: '2026-01-01',
+    calendarRangeEnd: '2028-12-31',
+    violations: [],
+    outOfSequence: [],
+    notSchedulable: [],
+  },
   leafCandidates: [],
   rows: [],
 };
@@ -65,6 +74,8 @@ describe('plan-write-success (story 2.15)', () => {
     expect(success.computedFinish).toBe('2027-03-26');
     expect(success.minFloat).toBe(4);
     expect(success.floatAnchorSentence).toMatch(/Float measured against/);
+    expect(success.exceptions.totalCount).toBe(0);
+    expect(success.exceptions.holidayCalendarVersionSeq).toBe(3);
     expect(success).not.toHaveProperty('movedWpIds');
   });
 

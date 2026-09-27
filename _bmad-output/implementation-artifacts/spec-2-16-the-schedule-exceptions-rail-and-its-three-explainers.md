@@ -1,0 +1,152 @@
+---
+title: 'Story 2.16 — The schedule-exceptions rail and its three explainers'
+type: 'feature'
+created: '2026-09-26'
+status: 'in-progress'
+route: 'dispatch'
+review_loop_iteration: 0
+baseline_commit: '23cd19b1a0da3f5c3a8641cdfaf50149d78dbd6b'
+context:
+  - '{project-root}/_bmad-output/implementation-artifacts/epic-2-context.md'
+  - '{project-root}/_bmad-output/planning-artifacts/ux-designs/ux-momo-keikaku-2026-09-20/EXPERIENCE.md'
+---
+
+<frozen-after-approval reason="human-owned intent — do not modify unless human renegotiates">
+
+## Intent
+
+**Problem:** Plan already paints Exception cells (glyph+word+number) and mounts an empty `exceptions-rail-slot`, but there is no ranked queue to walk, no drawer with a counted toggle, and no explainer that names the chain, calendar version, or the honesty line about Float — so FR-6b / UX-DR8 / UX-DR9 stay unmet.
+
+**Approach:** Fill the existing rail slot with three collapsible groups (violations → out-of-sequence → not-schedulable), a ≥1680px pinned column / below-1680 drawer whose toolbar toggle always shows the total count, and three non-modal explainers (violation / OOS / not-schedulable with duration fix via existing `patch_duration`). Reuse stored-run lists and Exception vocabulary; extend `getPlanGridState` so the rail gets full fields the cell currently discards. Keyboard: `j`/`k`/`Enter`/`e`/`x` (UX-DR24). Ship full **calendar_range** halt banner chrome; Comfort chain walk on the violation explainer.
+
+**Decisions (founder, 2026-09-26):**
+- **Keep the full spec** (~2000 tokens accepted; same posture as 2.10–2.15).
+- **Q1 → A.** Full chrome for `calendar_range` halt (range-halt banner deferred from 2.12). Illegal-edge "This plan cannot be scheduled…" band deferred — fence refuses `graph_invalid` at write time (FR-6a); see `deferred-work.md`.
+- **Q2 → B.** Include Comfort walkable chain: arrow keys move along the predecessor chain; each entry focuses that WP behind the popover.
+
+## Boundaries & Constraints
+
+**Always:**
+- Fill `PLAN_GRID_SLOTS[4]` (`exceptions-rail-slot`) only — keep UX-DR2 order; do not invent a second layout (2.13 Q1→A).
+- Three groups, fixed order, each with count (UX-DR8): Constraint violations (days-late worst first, then `compareWp`), Out-of-sequence links, Not schedulable yet. Groups with count > 0 expand by default; empty groups stay collapsed.
+- Empty rail says **"No schedule exceptions"** — never vanishes (still occupies the pinned column at ≥1680).
+- ≥1680px: pinned column; below: drawer closed by default. Toolbar gets a dedicated **exceptions toggle** (not inside the preset segment) that **always carries the total count** (UX-DR8 / UX-DR27). Below 1680: toggle opens/closes the drawer. ≥1680: rail stays pinned; toggle may be visually subdued but the count remains available to AT.
+- Rail items use the same glyph+word+number vocabulary as Exception cells (`▲ Late Nd` / `◆ Late Nd`, `⇄ Out of sequence`, `⊘ No duration`) — never colour alone (UX-DR12).
+- Violation explainer: asked date, derived date, working days late, Holiday Calendar version (from run `versionSeq` / inputs.calendar), predecessor chain as a **walkable list** (Q2→B), closing honesty line: *"This violation stays on this work package. It has not changed any other work package's Float."*
+- Chain walk (Q2→B): ArrowUp/Down move along the chain; popover **stays open**; grid scrolls and focuses that WP; keyboard stays on the chain list until `Esc` closes the explainer.
+- OOS explainer: neutral fact prose; **no fix**; never amber/red (UX-DR9 / UX-DR23). Date sources pinned: successor `actualStart` + predecessor finish (`actualFinish` if complete, else derived `earlyFinish`) from live WP + latest schedule rows — never invent.
+- Not-schedulable explainer: consequence (excluded from passes + critical path; successors as if absent; blocks next Baseline) **plus duration field** reusing fence `patch_duration` / existing plan action — no new kind.
+- Keyboard (UX-DR24): when Plan is active and not editing a cell / not inside the chain list — `j`/`k` walk the whole rail across groups; `Enter` on a rail item scrolls the grid, focuses the row, opens the explainer; `e` opens the explainer for the focused grid row's exception; `x` toggles the drawer (**only below 1680** — no-op when pinned). Activating the **Exception cell** (click or Enter on that cell) opens the **same** explainer as the matching rail item. `j`/`k` into a collapsed group with count > 0 **expands it** then focuses the first item; count 0 → no-op.
+- Breakpoint: **`>= 1680` pinned**, below = drawer. Resize across the breakpoint: entering pinned shows the rail; leaving pinned restores the last drawer open/closed preference.
+- Multi-kind / multi-edge: one WP may appear in **more than one** rail group; Exception cell priority stays violation → OOS → not-schedulable. OOS rail = **one item per edge** (pred→succ), even when several share a successor. Tie on `daysLate` → `compareWp`.
+- Missing targets: empty violation `chain` → explainer still opens with “No driving chain recorded” (Arrow no-op). Chain/OOS ids absent from the live tree → show stored WBS/name if available else short id; Arrow/Enter **skip** focus. OOS missing dates → name WPs, no invented dates. Halt banner missing `rangeStart`/`rangeEnd` → omit the Loaded clause or say “range unavailable” — never fake bounds.
+- Latest run **halted** (`outputs` null): rail shows empty copy + count 0; do **not** decode exceptions from the halted run. If `haltedReason = calendar_range`, show Q1→A banner; other stale/halt reasons keep the thin/generic 2.13 stale line — never the calendar-range copy.
+- Explainer open when a recalc settles: **close** or **rebind** the same wpId if it still has that exception — never keep a popover on a stale DTO.
+- **`calendar_range` halt banner** (Q1→A): replace the thin 2.13 stale line with: *"Schedule halted: calendar range. Loaded {rangeStart}–{rangeEnd}. Derived dates are stale — extend the Holiday Calendar range in Project settings."* No publish CTA on Plan. Grid keeps last-good derived dates marked stale; never invent dates. Illegal-edge persisted band is out of scope (fence refuse).
+- Domain lists / fence kinds / Exception cell labels stay the source of truth — rail reads, does not re-derive.
+
+**Never:**
+- No Links panel Comfort (`l`) — stays deferred (2.14 Q1→A).
+- No persisted illegal-edge "cannot be scheduled" band (Q1→A) — write-time FR-6a refuse covers it.
+- No Gantt / bar drag. No second mutator for duration. No new fence kinds. No migration.
+- Do not put the exceptions count inside the preset segment; do not add a calendar-publish CTA on the Plan halt banner.
+- Do not decode rail exceptions from a halted run's null outputs; do not use calendar-range banner copy for non-`calendar_range` stale/halt.
+- Do not change strip / What-moved / pred-constraint editors except shared focus/scroll hooks the rail needs.
+- Do not convey exceptions by colour alone. Do not hide the count when the drawer is shut.
+- Do not claim a violation moved another WP's Float or displaced the critical path.
+- Do not steal keyboard from the chain list into the grid on Arrow walk (popover stays; `Esc` closes).
+- Do not invent dates, chain entries, or calendar range bounds when data is missing.
+
+## I/O & Edge-Case Matrix
+
+| Scenario | Input / State | Expected Output / Behavior | Error Handling |
+|---|---|---|---|
+| Rail empty | Successful run, no violations/OOS/not-schedulable | Rail visible; "No schedule exceptions"; count 0 on toggle | N/A |
+| No run yet | No latest run / outputs null (not halted) | Empty rail + count 0; no calendar-range banner | N/A |
+| Rail ranked | Mixed exceptions | Three groups in fixed order; violations worst-late first then compareWp; non-zero groups expanded | N/A |
+| Multi-kind WP | Same WP Late + OOS (+ NS) | Cell: violation wins; rail lists in every applicable group | N/A |
+| Multi OOS edges | Several OOS edges, same successor | One rail item per edge; cell still one OOS label | N/A |
+| Drawer <1680 | Viewport below 1680px | Drawer; toolbar toggle shows total count; `x` toggles | N/A |
+| Pinned ≥1680 | Viewport ≥1680 (incl. exact 1680) | Rail pinned; `x` no-op; count available to AT | N/A |
+| Resize breakpoint | Cross 1680 with drawer open/closed | Pinned shows rail; return below restores drawer preference | N/A |
+| Violation explainer | Open on Late row | Asked/derived/days late/calendar version/chain/honesty line | Empty chain → “No driving chain recorded” |
+| Chain walk | ArrowUp/Down in violation chain | Grid scrolls+focuses WP; popover stays; keys on chain until Esc | Skip missing/deleted ids |
+| OOS explainer | Open on OOS row | Neutral prose from pinned date sources; no fix; neutral ink | Missing dates → name WPs only |
+| Exception cell | Click / Enter on Exception cell | Same explainer as matching rail item | Summary / no exception → no-op |
+| Not-schedulable | Open + set duration | Exclusion copy; `patch_duration` + fence; rail/cell refresh | Refuse under control |
+| Duration while halted | `calendar_range` + duration from explainer | Fence runs; banner/stale honest — never green schedule | Refuse under control |
+| Keyboard walk | `j`/`k`/`Enter`/`e`/`x` | Cross-group walk; collapsed group expands on walk; Enter/`e`/cell | Ignore while editing; count 0 no-op; chain owns Arrows |
+| Recalc while explainer open | Successful settle | Close or rebind same wpId; no stale DTO | N/A |
+| Calendar-range halt | Latest `haltedReason = calendar_range`, outputs null | Q1→A banner (+ range or “unavailable”); rail empty count 0; dates stale | Never decode halted outputs |
+| Other stale/halt | Stale or halt ≠ `calendar_range` | Thin/generic 2.13 stale line; not calendar-range copy | N/A |
+
+</frozen-after-approval>
+
+## Code Map
+
+- `apps/web/src/components/plan-tree-grid.tsx` — empty `plan-exceptions-rail-slot` (~L1326, `aria-hidden`); `ExceptionCell` (~L336); toolbar ~L1105 preset-only; `onGridKeyDown` lacks `e`/`x`/`j`/`k`; thin `schedule-stale` banner (~L1158). **Fill** rail mount; add exceptions toggle beside preset seg; wire keyboard + Exception-cell activate → same explainer; keep strip/What-moved/pred/constraint untouched.
+- `apps/web/src/app/globals.css` — `.plan-body` grid `1fr 0`; `.plan-exceptions-rail-slot { display: none }` (~L1153–1163). **Open** slot: pinned ≥1680 / drawer below; `{spacing.rail-width}` ~360px.
+- `apps/web/src/lib/plan-grid-view.ts` — `PLAN_GRID_SLOTS[4] = 'exceptions-rail-slot'`; view model has per-row `exceptionLabel`/`exceptionKind` only. **Extend** with rail lists + calendar version + total count + halt range bounds for banner.
+- `packages/app/src/schedule/plan-grid.ts` — `resolveException` (~L453) builds cell labels from violations/OOS/`no_duration` then discards full fields. `getPlanGridState` parses `storedOutputs.violations` / `outOfSequence` / not-schedulable but only maps cell data; `latest.holidayCalendarVersionSeq` loaded unused. **Add** top-level rail payload (full violation fields + chain ids, OOS pairs with pinned date sources from live WP + schedule rows, not-schedulable roster, calendar version + rangeStart/rangeEnd for halt banner).
+- `packages/domain/src/schedule/recalculate.ts` / `stored-run.ts` — `ConstraintViolation` (asked/derived/daysLate/chain), `outOfSequence`, `notSchedulable`; calendar `{ versionSeq, rangeStart, rangeEnd, … }` on inputs. **Reuse**; do not reshape engine outputs.
+- `apps/web/.../plan/actions.ts` + duration cell — `patchWpDurationAction` / fence `patch_duration`. **Reuse** from not-schedulable explainer (including while halted — honesty via banner/stale).
+- Continuity from 2.15 (done): strip + What-moved filled; polite live region; Exception cell vocabulary locked. Continuity from 2.13: slot order, Exception cell.
+- `tests/` — extend `plan-grid.test.ts`, `plan-grid-view.test.ts`; add rail/explainer unit coverage; optional `fence-2-16` for duration-from-explainer (+ halted path). Mockup reference: `ux-…/mockups/plan-tree-grid.html`.
+
+## Tasks & Acceptance
+
+**Execution:**
+- [x] `packages/app` `plan-grid.ts` — expose rail lists + calendar version + halt range bounds + OOS date joins; keep `resolveException` labels as shared vocabulary.
+- [x] `apps/web` view model + rail component — three groups (expand non-zero), empty copy, pinned/drawer ≥1680, dedicated toolbar exceptions toggle with count, `x`.
+- [x] `apps/web` three explainers — violation (honesty line + Comfort chain walk Q2→B, Esc closes), OOS (pinned dates, no fix), not-schedulable + duration via existing action; `j`/`k`/`Enter`/`e`; Exception cell activates same explainer.
+- [x] `apps/web` calendar-range halt banner — exact Q1→A copy with loaded range + settings pointer; no publish CTA.
+- [x] `tests/` — matrix rows incl. halted-empty rail, multi-kind/multi-edge, breakpoint/`x` no-op, empty chain, missing ids/dates, explainer rebind, non-calendar stale copy.
+- [x] `deferred-work.md` — append illegal-edge persisted band deferral (Q1→A) if not already present.
+
+**Acceptance Criteria:**
+- Given the Plan surface, when exceptions exist, then the rail shows three ordered groups with counts and matching glyph+word+number items; non-zero groups start expanded.
+- Given a viewport below 1680px, when the drawer is shut, then the dedicated toolbar exceptions toggle still shows the total exception count.
+- Given no exceptions, when the rail renders, then it says "No schedule exceptions".
+- Given each explainer type, when opened, then it meets UX-DR9 content rules (honesty line / no OOS fix / duration field); violation chain Arrow-walk focuses WPs with popover staying open until Esc (Q2→B).
+- Given `j`/`k`/`Enter`/`e`/`x` or Exception-cell activate, when used as specified, then rail walk, focus+explainer, and drawer toggle work (ignore while editing; chain list owns Arrows).
+- Given a `calendar_range` halt, when the Plan renders, then the banner uses the pinned copy with loaded range and settings pointer; derived dates stay stale — never invented (Q1→A); no illegal-edge persisted band; no Plan publish CTA.
+- Given `pnpm lint`, `pnpm typecheck`, `pnpm depcruise` and `pnpm test`, when they run, then all exit 0.
+
+## Implementation Notes
+
+- `getPlanGridState` builds `PlanExceptionsRail` via `buildExceptionsRail` on successful runs only; halted runs keep empty lists but still surface calendar `rangeStart`/`rangeEnd`/`versionSeq` from inputs for the Q1→A banner.
+- Rail vocabulary reuses `resolveException` labels; OOS is one item per edge; multi-kind WPs appear in every applicable group.
+- Client: `PlanExceptionsRail` + three non-modal explainers; `≥1680` pinned via `matchMedia`; drawer preference restored on breakpoint exit; toolbar `Exceptions · N` toggle is outside the preset segment.
+- Explainer rebind after recalc uses `rebindExplainer` against the settle payload's `exceptions` (and model refresh).
+- Illegal-edge persisted band already recorded in `deferred-work.md` (Q1→A). No optional `fence-2-16` integration test added — unit coverage covers the matrix rows without DB.
+
+## Spec Change Log
+
+## Review Triage Log
+
+## Design Notes
+
+**Slot, not a new page.** Rail behaviour fills the 2.13 mount. Exception cell already ships UX-DR12 marks — rail items must echo `resolveException` labels.
+
+**Full fields were discarded.** `getPlanGridState` already parses violations/OOS; 2.16 surfaces them as rail DTOs (asked/derived/chain, OOS peer dates from WP actuals / schedule rows, calendar `versionSeq`). Prefer `"Holiday Calendar version {seq}"` (plus national provenance when cheap from inputs) over inventing a display-name table.
+
+**Explainers are non-modal popovers.** One modal level only (UX-DR24). Duration fix reuses the duration editor's fence path. Exception cell and rail item share one explainer. Chain walk keeps the popover; Esc closes (War Room, 2026-09-26).
+
+**Halt vs illegal edges (Q1→A).** Architecture refuses graph offences; only `calendar_range` leaves a halted+stale Plan. Ship full range-halt banner with pinned copy + settings pointer (no Plan publish CTA); illegal-edge persisted band stays deferred (write-time FR-6a). **Chain walk (Q2→B)** is Comfort in-scope for this story.
+
+**Toolbar toggle.** Count lives on a dedicated exceptions control beside the preset segment — never inside it (War Room).
+
+**Edge sweep (2026-09-27).** Halted runs contribute no rail rows; calendar-range banner is reason-gated; multi-kind WPs list in every applicable group; OOS is per-edge; `j`/`k` expands collapsed non-empty groups; `x` is drawer-only; explainer must not outlive a stale DTO after recalc.
+
+## Verification
+
+**Commands:**
+- `pnpm lint` — expected: exit 0
+- `pnpm typecheck` — expected: exit 0
+- `pnpm depcruise` — expected: exit 0
+- `pnpm test` — expected: exit 0
+
+**Manual checks (if no CLI):**
+- Narrow viewport — drawer + count on toggle; wide — pinned rail.
+- Open each explainer type; confirm honesty line / no OOS fix / duration commits.
+- `j`/`k` across groups; `Enter` focuses the row; `e` from grid; `x` toggles.

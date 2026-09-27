@@ -28,12 +28,28 @@ import {
 } from '@/components/plan-thin-edit';
 import { PlanScheduleStrip } from '@/components/plan-schedule-strip';
 import { PlanWhatMovedBand } from '@/components/plan-what-moved-band';
+import {
+  ExceptionsRailToggle,
+  PlanExceptionsRail,
+  useExceptionsPinned,
+} from '@/components/plan-exceptions-rail';
 import type {
+  ExceptionsRailItemKey,
   PlanGridLeafCandidateView,
   PlanGridRowView,
   PlanGridViewModel,
   WhatMovedBandView,
 } from '@/components/plan-grid-types';
+import type { ExplainerTarget } from '@/lib/plan-exceptions';
+import {
+  calendarRangeHaltBannerCopy,
+  explainerFromRailKey,
+  flattenExceptionsRailKeys,
+  focusWpIdForRailKey,
+  genericScheduleStaleCopy,
+  railKeyForGridException,
+  rebindExplainer,
+} from '@/lib/plan-exceptions';
 import {
   capturePresetFocusRestore,
   dateInkClassName,
@@ -333,7 +349,13 @@ function InlineNumberCell({
   );
 }
 
-function ExceptionCell({ row }: { readonly row: PlanGridRowView }) {
+function ExceptionCell({
+  row,
+  onActivate,
+}: {
+  readonly row: PlanGridRowView;
+  readonly onActivate: () => void;
+}) {
   if (!row.isLeaf) return <SummaryDash />;
   if (!row.exceptionLabel) return null;
   const cls =
@@ -344,7 +366,26 @@ function ExceptionCell({ row }: { readonly row: PlanGridRowView }) {
       : row.exceptionKind === 'out_of_sequence'
         ? 'plan-ex plan-ex-o'
         : 'plan-ex plan-ex-n';
-  return <span className={cls}>{row.exceptionLabel}</span>;
+  return (
+    <button
+      type="button"
+      className={`plan-ex-cell-btn ${cls}`}
+      data-testid={`exception-cell-${row.wpId}`}
+      onClick={(e) => {
+        e.stopPropagation();
+        onActivate();
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          e.stopPropagation();
+          onActivate();
+        }
+      }}
+    >
+      {row.exceptionLabel}
+    </button>
+  );
 }
 
 function PredecessorCell({
@@ -667,6 +708,9 @@ export function PlanTreeGrid({
   const [pending, startTransition] = useTransition();
   const [stripPending, setStripPending] = useState(false);
   const [whatMoved, setWhatMoved] = useState<WhatMovedBandView | null>(model.whatMoved);
+  const [exceptions, setExceptions] = useState(model.exceptions);
+  const [scheduleStale, setScheduleStale] = useState(model.scheduleStale);
+  const [haltedReason, setHaltedReason] = useState(model.haltedReason);
   const [announceToken, setAnnounceToken] = useState(0);
   const [highlightedWpIds, setHighlightedWpIds] = useState<ReadonlySet<string>>(
     () => new Set(),
@@ -679,6 +723,13 @@ export function PlanTreeGrid({
     minFloat: number | null;
     floatAnchorSentence: string | null;
   } | null>(null);
+  const pinned = useExceptionsPinned();
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const drawerPrefRef = useRef(false);
+  const wasPinnedRef = useRef(pinned);
+  const [railSelectedKey, setRailSelectedKey] = useState<ExceptionsRailItemKey | null>(null);
+  const [explainer, setExplainer] = useState<ExplainerTarget | null>(null);
+  const [chainFocusActive, setChainFocusActive] = useState(false);
   const focusRestore = useRef<string | null>(null);
   const tableRef = useRef<HTMLTableElement>(null);
   const goChord = useRef<string | null>(null);
@@ -688,8 +739,35 @@ export function PlanTreeGrid({
 
   useEffect(() => {
     setWhatMoved(model.whatMoved);
+    setExceptions(model.exceptions);
+    setScheduleStale(model.scheduleStale);
+    setHaltedReason(model.haltedReason);
     setStripOverrides(null);
-  }, [model.whatMoved, model.projectStart, model.projectFinish, model.dataDate, model.computedFinish, model.minFloat, model.floatAnchorSentence]);
+    setExplainer((prev) => rebindExplainer(prev, model.exceptions));
+  }, [
+    model.whatMoved,
+    model.exceptions,
+    model.scheduleStale,
+    model.haltedReason,
+    model.projectStart,
+    model.projectFinish,
+    model.dataDate,
+    model.computedFinish,
+    model.minFloat,
+    model.floatAnchorSentence,
+  ]);
+
+  // Breakpoint: entering pinned shows rail; leaving restores drawer preference.
+  useEffect(() => {
+    const wasPinned = wasPinnedRef.current;
+    if (pinned && !wasPinned) {
+      drawerPrefRef.current = drawerOpen;
+      setDrawerOpen(false);
+    } else if (!pinned && wasPinned) {
+      setDrawerOpen(drawerPrefRef.current);
+    }
+    wasPinnedRef.current = pinned;
+  }, [pinned, drawerOpen]);
 
   useEffect(() => {
     setPreset(readStoredPreset(model.userId, model.projectId));
@@ -709,6 +787,36 @@ export function PlanTreeGrid({
     if (el) el.focus();
     else tableRef.current?.focus();
   }, [preset]);
+
+  const focusWpInGrid = useCallback((wpId: string) => {
+    setFocusedWpId(wpId);
+    const el = tableRef.current?.querySelector(`[data-wp-id="${wpId}"]`) as HTMLElement | null;
+    el?.focus();
+    el?.scrollIntoView({ block: 'nearest' });
+  }, []);
+
+  const openExplainerForKey = useCallback(
+    (key: ExceptionsRailItemKey) => {
+      const target = explainerFromRailKey(key);
+      if (!target) return;
+      setRailSelectedKey(key);
+      const focusId = focusWpIdForRailKey(key, exceptions);
+      if (focusId) focusWpInGrid(focusId);
+      setExplainer(target);
+    },
+    [exceptions, focusWpInGrid],
+  );
+
+  const openExplainerForGridRow = useCallback(
+    (wpId: string) => {
+      const row = model.rows.find((r) => r.wpId === wpId);
+      if (!row?.exceptionKind) return;
+      const key = railKeyForGridException(wpId, row.exceptionKind, exceptions);
+      if (!key) return;
+      openExplainerForKey(key);
+    },
+    [model.rows, exceptions, openExplainerForKey],
+  );
 
   const visibleRows = useMemo(() => {
     const hidden = new Set<string>();
@@ -751,6 +859,10 @@ export function PlanTreeGrid({
 
   const onRecalcSettled = useCallback((outcome: PlanWriteSuccess) => {
     setWhatMoved(outcome.whatMoved);
+    setExceptions(outcome.exceptions);
+    setScheduleStale(outcome.scheduleStale);
+    setHaltedReason(outcome.haltedReason);
+    setExplainer((prev) => rebindExplainer(prev, outcome.exceptions));
     setStripOverrides({
       projectStart: outcome.projectStart,
       projectFinish: outcome.projectFinish,
@@ -862,6 +974,7 @@ export function PlanTreeGrid({
   const onGridKeyDown = (e: KeyboardEvent<HTMLTableElement>) => {
     const target = e.target as HTMLElement | null;
     if (target?.closest('input, textarea')) return;
+    if (chainFocusActive) return;
 
     // g d — focus Data Date on the schedule strip (EXPERIENCE).
     if (e.key === 'g') {
@@ -890,6 +1003,43 @@ export function PlanTreeGrid({
       e.preventDefault();
       return;
     }
+
+    // UX-DR24 — exceptions rail walk / explainer / drawer.
+    if (e.key === 'j' || e.key === 'k') {
+      const keys = flattenExceptionsRailKeys(exceptions);
+      if (keys.length === 0) return;
+      e.preventDefault();
+      const cur = railSelectedKey ? keys.indexOf(railSelectedKey) : -1;
+      let nextIdx: number;
+      if (e.key === 'j') {
+        nextIdx = cur < 0 ? 0 : Math.min(cur + 1, keys.length - 1);
+      } else {
+        nextIdx = cur < 0 ? keys.length - 1 : Math.max(cur - 1, 0);
+      }
+      setRailSelectedKey(keys[nextIdx]!);
+      return;
+    }
+    if (e.key === 'Enter' && railSelectedKey) {
+      e.preventDefault();
+      openExplainerForKey(railSelectedKey);
+      return;
+    }
+    if (e.key === 'e' && focusedWpId) {
+      e.preventDefault();
+      openExplainerForGridRow(focusedWpId);
+      return;
+    }
+    if (e.key === 'x') {
+      if (pinned) return; // no-op when pinned (≥1680)
+      e.preventDefault();
+      setDrawerOpen((open) => {
+        const next = !open;
+        drawerPrefRef.current = next;
+        return next;
+      });
+      return;
+    }
+
     if (!focusedWpId) return;
     const idx = visibleRows.findIndex((r) => r.wpId === focusedWpId);
     if (e.key === 'ArrowDown' && idx < visibleRows.length - 1) {
@@ -1010,7 +1160,10 @@ export function PlanTreeGrid({
           )}
         </td>
         <td>
-          <ExceptionCell row={row} />
+          <ExceptionCell
+            row={row}
+            onActivate={() => openExplainerForGridRow(row.wpId)}
+          />
         </td>
         <td className="num">
           {row.isLeaf ? (
@@ -1125,6 +1278,18 @@ export function PlanTreeGrid({
             All
           </button>
         </div>
+        <ExceptionsRailToggle
+          totalCount={exceptions.totalCount}
+          pinned={pinned}
+          drawerOpen={drawerOpen}
+          onToggle={() => {
+            setDrawerOpen((open) => {
+              const next = !open;
+              drawerPrefRef.current = next;
+              return next;
+            });
+          }}
+        />
         {teaching ? (
           <span className="plan-teaching" role="status" data-testid="derived-date-teaching">
             {teaching}
@@ -1155,11 +1320,20 @@ export function PlanTreeGrid({
         </div>
       ) : null}
 
-      {model.scheduleStale ? (
-        <p className="caption" style={{ margin: '4px 12px' }} data-testid="schedule-stale">
-          {model.haltedReason
-            ? `Schedule halted: ${model.haltedReason}. Derived dates are stale.`
-            : 'Schedule outputs are stale — acknowledge the latest run.'}
+      {scheduleStale ? (
+        <p
+          className="caption"
+          style={{ margin: '4px 12px' }}
+          data-testid="schedule-stale"
+          data-halt-reason={haltedReason ?? ''}
+        >
+          {haltedReason === 'calendar_range'
+            ? calendarRangeHaltBannerCopy({
+                rangeStart: exceptions.calendarRangeStart,
+                rangeEnd: exceptions.calendarRangeEnd,
+                formatDate: formatPlanDate,
+              })
+            : genericScheduleStaleCopy(haltedReason)}
         </p>
       ) : null}
 
@@ -1169,18 +1343,21 @@ export function PlanTreeGrid({
         band={whatMoved}
         announceToken={announceToken}
         onFocusWp={(wpId) => {
-          setFocusedWpId(wpId);
-          const el = tableRef.current?.querySelector(
-            `[data-wp-id="${wpId}"]`,
-          ) as HTMLElement | null;
-          el?.focus();
-          el?.scrollIntoView({ block: 'nearest' });
+          focusWpInGrid(wpId);
         }}
         onHighlightWps={onHighlightWps}
         onPoliteAnnounce={setPoliteAnnounce}
       />
 
-      <div className="plan-body">
+      <div
+        className={[
+          'plan-body',
+          pinned ? 'plan-body--rail-pinned' : '',
+          !pinned && drawerOpen ? 'plan-body--rail-drawer-open' : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
+      >
         <div className="plan-gridwrap">
           <table
             ref={tableRef}
@@ -1323,10 +1500,22 @@ export function PlanTreeGrid({
           </table>
         </div>
 
-        <aside
-          className="plan-exceptions-rail-slot"
-          data-testid={PLAN_GRID_SLOTS[4]}
-          aria-hidden="true"
+        <PlanExceptionsRail
+          rail={exceptions}
+          pinned={pinned}
+          drawerOpen={drawerOpen}
+          selectedKey={railSelectedKey}
+          explainer={explainer}
+          onSelectKey={setRailSelectedKey}
+          onCloseExplainer={() => {
+            setChainFocusActive(false);
+            setExplainer(null);
+          }}
+          onActivateItem={openExplainerForKey}
+          onFocusWp={focusWpInGrid}
+          onPatchDuration={patchDuration}
+          chainFocusActive={chainFocusActive}
+          onChainFocusActiveChange={setChainFocusActive}
         />
       </div>
 

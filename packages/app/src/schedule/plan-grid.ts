@@ -1,6 +1,7 @@
 /**
  * Story 2.13 — authorised Plan tree-grid read.
  * Story 2.15 — schedule strip scalars + What-moved band (prev/latest run join).
+ * Story 2.16 — schedule-exceptions rail lists + calendar-range halt bounds.
  *
  * Joins live WP/edge inputs with `wp_schedule` and the latest `schedule_run` outputs (exceptions,
  * anchor). Display order is always `compareWp` (AD-28). Writes stay on `applyPlanChange`.
@@ -126,6 +127,73 @@ export interface WhatMovedBand {
   readonly atIso: string;
 }
 
+/** One WP on a violation's driving-predecessor chain (story 2.16). */
+export interface PlanExceptionsRailChainEntry {
+  readonly wpId: string;
+  readonly wbsCode: string;
+  readonly name: string;
+  /** Finish used in the explainer — actualFinish when complete, else earlyFinish. */
+  readonly finish: string | null;
+  /** Lag on the edge from this WP toward the violated WP; null when no edge found. */
+  readonly lagDays: number | null;
+  /** False when the id is absent from the live tree (Arrow/Enter skip focus). */
+  readonly presentInLiveTree: boolean;
+}
+
+export interface PlanExceptionsRailViolation {
+  readonly wpId: string;
+  readonly wbsCode: string;
+  readonly name: string;
+  readonly label: string;
+  readonly isMilestone: boolean;
+  readonly constraintType: 'must_start_on' | 'must_finish_on';
+  readonly askedDate: string;
+  readonly derivedDate: string;
+  readonly daysLate: number;
+  /** Engine order (immediate driver first); UI may reverse for display. */
+  readonly chain: readonly PlanExceptionsRailChainEntry[];
+}
+
+/** One OOS edge (pred→succ), even when several share a successor. */
+export interface PlanExceptionsRailOos {
+  readonly predecessorWpId: string;
+  readonly successorWpId: string;
+  readonly predecessorWbsCode: string;
+  readonly predecessorName: string;
+  readonly successorWbsCode: string;
+  readonly successorName: string;
+  readonly label: string;
+  /** Live successor actualStart — never invented. */
+  readonly successorActualStart: string | null;
+  /**
+   * Predecessor finish: actualFinish when complete, else derived earlyFinish.
+   * Null when neither is available (name WPs only).
+   */
+  readonly predecessorFinish: string | null;
+  readonly predecessorPresent: boolean;
+  readonly successorPresent: boolean;
+}
+
+export interface PlanExceptionsRailNotSchedulable {
+  readonly wpId: string;
+  readonly wbsCode: string;
+  readonly name: string;
+  readonly label: string;
+  readonly reason: 'no_duration';
+}
+
+/** Ranked exceptions queue for the Plan rail (UX-DR8). Empty when halted / no run. */
+export interface PlanExceptionsRail {
+  readonly totalCount: number;
+  readonly holidayCalendarVersionSeq: number | null;
+  /** From latest run inputs — for calendar_range halt banner (Q1→A). */
+  readonly calendarRangeStart: string | null;
+  readonly calendarRangeEnd: string | null;
+  readonly violations: readonly PlanExceptionsRailViolation[];
+  readonly outOfSequence: readonly PlanExceptionsRailOos[];
+  readonly notSchedulable: readonly PlanExceptionsRailNotSchedulable[];
+}
+
 export interface PlanGridState {
   readonly projectId: string;
   readonly projectStart: string | null;
@@ -145,9 +213,190 @@ export interface PlanGridState {
   readonly finishTeaching: string;
   /** Latest successful run's What-moved; null when no successful latest run. */
   readonly whatMoved: WhatMovedBand | null;
+  /** Story 2.16 — ranked exceptions + calendar bounds (empty lists when halted). */
+  readonly exceptions: PlanExceptionsRail;
   /** Leaf-only autocomplete candidates for predecessor cells (story 2.14). */
   readonly leafCandidates: readonly PlanGridLeafCandidate[];
   readonly rows: readonly PlanGridRow[];
+}
+
+/** Empty rail payload — halted run, no run, or parse failure. */
+export function emptyExceptionsRail(partial?: {
+  readonly holidayCalendarVersionSeq?: number | null;
+  readonly calendarRangeStart?: string | null;
+  readonly calendarRangeEnd?: string | null;
+}): PlanExceptionsRail {
+  return {
+    totalCount: 0,
+    holidayCalendarVersionSeq: partial?.holidayCalendarVersionSeq ?? null,
+    calendarRangeStart: partial?.calendarRangeStart ?? null,
+    calendarRangeEnd: partial?.calendarRangeEnd ?? null,
+    violations: [],
+    outOfSequence: [],
+    notSchedulable: [],
+  };
+}
+
+/**
+ * Q1→A calendar-range halt banner copy. Never invents bounds.
+ * Missing range → "range unavailable" instead of fake dates.
+ */
+export function calendarRangeHaltBanner(input: {
+  readonly rangeStart: string | null;
+  readonly rangeEnd: string | null;
+}): string {
+  const loaded =
+    input.rangeStart !== null && input.rangeEnd !== null
+      ? `Loaded ${formatPlanDate(input.rangeStart)}–${formatPlanDate(input.rangeEnd)}.`
+      : 'Loaded range unavailable.';
+  return `Schedule halted: calendar range. ${loaded} Derived dates are stale — extend the Holiday Calendar range in Project settings.`;
+}
+
+/**
+ * Build the ranked exceptions rail from a successful stored run + live joins.
+ * Does not decode exceptions from halted (null outputs) runs — callers must pass empty.
+ */
+export function buildExceptionsRail(input: {
+  readonly orderedIds: readonly string[];
+  readonly wbsById: ReadonlyMap<string, string>;
+  readonly nameById: ReadonlyMap<string, string>;
+  readonly liveWpIds: ReadonlySet<string>;
+  readonly milestoneIds: ReadonlySet<string>;
+  readonly holidayCalendarVersionSeq: number | null;
+  readonly calendarRangeStart: string | null;
+  readonly calendarRangeEnd: string | null;
+  readonly violations: readonly {
+    readonly wpId: string;
+    readonly constraintType: 'must_start_on' | 'must_finish_on';
+    readonly askedDate: string;
+    readonly derivedDate: string;
+    readonly daysLate: number;
+    readonly chain: readonly string[];
+  }[];
+  readonly outOfSequence: readonly {
+    readonly predecessorId: string;
+    readonly successorId: string;
+  }[];
+  readonly notSchedulable: readonly { readonly wpId: string; readonly reason: 'no_duration' }[];
+  /** Live status actuals by wpId. */
+  readonly actualByWp: ReadonlyMap<
+    string,
+    { readonly actualStart: string | null; readonly actualFinish: string | null }
+  >;
+  /** Latest schedule projection (or stored output) earlyFinish by wpId. */
+  readonly earlyFinishByWp: ReadonlyMap<string, string | null>;
+  /** Lag keyed `predId\0succId`. */
+  readonly lagByEdge: ReadonlyMap<string, number>;
+}): PlanExceptionsRail {
+  const labelOf = (wpId: string, isMilestone: boolean, daysLate: number): string => {
+    const resolved = resolveException({
+      wpId,
+      isLeaf: true,
+      notSchedulableReason: null,
+      violationsByWp: new Map([[wpId, { daysLate, isMilestone }]]),
+      oosWpIds: new Set(),
+    });
+    return resolved?.label ?? `${isMilestone ? '◆' : '▲'} Late ${daysLate}d`;
+  };
+
+  const resolveWpLabel = (
+    wpId: string,
+  ): { readonly wbsCode: string; readonly name: string; readonly present: boolean } => {
+    const present = input.liveWpIds.has(wpId);
+    const wbsCode = input.wbsById.get(wpId) ?? '';
+    const name = input.nameById.get(wpId) ?? '';
+    if (wbsCode !== '' || name !== '') {
+      return { wbsCode: wbsCode || wpId.slice(0, 8), name: name || wpId.slice(0, 8), present };
+    }
+    const short = wpId.length > 8 ? wpId.slice(0, 8) : wpId;
+    return { wbsCode: short, name: short, present };
+  };
+
+  const finishOf = (wpId: string): string | null => {
+    const actual = input.actualByWp.get(wpId);
+    if (actual?.actualFinish) return actual.actualFinish;
+    return input.earlyFinishByWp.get(wpId) ?? null;
+  };
+
+  const violationsSorted = [...input.violations].sort((a, b) => {
+    if (b.daysLate !== a.daysLate) return b.daysLate - a.daysLate;
+    return compareWp(
+      { id: a.wpId, wbsCode: input.wbsById.get(a.wpId) ?? '' },
+      { id: b.wpId, wbsCode: input.wbsById.get(b.wpId) ?? '' },
+    );
+  });
+
+  const violations: PlanExceptionsRailViolation[] = violationsSorted.map((v) => {
+    const isMilestone = input.milestoneIds.has(v.wpId);
+    const self = resolveWpLabel(v.wpId);
+    // Chain is immediate-driver first; lag is on the edge toward the violated WP.
+    const chainTargets = [...v.chain, v.wpId];
+    const chain: PlanExceptionsRailChainEntry[] = v.chain.map((id, i) => {
+      const meta = resolveWpLabel(id);
+      const successorId = chainTargets[i + 1]!;
+      const lagDays = input.lagByEdge.get(`${id}\0${successorId}`) ?? null;
+      return {
+        wpId: id,
+        wbsCode: meta.wbsCode,
+        name: meta.name,
+        finish: finishOf(id),
+        lagDays,
+        presentInLiveTree: meta.present,
+      };
+    });
+    return {
+      wpId: v.wpId,
+      wbsCode: self.wbsCode,
+      name: self.name,
+      label: labelOf(v.wpId, isMilestone, v.daysLate),
+      isMilestone,
+      constraintType: v.constraintType,
+      askedDate: v.askedDate,
+      derivedDate: v.derivedDate,
+      daysLate: v.daysLate,
+      chain,
+    };
+  });
+
+  const outOfSequence: PlanExceptionsRailOos[] = input.outOfSequence.map((e) => {
+    const pred = resolveWpLabel(e.predecessorId);
+    const succ = resolveWpLabel(e.successorId);
+    const succActual = input.actualByWp.get(e.successorId);
+    return {
+      predecessorWpId: e.predecessorId,
+      successorWpId: e.successorId,
+      predecessorWbsCode: pred.wbsCode,
+      predecessorName: pred.name,
+      successorWbsCode: succ.wbsCode,
+      successorName: succ.name,
+      label: '⇄ Out of sequence',
+      successorActualStart: succActual?.actualStart ?? null,
+      predecessorFinish: finishOf(e.predecessorId),
+      predecessorPresent: pred.present,
+      successorPresent: succ.present,
+    };
+  });
+
+  const notSchedulable: PlanExceptionsRailNotSchedulable[] = input.notSchedulable.map((n) => {
+    const meta = resolveWpLabel(n.wpId);
+    return {
+      wpId: n.wpId,
+      wbsCode: meta.wbsCode,
+      name: meta.name,
+      label: '⊘ No duration',
+      reason: 'no_duration',
+    };
+  });
+
+  return {
+    totalCount: violations.length + outOfSequence.length + notSchedulable.length,
+    holidayCalendarVersionSeq: input.holidayCalendarVersionSeq,
+    calendarRangeStart: input.calendarRangeStart,
+    calendarRangeEnd: input.calendarRangeEnd,
+    violations,
+    outOfSequence,
+    notSchedulable,
+  };
 }
 
 function asBound(scheduling: SchedulingBound): Bound {
@@ -562,6 +811,7 @@ export async function getPlanGridState<Handle>(
     let computedFinish: string | null = latest?.computedFinish ?? null;
     let minFloat: number | null = null;
     let whatMoved: WhatMovedBand | null = null;
+    let exceptions: PlanExceptionsRail = emptyExceptionsRail();
     const haltedReason = latest?.haltedReason ?? null;
 
     if (latest?.outputs !== null && latest?.outputs !== undefined && latest.haltedReason === null) {
@@ -587,6 +837,99 @@ export async function getPlanGridState<Handle>(
         anchor = storedOutputs.anchor;
         computedFinish = storedOutputs.computedFinish;
         minFloat = minFloatFromRows(storedOutputs.wps);
+
+        // Story 2.16 — full rail payload (violations keep asked/derived/chain; OOS joins dates).
+        const liveWpIds = new Set(ordered.map((w) => w.id));
+        const actualByWp = new Map<
+          string,
+          { readonly actualStart: string | null; readonly actualFinish: string | null }
+        >();
+        for (const wp of ordered) {
+          const status = planRows.statusHeads.get(wp.id);
+          actualByWp.set(wp.id, {
+            actualStart: status?.actualStart ?? null,
+            actualFinish: status?.actualFinish ?? null,
+          });
+        }
+        // Prefer live schedule projection; fall back to stored output earlyFinish.
+        const earlyFinishByWp = new Map<string, string | null>();
+        for (const row of wpSchedules) {
+          earlyFinishByWp.set(row.wpId, row.earlyFinish);
+        }
+        for (let i = 0; i < storedOutputs.wps.length; i += 1) {
+          const id = orderedIds[i];
+          const row = storedOutputs.wps[i];
+          if (id === undefined || row === undefined) continue;
+          if (!earlyFinishByWp.has(id) || earlyFinishByWp.get(id) === null) {
+            earlyFinishByWp.set(id, row.earlyFinish);
+          }
+        }
+        // Lag from live edges; fall back to stored input edges (index-decoded).
+        const lagByEdge = new Map<string, number>();
+        for (const e of edges) {
+          lagByEdge.set(`${e.predecessorWpId}\0${e.successorWpId}`, e.lagDays);
+        }
+        for (const e of storedInputs.edges) {
+          const pred = orderedIds[e.predecessorId];
+          const succ = orderedIds[e.successorId];
+          if (pred === undefined || succ === undefined) continue;
+          const key = `${pred}\0${succ}`;
+          if (!lagByEdge.has(key)) lagByEdge.set(key, e.lagDays);
+        }
+        // Also seed wbs/name from stored inputs for deleted WPs still named in exceptions.
+        const railWbs = new Map(wbsById);
+        const railName = new Map(nameById);
+        for (const w of storedInputs.wps) {
+          if (!railWbs.has(w.id) && w.wbsCode) railWbs.set(w.id, w.wbsCode);
+        }
+
+        const decodedViolations = storedOutputs.violations.flatMap((v) => {
+          const wpId = orderedIds[v.wpId];
+          if (wpId === undefined) return [];
+          const chain = v.chain.flatMap((idx) => {
+            const id = orderedIds[idx];
+            return id === undefined ? [] : [id];
+          });
+          return [
+            {
+              wpId,
+              constraintType: v.constraintType,
+              askedDate: v.askedDate,
+              derivedDate: v.derivedDate,
+              daysLate: v.daysLate,
+              chain,
+            },
+          ];
+        });
+        const decodedOos = storedOutputs.outOfSequence.flatMap((e) => {
+          const predecessorId = orderedIds[e.predecessorId];
+          const successorId = orderedIds[e.successorId];
+          if (predecessorId === undefined || successorId === undefined) return [];
+          return [{ predecessorId, successorId }];
+        });
+        const decodedNs = storedOutputs.notSchedulable.flatMap((n) => {
+          const wpId = orderedIds[n.wpId];
+          if (wpId === undefined) return [];
+          return [{ wpId, reason: 'no_duration' as const }];
+        });
+
+        exceptions = buildExceptionsRail({
+          orderedIds,
+          wbsById: railWbs,
+          nameById: railName,
+          liveWpIds,
+          milestoneIds,
+          holidayCalendarVersionSeq:
+            storedInputs.calendar.versionSeq ?? latest.holidayCalendarVersionSeq,
+          calendarRangeStart: storedInputs.calendar.rangeStart,
+          calendarRangeEnd: storedInputs.calendar.rangeEnd,
+          violations: decodedViolations,
+          outOfSequence: decodedOos,
+          notSchedulable: decodedNs,
+          actualByWp,
+          earlyFinishByWp,
+          lagByEdge,
+        });
 
         let previousPayload: {
           readonly computedFinish: string | null;
@@ -672,14 +1015,36 @@ export async function getPlanGridState<Handle>(
         }
         minFloat = minFloatFromRows(wpSchedules);
       }
-    } else if (latest?.anchor) {
-      const kind =
-        project.projectFinish !== null && latest.anchor === project.projectFinish
-          ? 'project_finish'
-          : 'computed_finish';
-      anchor = { kind, date: latest.anchor };
+    } else if (latest !== null) {
+      // Halted or outputs-null: never decode exception lists; still surface calendar bounds for
+      // the calendar_range banner (Q1→A).
+      let rangeStart: string | null = null;
+      let rangeEnd: string | null = null;
+      let versionSeq: number | null = latest.holidayCalendarVersionSeq;
+      try {
+        const storedInputs = parseStoredInputs(latest.inputs);
+        rangeStart = storedInputs.calendar.rangeStart;
+        rangeEnd = storedInputs.calendar.rangeEnd;
+        versionSeq = storedInputs.calendar.versionSeq;
+      } catch {
+        // Inputs unreadable — banner will say "range unavailable".
+      }
+      exceptions = emptyExceptionsRail({
+        holidayCalendarVersionSeq: versionSeq,
+        calendarRangeStart: rangeStart,
+        calendarRangeEnd: rangeEnd,
+      });
+      if (latest.anchor) {
+        const kind =
+          project.projectFinish !== null && latest.anchor === project.projectFinish
+            ? 'project_finish'
+            : 'computed_finish';
+        anchor = { kind, date: latest.anchor };
+      } else {
+        minFloat = haltedReason === null ? minFloatFromRows(wpSchedules) : null;
+      }
     } else {
-      minFloat = haltedReason === null ? minFloatFromRows(wpSchedules) : null;
+      minFloat = null;
     }
 
     if (minFloat === null && haltedReason === null) {
@@ -772,6 +1137,7 @@ export async function getPlanGridState<Handle>(
       floatAnchorLabel: floatAnchorHeader(anchor),
       finishTeaching: PROJECT_FINISH_TEACHING,
       whatMoved,
+      exceptions,
       leafCandidates,
       rows,
     } satisfies PlanGridState;

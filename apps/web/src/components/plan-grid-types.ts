@@ -1,5 +1,5 @@
 /**
- * Serializable Plan grid row for the client treegrid (story 2.13 / 2.14 / 2.15).
+ * Serializable Plan grid row for the client treegrid (story 2.13 / 2.14 / 2.15 / 2.16).
  * BigInt ratios become strings for RSC → client props.
  */
 
@@ -87,6 +87,66 @@ export interface WhatMovedBandView {
   readonly atIso: string;
 }
 
+export interface PlanExceptionsRailChainEntryView {
+  readonly wpId: string;
+  readonly wbsCode: string;
+  readonly name: string;
+  readonly finish: string | null;
+  readonly lagDays: number | null;
+  readonly presentInLiveTree: boolean;
+}
+
+export interface PlanExceptionsRailViolationView {
+  readonly wpId: string;
+  readonly wbsCode: string;
+  readonly name: string;
+  readonly label: string;
+  readonly isMilestone: boolean;
+  readonly constraintType: 'must_start_on' | 'must_finish_on';
+  readonly askedDate: string;
+  readonly derivedDate: string;
+  readonly daysLate: number;
+  readonly chain: readonly PlanExceptionsRailChainEntryView[];
+}
+
+export interface PlanExceptionsRailOosView {
+  readonly predecessorWpId: string;
+  readonly successorWpId: string;
+  readonly predecessorWbsCode: string;
+  readonly predecessorName: string;
+  readonly successorWbsCode: string;
+  readonly successorName: string;
+  readonly label: string;
+  readonly successorActualStart: string | null;
+  readonly predecessorFinish: string | null;
+  readonly predecessorPresent: boolean;
+  readonly successorPresent: boolean;
+}
+
+export interface PlanExceptionsRailNotSchedulableView {
+  readonly wpId: string;
+  readonly wbsCode: string;
+  readonly name: string;
+  readonly label: string;
+  readonly reason: 'no_duration';
+}
+
+export interface PlanExceptionsRailView {
+  readonly totalCount: number;
+  readonly holidayCalendarVersionSeq: number | null;
+  readonly calendarRangeStart: string | null;
+  readonly calendarRangeEnd: string | null;
+  readonly violations: readonly PlanExceptionsRailViolationView[];
+  readonly outOfSequence: readonly PlanExceptionsRailOosView[];
+  readonly notSchedulable: readonly PlanExceptionsRailNotSchedulableView[];
+}
+
+/** Stable key for a flat rail walk item (j/k). */
+export type ExceptionsRailItemKey =
+  | `violation:${string}`
+  | `oos:${string}->${string}`
+  | `not_schedulable:${string}`;
+
 export interface PlanGridViewModel {
   readonly projectId: string;
   readonly userId: string;
@@ -102,6 +162,7 @@ export interface PlanGridViewModel {
   readonly scheduleStale: boolean;
   readonly haltedReason: string | null;
   readonly whatMoved: WhatMovedBandView | null;
+  readonly exceptions: PlanExceptionsRailView;
   readonly leafCandidates: readonly PlanGridLeafCandidateView[];
   readonly rows: readonly PlanGridRowView[];
 }
