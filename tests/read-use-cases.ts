@@ -399,6 +399,8 @@ export const READ_USE_CASES: readonly ReadUseCase[] = [
     invoke: (deps, target) =>
       readSurface.listDepartments(deps, adminContextOf(target)),
     mustSurface: departmentListLabels,
+    // Fixture has one Department — few labels; floor 0 like listAuditLog.
+    minimumLabels: 0,
   },
   {
     name: 'listPrograms',
@@ -410,6 +412,7 @@ export const READ_USE_CASES: readonly ReadUseCase[] = [
     invoke: (deps, target) =>
       readSurface.listPrograms(deps, adminContextOf(target)),
     mustSurface: programListLabels,
+    minimumLabels: 0,
   },
   {
     name: 'listProjects',
@@ -421,6 +424,7 @@ export const READ_USE_CASES: readonly ReadUseCase[] = [
     invoke: (deps, target) =>
       readSurface.listProjects(deps, adminContextOf(target)),
     mustSurface: projectListLabels,
+    minimumLabels: 0,
   },
   {
     name: 'mapTickets',
