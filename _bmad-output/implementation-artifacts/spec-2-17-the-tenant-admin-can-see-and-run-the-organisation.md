@@ -95,6 +95,7 @@ context:
 ## Implementation Notes
 
 - 2026-09-27: Added `listDepartments` / `listPrograms` / `listProjects` (ADMIN_ONLY) with `ports/org-read` + `repo-org-list` SELECTs (not FOR UPDATE). Registered in harness; removed `program` from `UNREACHED_TENANT_OWNED_TABLES`. Wired composition bindings + server actions wrapping the eight existing org writes. Three `/admin/{departments,programs,projects}` pages with Ledger-Paper tables; User menu adds three links beside Audit log. PM assignment + Resources & Rates already recorded in deferred-work.md (Q2→B / Build split).
+- Verified: `pnpm lint`, `pnpm typecheck`, `pnpm depcruise`, `pnpm test` (1454 passed with local Postgres).
 
 ## Spec Change Log
 
