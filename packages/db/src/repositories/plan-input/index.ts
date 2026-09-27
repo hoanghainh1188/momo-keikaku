@@ -739,12 +739,14 @@ export function planInputRepositoryOn(bound: Bound) {
     async patchMilestone(command: PatchMilestoneCommand): Promise<void> {
       await requireProject(bound, command.projectId);
       await requireActiveWp(bound, command.projectId, command.wpId);
+      // Mark: duration → 0. Clear (Q1→C): duration → null so the WP is not-schedulable
+      // until a duration is entered (avoids non-◆ + duration-0 split-brain).
       const updated = await tx
         .update(s.workPackage)
         .set(
           command.isMilestone
             ? { isMilestone: true, durationDays: 0 }
-            : { isMilestone: false },
+            : { isMilestone: false, durationDays: null },
         )
         .where(
           and(
