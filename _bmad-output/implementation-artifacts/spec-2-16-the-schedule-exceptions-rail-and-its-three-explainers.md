@@ -2,7 +2,7 @@
 title: 'Story 2.16 — The schedule-exceptions rail and its three explainers'
 type: 'feature'
 created: '2026-09-26'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '23cd19b1a0da3f5c3a8641cdfaf50149d78dbd6b'
@@ -120,6 +120,7 @@ context:
 - Explainer rebind after recalc uses `rebindExplainer` against the settle payload's `exceptions` (and model refresh).
 - Illegal-edge persisted band already recorded in `deferred-work.md` (Q1→A). No optional `fence-2-16` integration test added — unit coverage covers the matrix rows without DB.
 - Matrix audit (2026-09-27): extracted pure `walkExceptionsRailKey` / `nextDrawerOpenForXKey` / `nextDrawerOpenForBreakpoint` / `scheduleStaleBannerKind` / `groupIdForRailKey`; wired into `plan-tree-grid` + rail expand; unit tests cover j/k empty no-op, expand group id, `x` pinned no-op, breakpoint pref restore, calendar vs generic banner, halted write-success empty rail.
+- Review patches (2026-09-27): auto-open drawer for explainers; chain walk without stealing focus; rebind rail selection; duration try/finally; empty-group collapse; fence asserts for rail + halt bounds. Deferred BH5 formatter dedupe + BH11 national provenance.
 
 ## Spec Change Log
 
