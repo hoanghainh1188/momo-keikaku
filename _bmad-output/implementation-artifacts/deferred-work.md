@@ -1214,3 +1214,7 @@ above can see where it went.
   summary: Story 2.17 follow-up — PM assignment UI (assign/unassign a member's Project via existing `assignMemberProject` / `unassignMemberProject`).
   evidence: Split at story 2.17 Open Questions gate — founder chose Q2→B (hierarchy screens only). EXPERIENCE lists PM assignment under Admin: Organisation; epics ACs for 2.17 name create/rename/reassign. Natural home is Admin: Users or a later Organisation follow-up.
 
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-17-the-tenant-admin-can-see-and-run-the-organisation.md`
+  summary: Rename `UserChip` / layout prop `showAuditLog` to something that means "show Admin menu" now that it also gates Departments / Programs / Projects.
+  evidence: Review BH8 (2026-09-27): flag semantics widened; rename touches multiple call sites and tests — more than a trivial patch.
+
