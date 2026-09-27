@@ -44,6 +44,19 @@ export type { Clock } from './ports/clock';
 export type { IdGenerator } from './ports/ids';
 export type { MailerPort, MailMessage } from './ports/mailer';
 export type {
+  WorkbookCell,
+  WorkbookCellValue,
+  WorkbookFormulaValue,
+  WorkbookLimit,
+  WorkbookMergeRange,
+  WorkbookParse,
+  WorkbookParseResult,
+  WorkbookPlainValue,
+  WorkbookPort,
+  WorkbookReject,
+  WorkbookSheet,
+} from './ports/workbook';
+export type {
   DepartmentRow,
   NewProjectRow,
   OrgRepository,
