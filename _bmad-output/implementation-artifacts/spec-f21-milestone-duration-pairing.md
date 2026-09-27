@@ -2,7 +2,7 @@
 title: 'Epic 2 retro F21 — enforce milestone ↔ duration pairing at the fence'
 type: 'bugfix'
 created: '2026-09-27'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '498aefee695d7e8a34e99b90f619d93c3b79e144'
@@ -79,12 +79,29 @@ context:
 - Fence gates in `applyMutation`: `create_wp` refuses `isMilestone` + `durationDays ≥ 1` (`milestone_must_be_zero`) and coerces omitted/null → `0`; `patch_duration` refuses non-zero/null on a live milestone (idempotent `0` allowed); `patch_milestone` still goes through repo.
 - `patchMilestone(false)` now writes `{ isMilestone: false, durationDays: null }` (Q1 → C) in the same statement.
 - Regression suite: `tests/schedule/fence-f21-milestone-duration.test.ts` (every I/O matrix row). Fence-only — no DB CHECK (Q2 → A).
+- Review patches (2026-09-27): idempotent `patchMilestone(false)` preserves duration on non-milestones; null refuse detail `milestone_cannot_clear`; post-refuse reload asserts; deferred reverse duration-0-without-flag path.
 
 ## Spec Change Log
 
 - 2026-09-27: Implemented fence pairing + Q1 clear-null; sprint item-13 → `done`.
+- 2026-09-27: Review patches — idempotent clear, distinct null refuse, stronger refuse assertions.
 
 ## Review Triage Log
+
+Review pass 1 (2026-09-27), Blind Hunter (BH), Edge Case Hunter (EC), Verification Gap (VG).
+
+| # | Source | Finding | Verdict | Evidence | Route |
+|---|---|---|---|---|---|
+| 1 | BH, EC | Non-milestone + `durationDays === 0` still writable via `create_wp` / `patch_duration` (reverse split-brain) | medium | Pre-existing; Approach/matrix only lock milestone → 0 and Q1→C on clear. Not introduced by this diff | defer |
+| 2 | BH | `patch_duration` null on milestone used detail `milestone_must_be_zero` | medium | Confirmed; clients got wrong remediation signal. Patched → `milestone_cannot_clear` | patch |
+| 3 | BH | Spec Verification still names `fence-2-10` first | false | Finding's fix is editing this build's spec — rejected per triage rules | reject |
+| 4 | BH | Combined refuse test never reloads WP after refuse | low | Real soft gap; patched — reload asserts milestone + duration 0 | patch |
+| 5 | BH | Code Map line anchors stale | false | Fix would edit this build's spec — rejected | reject |
+| 6 | BH | Design Notes still read as forward guidance | false | Fix would edit this build's spec — rejected | reject |
+| 7 | BH | Missing/soft-deleted WP skips F21 refuse then hits `requireActiveWp` | false | Inactive targets still fail via existing repo guards; F21 pairing only applies to live milestones | reject |
+| 8 | BH | Repo `createWp`/`patchDuration` ungated | false | Q2 → A fence-only; intentional | reject |
+| 9 | EC | `patch_milestone: false` on already non-milestone nulls an active duration | medium | Confirmed wipe. Patched — only null duration when prior row was milestone | patch |
+| 10 | VG | (none) | — | No verification gaps filed | — |
 
 ## Design Notes
 
