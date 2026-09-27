@@ -405,7 +405,11 @@ async function applyMutation(
           ),
         );
       if (wp !== undefined && wp.deletedAt === null && wp.isMilestone && mutation.durationDays !== 0) {
-        refuse('invalid_input', { durationDays: ['milestone_must_be_zero'] });
+        refuse('invalid_input', {
+          durationDays: [
+            mutation.durationDays === null ? 'milestone_cannot_clear' : 'milestone_must_be_zero',
+          ],
+        });
       }
       await planInput.patchDuration(mutation);
       return warnings;

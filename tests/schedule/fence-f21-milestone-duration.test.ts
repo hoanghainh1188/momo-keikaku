@@ -246,6 +246,7 @@ describe.skipIf(!reachable)('applyPlanChange fence (F21 milestone ↔ duration)'
     if (multiDay.ok) return;
     expect(multiDay.error.code).toBe('invalid_input');
     expect(multiDay.error.details?.durationDays).toEqual(['milestone_must_be_zero']);
+    expect(await loadWp(app, leaf.id)).toEqual({ isMilestone: true, durationDays: 0 });
 
     const cleared = await applyPlanChange(
       { handle: app, transaction: inTenantTransaction },
@@ -260,7 +261,8 @@ describe.skipIf(!reachable)('applyPlanChange fence (F21 milestone ↔ duration)'
     expect(cleared.ok).toBe(false);
     if (cleared.ok) return;
     expect(cleared.error.code).toBe('invalid_input');
-    expect(cleared.error.details?.durationDays).toEqual(['milestone_must_be_zero']);
+    expect(cleared.error.details?.durationDays).toEqual(['milestone_cannot_clear']);
+    expect(await loadWp(app, leaf.id)).toEqual({ isMilestone: true, durationDays: 0 });
 
     const stayZero = await applyPlanChange(
       { handle: app, transaction: inTenantTransaction },
@@ -330,5 +332,27 @@ describe.skipIf(!reachable)('applyPlanChange fence (F21 milestone ↔ duration)'
     if (!cleared.ok) return;
 
     expect(await loadWp(app, leaf.id)).toEqual({ isMilestone: false, durationDays: null });
+  });
+
+  it('idempotent patch_milestone false on a non-milestone leaves duration intact', async () => {
+    const owner = getDb(OWNER_DATABASE_URL!);
+    const app = getDb(APP_DATABASE_URL!);
+    const leaf = await prepareSchedulableProject(owner);
+    expect(await loadWp(app, leaf.id)).toEqual({ isMilestone: false, durationDays: 3 });
+
+    const result = await applyPlanChange(
+      { handle: app, transaction: inTenantTransaction },
+      ctx(),
+      {
+        kind: 'patch_milestone',
+        projectId: PROBE.projectId,
+        wpId: leaf.id,
+        isMilestone: false,
+      },
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(await loadWp(app, leaf.id)).toEqual({ isMilestone: false, durationDays: 3 });
   });
 });
