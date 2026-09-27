@@ -39,6 +39,7 @@
  */
 import type { ProjectReadDeps } from '../packages/app/src/ports/project-read';
 import type { AuditLogReadDeps } from '../packages/app/src/ports/audit-log-read';
+import type { OrgReadDeps } from '../packages/app/src/ports/org-read';
 import type { WriteDeps } from '../packages/app/src/ports/write-deps';
 import * as readSurface from '../packages/app/src/use-cases';
 import type { Db } from '../packages/db/src/client';
@@ -46,8 +47,8 @@ import type { DemoState } from '../packages/db/src/fixtures';
 import { tenantCurrencyOn } from '../packages/db/src/repo-tenant-currency';
 import { adminContextFor, pmContextFor } from './request-context';
 
-/** What the harness wires for every read invoke — project reads plus story 1.7's audit port. */
-export type HarnessReadDeps = ProjectReadDeps<Db> & AuditLogReadDeps<Db>;
+/** What the harness wires for every read invoke — project reads, audit, and org lists. */
+export type HarnessReadDeps = ProjectReadDeps<Db> & AuditLogReadDeps<Db> & OrgReadDeps<Db>;
 
 /** Named in failure messages, so the reader is sent to the file rather than to a diff. */
 export const READ_SURFACE_MODULE = 'packages/app/src/use-cases/index.ts';
@@ -292,6 +293,30 @@ export function auditLogLabels(state: DemoState): string[] {
   return [state.fixture.project.id];
 }
 
+/** Department id + name from the seed fixture (story 2.17 listDepartments). */
+export function departmentListLabels(state: DemoState): string[] {
+  return [state.fixture.department.id, state.fixture.department.name];
+}
+
+/** Program id + name + owning Department name (story 2.17 listPrograms). */
+export function programListLabels(state: DemoState): string[] {
+  return [
+    state.fixture.program.id,
+    state.fixture.program.name,
+    state.fixture.department.name,
+  ];
+}
+
+/** Project id + name + parent Department / Program names (story 2.17 listProjects). */
+export function projectListLabels(state: DemoState): string[] {
+  return [
+    state.fixture.project.id,
+    state.fixture.project.name,
+    state.fixture.department.name,
+    state.fixture.program.name,
+  ];
+}
+
 /**
  * Every export of the use-case surface, reads and writes alike. (The name predates the writes;
  * `kind` is what tells them apart.)
@@ -361,6 +386,44 @@ export const READ_USE_CASES: readonly ReadUseCase[] = [
     mustSurface: auditLogLabels,
     // Seed writes one audit row; originalsIn finds the Project id only (demo.seed is outside
     // the fixture universe). Floor 0: toBeGreaterThan(0) still requires at least one label.
+    minimumLabels: 0,
+  },
+  {
+    name: 'listDepartments',
+    kind: 'read',
+    why:
+      'Story 2.17 Organisation Admin: packages/db repo-org-list listDepartments inside ' +
+      'withTenant over department. Tenant-wide Admin list; cross-Tenant probe expects ' +
+      'own-tenant rows.',
+    crossTenant: 'own-tenant-ok',
+    invoke: (deps, target) =>
+      readSurface.listDepartments(deps, adminContextOf(target)),
+    mustSurface: departmentListLabels,
+    // Fixture has one Department — few labels; floor 0 like listAuditLog.
+    minimumLabels: 0,
+  },
+  {
+    name: 'listPrograms',
+    kind: 'read',
+    why:
+      'Story 2.17 Organisation Admin: packages/db repo-org-list listPrograms joins program ' +
+      'to department. Removes program from UNREACHED_TENANT_OWNED_TABLES. Own-tenant-ok.',
+    crossTenant: 'own-tenant-ok',
+    invoke: (deps, target) =>
+      readSurface.listPrograms(deps, adminContextOf(target)),
+    mustSurface: programListLabels,
+    minimumLabels: 0,
+  },
+  {
+    name: 'listProjects',
+    kind: 'read',
+    why:
+      'Story 2.17 Organisation Admin: packages/db repo-org-list listProjects joins project ' +
+      'to department and left-joins program. Own-tenant-ok.',
+    crossTenant: 'own-tenant-ok',
+    invoke: (deps, target) =>
+      readSurface.listProjects(deps, adminContextOf(target)),
+    mustSurface: projectListLabels,
     minimumLabels: 0,
   },
   {
@@ -709,14 +772,6 @@ export interface UnreachedTable {
  * reading. Either way the change becomes a decision somebody makes on purpose.
  */
 export const UNREACHED_TENANT_OWNED_TABLES: readonly UnreachedTable[] = [
-  {
-    table: 'program',
-    why:
-      'Written by the organisation writes (story 1.3 slice 2), read by none of the READ use ' +
-      'cases: the Project bundle carries the Department\'s name but no Program, and there is no ' +
-      'read use case for the org in 1.3 (no Organisation UI). The first read of it — the admin ' +
-      'surface or a Program roll-up — brings it into this harness and must remove this entry.',
-  },
   {
     table: 'project_default_rate_entry',
     why:

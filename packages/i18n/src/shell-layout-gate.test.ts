@@ -49,6 +49,9 @@ const GATE_PARAMS: Record<string, Record<string, unknown>> = {
   'shell.ageMinutes': { minutes: 5 },
   'shell.ageHours': { hours: 2 },
   'shell.ageDays': { days: 3 },
+  'admin.org.rename_named': { name: 'Delivery' },
+  'admin.org.reassign_program_named': { name: 'EC Phase 2' },
+  'admin.org.reassign_department_named': { name: 'EC Phase 2' },
 };
 
 /**

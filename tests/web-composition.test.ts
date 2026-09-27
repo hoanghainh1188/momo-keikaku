@@ -146,6 +146,29 @@ const spies = vi.hoisted(() => {
         }[]
       > => [],
     ),
+    listDepartments: vi.fn(async (): Promise<readonly { id: string; name: string }[]> => []),
+    listPrograms: vi.fn(
+      async (): Promise<
+        readonly {
+          id: string;
+          departmentId: string;
+          departmentName: string;
+          name: string;
+        }[]
+      > => [],
+    ),
+    listProjects: vi.fn(
+      async (): Promise<
+        readonly {
+          id: string;
+          name: string;
+          departmentId: string;
+          departmentName: string;
+          programId: string | null;
+          programName: string | null;
+        }[]
+      > => [],
+    ),
     session,
     identity,
     membershipsOf: vi.fn(async (_handle: unknown, _userId: string) => [
@@ -188,6 +211,9 @@ vi.mock('@momo/db', async (importOriginal) => ({
   loadProjectBundle: spies.loadProjectBundle,
   loadReview: spies.loadReview,
   listAuditLog: spies.listAuditLog,
+  listDepartments: spies.listDepartments,
+  listPrograms: spies.listPrograms,
+  listProjects: spies.listProjects,
   membershipsOf: spies.membershipsOf,
   identityEventWriterOn: (handle: unknown) => {
     expect(handle).toBe(spies.handle);
@@ -784,6 +810,58 @@ describe('the listAuditLog read binding (story 1.7)', () => {
     expect(spies.identity.lookupUser).toHaveBeenCalledWith(spies.session.userId);
     expect(spies.loadReview, 'audit read must not load a Project').not.toHaveBeenCalled();
     expect(spies.inTenantTransaction, 'a read must not open a write transaction').not.toHaveBeenCalled();
+  });
+});
+
+describe('the organisation list read bindings (story 2.17)', () => {
+  beforeEach(() => {
+    spies.membershipsOf.mockResolvedValue([
+      { tenantId: SESSION_TENANT, role: 'tenant_admin', projectIds: [] },
+    ]);
+  });
+
+  it('listDepartments reaches the repo for the session Tenant', async () => {
+    spies.listDepartments.mockResolvedValue([{ id: 'dep-1', name: 'Delivery' }]);
+    const result = await composition.listDepartments();
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.rows).toEqual([{ id: 'dep-1', name: 'Delivery' }]);
+    expect(spies.listDepartments).toHaveBeenCalledWith(spies.handle, SESSION_TENANT);
+    expect(spies.inTenantTransaction).not.toHaveBeenCalled();
+  });
+
+  it('listPrograms reaches the repo for the session Tenant', async () => {
+    spies.listPrograms.mockResolvedValue([
+      {
+        id: 'prog-1',
+        departmentId: 'dep-1',
+        departmentName: 'Delivery',
+        name: 'Phase 2',
+      },
+    ]);
+    const result = await composition.listPrograms();
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.rows[0]?.name).toBe('Phase 2');
+    expect(spies.listPrograms).toHaveBeenCalledWith(spies.handle, SESSION_TENANT);
+  });
+
+  it('listProjects reaches the repo for the session Tenant', async () => {
+    spies.listProjects.mockResolvedValue([
+      {
+        id: 'prj-1',
+        name: 'EC',
+        departmentId: 'dep-1',
+        departmentName: 'Delivery',
+        programId: 'prog-1',
+        programName: 'Phase 2',
+      },
+    ]);
+    const result = await composition.listProjects();
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.rows[0]?.id).toBe('prj-1');
+    expect(spies.listProjects).toHaveBeenCalledWith(spies.handle, SESSION_TENANT);
   });
 });
 

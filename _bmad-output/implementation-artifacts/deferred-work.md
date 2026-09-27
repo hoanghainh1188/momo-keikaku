@@ -565,6 +565,7 @@ and why thirty-five entries sat open while the work behind them had already ship
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-3-organisation-hierarchy.md`
   summary: The org writes have no read side: nothing lists Departments or Programs, and `program` is declared unreached in the read harness.
   evidence: The spec's Never list: no UI and no read use case for the org in 1.3. The first read (the Organisation admin surface, after 1.4/1.5, or a Program roll-up) must remove `program` from `UNREACHED_TENANT_OWNED_TABLES` or the reach assertion fails.
+  resolved: YES, 2026-09-27 in `spec-2-17-the-tenant-admin-can-see-and-run-the-organisation.md`. `listDepartments` / `listPrograms` / `listProjects` are ADMIN_ONLY reads on `repo-org-list`, registered in the harness; `program` is removed from `UNREACHED_TENANT_OWNED_TABLES`.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-3-organisation-hierarchy.md`
   summary: `findProject`'s row lock — the only concurrent guard of the Program-within-Department rule — has no test.
@@ -1204,3 +1205,16 @@ above can see where it went.
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-16-the-schedule-exceptions-rail-and-its-three-explainers.md`
   summary: Confirm whether `chainFocusActive` stays true after a recalc rebind unmounts the violation explainer, leaving grid `j` / `k` dead because `onGridKeyDown` returns early.
   evidence: Code review (2026-09-27), maybe-false. `plan-tree-grid.tsx` rebind does not clear `chainFocusActive`. The chain list `onBlur` usually clears it on unmount. Settle with a runtime repro: recalc while the chain list is focused and see whether grid `j` / `k` stay dead.
+
+- source_spec: none
+  summary: Story 2.17 follow-up — Resources & Rates screens (list Rate history in effective-date order; append via `appendResourceRate` / `appendProjectDefaultRate`) plus Epic 1 retrospective F21 narrowing `loadProjectBundle` resource/rate_entry reads to the Project before any screen renders Rates.
+  evidence: Split from story 2.17 at the Build multi-goal gate (2026-09-27). Founder chose hierarchy screens (Department / Program / Project) first; Resources & Rates and F21 are independently shippable and stay Comfort for a later PR.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-17-the-tenant-admin-can-see-and-run-the-organisation.md`
+  summary: Story 2.17 follow-up — PM assignment UI (assign/unassign a member's Project via existing `assignMemberProject` / `unassignMemberProject`).
+  evidence: Split at story 2.17 Open Questions gate — founder chose Q2→B (hierarchy screens only). EXPERIENCE lists PM assignment under Admin: Organisation; epics ACs for 2.17 name create/rename/reassign. Natural home is Admin: Users or a later Organisation follow-up.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-17-the-tenant-admin-can-see-and-run-the-organisation.md`
+  summary: Rename `UserChip` / layout prop `showAuditLog` to something that means "show Admin menu" now that it also gates Departments / Programs / Projects.
+  evidence: Review BH8 (2026-09-27): flag semantics widened; rename touches multiple call sites and tests — more than a trivial patch.
+

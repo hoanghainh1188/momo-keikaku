@@ -1,9 +1,12 @@
+'use client';
+
 /**
- * Top-bar user chip with an optional Admin menu (Audit log) — story 1.7.
+ * Top-bar user chip with an optional Admin menu (story 1.7 + 2.17).
  * Plain `.ts` (createElement) so the unit gate can import it without JSX transform.
- * Uses a plain `<a>` for the menu link: `createElement(Link, …)` rejects `data-testid` under
- * Next's typed Link props, and a full navigation to `/admin/audit` does not need client routing.
+ * Uses plain `<a>` for menu links: `createElement(Link, …)` rejects `data-testid` under
+ * Next's typed Link props, and full navigation to `/admin/...` does not need client routing.
  */
+import { useTranslations } from 'next-intl';
 import { createElement } from 'react';
 
 export function UserChip({
@@ -11,8 +14,10 @@ export function UserChip({
   showAuditLog,
 }: {
   label: string;
+  /** When true (Tenant Admin), show Organisation + Audit log menuitems. */
   showAuditLog: boolean;
 }) {
+  const t = useTranslations();
   if (!showAuditLog) {
     return createElement('div', { className: 'userchip', 'data-testid': 'userchip' }, label);
   }
@@ -26,8 +31,23 @@ export function UserChip({
       { className: 'userchip-dropdown', role: 'menu' },
       createElement(
         'a',
+        { href: '/admin/departments', role: 'menuitem', 'data-testid': 'admin-departments-link' },
+        t('admin.org.departments'),
+      ),
+      createElement(
+        'a',
+        { href: '/admin/programs', role: 'menuitem', 'data-testid': 'admin-programs-link' },
+        t('admin.org.programs'),
+      ),
+      createElement(
+        'a',
+        { href: '/admin/projects', role: 'menuitem', 'data-testid': 'admin-projects-link' },
+        t('admin.org.projects'),
+      ),
+      createElement(
+        'a',
         { href: '/admin/audit', role: 'menuitem', 'data-testid': 'audit-log-link' },
-        'Audit log',
+        t('admin.audit.audit_log'),
       ),
     ),
   );

@@ -14,6 +14,11 @@ import {
   loadReview,
 } from '../packages/db/src/repo';
 import { listAuditLog } from '../packages/db/src/repo-audit';
+import {
+  listDepartments,
+  listPrograms,
+  listProjects,
+} from '../packages/db/src/repo-org-list';
 import { lookupUserOn } from '../packages/db/auth/src/identity';
 import {
   READ_SURFACE_MODULE,
@@ -494,6 +499,11 @@ function restrictedDeps(): HarnessReadDeps {
     handle: restricted!,
     projectRead: { loadProjectBundle, loadReview },
     auditLogRead: { list: listAuditLog },
+    orgRead: {
+      listDepartments,
+      listPrograms,
+      listProjects,
+    },
     lookupUser: (userId) => lookupUserOn(restricted!, userId),
   } satisfies HarnessReadDeps;
 }

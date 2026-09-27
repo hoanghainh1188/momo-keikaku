@@ -40,4 +40,5 @@ export {
   createResource,
 } from './resource-writes';
 export { listAuditLog } from './list-audit-log';
+export { listDepartments, listPrograms, listProjects } from './list-org';
 export { changeTenantCurrency } from './tenant-currency';
