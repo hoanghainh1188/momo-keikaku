@@ -7,6 +7,7 @@ import {
   actorUserIdOf,
   buildExceptionsRail,
   buildWhatMovedBand,
+  blankDerivedDates,
   calendarRangeHaltBanner,
   emptyExceptionsRail,
   floatAnchorHeader,
@@ -71,6 +72,18 @@ describe('plan-grid display helpers (story 2.13)', () => {
     ).toBe(
       'Float measured against the computed finish, 12 Mar 2027 — relative, because no Project finish is set',
     );
+  });
+
+  it('keeps last-good row dates on calendar_range; blanks other halt/stale', () => {
+    expect(blankDerivedDates({ haltedReason: 'calendar_range', scheduleStale: true })).toBe(
+      false,
+    );
+    expect(blankDerivedDates({ haltedReason: 'calendar_range', scheduleStale: false })).toBe(
+      false,
+    );
+    expect(blankDerivedDates({ haltedReason: 'graph_invalid', scheduleStale: true })).toBe(true);
+    expect(blankDerivedDates({ haltedReason: null, scheduleStale: true })).toBe(true);
+    expect(blankDerivedDates({ haltedReason: null, scheduleStale: false })).toBe(false);
   });
 
   it('blanks strip computed finish / min Float / anchor when the run is halted', () => {
@@ -405,11 +418,62 @@ describe('exceptions rail builders (story 2.16)', () => {
     expect(rail.violations[0]!.chain).toEqual([]);
     expect(rail.violations[1]!.chain[0]!.presentInLiveTree).toBe(false);
     expect(rail.violations[1]!.chain[0]!.wbsCode).toMatch(/missing|miss/);
+    // One-link: lag on p→v (immediate driver of violated WP).
+    expect(rail.violations[2]!.wpId).toBe('v');
+    expect(rail.violations[2]!.chain[0]!.lagDays).toBe(2);
     expect(rail.outOfSequence).toHaveLength(2);
     expect(rail.outOfSequence[0]!.successorActualStart).toBe('2026-09-07');
     expect(rail.outOfSequence[0]!.predecessorFinish).toBe('2026-09-14');
     expect(rail.notSchedulable[0]!.label).toBe('⊘ No duration');
     expect(rail.holidayCalendarVersionSeq).toBe(3);
+  });
+
+  it('pairs multi-hop chain lag toward the violated WP (immediate-driver first)', () => {
+    const rail = buildExceptionsRail({
+      orderedIds: ['p0', 'p1', 'w'],
+      wbsById: new Map([
+        ['p0', '1.0'],
+        ['p1', '1.1'],
+        ['w', '1.2'],
+      ]),
+      nameById: new Map([
+        ['p0', 'Root'],
+        ['p1', 'Mid'],
+        ['w', 'Late'],
+      ]),
+      liveWpIds: new Set(['p0', 'p1', 'w']),
+      milestoneIds: new Set(),
+      holidayCalendarVersionSeq: 1,
+      calendarRangeStart: null,
+      calendarRangeEnd: null,
+      violations: [
+        {
+          wpId: 'w',
+          constraintType: 'must_finish_on',
+          askedDate: '2027-01-01',
+          derivedDate: '2027-01-15',
+          daysLate: 10,
+          chain: ['p1', 'p0'],
+        },
+      ],
+      outOfSequence: [],
+      notSchedulable: [],
+      actualByWp: new Map(),
+      earlyFinishByWp: new Map([
+        ['p0', '2026-12-01'],
+        ['p1', '2026-12-10'],
+      ]),
+      lagByEdge: new Map([
+        ['p1\0w', 3],
+        ['p0\0p1', 1],
+        // Wrong-direction keys must not win.
+        ['p1\0p0', 99],
+        ['p0\0w', 98],
+      ]),
+    });
+    expect(rail.violations[0]!.chain.map((c) => c.wpId)).toEqual(['p1', 'p0']);
+    expect(rail.violations[0]!.chain[0]!.lagDays).toBe(3);
+    expect(rail.violations[0]!.chain[1]!.lagDays).toBe(1);
   });
 
   it('omits invented OOS dates when actual/finish are missing', () => {

@@ -480,6 +480,10 @@ describe.skipIf(!reachable)('predecessor set + constraint editors (story 2.14)',
     expect(railV?.label).toBe(row?.exception?.label);
     expect(railV?.daysLate).toBeGreaterThan(0);
     expect(typeof railV?.daysLate).toBe('number');
+    // Stored chain indexes must decode to live WP ids (story 2.16).
+    expect(railV?.chain.length).toBeGreaterThan(0);
+    expect(railV?.chain[0]?.wpId).toBe(pred.id);
+    expect(railV?.chain[0]?.presentInLiveTree).toBe(true);
   });
 
   it('parse refuse for malformed predecessor text does not write', async () => {

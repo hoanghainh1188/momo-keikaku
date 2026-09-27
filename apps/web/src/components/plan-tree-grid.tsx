@@ -114,6 +114,7 @@ function DateCell({
   isSummary,
   inFlight,
   highlighted,
+  stale,
   onRefuseDerived,
 }: {
   readonly date: string | null;
@@ -122,6 +123,7 @@ function DateCell({
   readonly isSummary: boolean;
   readonly inFlight?: boolean;
   readonly highlighted?: boolean;
+  readonly stale?: boolean;
   readonly onRefuseDerived: () => void;
 }) {
   if (isSummary) return <SummaryDash />;
@@ -147,14 +149,23 @@ function DateCell({
       </span>
     );
   }
+  const staleMark = stale === true;
   return (
     <button
       type="button"
-      className={`${dateInkClassName(date, dataDate)}${highlighted ? ' plan-cell-moved' : ''}`}
+      className={[
+        dateInkClassName(date, dataDate),
+        highlighted ? 'plan-cell-moved' : '',
+        staleMark ? 'plan-date-stale' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
+      aria-label={staleMark ? `stale derived date ${formatPlanDate(date)}` : undefined}
       onClick={() => void onRefuseDerived()}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
+          e.stopPropagation();
           void onRefuseDerived();
         }
       }}
@@ -775,6 +786,11 @@ export function PlanTreeGrid({
     if (wasPinned !== pinned) {
       drawerPrefRef.current = next.drawerPref;
       setDrawerOpen(next.drawerOpen);
+      // Unpinned + drawer shut: rail (and explainer) unmount — clear stale popover.
+      if (!pinned && !next.drawerOpen) {
+        setChainFocusActive(false);
+        setExplainer(null);
+      }
     }
     wasPinnedRef.current = pinned;
   }, [pinned, drawerOpen]);
@@ -798,19 +814,46 @@ export function PlanTreeGrid({
     else tableRef.current?.focus();
   }, [preset]);
 
-  const focusWpInGrid = useCallback((wpId: string) => {
-    setFocusedWpId(wpId);
-    const el = tableRef.current?.querySelector(`[data-wp-id="${wpId}"]`) as HTMLElement | null;
-    el?.focus();
-    el?.scrollIntoView({ block: 'nearest' });
-  }, []);
+  const expandAncestorsOf = useCallback(
+    (wpId: string) => {
+      setExpanded((prev) => {
+        const next = new Set(prev);
+        let parentId = model.rows.find((r) => r.wpId === wpId)?.parentId ?? null;
+        while (parentId !== null) {
+          next.add(parentId);
+          parentId = model.rows.find((r) => r.wpId === parentId)?.parentId ?? null;
+        }
+        return next;
+      });
+    },
+    [model.rows],
+  );
 
-  /** Chain walk / Comfort: scroll+select without stealing DOM focus from the chain list. */
-  const revealWpInGrid = useCallback((wpId: string) => {
-    setFocusedWpId(wpId);
-    const el = tableRef.current?.querySelector(`[data-wp-id="${wpId}"]`) as HTMLElement | null;
-    el?.scrollIntoView({ block: 'nearest' });
-  }, []);
+  const focusWpInGrid = useCallback(
+    (wpId: string) => {
+      expandAncestorsOf(wpId);
+      setFocusedWpId(wpId);
+      requestAnimationFrame(() => {
+        const el = tableRef.current?.querySelector(`[data-wp-id="${wpId}"]`) as HTMLElement | null;
+        el?.focus();
+        el?.scrollIntoView({ block: 'nearest' });
+      });
+    },
+    [expandAncestorsOf],
+  );
+
+  /** Chain walk / Comfort: expand ancestors, scroll+select without stealing chain-list focus. */
+  const revealWpInGrid = useCallback(
+    (wpId: string) => {
+      expandAncestorsOf(wpId);
+      setFocusedWpId(wpId);
+      requestAnimationFrame(() => {
+        const el = tableRef.current?.querySelector(`[data-wp-id="${wpId}"]`) as HTMLElement | null;
+        el?.scrollIntoView({ block: 'nearest' });
+      });
+    },
+    [expandAncestorsOf],
+  );
 
   const openExplainerForKey = useCallback(
     (key: ExceptionsRailItemKey) => {
@@ -1056,9 +1099,18 @@ export function PlanTreeGrid({
       if (nextKey === null) return;
       e.preventDefault();
       setRailSelectedKey(nextKey);
+      requestAnimationFrame(() => {
+        const item = document.querySelector(
+          `[data-rail-key="${CSS.escape(nextKey)}"]`,
+        ) as HTMLElement | null;
+        item?.scrollIntoView({ block: 'nearest' });
+      });
       return;
     }
+    // Enter opens the selected rail item only from row/table focus — not cell controls.
     if (e.key === 'Enter' && railSelectedKey) {
+      const t = e.target as HTMLElement | null;
+      if (t?.closest('button, input, textarea, select, a')) return;
       e.preventDefault();
       openExplainerForKey(railSelectedKey);
       return;
@@ -1120,6 +1172,7 @@ export function PlanTreeGrid({
             isSummary={!row.isLeaf}
             inFlight={recalcPending}
             highlighted={highlightedWpIds.has(row.wpId)}
+            stale={row.stale}
             onRefuseDerived={() => void refuseDerived(constraintId)}
           />
         </td>
@@ -1131,6 +1184,7 @@ export function PlanTreeGrid({
             isSummary={!row.isLeaf}
             inFlight={recalcPending}
             highlighted={highlightedWpIds.has(row.wpId)}
+            stale={row.stale}
             onRefuseDerived={() => void refuseDerived(constraintId)}
           />
         </td>
@@ -1172,15 +1226,23 @@ export function PlanTreeGrid({
             <SummaryDash />
           )}
         </td>
-        <td className={`num ${float.negative ? 'plan-float-neg' : ''}`}>
+        <td
+          className={[
+            'num',
+            float.negative ? 'plan-float-neg' : '',
+            row.stale && row.floatDays !== null ? 'plan-date-stale' : '',
+          ]
+            .filter(Boolean)
+            .join(' ')}
+        >
           {row.isLeaf ? (
             row.notSchedulable || row.floatDays === null ? (
               <span className="plan-dash">—</span>
             ) : (
-              <>
+              <span aria-label={row.stale ? `stale float ${float.text}d` : undefined}>
                 {float.text}
                 <span className="plan-u">d</span>
-              </>
+              </span>
             )
           ) : (
             <SummaryDash />

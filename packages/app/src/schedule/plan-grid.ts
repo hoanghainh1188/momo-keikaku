@@ -329,11 +329,10 @@ export function buildExceptionsRail(input: {
   const violations: PlanExceptionsRailViolation[] = violationsSorted.map((v) => {
     const isMilestone = input.milestoneIds.has(v.wpId);
     const self = resolveWpLabel(v.wpId);
-    // Chain is immediate-driver first; lag is on the edge toward the violated WP.
-    const chainTargets = [...v.chain, v.wpId];
+    // Chain is immediate-driver first: chain[0] drives the violated WP; chain[i] drives chain[i-1].
     const chain: PlanExceptionsRailChainEntry[] = v.chain.map((id, i) => {
       const meta = resolveWpLabel(id);
-      const successorId = chainTargets[i + 1]!;
+      const successorId = i === 0 ? v.wpId : v.chain[i - 1]!;
       const lagDays = input.lagByEdge.get(`${id}\0${successorId}`) ?? null;
       return {
         wpId: id,
@@ -669,6 +668,19 @@ export function stripDerivedScalars(input: {
     minFloat: input.minFloat,
     floatAnchorSentence: floatAnchorSentence(input.anchor, input.projectFinish),
   };
+}
+
+/**
+ * Whether Start/Finish/Float/Critical cells should blank to "—".
+ * `calendar_range` keeps last-good `wp_schedule` values marked stale (founder 2026-09-27);
+ * other halt reasons and non-halt stale rows stay blanked (Story 2.13).
+ */
+export function blankDerivedDates(input: {
+  readonly haltedReason: string | null;
+  readonly scheduleStale: boolean;
+}): boolean {
+  if (input.haltedReason === 'calendar_range') return false;
+  return input.haltedReason !== null || input.scheduleStale;
 }
 
 export function inkTone(
@@ -1062,8 +1074,11 @@ export async function getPlanGridState<Handle>(
       const posInSet = siblings.findIndex((sib) => sib.id === wp.id) + 1;
       const status = planRows.statusHeads.get(wp.id);
       const pct = planRows.pctHeads.get(wp.id) ?? null;
-      // Halted run or stale projection: matrix wants derived dates/Float/Critical as "—".
-      const blankDerived = haltedReason !== null || (sched?.stale ?? false);
+      // calendar_range keeps last-good dates marked stale; other halt/stale → "—".
+      const blankDerived = blankDerivedDates({
+        haltedReason,
+        scheduleStale: sched?.stale ?? false,
+      });
       let remaining: number | null = null;
       if (wp.isLeaf && wp.durationDays !== null) {
         try {
