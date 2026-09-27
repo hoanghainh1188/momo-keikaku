@@ -20,6 +20,7 @@ import {
   EXCEPTIONS_RAIL_BREAKPOINT_PX,
   NOT_SCHEDULABLE_COPY,
   VIOLATION_HONESTY_LINE,
+  groupIdForRailKey,
   notSchedulableItemKey,
   oosExplainerProse,
   oosItemKey,
@@ -77,13 +78,10 @@ export function PlanExceptionsRail({
   // j/k into a collapsed non-empty group expands it.
   useEffect(() => {
     if (!selectedKey) return;
-    if (selectedKey.startsWith('violation:') && rail.violations.length > 0) {
-      setViolationsOpen(true);
-    } else if (selectedKey.startsWith('oos:') && rail.outOfSequence.length > 0) {
-      setOosOpen(true);
-    } else if (selectedKey.startsWith('not_schedulable:') && rail.notSchedulable.length > 0) {
-      setNsOpen(true);
-    }
+    const group = groupIdForRailKey(selectedKey);
+    if (group === 'violations' && rail.violations.length > 0) setViolationsOpen(true);
+    else if (group === 'oos' && rail.outOfSequence.length > 0) setOosOpen(true);
+    else if (group === 'not_schedulable' && rail.notSchedulable.length > 0) setNsOpen(true);
   }, [selectedKey, rail.violations.length, rail.outOfSequence.length, rail.notSchedulable.length]);
 
   if (!visible) {

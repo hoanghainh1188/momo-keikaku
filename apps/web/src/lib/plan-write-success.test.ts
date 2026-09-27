@@ -85,4 +85,31 @@ describe('plan-write-success (story 2.15)', () => {
     expect(refuse.code).toBe('read_after_write');
     expect(refuse.details?.refuse?.[0]).toMatch(/could not be re-read/);
   });
+
+  it('preserves empty exceptions + calendar range on a halted re-read (story 2.16)', () => {
+    const halted: PlanGridViewModel = {
+      ...sampleView,
+      scheduleStale: true,
+      haltedReason: 'calendar_range',
+      computedFinish: null,
+      minFloat: null,
+      floatAnchorSentence: null,
+      whatMoved: null,
+      exceptions: {
+        totalCount: 0,
+        holidayCalendarVersionSeq: null,
+        calendarRangeStart: '2026-01-01',
+        calendarRangeEnd: '2028-12-31',
+        violations: [],
+        outOfSequence: [],
+        notSchedulable: [],
+      },
+    };
+    const success = toPlanWriteSuccess(halted);
+    expect(success.ok).toBe(true);
+    expect(success.exceptions.totalCount).toBe(0);
+    expect(success.exceptions.calendarRangeStart).toBe('2026-01-01');
+    expect(success.scheduleStale).toBe(true);
+    expect(success.haltedReason).toBe('calendar_range');
+  });
 });

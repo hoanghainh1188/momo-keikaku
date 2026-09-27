@@ -47,8 +47,12 @@ import {
   flattenExceptionsRailKeys,
   focusWpIdForRailKey,
   genericScheduleStaleCopy,
+  nextDrawerOpenForBreakpoint,
+  nextDrawerOpenForXKey,
   railKeyForGridException,
   rebindExplainer,
+  scheduleStaleBannerKind,
+  walkExceptionsRailKey,
 } from '@/lib/plan-exceptions';
 import {
   capturePresetFocusRestore,
@@ -760,11 +764,15 @@ export function PlanTreeGrid({
   // Breakpoint: entering pinned shows rail; leaving restores drawer preference.
   useEffect(() => {
     const wasPinned = wasPinnedRef.current;
-    if (pinned && !wasPinned) {
-      drawerPrefRef.current = drawerOpen;
-      setDrawerOpen(false);
-    } else if (!pinned && wasPinned) {
-      setDrawerOpen(drawerPrefRef.current);
+    const next = nextDrawerOpenForBreakpoint({
+      wasPinned,
+      nowPinned: pinned,
+      drawerOpen,
+      drawerPref: drawerPrefRef.current,
+    });
+    if (wasPinned !== pinned) {
+      drawerPrefRef.current = next.drawerPref;
+      setDrawerOpen(next.drawerOpen);
     }
     wasPinnedRef.current = pinned;
   }, [pinned, drawerOpen]);
@@ -1006,17 +1014,14 @@ export function PlanTreeGrid({
 
     // UX-DR24 — exceptions rail walk / explainer / drawer.
     if (e.key === 'j' || e.key === 'k') {
-      const keys = flattenExceptionsRailKeys(exceptions);
-      if (keys.length === 0) return;
+      const nextKey = walkExceptionsRailKey(
+        flattenExceptionsRailKeys(exceptions),
+        railSelectedKey,
+        e.key,
+      );
+      if (nextKey === null) return;
       e.preventDefault();
-      const cur = railSelectedKey ? keys.indexOf(railSelectedKey) : -1;
-      let nextIdx: number;
-      if (e.key === 'j') {
-        nextIdx = cur < 0 ? 0 : Math.min(cur + 1, keys.length - 1);
-      } else {
-        nextIdx = cur < 0 ? keys.length - 1 : Math.max(cur - 1, 0);
-      }
-      setRailSelectedKey(keys[nextIdx]!);
+      setRailSelectedKey(nextKey);
       return;
     }
     if (e.key === 'Enter' && railSelectedKey) {
@@ -1030,13 +1035,11 @@ export function PlanTreeGrid({
       return;
     }
     if (e.key === 'x') {
-      if (pinned) return; // no-op when pinned (≥1680)
+      const next = nextDrawerOpenForXKey({ pinned, drawerOpen });
+      if (!next.changed) return; // no-op when pinned (≥1680)
       e.preventDefault();
-      setDrawerOpen((open) => {
-        const next = !open;
-        drawerPrefRef.current = next;
-        return next;
-      });
+      drawerPrefRef.current = next.drawerOpen;
+      setDrawerOpen(next.drawerOpen);
       return;
     }
 
@@ -1236,6 +1239,8 @@ export function PlanTreeGrid({
     </>
   );
 
+  const staleBanner = scheduleStaleBannerKind(haltedReason, scheduleStale);
+
   return (
     <div className="plan-surface" data-testid="plan-surface" data-pending={recalcPending ? '1' : '0'}>
       <PlanScheduleStrip
@@ -1320,14 +1325,14 @@ export function PlanTreeGrid({
         </div>
       ) : null}
 
-      {scheduleStale ? (
+      {staleBanner !== null ? (
         <p
           className="caption"
           style={{ margin: '4px 12px' }}
           data-testid="schedule-stale"
           data-halt-reason={haltedReason ?? ''}
         >
-          {haltedReason === 'calendar_range'
+          {staleBanner === 'calendar_range'
             ? calendarRangeHaltBannerCopy({
                 rangeStart: exceptions.calendarRangeStart,
                 rangeEnd: exceptions.calendarRangeEnd,

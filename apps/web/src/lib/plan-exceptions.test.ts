@@ -10,13 +10,18 @@ import {
   flattenExceptionsRailKeys,
   focusWpIdForRailKey,
   genericScheduleStaleCopy,
+  groupIdForRailKey,
+  nextDrawerOpenForBreakpoint,
+  nextDrawerOpenForXKey,
   notSchedulableItemKey,
   oosExplainerProse,
   oosItemKey,
   railKeyForGridException,
   rebindExplainer,
+  scheduleStaleBannerKind,
   VIOLATION_HONESTY_LINE,
   violationItemKey,
+  walkExceptionsRailKey,
 } from './plan-exceptions';
 
 const sampleRail: PlanExceptionsRailView = {
@@ -173,5 +178,68 @@ describe('plan-exceptions helpers (story 2.16)', () => {
         formatDate: () => '—',
       }),
     ).toMatch(/out of sequence with WP 2\.3/);
+  });
+
+  it('walks j/k across groups; empty is no-op; selecting a key expands its group id', () => {
+    const keys = flattenExceptionsRailKeys(sampleRail);
+    expect(walkExceptionsRailKey([], null, 'j')).toBeNull();
+    expect(walkExceptionsRailKey(keys, null, 'j')).toBe(violationItemKey('v1'));
+    expect(walkExceptionsRailKey(keys, violationItemKey('v1'), 'j')).toBe(oosItemKey('p', 's'));
+    expect(walkExceptionsRailKey(keys, oosItemKey('p', 's'), 'k')).toBe(violationItemKey('v1'));
+    expect(groupIdForRailKey(oosItemKey('p2', 's'))).toBe('oos');
+    expect(groupIdForRailKey(notSchedulableItemKey('n1'))).toBe('not_schedulable');
+  });
+
+  it('makes x a no-op when pinned and restores drawer preference across the breakpoint', () => {
+    expect(nextDrawerOpenForXKey({ pinned: true, drawerOpen: false })).toEqual({
+      drawerOpen: false,
+      changed: false,
+    });
+    expect(nextDrawerOpenForXKey({ pinned: false, drawerOpen: false })).toEqual({
+      drawerOpen: true,
+      changed: true,
+    });
+    expect(
+      nextDrawerOpenForBreakpoint({
+        wasPinned: false,
+        nowPinned: true,
+        drawerOpen: true,
+        drawerPref: false,
+      }),
+    ).toEqual({ drawerOpen: false, drawerPref: true });
+    expect(
+      nextDrawerOpenForBreakpoint({
+        wasPinned: true,
+        nowPinned: false,
+        drawerOpen: false,
+        drawerPref: true,
+      }),
+    ).toEqual({ drawerOpen: true, drawerPref: true });
+    expect(EXCEPTIONS_RAIL_BREAKPOINT_PX).toBe(1680);
+  });
+
+  it('gates calendar-range vs generic stale banners (duration-while-halted honesty)', () => {
+    expect(scheduleStaleBannerKind('calendar_range', true)).toBe('calendar_range');
+    expect(scheduleStaleBannerKind('graph_invalid', true)).toBe('generic');
+    expect(scheduleStaleBannerKind(null, true)).toBe('generic');
+    expect(scheduleStaleBannerKind(null, false)).toBeNull();
+    // Halted run: empty rail + calendar banner — never a green schedule surface.
+    const haltedEmpty: PlanExceptionsRailView = {
+      totalCount: 0,
+      holidayCalendarVersionSeq: null,
+      calendarRangeStart: '2026-01-01',
+      calendarRangeEnd: '2028-12-31',
+      violations: [],
+      outOfSequence: [],
+      notSchedulable: [],
+    };
+    expect(haltedEmpty.totalCount).toBe(0);
+    expect(
+      calendarRangeHaltBannerCopy({
+        rangeStart: haltedEmpty.calendarRangeStart,
+        rangeEnd: haltedEmpty.calendarRangeEnd,
+        formatDate: (iso) => iso ?? '',
+      }),
+    ).toMatch(/extend the Holiday Calendar range in Project settings/);
   });
 });

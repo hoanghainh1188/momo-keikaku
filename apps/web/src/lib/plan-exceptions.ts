@@ -175,3 +175,71 @@ export function oosExplainerProse(input: {
   }
   return `${succ} is out of sequence with ${pred}. Actual dates are kept when present.`;
 }
+
+export type ExceptionsRailGroupId = 'violations' | 'oos' | 'not_schedulable';
+
+/** Group a walk key belongs to — selecting it must expand a collapsed non-empty group. */
+export function groupIdForRailKey(key: ExceptionsRailItemKey): ExceptionsRailGroupId | null {
+  if (key.startsWith('violation:')) return 'violations';
+  if (key.startsWith('oos:')) return 'oos';
+  if (key.startsWith('not_schedulable:')) return 'not_schedulable';
+  return null;
+}
+
+/** `j`/`k` walk across the flat key list; empty → null (no-op). */
+export function walkExceptionsRailKey(
+  keys: readonly ExceptionsRailItemKey[],
+  current: ExceptionsRailItemKey | null,
+  direction: 'j' | 'k',
+): ExceptionsRailItemKey | null {
+  if (keys.length === 0) return null;
+  const cur = current !== null ? keys.indexOf(current) : -1;
+  if (direction === 'j') {
+    const nextIdx = cur < 0 ? 0 : Math.min(cur + 1, keys.length - 1);
+    return keys[nextIdx] ?? null;
+  }
+  const nextIdx = cur < 0 ? keys.length - 1 : Math.max(cur - 1, 0);
+  return keys[nextIdx] ?? null;
+}
+
+/**
+ * `x` toggles the drawer only below the breakpoint. When pinned (≥1680) → no-op.
+ */
+export function nextDrawerOpenForXKey(input: {
+  readonly pinned: boolean;
+  readonly drawerOpen: boolean;
+}): { readonly drawerOpen: boolean; readonly changed: boolean } {
+  if (input.pinned) return { drawerOpen: input.drawerOpen, changed: false };
+  return { drawerOpen: !input.drawerOpen, changed: true };
+}
+
+/**
+ * Breakpoint transition: entering pinned hides drawer chrome; leaving restores preference.
+ */
+export function nextDrawerOpenForBreakpoint(input: {
+  readonly wasPinned: boolean;
+  readonly nowPinned: boolean;
+  readonly drawerOpen: boolean;
+  readonly drawerPref: boolean;
+}): { readonly drawerOpen: boolean; readonly drawerPref: boolean } {
+  if (!input.wasPinned && input.nowPinned) {
+    return { drawerOpen: false, drawerPref: input.drawerOpen };
+  }
+  if (input.wasPinned && !input.nowPinned) {
+    return { drawerOpen: input.drawerPref, drawerPref: input.drawerPref };
+  }
+  return { drawerOpen: input.drawerOpen, drawerPref: input.drawerPref };
+}
+
+/**
+ * Halt banner gating for the schedule-stale slot (matrix: calendar_range vs other).
+ * Duration commits still go through the fence; honesty is banner + empty rail, not a green schedule.
+ */
+export function scheduleStaleBannerKind(
+  haltedReason: string | null,
+  scheduleStale: boolean,
+): 'calendar_range' | 'generic' | null {
+  if (haltedReason === 'calendar_range') return 'calendar_range';
+  if (scheduleStale || haltedReason !== null) return 'generic';
+  return null;
+}
