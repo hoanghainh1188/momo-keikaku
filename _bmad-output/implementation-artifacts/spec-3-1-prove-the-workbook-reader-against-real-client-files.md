@@ -2,7 +2,7 @@
 title: 'Story 3.1 — prove the workbook reader against real client files'
 type: 'feature'
 created: '2026-09-27'
-status: 'review'
+status: 'in-progress'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '498aefee695d7e8a34e99b90f619d93c3b79e144'
@@ -97,6 +97,7 @@ Shipped 2026-09-27 on branch `cursor/workbook-reader-spike-2c77`:
 - Real corpus suite gated by `MOMO_WBS_SPIKE_DIR` / `REQUIRE_WBS_SPIKE=1` (Q1 → A). **This agent run:** env unset → suite skipped (6 synthetic tests green). AR-25 is therefore **not claimed closed** until a founder/tagged run with three real JA WBS files passes. Composition root left unwired (spike proves via adapter tests).
 - **SheetJS CE fallback:** unused. Named follow-up swap remains SheetJS CE from `cdn.sheetjs.com` — never npm `xlsx@0.18.5`. Not implemented (Q2 → A). No `deferred-work.md` entry — corpus was absent, not failed.
 - Verification: `pnpm exec vitest run packages/adapters/src/excel.test.ts` green; `pnpm typecheck` clean; `pnpm depcruise` clean. `pnpm lint` still fails on pre-existing `tests/schedule/fence-nfr-p1.test.ts` bare `new Date()` (Epic 2 NFR-P1 harness) — untouched by this story; changed files lint clean.
+- **Paused 2026-09-27 (founder choice 1):** Harry does not yet have the three real JA WBS files. Story stays `in-progress`. Resume when files exist: set `MOMO_WBS_SPIKE_DIR` + `REQUIRE_WBS_SPIKE=1`, run `pnpm exec vitest run packages/adapters/src/excel.test.ts`, close AR-25 Happy parse, then continue Build review. Do not claim story done / do not start Epic 3 feature stories until that gate passes (or Q2 → A halt path is taken).
 
 ## Spec Change Log
 
