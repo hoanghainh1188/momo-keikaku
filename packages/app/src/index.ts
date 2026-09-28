@@ -220,6 +220,8 @@ export {
 } from './schedule/predecessors';
 export { applyPredecessorSet } from './schedule/apply-predecessor-set';
 
+// Story 2.12 calendar publish surface — outside the use-cases barrel (role/audit gates
+// enumerate it via a second module list — Epic 2 retro F10 / Q1→B).
 export {
   publishCalendarVersion,
   publishCalendarVersionFanOut,

@@ -3,9 +3,10 @@
  * (`tests/audited-use-cases.test.ts`) reads.
  *
  * Internal to `use-cases/`, like `project-input.ts`: not re-exported from `use-cases/index.ts`,
- * whose exports ARE the enumerated surface. A module that adds write use cases spreads its own
- * declaration in here; the gate fails, with no database, naming any exported use case that is
- * neither a registered read nor declared here.
+ * whose exports ARE the primary enumerated surface. The gate also enumerates a second
+ * schedule/calendar module list (Epic 2 retro F10 / Q1→B) whose writers stay off that barrel.
+ * A module that adds write use cases spreads its own declaration in here; the gate fails, with
+ * no database, naming any exported use case that is neither a registered read nor declared here.
  */
 import type { AuditDeclaration } from '../audit';
 import { CALENDAR_AUDIT } from '../calendar/publish-calendar-version';

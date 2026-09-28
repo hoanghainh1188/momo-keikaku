@@ -12,28 +12,38 @@ import type { Result } from '../packages/app/src/result';
 import * as calendarWrites from '../packages/app/src/calendar/publish-calendar-version';
 import * as scheduleFence from '../packages/app/src/schedule/apply-plan-change';
 
-/** Named in failure messages — the modules whose function exports the gates enumerate. */
-export const SCHEDULE_CALENDAR_WRITE_MODULES = [
-  'packages/app/src/schedule/apply-plan-change.ts',
-  'packages/app/src/calendar/publish-calendar-version.ts',
-] as const;
-
 type WriteFn = (
   deps: unknown,
   ctx: RequestContext,
   input: unknown,
 ) => Promise<Result<unknown>>;
 
-const MODULE_NAMESPACES: ReadonlyArray<Readonly<Record<string, unknown>>> = [
-  scheduleFence,
-  calendarWrites,
-];
+/** One source for both failure-message paths and the namespaces the gates enumerate. */
+const SCHEDULE_CALENDAR_WRITE_SURFACE = [
+  { path: 'packages/app/src/schedule/apply-plan-change.ts', ns: scheduleFence },
+  { path: 'packages/app/src/calendar/publish-calendar-version.ts', ns: calendarWrites },
+] as const;
 
-/** Every exported function of the schedule/calendar write modules, sorted. */
+/** Named in failure messages — derived from SCHEDULE_CALENDAR_WRITE_SURFACE. */
+export const SCHEDULE_CALENDAR_WRITE_MODULES = SCHEDULE_CALENDAR_WRITE_SURFACE.map(
+  (entry) => entry.path,
+);
+
+/** True for a non-null object (or array) with a function anywhere among its own values. */
+function holdsFunctions(value: unknown): boolean {
+  if (value === null || typeof value !== 'object') return false;
+  return Object.values(value).some((member) => typeof member === 'function');
+}
+
+function isSurfaceExport(value: unknown): boolean {
+  return typeof value === 'function' || holdsFunctions(value);
+}
+
+/** Every exported function (or function-holding namespace) of the write modules, sorted. */
 export function readScheduleCalendarWriteFunctionNames(): string[] {
-  return MODULE_NAMESPACES.flatMap((ns) =>
+  return SCHEDULE_CALENDAR_WRITE_SURFACE.flatMap(({ ns }) =>
     Object.entries(ns)
-      .filter(([, value]) => typeof value === 'function')
+      .filter(([, value]) => isSurfaceExport(value))
       .map(([name]) => name),
   ).sort();
 }
@@ -41,9 +51,9 @@ export function readScheduleCalendarWriteFunctionNames(): string[] {
 /** Callable map for the role gate's behavioural half. */
 export function scheduleCalendarWriteFns(): Readonly<Record<string, WriteFn>> {
   const out: Record<string, WriteFn> = {};
-  for (const ns of MODULE_NAMESPACES) {
+  for (const { ns } of SCHEDULE_CALENDAR_WRITE_SURFACE) {
     for (const [name, value] of Object.entries(ns)) {
-      if (typeof value === 'function') out[name] = value as WriteFn;
+      if (isSurfaceExport(value)) out[name] = value as WriteFn;
     }
   }
   return out;
