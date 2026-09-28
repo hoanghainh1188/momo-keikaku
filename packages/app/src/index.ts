@@ -142,7 +142,8 @@ export type {
 } from './use-cases/resource-input';
 export type { ChangeTenantCurrencyInput, TenantCurrencyDeps } from './use-cases/tenant-currency';
 
-// Story 2.10 fence surface — outside the use-cases barrel (role gate enumerates that barrel only).
+// Story 2.10 fence surface — outside the use-cases barrel (role/audit gates enumerate it via a
+// second module list — Epic 2 retro F10 / Q1→B).
 export {
   applyPlanChange,
   planMutationSchema,

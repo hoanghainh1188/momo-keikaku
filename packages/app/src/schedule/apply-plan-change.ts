@@ -16,9 +16,9 @@ import { lockWatermark } from '../../../db/src/watermark-lock';
 import { planInputRepositoryOn } from '../../../db/src/repositories/plan-input';
 import { scheduleRepositoryOn } from '../../../db/src/repositories/schedule';
 import * as s from '../../../db/src/schema';
-import { authorize, PROJECT_REACH_ROLES } from '../authz/authorize';
+import { authorize, PROJECT_REACH, PROJECT_REACH_ROLES, type RoleDeclaration } from '../authz/authorize';
 import type { RequestContext } from '../authz/request-context';
-import { audit, type AuditSink } from '../audit';
+import { audit, type AuditDeclaration, type AuditSink } from '../audit';
 import { isProjectNotFound } from '../ports/project-read';
 import { projectNotFound } from '../../../db/src/project-not-found';
 import type { AuditedWriteDeps, WriteStamp } from '../ports/audited-write';
@@ -773,3 +773,17 @@ export async function applyPlanChange<Handle>(
     throw error;
   }
 }
+
+/**
+ * What the fence records, declared for the audit gate (`tests/audited-use-cases.test.ts`).
+ * Keyed by the exported name; the gate's second schedule/calendar module list asserts both ways
+ * (Epic 2 retro F10 / Q1→B — outside the use-cases barrel).
+ */
+export const SCHEDULE_AUDIT = {
+  applyPlanChange: { audited: ['schedule.apply_plan_change'] },
+} as const satisfies Readonly<Record<string, AuditDeclaration>>;
+
+/** Role declarations for the fence (colocated — see `use-cases/role-declarations.ts`). */
+export const SCHEDULE_ROLES = {
+  applyPlanChange: PROJECT_REACH,
+} as const satisfies Readonly<Record<string, RoleDeclaration>>;
