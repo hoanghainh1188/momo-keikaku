@@ -2,7 +2,7 @@
 title: 'Epic 2 retro F10 — register schedule/calendar in role + audit gates'
 type: 'chore'
 created: '2026-09-28'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '9b9832c9994887d3aad2891f4960602824cd1378'
@@ -76,9 +76,36 @@ context:
 
 ## Implementation Notes
 
+- Q1→B: `tests/schedule-calendar-writes.ts` is the second enumerated surface; `use-cases/index.ts` unchanged.
+- Colocated `SCHEDULE_ROLES`/`SCHEDULE_AUDIT` on `apply-plan-change.ts`; `CALENDAR_ROLES`/`CALENDAR_AUDIT` on `publish-calendar-version.ts`; merged into Epic 1 hubs.
+- Role gate behavioural half covers both surfaces; audit gate classifies schedule/calendar (declare-only) — drive half stays Epic 1 use-cases (intentional under Q1→B).
+- Thin `plan-edit` / `apply-predecessor-set` wrappers not listed; inherit via fence.
+- Review patches: single-source module list + `holdsFunctions`; audit-declarations + barrel comments; retro remaining-open prose cleaned.
+
 ## Spec Change Log
 
+- 2026-09-28: Implemented F10 Q1→B second-list gates; sprint item-11 → `done`.
+- 2026-09-28: Review patches — harden enumerator, docs alignment.
+
 ## Review Triage Log
+
+Review pass 1 (2026-09-28), Blind Hunter (BH), Edge Case Hunter (EC), Verification Gap (VG).
+
+| # | Source | Finding | Verdict | Evidence | Route |
+|---|---|---|---|---|---|
+| 1 | BH | Retro “remaining open” still listed role/audit gate | low | Stale prose after item-11 done. Patched | patch |
+| 2 | BH | Spec status vs tasks checked | false | Process; set `done` at present | reject |
+| 3 | BH | Empty Implementation Notes / change log at review start | low | Filled at close | reject |
+| 4 | BH | Code Map still says “decide” wrappers | false | Fix would edit this build's spec | reject |
+| 5 | BH | Calendar barrel comment missing F10 note | low | Patched in `index.ts` | patch |
+| 6 | BH | `audit-declarations.ts` header outdated | low | Patched | patch |
+| 7 | BH | Audit classify-only weaker than Epic 1 drive | false | Intentional Q1→B | reject |
+| 8 | BH | Fan-out declared audited but records via nested publish | false | Comment + nested `publishCalendarVersion` audit; classify-only by design | reject |
+| 9 | BH | `applyPredecessorSet` still outside both surfaces | medium | Pre-existing thin-wrapper choice; Design Notes preferred fence+calendar only | defer |
+| 10 | BH | Future non-write helper export would force bogus declarations | low | Unlikely everyday; allowlist not required now | reject |
+| 11 | EC | Object-shaped write export silently skipped | medium | Patched — `holdsFunctions` parity with `readSurfaceFunctionNames` | patch |
+| 12 | EC | Path list could diverge from namespace array | medium | Patched — single `SCHEDULE_CALENDAR_WRITE_SURFACE` source | patch |
+| 13 | VG | (none) | — | No verification gaps | — |
 
 ## Design Notes
 
