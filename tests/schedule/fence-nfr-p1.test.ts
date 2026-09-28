@@ -99,7 +99,8 @@ async function seedFiveHundredWpPlan(owner: ReturnType<typeof getDb>): Promise<{
     childCounts.set(parent, (childCounts.get(parent) ?? 0) + 1);
   }
 
-  const now = new Date();
+  // Fixed instant — bare `new Date()` is banned (Clock rule); soft-delete stamp need not be wall time.
+  const now = new Date('2026-09-27T12:00:00.000Z');
   await withTenant(owner, PROBE.tenantId, async (tx) => {
     await tx
       .update(s.project)
