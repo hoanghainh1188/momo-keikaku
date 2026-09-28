@@ -2,7 +2,7 @@
 title: 'Epic 2 retro F10 — register schedule/calendar in role + audit gates'
 type: 'chore'
 created: '2026-09-28'
-status: 'done'
+status: 'in-review'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '9b9832c9994887d3aad2891f4960602824cd1378'
