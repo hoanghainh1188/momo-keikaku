@@ -389,9 +389,31 @@ async function applyMutation(
   const warnings: string[] = [];
 
   switch (mutation.kind) {
-    case 'patch_duration':
+    case 'patch_duration': {
+      // F21: a milestone must stay at duration 0 — refuse non-zero / null (idempotent 0 OK).
+      const [wp] = await bound.tx
+        .select({
+          isMilestone: s.workPackage.isMilestone,
+          deletedAt: s.workPackage.deletedAt,
+        })
+        .from(s.workPackage)
+        .where(
+          and(
+            eq(s.workPackage.tenantId, bound.tenantId),
+            eq(s.workPackage.projectId, mutation.projectId),
+            eq(s.workPackage.id, mutation.wpId),
+          ),
+        );
+      if (wp !== undefined && wp.deletedAt === null && wp.isMilestone && mutation.durationDays !== 0) {
+        refuse('invalid_input', {
+          durationDays: [
+            mutation.durationDays === null ? 'milestone_cannot_clear' : 'milestone_must_be_zero',
+          ],
+        });
+      }
       await planInput.patchDuration(mutation);
       return warnings;
+    }
     case 'patch_constraint':
       await planInput.patchConstraint(mutation);
       return warnings;
@@ -404,9 +426,20 @@ async function applyMutation(
     case 're_lag_dependency':
       await planInput.reLagDependency(mutation);
       return warnings;
-    case 'create_wp':
+    case 'create_wp': {
+      // F21: milestone ↔ duration pairing — refuse multi-day; coerce omitted/null → 0.
+      const isMilestone = mutation.isMilestone ?? false;
+      if (isMilestone) {
+        const raw = mutation.durationDays;
+        if (raw !== undefined && raw !== null && raw !== 0) {
+          refuse('invalid_input', { durationDays: ['milestone_must_be_zero'] });
+        }
+        await planInput.createWp({ ...mutation, isMilestone: true, durationDays: 0 });
+        return warnings;
+      }
       await planInput.createWp(mutation);
       return warnings;
+    }
     case 'delete_wp':
       await planInput.softDeleteWp({
         projectId: mutation.projectId,
@@ -427,6 +460,7 @@ async function applyMutation(
       await planInput.patchResources(mutation);
       return warnings;
     case 'patch_milestone':
+      // F21 / Q1→C: true coerces duration to 0; false clears duration to null (repo write).
       await planInput.patchMilestone(mutation);
       return warnings;
     case 'patch_actual_dates': {

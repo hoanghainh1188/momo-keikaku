@@ -221,6 +221,7 @@ async function loadWpRow(
   readonly parentId: string | null;
   readonly childCount: number;
   readonly isLeaf: boolean;
+  readonly isMilestone: boolean;
   readonly durationDays: number | null;
   readonly constraintType: string;
   readonly constraintDate: string | null;
@@ -232,6 +233,7 @@ async function loadWpRow(
       parentId: s.workPackage.parentId,
       childCount: s.workPackage.childCount,
       isLeaf: s.workPackage.isLeaf,
+      isMilestone: s.workPackage.isMilestone,
       durationDays: s.workPackage.durationDays,
       constraintType: s.workPackage.constraintType,
       constraintDate: s.workPackage.constraintDate,
@@ -738,13 +740,17 @@ export function planInputRepositoryOn(bound: Bound) {
 
     async patchMilestone(command: PatchMilestoneCommand): Promise<void> {
       await requireProject(bound, command.projectId);
-      await requireActiveWp(bound, command.projectId, command.wpId);
+      const prior = await requireActiveWp(bound, command.projectId, command.wpId);
+      // Mark: duration → 0. Clear (Q1→C): only when prior was a milestone, duration → null.
+      // Idempotent clear on an already non-milestone leaves duration untouched.
       const updated = await tx
         .update(s.workPackage)
         .set(
           command.isMilestone
             ? { isMilestone: true, durationDays: 0 }
-            : { isMilestone: false },
+            : prior.isMilestone
+              ? { isMilestone: false, durationDays: null }
+              : { isMilestone: false },
         )
         .where(
           and(
