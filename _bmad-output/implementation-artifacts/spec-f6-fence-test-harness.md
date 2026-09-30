@@ -79,6 +79,12 @@ Landed on branch `cursor/f6-fence-test-harness-75a8`:
 - Sprint action `epic-2-retro-item-17-…` → `done`; `last_updated` refreshed.
 - Spec status remains `in-progress` for parent advancement.
 
+**Verification (this worker):**
+- No `DATABASE_URL` / `APP_DATABASE_URL` in the environment — DB describes skip (2-13/2-15: 2 passed / 8 skipped; nfr-p1 + f21 load without throw).
+- `REQUIRE_DB=1` with URLs unset → fails at `connectFenceHarness` with the legacy message.
+- `tsc --noEmit` clean after restoring `createProbeTenant` in fence-2-15.
+- **Gap:** green path with a live Postgres was not exercised here; parent should re-run 2-13/2-15 (and optionally f21) when DB is up.
+
 ## Spec Change Log
 
 ## Review Triage Log
