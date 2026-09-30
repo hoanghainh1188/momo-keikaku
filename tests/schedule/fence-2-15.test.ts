@@ -1,7 +1,7 @@
 /**
  * Story 2.15 fence + plan-grid: strip settings kinds, min Float, What-moved join.
  */
-import { afterAll, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { and, eq } from 'drizzle-orm';
 import { applyPlanChange } from '../../packages/app/src/schedule/apply-plan-change';
 import {
@@ -9,86 +9,37 @@ import {
   getPlanGridState,
 } from '../../packages/app/src/schedule/plan-grid';
 import { PROJECT_FINISH_TEACHING } from '../../packages/app/src/schedule/plan-edit';
-import { closeAllPools, getDb, getPool } from '../../packages/db/src/client';
+import { getDb } from '../../packages/db/src/client';
 import {
   assertProbeTenantsDisjoint,
   buildProbeTenant,
-  createProbeTenant,
-  removeProbeTenant,
 } from '../../packages/db/src/probe-tenants';
 import * as s from '../../packages/db/src/schema';
-import { acquireSeedSuiteLock, releaseSeedSuiteLock } from '../../packages/db/src/seed-suite-lock';
 import { inTenantTransaction } from '../../packages/db/src/tenant-transaction';
 import { withTenant } from '../../packages/db/src/with-tenant';
+import {
+  connectFenceHarness,
+  installFenceAfterAll,
+  pmCtx,
+  prepareSchedulableLeaf,
+} from './fence-harness';
 
 const OWNER_DATABASE_URL = process.env.DATABASE_URL;
 const APP_DATABASE_URL = process.env.APP_DATABASE_URL;
-const REQUIRE_DB = process.env.REQUIRE_DB === '1';
 
-async function reachableAs(connectionString: string | undefined): Promise<boolean> {
-  if (!connectionString) return false;
-  try {
-    const client = await getPool(connectionString).connect();
-    client.release();
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-const reachable =
-  (await reachableAs(OWNER_DATABASE_URL)) && (await reachableAs(APP_DATABASE_URL));
-if (REQUIRE_DB && !reachable) {
-  throw new Error('REQUIRE_DB=1 but DATABASE_URL or APP_DATABASE_URL is unreachable.');
-}
+const { reachable } = await connectFenceHarness({
+  ownerUrl: OWNER_DATABASE_URL,
+  appUrl: APP_DATABASE_URL,
+  requireDb: process.env.REQUIRE_DB === '1',
+});
 
 const PROBE = buildProbeTenant('xtprobe-s215', 957_000_000);
 assertProbeTenantsDisjoint([PROBE]);
+installFenceAfterAll({ reachable, ownerUrl: OWNER_DATABASE_URL, probe: PROBE });
 
-if (reachable) {
-  await acquireSeedSuiteLock(OWNER_DATABASE_URL!, 'shared');
-}
-
-afterAll(async () => {
-  if (reachable) {
-    await removeProbeTenant(getDb(OWNER_DATABASE_URL!), PROBE).catch(() => {});
-  }
-  await releaseSeedSuiteLock();
-  await closeAllPools();
-});
-
-function ctx(userId = 'user-s215') {
-  return {
-    tenantId: PROBE.tenantId,
-    userId,
-    roles: ['pm'] as const,
-    locale: 'en' as const,
-    projectIds: [PROBE.projectId],
-  };
-}
-
-async function prepareSchedulable(owner: ReturnType<typeof getDb>) {
-  await createProbeTenant(owner, PROBE);
-  const leaf = PROBE.state.wps.find((w) => w.isLeaf && !w.isMilestone);
-  if (!leaf) throw new Error('fixture needs a leaf WP');
-  await withTenant(owner, PROBE.tenantId, async (tx) => {
-    await tx
-      .update(s.project)
-      .set({ projectStart: '2026-09-01', dataDate: '2026-10-05', projectFinish: null })
-      .where(eq(s.project.id, PROBE.projectId));
-    await tx
-      .update(s.workPackage)
-      .set({ durationDays: 3, constraintType: 'asap', constraintDate: null })
-      .where(
-        and(
-          eq(s.workPackage.tenantId, PROBE.tenantId),
-          eq(s.workPackage.projectId, PROBE.projectId),
-          eq(s.workPackage.id, leaf.id),
-        ),
-      );
-  });
-  return leaf;
-}
+const ctx = (userId = 'user-s215') => pmCtx(PROBE, { userId });
+const prepareSchedulable = (owner: ReturnType<typeof getDb>) =>
+  prepareSchedulableLeaf(owner, PROBE);
 
 describe('strip sentence helpers (story 2.15)', () => {
   it('matches UX-DR5 Project finish vs relative computed finish copy', () => {

@@ -2,68 +2,40 @@
  * Story 2.14 — predecessor-set apply + constraint patch through the fence; FR-6a keep-text
  * refuse; Exception cell after an impossible must_* constraint.
  */
-import { afterAll, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { and, eq } from 'drizzle-orm';
 import { applyPlanChange } from '../../packages/app/src/schedule/apply-plan-change';
 import { applyPredecessorSet } from '../../packages/app/src/schedule/apply-predecessor-set';
 import { getPlanGridState } from '../../packages/app/src/schedule/plan-grid';
-import { closeAllPools, getDb, getPool } from '../../packages/db/src/client';
+import { getDb } from '../../packages/db/src/client';
 import {
   assertProbeTenantsDisjoint,
   buildProbeTenant,
   createProbeTenant,
-  removeProbeTenant,
 } from '../../packages/db/src/probe-tenants';
 import * as s from '../../packages/db/src/schema';
-import { acquireSeedSuiteLock, releaseSeedSuiteLock } from '../../packages/db/src/seed-suite-lock';
 import { inTenantTransaction } from '../../packages/db/src/tenant-transaction';
 import { withTenant } from '../../packages/db/src/with-tenant';
+import {
+  connectFenceHarness,
+  installFenceAfterAll,
+  pmCtx,
+} from './fence-harness';
 
 const OWNER_DATABASE_URL = process.env.DATABASE_URL;
 const APP_DATABASE_URL = process.env.APP_DATABASE_URL;
-const REQUIRE_DB = process.env.REQUIRE_DB === '1';
 
-async function reachableAs(connectionString: string | undefined): Promise<boolean> {
-  if (!connectionString) return false;
-  try {
-    const client = await getPool(connectionString).connect();
-    client.release();
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-const reachable =
-  (await reachableAs(OWNER_DATABASE_URL)) && (await reachableAs(APP_DATABASE_URL));
-if (REQUIRE_DB && !reachable) {
-  throw new Error('REQUIRE_DB=1 but DATABASE_URL or APP_DATABASE_URL is unreachable.');
-}
+const { reachable } = await connectFenceHarness({
+  ownerUrl: OWNER_DATABASE_URL,
+  appUrl: APP_DATABASE_URL,
+  requireDb: process.env.REQUIRE_DB === '1',
+});
 
 const PROBE = buildProbeTenant('xtprobe-s214', 956_000_000);
 assertProbeTenantsDisjoint([PROBE]);
+installFenceAfterAll({ reachable, ownerUrl: OWNER_DATABASE_URL, probe: PROBE });
 
-if (reachable) {
-  await acquireSeedSuiteLock(OWNER_DATABASE_URL!, 'shared');
-}
-
-afterAll(async () => {
-  if (reachable) {
-    await removeProbeTenant(getDb(OWNER_DATABASE_URL!), PROBE).catch(() => {});
-  }
-  await releaseSeedSuiteLock();
-  await closeAllPools();
-});
-
-function ctx() {
-  return {
-    tenantId: PROBE.tenantId,
-    userId: 'user-s214',
-    roles: ['pm'] as const,
-    locale: 'en' as const,
-    projectIds: [PROBE.projectId],
-  };
-}
+const ctx = () => pmCtx(PROBE, { userId: 'user-s214' });
 
 async function prepareTwoLeaves(owner: ReturnType<typeof getDb>) {
   await createProbeTenant(owner, PROBE);

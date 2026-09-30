@@ -2,7 +2,7 @@
  * Story 2.12 fence cases: publishCalendarVersion, national toggles, Project days,
  * refuse missing calendar, serial fan-out, AR-52 allow-list via schedule-closure.
  */
-import { afterAll, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import {
   addProjectNonWorkingDay,
@@ -14,86 +14,46 @@ import {
 import { applyPlanChange } from '../../packages/app/src/schedule/apply-plan-change';
 import { getPlanThinUiState } from '../../packages/app/src/schedule/plan-edit';
 import { NATIONAL_DATASET_VERSION, resolveCalendarVersion } from '../../packages/domain/src/calendar';
-import { closeAllPools, getDb, getPool } from '../../packages/db/src/client';
+import { getDb } from '../../packages/db/src/client';
 import {
   assertProbeTenantsDisjoint,
   buildProbeTenant,
   createProbeTenant,
-  removeProbeTenant,
 } from '../../packages/db/src/probe-tenants';
 import * as s from '../../packages/db/src/schema';
-import { acquireSeedSuiteLock, releaseSeedSuiteLock } from '../../packages/db/src/seed-suite-lock';
 import { inTenantTransaction } from '../../packages/db/src/tenant-transaction';
 import { withTenant } from '../../packages/db/src/with-tenant';
+import {
+  connectFenceHarness,
+  installFenceAfterAll,
+  pmCtx,
+  prepareSchedulableLeaf,
+} from './fence-harness';
 
 const OWNER_DATABASE_URL = process.env.DATABASE_URL;
 const APP_DATABASE_URL = process.env.APP_DATABASE_URL;
-const REQUIRE_DB = process.env.REQUIRE_DB === '1';
 
-async function reachableAs(connectionString: string | undefined): Promise<boolean> {
-  if (!connectionString) return false;
-  try {
-    const client = await getPool(connectionString).connect();
-    client.release();
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-const reachable =
-  (await reachableAs(OWNER_DATABASE_URL)) && (await reachableAs(APP_DATABASE_URL));
-if (REQUIRE_DB && !reachable) {
-  throw new Error('REQUIRE_DB=1 but DATABASE_URL or APP_DATABASE_URL is unreachable.');
-}
+const { reachable } = await connectFenceHarness({
+  ownerUrl: OWNER_DATABASE_URL,
+  appUrl: APP_DATABASE_URL,
+  requireDb: process.env.REQUIRE_DB === '1',
+});
 
 const PROBE = buildProbeTenant('xtprobe-s212', 954_000_000);
 assertProbeTenantsDisjoint([PROBE]);
-
-if (reachable) {
-  await acquireSeedSuiteLock(OWNER_DATABASE_URL!, 'shared');
-}
-
-afterAll(async () => {
-  if (reachable) {
-    await removeProbeTenant(getDb(OWNER_DATABASE_URL!), PROBE).catch(() => {});
-  }
-  await releaseSeedSuiteLock();
-  await closeAllPools();
-});
+installFenceAfterAll({ reachable, ownerUrl: OWNER_DATABASE_URL, probe: PROBE });
 
 function ctx(projectIds: string | readonly string[] = PROBE.projectId) {
-  return {
-    tenantId: PROBE.tenantId,
+  return pmCtx(PROBE, {
     userId: 'user-s212',
-    roles: ['pm'] as const,
-    locale: 'en' as const,
-    projectIds: typeof projectIds === 'string' ? [projectIds] : [...projectIds],
-  };
+    projectIds: typeof projectIds === 'string' ? [projectIds] : projectIds,
+  });
 }
 
-async function prepareSchedulable(owner: ReturnType<typeof getDb>, probe = PROBE) {
-  await createProbeTenant(owner, probe);
-  const leaf = probe.state.wps.find((w) => w.isLeaf && !w.isMilestone);
-  if (!leaf) throw new Error('fixture needs a leaf WP');
-  await withTenant(owner, probe.tenantId, async (tx) => {
-    await tx
-      .update(s.project)
-      .set({ projectStart: '2026-09-01', dataDate: '2026-10-05', projectFinish: null })
-      .where(eq(s.project.id, probe.projectId));
-    await tx
-      .update(s.workPackage)
-      .set({ durationDays: 3, constraintType: 'asap', constraintDate: null })
-      .where(
-        and(
-          eq(s.workPackage.tenantId, probe.tenantId),
-          eq(s.workPackage.projectId, probe.projectId),
-          eq(s.workPackage.id, leaf.id),
-        ),
-      );
-  });
-  return leaf;
-}
+const prepareSchedulable = (
+  owner: ReturnType<typeof getDb>,
+  probe: typeof PROBE = PROBE,
+) => prepareSchedulableLeaf(owner, probe);
 
 describe('resolveCalendarVersion (pure)', () => {
   it('lists weekends exhaustively and merges nationals + project days over the default range', () => {

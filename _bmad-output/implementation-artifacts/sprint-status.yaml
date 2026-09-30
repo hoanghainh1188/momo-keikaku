@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 09-20-2026 16:55
-last_updated: 09-27-2026 23:30
+last_updated: 09-30-2026 22:15
 project: momo-keikaku
 project_key: NOKEY
 tracking_system: file-system
@@ -255,7 +255,7 @@ action_items:
     action: "Extract the shared fence test harness (reachableAs / afterAll / prepareSchedulable)
       before the next epic adds more fence files (retro F6)"
     owner: "dev"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-09-27.md"
   - id: "epic-2-retro-item-18-do-not-mark-a-story-done-while-a-core-ep"
     epic: 2
