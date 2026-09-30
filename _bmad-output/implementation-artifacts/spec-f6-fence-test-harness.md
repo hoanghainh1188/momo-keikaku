@@ -2,7 +2,7 @@
 title: 'Epic 2 retro F6 — extract the shared fence test harness'
 type: 'refactor'
 created: '2026-09-30'
-status: 'in-progress'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '46224b76da1872a932e4643498f0e3cd468b73c8'
@@ -79,15 +79,36 @@ Landed on branch `cursor/f6-fence-test-harness-75a8`:
 - Sprint action `epic-2-retro-item-17-…` → `done`; `last_updated` refreshed.
 - Spec status remains `in-progress` for parent advancement.
 
-**Verification (this worker):**
-- No `DATABASE_URL` / `APP_DATABASE_URL` in the environment — DB describes skip (2-13/2-15: 2 passed / 8 skipped; nfr-p1 + f21 load without throw).
-- `REQUIRE_DB=1` with URLs unset → fails at `connectFenceHarness` with the legacy message.
-- `tsc --noEmit` clean after restoring `createProbeTenant` in fence-2-15.
-- **Gap:** green path with a live Postgres was not exercised here; parent should re-run 2-13/2-15 (and optionally f21) when DB is up.
+**Verification:**
+- Skip without DB: OK. `REQUIRE_DB=1` unreachable → fails at `connectFenceHarness`.
+- Live DB all nine suites: **75 passed**; 1 pre-existing AR-50 WAL budget flake in `fence.test.ts` (unrelated to harness).
+- Review patch (`cde7c77`): lock moves into `installFenceAfterAll` after PROBE build — re-verified 2-13/2-14/2-15/f21 (27 passed) + typecheck clean.
 
 ## Spec Change Log
 
 ## Review Triage Log
+
+Review pass 1 (2026-09-30), Blind Hunter (BH), Edge Case Hunter (EC), Verification Gap (VG).
+
+| # | Source | Finding | Verdict | Evidence | Route |
+|---|---|---|---|---|---|
+| 1 | BH | Spec `in-progress` vs sprint item-17 `done` disagree | false | Spec is `in-review`; AC allows marking item-17 done once harness verified. Process pairing is intentional | reject |
+| 2 | BH | Empty Spec Change Log / Review Triage Log | false | Those sections fill on loopback / this review pass — not a product defect | reject |
+| 3 | BH | Design Notes order vs lock-inside-connect | medium | Real: `connectFenceHarness` acquired the seed lock before PROBE/`installFenceAfterAll`, so a throw in `buildProbeTenant`/`assertProbeTenantsDisjoint` leaked the lock (pre-F6 acquired lock after probe). Same root as EC#1 / BH#7 | patch |
+| 4 | BH | Only 3/9 suites verified on live DB | false | Parent re-ran all nine: 75 passed; sole failure is pre-existing AR-50 WAL budget flake in `fence.test.ts` (not harness behavior) | reject |
+| 5 | BH | Verification Commands block stale vs Notes | false | Fix would edit this build’s spec — rejected per triage rules | reject |
+| 6 | BH | Env URL/`REQUIRE_DB` still copied per suite | false | Intentional: same pattern as `write-harness` (suites hand env in); Never force write-harness merge | reject |
+| 7 | BH | connect / afterAll unpaired → lock leak | medium | Same root as #3 / EC#1 — lock must move into `installFenceAfterAll` | patch |
+| 8 | BH | `prepareBareProject` still duplicates leaf ASAP | false | Spec Always: specialized prepares stay local; bare dates are the specialization | reject |
+| 9 | BH | `pmCtx` lacks explicit return type | low | Cosmetic; unlikely everyday harm; reject | reject |
+| 10 | BH | Fixture date/duration literals not exported | low | Cosmetic drift risk only; reject | reject |
+| 11 | BH | `removeProbeTenant(…).catch(() => {})` swallows errors | defer | Pre-existing pattern copied into harness; not introduced as new silence policy | defer |
+| 12 | BH | Dual `reachableAs` vs `write-harness` without note | low | Spec forbids merging; one-line comment is optional cosmetics — reject | reject |
+| 13 | BH | No harness-unit tests for REQUIRE_DB/skip/leaf | false | VG: CI runs fence suites with `REQUIRE_DB=1`; parent confirmed skip + REQUIRE_DB throw + live path | reject |
+| 14 | EC | Lock held if probe build/assert throws after connect | medium | Confirmed regression vs old order — same patch as #3/#7 | patch |
+| 15 | EC | `getPool().connect()` can hang without timeout | defer | Pre-existing identical pattern in `write-harness`; not introduced by extract | defer |
+| 16 | EC | REQUIRE_DB throw may leave pools open | defer | Pre-existing; `reachableAs` releases the client; same as write suites | defer |
+| 17 | VG | (none) | — | No verification gaps filed | — |
 
 ## Design Notes
 
