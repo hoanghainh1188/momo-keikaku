@@ -17,9 +17,14 @@ import type { Bound } from '../../../db/src/bound';
 import { lockWatermark } from '../../../db/src/watermark-lock';
 import { scheduleRepositoryOn } from '../../../db/src/repositories/schedule';
 import * as s from '../../../db/src/schema';
-import { authorize, PROJECT_REACH_ROLES } from '../authz/authorize';
+import {
+  authorize,
+  PROJECT_REACH,
+  PROJECT_REACH_ROLES,
+  type RoleDeclaration,
+} from '../authz/authorize';
 import type { RequestContext } from '../authz/request-context';
-import { audit } from '../audit';
+import { audit, type AuditDeclaration } from '../audit';
 import type { WriteStamp } from '../ports/audited-write';
 import type { SchedulingBound } from '../ports/schedule-write';
 import { fail, ok, type Result } from '../result';
@@ -414,3 +419,32 @@ export async function removeProjectNonWorkingDay<Handle>(
     },
   );
 }
+
+/**
+ * What each calendar write records, declared for the audit gate
+ * (`tests/audited-use-cases.test.ts`). Fan-out audits via `publishCalendarVersion` per Project.
+ * Keyed by exported name; the gate's second schedule/calendar module list asserts both ways
+ * (Epic 2 retro F10 / Q1→B — outside the use-cases barrel).
+ */
+export const CALENDAR_AUDIT = {
+  publishCalendarVersion: { audited: ['calendar.publish_version'] },
+  publishCalendarVersionFanOut: { audited: ['calendar.publish_version'] },
+  patchNationalCalendarFlags: { audited: ['calendar.publish_version'] },
+  addProjectNonWorkingDay: { audited: ['calendar.publish_version'] },
+  removeProjectNonWorkingDay: { audited: ['calendar.publish_version'] },
+} as const satisfies Readonly<Record<string, AuditDeclaration>>;
+
+/**
+ * Role declarations for the calendar writes (colocated — see `use-cases/role-declarations.ts`).
+ * Fan-out authorises roles only at the top (reach is per Project inside each publish).
+ */
+export const CALENDAR_ROLES = {
+  publishCalendarVersion: PROJECT_REACH,
+  publishCalendarVersionFanOut: {
+    roles: PROJECT_REACH_ROLES,
+    projectScoped: false,
+  },
+  patchNationalCalendarFlags: PROJECT_REACH,
+  addProjectNonWorkingDay: PROJECT_REACH,
+  removeProjectNonWorkingDay: PROJECT_REACH,
+} as const satisfies Readonly<Record<string, RoleDeclaration>>;

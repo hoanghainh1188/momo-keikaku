@@ -5,13 +5,19 @@ import type { Result } from '../packages/app/src/result';
 import * as useCases from '../packages/app/src/use-cases';
 import { USE_CASE_ROLES } from '../packages/app/src/use-cases/role-declarations';
 import { readSurfaceFunctionNames, READ_SURFACE_MODULE } from './read-use-cases';
+import {
+  readScheduleCalendarWriteFunctionNames,
+  SCHEDULE_CALENDAR_WRITE_MODULES,
+  scheduleCalendarWriteFns,
+} from './schedule-calendar-writes';
 
 /**
  * THE ROLE GATE (story 1.5, AD-12). Pure: no database, no environment.
  *
  * Two proofs, both required:
  *
- *   1. Enumeration — every export of `packages/app/src/use-cases/index.ts` appears in
+ *   1. Enumeration — every export of `packages/app/src/use-cases/index.ts` AND every function
+ *      export of the schedule/calendar write modules (Epic 2 retro F10 / Q1→B) appears in
  *      `USE_CASE_ROLES`, nothing stale, every declaration names known non-empty roles. A new
  *      use case that ships without a declaration fails here, named — the same spirit as the
  *      audited-use-case and cross-tenant enumerations.
@@ -83,6 +89,15 @@ const WELL_FORMED_INPUT: Readonly<Record<string, unknown>> = {
   explainTickets: { projectId: UNREACHED_PROJECT, note: 'Client asked for it.', ticketIds: ['tkt-1'] },
   markChangeRequestCandidates: { projectId: UNREACHED_PROJECT, ticketIds: ['tkt-1'] },
   mapTicket: { projectId: UNREACHED_PROJECT, ticketId: 'tkt-1', wpId: 'wp-1' },
+  applyPlanChange: { kind: 'clear_project_start', projectId: UNREACHED_PROJECT },
+  publishCalendarVersion: { projectId: UNREACHED_PROJECT },
+  patchNationalCalendarFlags: {
+    projectId: UNREACHED_PROJECT,
+    calendarJp: true,
+    calendarVn: false,
+  },
+  addProjectNonWorkingDay: { projectId: UNREACHED_PROJECT, day: '2026-01-01' },
+  removeProjectNonWorkingDay: { projectId: UNREACHED_PROJECT, day: '2026-01-01' },
 };
 
 type UseCaseFn = (
@@ -90,6 +105,16 @@ type UseCaseFn = (
   ctx: RequestContext,
   input: unknown,
 ) => Promise<Result<unknown>>;
+
+/** Use-cases barrel plus schedule/calendar writers — the full enumerated surface. */
+function allDeclaredSurfaceNames(): string[] {
+  return [...readSurfaceFunctionNames(), ...readScheduleCalendarWriteFunctionNames()].sort();
+}
+
+const CALLABLE: Readonly<Record<string, UseCaseFn>> = {
+  ...(useCases as Readonly<Record<string, UseCaseFn>>),
+  ...scheduleCalendarWriteFns(),
+};
 
 describe('every use case declares its roles', () => {
   it('declares every export of the use-case surface', () => {
@@ -102,13 +127,24 @@ describe('every use case declares its roles', () => {
     ).toEqual([]);
   });
 
-  it('declares nothing that is not an exported use case', () => {
-    const exported = new Set(readSurfaceFunctionNames());
+  it('declares every schedule/calendar write export (retro F10 / Q1→B)', () => {
+    const exported = readScheduleCalendarWriteFunctionNames();
+    const undeclared = exported.filter((name) => !Object.hasOwn(USE_CASE_ROLES, name));
+    expect(
+      undeclared,
+      `these functions are exported from ${SCHEDULE_CALENDAR_WRITE_MODULES.join(' / ')} with no ` +
+        `role declaration in ${ROLE_DECLARATIONS_MODULE}: ${undeclared.join(', ')}. Declare each ` +
+        '{ roles, projectScoped } and merge via SCHEDULE_ROLES / CALENDAR_ROLES.',
+    ).toEqual([]);
+  });
+
+  it('declares nothing that is not an exported use case or schedule/calendar writer', () => {
+    const exported = new Set(allDeclaredSurfaceNames());
     const stale = Object.keys(USE_CASE_ROLES).filter((name) => !exported.has(name));
     expect(
       stale,
       `${ROLE_DECLARATIONS_MODULE} declares ${stale.join(', ')}, which is not an export of ` +
-        `${READ_SURFACE_MODULE}`,
+        `${READ_SURFACE_MODULE} or ${SCHEDULE_CALENDAR_WRITE_MODULES.join(' / ')}`,
     ).toEqual([]);
   });
 
@@ -126,6 +162,13 @@ describe('every use case declares its roles', () => {
   it('pins every use case\'s declared roles', () => {
     expect(USE_CASE_ROLES).toMatchInlineSnapshot(`
       {
+        "addProjectNonWorkingDay": {
+          "projectScoped": true,
+          "roles": [
+            "tenant_admin",
+            "pm",
+          ],
+        },
         "appendProjectDefaultRate": {
           "projectScoped": false,
           "roles": [
@@ -136,6 +179,13 @@ describe('every use case declares its roles', () => {
           "projectScoped": false,
           "roles": [
             "tenant_admin",
+          ],
+        },
+        "applyPlanChange": {
+          "projectScoped": true,
+          "roles": [
+            "tenant_admin",
+            "pm",
           ],
         },
         "assignMemberProject": {
@@ -254,8 +304,29 @@ describe('every use case declares its roles', () => {
             "pm",
           ],
         },
+        "patchNationalCalendarFlags": {
+          "projectScoped": true,
+          "roles": [
+            "tenant_admin",
+            "pm",
+          ],
+        },
         "planTicketsAsWorkPackage": {
           "projectScoped": true,
+          "roles": [
+            "tenant_admin",
+            "pm",
+          ],
+        },
+        "publishCalendarVersion": {
+          "projectScoped": true,
+          "roles": [
+            "tenant_admin",
+            "pm",
+          ],
+        },
+        "publishCalendarVersionFanOut": {
+          "projectScoped": false,
           "roles": [
             "tenant_admin",
             "pm",
@@ -271,6 +342,13 @@ describe('every use case declares its roles', () => {
           "projectScoped": false,
           "roles": [
             "tenant_admin",
+          ],
+        },
+        "removeProjectNonWorkingDay": {
+          "projectScoped": true,
+          "roles": [
+            "tenant_admin",
+            "pm",
           ],
         },
         "renameDepartment": {
@@ -318,8 +396,13 @@ async function refusalProblems(
   ctx: RequestContext,
   input: unknown = {},
 ): Promise<string[]> {
-  const fn = (useCases as Readonly<Record<string, UseCaseFn>>)[name];
-  if (typeof fn !== 'function') return [`${name}: not a function on ${READ_SURFACE_MODULE}`];
+  const fn = CALLABLE[name];
+  if (typeof fn !== 'function') {
+    return [
+      `${name}: not a function on ${READ_SURFACE_MODULE} or ` +
+        SCHEDULE_CALENDAR_WRITE_MODULES.join(' / '),
+    ];
+  }
 
   const { deps, touches } = throwingDeps();
   let result: Result<unknown>;
@@ -343,7 +426,7 @@ async function refusalProblems(
 describe('every use case authorises before parse', () => {
   it('answers not_found to a viewer, touching no deps, for every export', async () => {
     const offenders: string[] = [];
-    for (const name of readSurfaceFunctionNames()) {
+    for (const name of allDeclaredSurfaceNames()) {
       for (const role of VIEWER_ROLES) {
         offenders.push(...(await refusalProblems(name, role, viewerContext(role))));
       }
@@ -396,7 +479,7 @@ describe('every use case authorises before parse', () => {
     const blocked: string[] = [];
     for (const [name, declaration] of Object.entries(USE_CASE_ROLES)) {
       if (!declaration.projectScoped) continue;
-      const fn = (useCases as Readonly<Record<string, UseCaseFn>>)[name]!;
+      const fn = CALLABLE[name]!;
       const { deps, touches } = throwingDeps();
       try {
         const result = await fn(deps, assigned, WELL_FORMED_INPUT[name]);

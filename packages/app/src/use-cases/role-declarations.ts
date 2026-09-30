@@ -3,14 +3,16 @@
  * (`tests/role-declarations.test.ts`) enumerates and snapshots.
  *
  * Internal to `use-cases/`, like `audit-declarations.ts`: not re-exported from
- * `use-cases/index.ts`, whose exports ARE the enumerated surface. The gate fails, with no
- * database, naming any export that has no declaration. Enforcement is proved by the behavioural
- * half of that gate: every export, called with a viewer-only context and deps that throw, must
- * answer `not_found` without touching a port — so a table entry that never reaches `authorize`
- * cannot pass CI.
+ * `use-cases/index.ts`, whose exports ARE the primary enumerated surface. The gate also
+ * enumerates a second schedule/calendar module list (Epic 2 retro F10 / Q1→B) whose writers
+ * stay off that barrel. The gate fails, with no database, naming any export that has no
+ * declaration. Enforcement is proved by the behavioural half of that gate: every export,
+ * called with a viewer-only context and deps that throw, must answer `not_found` without
+ * touching a port — so a table entry that never reaches `authorize` cannot pass CI.
  *
- * COLOCATED, THEN MERGED — the same convention as `audit-declarations.ts`. Each use-case module
- * exports the declarations for the use cases it owns, and this file imports and spreads them.
+ * COLOCATED, THEN MERGED — the same convention as `audit-declarations.ts`. Each use-case
+ * module (and the schedule/calendar write modules) exports the declarations for the writers it
+ * owns, and this file imports and spreads them.
  *
  * It used to be the other way round: every declaration was written out here, away from the module
  * implementing it, while audit declarations were colocated. Two conceptually parallel gates with
@@ -24,6 +26,8 @@
  * importing this file — which would be a cycle.
  */
 import type { RoleDeclaration } from '../authz/authorize';
+import { CALENDAR_ROLES } from '../calendar/publish-calendar-version';
+import { SCHEDULE_ROLES } from '../schedule/apply-plan-change';
 import { GET_PROJECT_HEADER_ROLES } from './get-project-header';
 import { GET_PROJECT_MAPPING_ROLES } from './get-project-mapping';
 import { GET_PROJECT_REVIEW_ROLES } from './get-project-review';
@@ -39,7 +43,8 @@ export type { RoleDeclaration };
 
 /**
  * Spread order matters only for readability — the gate asserts the key set against the exported
- * surface, and a duplicate key would be a compile error in the module that owns it.
+ * surface (use-cases barrel plus the schedule/calendar second module list — Epic 2 retro F10),
+ * and a duplicate key would be a compile error in the module that owns it.
  */
 export const USE_CASE_ROLES: Readonly<Record<string, RoleDeclaration>> = {
   ...GET_PROJECT_HEADER_ROLES,
@@ -52,4 +57,6 @@ export const USE_CASE_ROLES: Readonly<Record<string, RoleDeclaration>> = {
   ...RESOURCE_WRITE_ROLES,
   ...AUDIT_LOG_READ_ROLES,
   ...TENANT_CURRENCY_ROLES,
+  ...SCHEDULE_ROLES,
+  ...CALENDAR_ROLES,
 };

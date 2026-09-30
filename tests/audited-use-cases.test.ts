@@ -19,6 +19,10 @@ import {
   type ReadUseCase,
   type WriteTarget,
 } from './read-use-cases';
+import {
+  readScheduleCalendarWriteFunctionNames,
+  SCHEDULE_CALENDAR_WRITE_MODULES,
+} from './schedule-calendar-writes';
 
 /**
  * THE AUDIT GATE (AD-14, AR-26 — story 1.3 slice 1; generalised by slice 2). Pure: no database,
@@ -31,15 +35,18 @@ import {
  *   1. CLASSIFIED. Every export of `packages/app/src/use-cases/index.ts` is either a registered
  *      read or declared in `USE_CASE_AUDIT` (`packages/app/src/use-cases/audit-declarations.ts`)
  *      as audited — with the actions it records — or unaudited with a reason. A new write that is
- *      neither fails here, named.
- *   2. DRIVEN. Every declared use case is run, through its registry entry's `invokeWrite` and
- *      each of its `moreWrites`, against a FAKE tenant transaction that commits what its work did
- *      when the work resolves and discards it when the work throws — the contract `packages/db`'s
- *      `inTenantTransaction` keeps with Postgres. An audited one must open exactly one transaction
- *      and commit exactly one record, of a declared action, on that transaction's own scope, per
- *      invocation — and between its invocations record every action it declares; when any
- *      repository write throws, or the transaction fails after the work, it must commit none. An
- *      unaudited one must commit none, ever.
+ *      neither fails here, named. The same classification covers the schedule/calendar write
+ *      modules via a second enumerated list (Epic 2 retro F10 / Q1→B) — those writers stay off
+ *      the use-cases barrel and off this gate's Epic 1 write registry.
+ *   2. DRIVEN. Every declared use case ON THE USE-CASES SURFACE is run, through its registry
+ *      entry's `invokeWrite` and each of its `moreWrites`, against a FAKE tenant transaction that
+ *      commits what its work did when the work resolves and discards it when the work throws —
+ *      the contract `packages/db`'s `inTenantTransaction` keeps with Postgres. An audited one must
+ *      open exactly one transaction and commit exactly one record, of a declared action, on that
+ *      transaction's own scope, per invocation — and between its invocations record every action
+ *      it declares; when any repository write throws, or the transaction fails after the work, it
+ *      must commit none. An unaudited one must commit none, ever. Schedule/calendar writers are
+ *      classified only (Q1→B); their runtime audit is covered by fence/calendar tests.
  *
  * NOT TIED TO ONE SCOPE (slice 2, resolving slice 1's B5). The fake transaction hands the WHOLE
  * `WriteScope` — one fake per repository family (`FAKE_FAMILIES`), each recording its write
@@ -273,9 +280,17 @@ const UNAUDITED_BY_DECISION: Readonly<Record<string, string>> = {
 
 const DECLARED: readonly (readonly [string, AuditDeclaration])[] = Object.entries(USE_CASE_AUDIT);
 
+/** Schedule/calendar writers — classified in USE_CASE_AUDIT but not driven by this gate (Q1→B). */
+const SCHEDULE_CALENDAR_WRITE_NAMES = new Set(readScheduleCalendarWriteFunctionNames());
+
 function entryOf(name: string): ReadUseCase | undefined {
   return READ_USE_CASES.find((entry) => entry.name === name);
 }
+
+/** Epic 1 use-case writes only — the DRIVEN half stays on the registry (Q1→B). */
+const DECLARED_ON_USE_CASE_SURFACE = DECLARED.filter(
+  ([name]) => !SCHEDULE_CALENDAR_WRITE_NAMES.has(name),
+);
 
 describe('every use case that changes anything is classified for audit', () => {
   it('declares every export that is not a registered read — audited, or unaudited with a reason', () => {
@@ -287,6 +302,17 @@ describe('every use case that changes anything is classified for audit', () => {
         `${REGISTRY_MODULE}, and have no audit declaration in ${USE_CASE_AUDIT_MODULE}: ` +
         `${unclassified.join(', ')}. Declare each { audited: [actions] } — and call audit.record ` +
         'inside its transaction — or { unaudited: "why it is not on NFR-A1\'s list" }.',
+    ).toEqual([]);
+  });
+
+  it('declares every schedule/calendar write export (retro F10 / Q1→B)', () => {
+    const exported = readScheduleCalendarWriteFunctionNames();
+    const unclassified = exported.filter((name) => !Object.hasOwn(USE_CASE_AUDIT, name));
+    expect(
+      unclassified,
+      `these functions are exported from ${SCHEDULE_CALENDAR_WRITE_MODULES.join(' / ')} with no ` +
+        `audit declaration in ${USE_CASE_AUDIT_MODULE}: ${unclassified.join(', ')}. Declare each ` +
+        '{ audited: [actions] } and merge via SCHEDULE_AUDIT / CALENDAR_AUDIT.',
     ).toEqual([]);
   });
 
@@ -318,15 +344,18 @@ describe('every use case that changes anything is classified for audit', () => {
     ).toEqual([]);
   });
 
-  it('declares nothing that is not an exported, non-read use case', () => {
-    const exported = new Set(readSurfaceFunctionNames());
+  it('declares nothing that is not an exported write use case or schedule/calendar writer', () => {
+    const exported = new Set([
+      ...readSurfaceFunctionNames(),
+      ...readScheduleCalendarWriteFunctionNames(),
+    ]);
     const stale = DECLARED.map(([name]) => name).filter(
       (name) => !exported.has(name) || READ_NAMES.has(name),
     );
     expect(
       stale,
-      `${USE_CASE_AUDIT_MODULE} declares ${stale.join(', ')}, which is not an exported write use ` +
-        `case of ${READ_SURFACE_MODULE}`,
+      `${USE_CASE_AUDIT_MODULE} declares ${stale.join(', ')}, which is not an exported write of ` +
+        `${READ_SURFACE_MODULE} or ${SCHEDULE_CALENDAR_WRITE_MODULES.join(' / ')}`,
     ).toEqual([]);
   });
 
@@ -343,19 +372,22 @@ describe('every use case that changes anything is classified for audit', () => {
     expect(broken).toEqual([]);
   });
 
-  it('can drive every declared use case — each has a write entry with invokeWrite', () => {
-    const undrivable = DECLARED.map(([name]) => name).filter(
+  it('can drive every declared use-case-surface write — each has a write entry with invokeWrite', () => {
+    const undrivable = DECLARED_ON_USE_CASE_SURFACE.map(([name]) => name).filter(
       (name) => typeof entryOf(name)?.invokeWrite !== 'function',
     );
     expect(
       undrivable,
-      `every use case declared in ${USE_CASE_AUDIT_MODULE} needs an entry of kind 'write' with ` +
-        `invokeWrite in ${REGISTRY_MODULE}, or this gate cannot drive it: ${undrivable.join(', ')}`,
+      `every use-case-surface write declared in ${USE_CASE_AUDIT_MODULE} needs an entry of kind ` +
+        `'write' with invokeWrite in ${REGISTRY_MODULE}, or this gate cannot drive it: ` +
+        `${undrivable.join(', ')}`,
     ).toEqual([]);
   });
 
   it('drives at least one audited use case', () => {
-    expect(DECLARED.some(([, declaration]) => 'audited' in declaration)).toBe(true);
+    expect(DECLARED_ON_USE_CASE_SURFACE.some(([, declaration]) => 'audited' in declaration)).toBe(
+      true,
+    );
   });
 });
 
@@ -373,10 +405,11 @@ function expectedStamp(name: string): Date | undefined {
   return undefined;
 }
 
-const AUDITED = DECLARED.flatMap(([name, declaration]) =>
+/** Driven half: Epic 1 use-case surface only (schedule/calendar classified, not driven — Q1→B). */
+const AUDITED = DECLARED_ON_USE_CASE_SURFACE.flatMap(([name, declaration]) =>
   'audited' in declaration ? [[name, declaration.audited] as const] : [],
 );
-const UNAUDITED = DECLARED.flatMap(([name, declaration]) =>
+const UNAUDITED = DECLARED_ON_USE_CASE_SURFACE.flatMap(([name, declaration]) =>
   'unaudited' in declaration ? [name] : [],
 );
 

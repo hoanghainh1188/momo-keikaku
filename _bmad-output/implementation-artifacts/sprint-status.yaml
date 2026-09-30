@@ -213,7 +213,7 @@ action_items:
     action: "Register schedule/calendar writes in the Epic 1 role and audit enumeration
       gates (declare *_ROLES/*_AUDIT or widen the enumerated barrel) (retro F10)"
     owner: "dev"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-09-27.md"
   - id: "epic-2-retro-item-12-ship-or-formally-reconcile-the-story-2-1"
     epic: 2

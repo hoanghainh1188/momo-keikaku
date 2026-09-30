@@ -1238,3 +1238,7 @@ above can see where it went.
 - source_spec: `_bmad-output/implementation-artifacts/spec-f21-milestone-duration-pairing.md`
   summary: Non-milestone Work Packages can still carry durationDays === 0 via create_wp / patch_duration, so the engine treats them as milestones while the UI does not show ◆ (reverse of F21 pairing).
   evidence: F21 review 2026-09-27 (BH/EC). Approach and matrix only enforce milestone ⇒ duration 0 and Q1→C on clear; refusing duration 0 on non-milestones was not decided and remains pre-existing.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-f10-schedule-role-audit-gates.md`
+  summary: applyPredecessorSet authorizes and opens a transaction before calling applyPlanChange but stays outside both the use-cases barrel and the F10 second schedule/calendar module list.
+  evidence: F10 review 2026-09-28 (BH). Spec Design Notes preferred registering fence + calendar publish only; thin wrappers inherit. Closing the predecessor-set escape needs an explicit follow-up if product wants every package-barrel write enumerated.
