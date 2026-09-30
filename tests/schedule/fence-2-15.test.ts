@@ -13,6 +13,7 @@ import { getDb } from '../../packages/db/src/client';
 import {
   assertProbeTenantsDisjoint,
   buildProbeTenant,
+  createProbeTenant,
 } from '../../packages/db/src/probe-tenants';
 import * as s from '../../packages/db/src/schema';
 import { inTenantTransaction } from '../../packages/db/src/tenant-transaction';
