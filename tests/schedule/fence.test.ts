@@ -48,7 +48,7 @@ const { reachable } = await connectFenceHarness({
 
 const PROBE = buildProbeTenant('xtprobe-s29', 940_000_000);
 assertProbeTenantsDisjoint([PROBE]);
-installFenceAfterAll({ reachable, ownerUrl: OWNER_DATABASE_URL, probe: PROBE });
+await installFenceAfterAll({ reachable, ownerUrl: OWNER_DATABASE_URL, probe: PROBE });
 
 const ctx = () => pmCtx(PROBE, { userId: 'user-s29' });
 

@@ -2,8 +2,10 @@
  * Shared fence-suite preamble — dual-role reachability, REQUIRE_DB gate, seed-suite lock,
  * afterAll probe teardown, default PM request context, and the common schedulable-leaf prepare.
  *
- * Test-only wiring (Epic 2 retro F6). Suites keep their own PROBE slug/seq band and any
- * specialized prepare. Do not import `tests/write-harness.ts` from fence suites.
+ * Call order per suite: reachability (`connectFenceHarness`) → probe build →
+ * `installFenceAfterAll` (lock when reachable + teardown). Test-only wiring (Epic 2 retro F6).
+ * Suites keep their own PROBE slug/seq band and any specialized prepare. Do not import
+ * `tests/write-harness.ts` from fence suites.
  */
 import { afterAll } from 'vitest';
 import { and, eq } from 'drizzle-orm';
@@ -37,9 +39,8 @@ async function reachableAs(connectionString: string | undefined): Promise<boolea
 }
 
 /**
- * Dual-role reachability + REQUIRE_DB fail + shared seed-suite lock when reachable.
- * Call before building the suite PROBE; order with installFenceAfterAll is
- * reachability → probe build → afterAll (lock is taken here when reachable).
+ * Dual-role reachability + REQUIRE_DB fail. Does not take the seed-suite lock —
+ * that happens in `installFenceAfterAll` after the suite PROBE is built.
  */
 export async function connectFenceHarness(
   env: FenceHarnessEnv,
@@ -48,18 +49,21 @@ export async function connectFenceHarness(
   if (env.requireDb && !reachable) {
     throw new Error('REQUIRE_DB=1 but DATABASE_URL or APP_DATABASE_URL is unreachable.');
   }
-  if (reachable) {
-    await acquireSeedSuiteLock(env.ownerUrl!, 'shared');
-  }
   return { reachable };
 }
 
-/** Registers afterAll: remove probe (when reachable), release seed lock, close pools. */
-export function installFenceAfterAll(opts: {
+/**
+ * When reachable, acquires the shared seed-suite lock, then registers afterAll:
+ * remove probe, release seed lock, close pools.
+ */
+export async function installFenceAfterAll(opts: {
   readonly reachable: boolean;
   readonly ownerUrl: string | undefined;
   readonly probe: ProbeTenant;
-}): void {
+}): Promise<void> {
+  if (opts.reachable) {
+    await acquireSeedSuiteLock(opts.ownerUrl!, 'shared');
+  }
   afterAll(async () => {
     if (opts.reachable) {
       await removeProbeTenant(getDb(opts.ownerUrl!), opts.probe).catch(() => {});

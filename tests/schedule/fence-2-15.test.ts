@@ -36,7 +36,7 @@ const { reachable } = await connectFenceHarness({
 
 const PROBE = buildProbeTenant('xtprobe-s215', 957_000_000);
 assertProbeTenantsDisjoint([PROBE]);
-installFenceAfterAll({ reachable, ownerUrl: OWNER_DATABASE_URL, probe: PROBE });
+await installFenceAfterAll({ reachable, ownerUrl: OWNER_DATABASE_URL, probe: PROBE });
 
 const ctx = (userId = 'user-s215') => pmCtx(PROBE, { userId });
 const prepareSchedulable = (owner: ReturnType<typeof getDb>) =>
