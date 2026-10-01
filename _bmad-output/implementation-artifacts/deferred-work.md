@@ -1242,3 +1242,15 @@ above can see where it went.
 - source_spec: `_bmad-output/implementation-artifacts/spec-f10-schedule-role-audit-gates.md`
   summary: applyPredecessorSet authorizes and opens a transaction before calling applyPlanChange but stays outside both the use-cases barrel and the F10 second schedule/calendar module list.
   evidence: F10 review 2026-09-28 (BH). Spec Design Notes preferred registering fence + calendar publish only; thin wrappers inherit. Closing the predecessor-set escape needs an explicit follow-up if product wants every package-barrel write enumerated.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-f6-fence-test-harness.md`
+  summary: Shared fence afterAll still swallows removeProbeTenant failures with `.catch(() => {})`, hiding probe cleanup errors across all nine suites.
+  evidence: F6 review 2026-09-30 (BH). Pre-existing silence pattern copied into `fence-harness.ts`; not introduced as a new policy by the extract.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-f6-fence-test-harness.md`
+  summary: Fence/write harness `reachableAs` can hang forever if `getPool(url).connect()` never resolves (no timeout).
+  evidence: F6 review 2026-09-30 (EC). Identical pre-existing pattern in `tests/write-harness.ts`; extract did not add a timeout.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-f6-fence-test-harness.md`
+  summary: REQUIRE_DB=1 unreachable path throws without an explicit `closeAllPools()` after a failed reachability probe may have opened pools.
+  evidence: F6 review 2026-09-30 (EC). Pre-existing; `reachableAs` releases the client on failure, same as write suites.

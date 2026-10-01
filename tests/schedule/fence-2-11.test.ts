@@ -2,67 +2,40 @@
  * Story 2.11 fence cases: Project start (set/clear), Project finish, standalone Data Date,
  * audit before/after, AR-52 still green via schedule-closure.
  */
-import { afterAll, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { and, eq } from 'drizzle-orm';
 import { applyPlanChange } from '../../packages/app/src/schedule/apply-plan-change';
 import { dataDateAdvancePreview } from '../../packages/app/src/schedule/plan-edit';
-import { closeAllPools, getDb, getPool } from '../../packages/db/src/client';
+import { getDb } from '../../packages/db/src/client';
 import {
   assertProbeTenantsDisjoint,
   buildProbeTenant,
   createProbeTenant,
-  removeProbeTenant,
 } from '../../packages/db/src/probe-tenants';
 import * as s from '../../packages/db/src/schema';
-import { acquireSeedSuiteLock, releaseSeedSuiteLock } from '../../packages/db/src/seed-suite-lock';
 import { inTenantTransaction } from '../../packages/db/src/tenant-transaction';
 import { withTenant } from '../../packages/db/src/with-tenant';
+import {
+  connectFenceHarness,
+  installFenceAfterAll,
+  pmCtx,
+  prepareSchedulableLeaf,
+} from './fence-harness';
 
 const OWNER_DATABASE_URL = process.env.DATABASE_URL;
 const APP_DATABASE_URL = process.env.APP_DATABASE_URL;
-const REQUIRE_DB = process.env.REQUIRE_DB === '1';
 
-async function reachableAs(connectionString: string | undefined): Promise<boolean> {
-  if (!connectionString) return false;
-  try {
-    const client = await getPool(connectionString).connect();
-    client.release();
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-const reachable =
-  (await reachableAs(OWNER_DATABASE_URL)) && (await reachableAs(APP_DATABASE_URL));
-if (REQUIRE_DB && !reachable) {
-  throw new Error('REQUIRE_DB=1 but DATABASE_URL or APP_DATABASE_URL is unreachable.');
-}
+const { reachable } = await connectFenceHarness({
+  ownerUrl: OWNER_DATABASE_URL,
+  appUrl: APP_DATABASE_URL,
+  requireDb: process.env.REQUIRE_DB === '1',
+});
 
 const PROBE = buildProbeTenant('xtprobe-s211', 951_000_000);
 assertProbeTenantsDisjoint([PROBE]);
+await installFenceAfterAll({ reachable, ownerUrl: OWNER_DATABASE_URL, probe: PROBE });
 
-if (reachable) {
-  await acquireSeedSuiteLock(OWNER_DATABASE_URL!, 'shared');
-}
-
-afterAll(async () => {
-  if (reachable) {
-    await removeProbeTenant(getDb(OWNER_DATABASE_URL!), PROBE).catch(() => {});
-  }
-  await releaseSeedSuiteLock();
-  await closeAllPools();
-});
-
-function ctx() {
-  return {
-    tenantId: PROBE.tenantId,
-    userId: 'user-s211',
-    roles: ['pm'] as const,
-    locale: 'en' as const,
-    projectIds: [PROBE.projectId],
-  };
-}
+const ctx = () => pmCtx(PROBE, { userId: 'user-s211' });
 
 async function prepareBareProject(owner: ReturnType<typeof getDb>) {
   await createProbeTenant(owner, PROBE);
@@ -87,16 +60,8 @@ async function prepareBareProject(owner: ReturnType<typeof getDb>) {
   return leaf;
 }
 
-async function prepareSchedulable(owner: ReturnType<typeof getDb>) {
-  const leaf = await prepareBareProject(owner);
-  await withTenant(owner, PROBE.tenantId, async (tx) => {
-    await tx
-      .update(s.project)
-      .set({ projectStart: '2026-09-01', dataDate: '2026-10-05', projectFinish: null })
-      .where(eq(s.project.id, PROBE.projectId));
-  });
-  return leaf;
-}
+const prepareSchedulable = (owner: ReturnType<typeof getDb>) =>
+  prepareSchedulableLeaf(owner, PROBE);
 
 describe('dataDateAdvancePreview', () => {
   it('names the remaining count', () => {

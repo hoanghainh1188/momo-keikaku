@@ -5,70 +5,42 @@
  * measured as p95 ≤ 300 ms on Epic 1's 500-WP fixture — not a domain-only single sample.
  */
 import { performance } from 'node:perf_hooks';
-import { afterAll, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { and, eq, sql } from 'drizzle-orm';
 import { applyPlanChange } from '../../packages/app/src/schedule/apply-plan-change';
-import { closeAllPools, getDb, getPool } from '../../packages/db/src/client';
+import { getDb } from '../../packages/db/src/client';
 import {
   assertProbeTenantsDisjoint,
   buildProbeTenant,
   createProbeTenant,
-  removeProbeTenant,
 } from '../../packages/db/src/probe-tenants';
 import * as s from '../../packages/db/src/schema';
-import { acquireSeedSuiteLock, releaseSeedSuiteLock } from '../../packages/db/src/seed-suite-lock';
 import { inTenantTransaction } from '../../packages/db/src/tenant-transaction';
 import { withTenant } from '../../packages/db/src/with-tenant';
 import {
   generateLoadFixture,
   LOAD_WP_PER_PROJECT,
 } from '../../packages/db/src/load-generator';
+import {
+  connectFenceHarness,
+  installFenceAfterAll,
+  pmCtx,
+} from './fence-harness';
 
 const OWNER_DATABASE_URL = process.env.DATABASE_URL;
 const APP_DATABASE_URL = process.env.APP_DATABASE_URL;
-const REQUIRE_DB = process.env.REQUIRE_DB === '1';
 
-async function reachableAs(connectionString: string | undefined): Promise<boolean> {
-  if (!connectionString) return false;
-  try {
-    const client = await getPool(connectionString).connect();
-    client.release();
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-const reachable =
-  (await reachableAs(OWNER_DATABASE_URL)) && (await reachableAs(APP_DATABASE_URL));
-if (REQUIRE_DB && !reachable) {
-  throw new Error('REQUIRE_DB=1 but DATABASE_URL or APP_DATABASE_URL is unreachable.');
-}
+const { reachable } = await connectFenceHarness({
+  ownerUrl: OWNER_DATABASE_URL,
+  appUrl: APP_DATABASE_URL,
+  requireDb: process.env.REQUIRE_DB === '1',
+});
 
 const PROBE = buildProbeTenant('xtprobe-nfrp1', 941_000_000);
 assertProbeTenantsDisjoint([PROBE]);
+await installFenceAfterAll({ reachable, ownerUrl: OWNER_DATABASE_URL, probe: PROBE });
 
-if (reachable) {
-  await acquireSeedSuiteLock(OWNER_DATABASE_URL!, 'shared');
-}
-
-afterAll(async () => {
-  if (reachable) {
-    await removeProbeTenant(getDb(OWNER_DATABASE_URL!), PROBE).catch(() => {});
-  }
-  await releaseSeedSuiteLock();
-  await closeAllPools();
-});
-
-function ctx() {
-  return {
-    tenantId: PROBE.tenantId,
-    userId: 'user-nfrp1',
-    roles: ['pm'] as const,
-    locale: 'en' as const,
-    projectIds: [PROBE.projectId],
-  };
-}
+const ctx = () => pmCtx(PROBE, { userId: 'user-nfrp1' });
 
 /** Inclusive empirical p95 — ceil(0.95 × n)-th sample of a sorted ascending array (1-based). */
 function percentile95(samplesMs: readonly number[]): number {
