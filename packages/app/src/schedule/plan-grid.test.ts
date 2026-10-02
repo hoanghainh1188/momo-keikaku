@@ -20,6 +20,7 @@ import {
   inkTone,
   minFloatFromRows,
   recordedPctDisplay,
+  planGridExceptionCell,
   resolveException,
   stripDerivedScalars,
   SUMMARY_NA_LABEL,
@@ -320,6 +321,26 @@ describe('plan-grid display helpers (story 2.13)', () => {
     ];
     const sorted = [...rows].sort(compareWp);
     expect(sorted.map((r) => r.wbsCode)).toEqual(['2', '10']);
+  });
+});
+
+describe('planGridExceptionCell (story 2.16 / retro F23)', () => {
+  const base = {
+    wpId: 'leaf-1',
+    isLeaf: true,
+    notSchedulableReason: 'no_duration' as const,
+    violationsByWp: new Map<string, never>(),
+    oosWpIds: new Set<string>(),
+  };
+
+  it('returns null when the latest run is halted', () => {
+    expect(resolveException(base)).not.toBeNull();
+    expect(planGridExceptionCell('calendar_range', base)).toBeNull();
+    expect(planGridExceptionCell('graph_invalid', base)).toBeNull();
+  });
+
+  it('delegates to resolveException when not halted', () => {
+    expect(planGridExceptionCell(null, base)).toEqual(resolveException(base));
   });
 });
 

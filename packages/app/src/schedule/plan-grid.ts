@@ -744,6 +744,15 @@ export function resolveException(input: {
   return null;
 }
 
+/** Exception cell for a grid row — cleared when the latest run is halted (story 2.16 / retro F23). */
+export function planGridExceptionCell(
+  haltedReason: string | null,
+  input: Parameters<typeof resolveException>[0],
+): PlanGridException | null {
+  if (haltedReason !== null) return null;
+  return resolveException(input);
+}
+
 function depthOf(
   wpId: string,
   parentOf: ReadonlyMap<string, string | null>,
@@ -1119,7 +1128,7 @@ export async function getPlanGridState<Handle>(
         actualFinish: status?.actualFinish ?? null,
         recordedPct: pct,
         remainingDays: remaining,
-        exception: resolveException({
+        exception: planGridExceptionCell(haltedReason, {
           wpId: wp.id,
           isLeaf: wp.isLeaf,
           notSchedulableReason: sched?.notSchedulableReason ?? null,
