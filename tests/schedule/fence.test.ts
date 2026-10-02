@@ -339,6 +339,20 @@ describe.skipIf(!reachable)('applyPlanChange fence (story 2.9)', () => {
     expect(afterProjection.length).toBe(priorProjection.length);
     expect(afterProjection.every((r) => r.stale === true)).toBe(true);
 
+    // Retro F23 — seed stale not_schedulable chrome that must not paint Exception cells while halted.
+    await withTenant(app, PROBE.tenantId, async (tx) => {
+      await tx
+        .update(s.wpSchedule)
+        .set({ notSchedulableReason: 'no_duration' })
+        .where(
+          and(
+            eq(s.wpSchedule.tenantId, PROBE.tenantId),
+            eq(s.wpSchedule.projectId, PROBE.projectId),
+            eq(s.wpSchedule.wpId, leaf.id),
+          ),
+        );
+    });
+
     // Story 2.16 Q1→A — halted run contributes no rail rows; calendar bounds stay for the banner.
     const grid = await getPlanGridState(
       { handle: app, transaction: inTenantTransaction },
@@ -354,6 +368,10 @@ describe.skipIf(!reachable)('applyPlanChange fence (story 2.9)', () => {
     expect(grid.value.exceptions.notSchedulable).toEqual([]);
     expect(grid.value.exceptions.calendarRangeStart).toBeTruthy();
     expect(grid.value.exceptions.calendarRangeEnd).toBeTruthy();
+    expect(grid.value.rows.length).toBeGreaterThan(0);
+    const haltedLeaf = grid.value.rows.find((row) => row.wpId === leaf.id);
+    expect(haltedLeaf?.notSchedulable).toBe(true);
+    expect(grid.value.rows.every((row) => row.exception === null)).toBe(true);
   });
 
   it('contending applyPlanChange with lock_timeout fails retryably (does not block forever)', async () => {
