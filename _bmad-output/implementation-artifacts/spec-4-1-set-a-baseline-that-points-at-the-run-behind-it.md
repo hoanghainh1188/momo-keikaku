@@ -2,7 +2,7 @@
 title: 'Story 4.1 — Set a Baseline that points at the run behind it'
 type: 'feature'
 created: '2026-10-03'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: 'bfc7383d0b25904beb3688f296adfccc9af3e507'
