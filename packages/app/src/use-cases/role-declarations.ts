@@ -26,6 +26,7 @@
  * importing this file — which would be a cycle.
  */
 import type { RoleDeclaration } from '../authz/authorize';
+import { RE_BASELINE_ROLES } from '../baseline/re-baseline';
 import { SET_BASELINE_ROLES } from '../baseline/set-baseline';
 import { CALENDAR_ROLES } from '../calendar/publish-calendar-version';
 import { SCHEDULE_ROLES } from '../schedule/apply-plan-change';
@@ -61,4 +62,5 @@ export const USE_CASE_ROLES: Readonly<Record<string, RoleDeclaration>> = {
   ...SCHEDULE_ROLES,
   ...CALENDAR_ROLES,
   ...SET_BASELINE_ROLES,
+  ...RE_BASELINE_ROLES,
 };

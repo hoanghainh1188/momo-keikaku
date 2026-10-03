@@ -155,7 +155,14 @@
     "set_blocked": "Fix Project start or incomplete leaf durations before setting a Baseline.",
     "not_schedulable_link": "{count} not schedulable yet — open exceptions rail",
     "initial_reason": "Initial Baseline",
-    "bac_with_active": "Active Baseline BAC is {bac}h. Re-baseline and version comparison land in later stories."
+    "author": "Author",
+    "re_baseline": "Re-baseline",
+    "re_baseline_reason": "Reason",
+    "re_baseline_reason_placeholder": "Why is the Baseline moving?",
+    "re_baseline_reason_required": "A reason is required to Re-baseline.",
+    "re_baseline_disabled_title": "Re-baseline is unavailable until every leaf is schedulable and the latest schedule run succeeded.",
+    "re_baseline_blocked": "Fix Project start or incomplete leaf durations before Re-baselining.",
+    "bac_with_active": "Active Baseline BAC is {bac}h. Version comparison lands in a later story."
   },
   "connectors": {
     "backlog_connector": "Backlog Connector",

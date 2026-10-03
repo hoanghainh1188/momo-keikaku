@@ -138,7 +138,9 @@ import {
   addProjectNonWorkingDay,
   removeProjectNonWorkingDay,
   setBaseline,
+  reBaseline,
   getBaselineSetState,
+  getReBaselineState,
 } from '@momo/app';
 import { buildResetPasswordMail } from '@momo/i18n';
 import { mailerConsoleOn, productClockOn, systemClock, uuidV7IdsOn } from '@momo/adapters';
@@ -645,10 +647,22 @@ export async function setProjectBaseline(input: unknown, ctx?: RequestContext) {
   return setBaseline(writeDeps(), context, input);
 }
 
+/** Story 4.3 — Re-baseline with mandatory reason. */
+export async function reProjectBaseline(input: unknown, ctx?: RequestContext) {
+  const context = ctx ?? (await requestContext());
+  return reBaseline(writeDeps(), context, input);
+}
+
 /** Story 4.1 — Set Baseline eligibility for Review / Plan / Baselines controls. */
 export async function baselineSetState(projectId: string, ctx?: RequestContext) {
   const context = ctx ?? (await requestContext());
   return getBaselineSetState(writeDeps(), context, { projectId });
+}
+
+/** Story 4.3 — Re-baseline eligibility for Baselines control. */
+export async function reBaselineState(projectId: string, ctx?: RequestContext) {
+  const context = ctx ?? (await requestContext());
+  return getReBaselineState(writeDeps(), context, { projectId });
 }
 
 /** First-observed activity evidence for the complete flow (read-only). */

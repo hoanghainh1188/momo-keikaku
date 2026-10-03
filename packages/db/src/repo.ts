@@ -126,6 +126,7 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
     id: b.id,
     reason: b.reason,
     recordedAt: b.recordedAt.toISOString(),
+    actor: b.actor,
     wps: blWps
       .filter((x) => Number(x.baselineVersionSeq) === Number(b.seq))
       .map((x) => ({

@@ -44,6 +44,7 @@ const input: ReviewInput = {
       id: 'bl-1',
       reason: 'x',
       recordedAt: '2026-06-01T00:00:00.000Z',
+      actor: 'user:pm',
       wps: [
         { wpId: 'WP-B', start: '2026-06-01', finish: '2026-12-01', baselineMh: hoursToMh(200), isMilestone: false },
       ],

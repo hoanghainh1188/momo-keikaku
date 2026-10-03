@@ -170,6 +170,7 @@ describe('attribution (FR-20, FR-21, FR-24)', () => {
       id: 'bl-1',
       reason: 'x',
       recordedAt: '2026-06-01T00:00:00.000Z',
+      actor: 'user:pm',
       wps: [
         { wpId: 'WP-B', start: '2026-06-01', finish: '2026-12-01', baselineMh: hoursToMh(200), isMilestone: false },
         { wpId: 'WP-C', start: '2026-06-01', finish: '2026-12-01', baselineMh: hoursToMh(10), isMilestone: false },
@@ -255,6 +256,49 @@ describe('attribution (FR-20, FR-21, FR-24)', () => {
   it('keeps Plan-disposition hours Unplanned until a Re-baseline includes the WP', () => {
     const entries = [entry(1, 'tn', 12, IN)];
     expect(run(entries).cumulative.unplannedMh).toBe(hoursToMh(12));
+  });
+
+  it('keeps hours stamped before a Re-baseline Unplanned after the new version includes their WP (FR-30 / FR-16)', () => {
+    // Entry stamped against seq 1 (or null) where WP-N is absent; Re-baseline seq 2 includes WP-N.
+    // Judgment must use the stamp, not today's active seq — else Unplanned history is erased.
+    const afterRebaseline = [
+      ...baselineVersions,
+      {
+        seq: 2,
+        id: 'bl-2',
+        reason: 'Include Plan WP',
+        recordedAt: '2026-09-20T00:00:00.000Z',
+        actor: 'user:pm',
+        wps: [
+          ...baselineVersions[0]!.wps,
+          {
+            wpId: 'WP-N',
+            start: '2026-06-01',
+            finish: '2026-12-01',
+            baselineMh: hoursToMh(50),
+            isMilestone: false,
+          },
+        ],
+      },
+    ];
+    const stampedAtSeq1: LedgerEntry[] = [entry(1, 'tn', 12, IN)]; // activeBaselineVersionSeq: 1
+    const stampedNull: LedgerEntry[] = [
+      { ...entry(1, 'tn', 12, IN), activeBaselineVersionSeq: null },
+    ];
+    for (const entries of [stampedAtSeq1, stampedNull]) {
+      const r = attribute({
+        entries,
+        head: mappingHead(events),
+        wps,
+        baselineVersions: afterRebaseline,
+        resources,
+        project,
+        period,
+      });
+      expect(r.cumulative.unplannedMh).toBe(hoursToMh(12));
+      expect(r.cumulative.mappedNonBaselinedMh).toBe(hoursToMh(12));
+      expect(r.cumulative.mappedBaselinedMh).toBe(0n);
+    }
   });
 
   it('costs each entry at the Resource Rate in effect, and falls back to the Project default', () => {

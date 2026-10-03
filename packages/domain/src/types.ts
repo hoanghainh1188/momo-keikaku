@@ -101,6 +101,8 @@ export interface BaselineVersion {
   id: string;
   reason: string;
   recordedAt: string;
+  /** Author of this version (`audit` actor form). DB column already stored; exposed for FR-16 history. */
+  actor: string;
   wps: BaselineWp[];
 }
 

@@ -262,6 +262,7 @@ export function loadProjectAsDemoState(
       id: fixture.baseline.id,
       reason: fixture.baseline.reason,
       recordedAt: fixture.baseline.recordedAt,
+      actor: 'user:load-fixture',
       wps: fixture.baseline.wps.map((b) => ({ ...b, baselineMh: mhFromJson(b.baselineMh) })),
     },
   ];
