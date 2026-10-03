@@ -212,6 +212,8 @@ export function buildDemoState(anchorIso?: string): DemoState {
       id: fixture.baseline.id,
       reason: fixture.baseline.reason,
       recordedAt: fixture.baseline.recordedAt,
+      // Demo fixture JSON has no actor; stamp the demo PM (seed still writes no Baseline — 2-A).
+      actor: actorOf(DEMO_USERS.linh.id),
       wps: fixture.baseline.wps.map((b) => ({ ...b, baselineMh: mhFromJson(b.baselineMh) })),
     },
   ];

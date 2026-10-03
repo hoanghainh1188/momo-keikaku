@@ -112,6 +112,7 @@ describe('computeEvm — an actual finish lifts the 99% cap only on a non-milest
     id: 'bl-1',
     reason: 'cap',
     recordedAt: '2026-06-01T00:00:00.000Z',
+    actor: 'user:pm',
     wps: [
       { wpId: 'WP-1', start: '2026-06-01', finish: '2026-06-12', baselineMh: hoursToMh(100), isMilestone: false },
       { wpId: 'WP-M', start: '2026-06-12', finish: '2026-06-12', baselineMh: hoursToMh(100), isMilestone: true },
@@ -195,6 +196,7 @@ describe('computeEvm — golden case', () => {
     id: 'bl-1',
     reason: 'golden',
     recordedAt: '2026-06-01T00:00:00.000Z',
+    actor: 'user:pm',
     wps: [
       { wpId: 'WP-1', start: '2026-06-01', finish: '2026-06-12', baselineMh: hoursToMh(100), isMilestone: false },
       { wpId: 'WP-2', start: '2026-06-01', finish: '2026-06-12', baselineMh: hoursToMh(100), isMilestone: false },
@@ -269,6 +271,7 @@ describe('FR-27 Ticket-Count Mode', () => {
       id: 'bl-1',
       reason: 'x',
       recordedAt: '2026-06-01T00:00:00.000Z',
+      actor: 'user:pm',
       wps: [
         { wpId: 'WP-1', start: '2026-06-01', finish: '2026-06-12', baselineMh: hoursToMh(100), isMilestone: false },
       ],

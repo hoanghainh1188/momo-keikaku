@@ -232,7 +232,7 @@ export {
   type FanOutProjectResult,
 } from './calendar/publish-calendar-version';
 
-// Story 4.1 Baseline writer — outside the use-cases barrel (F10 second module list).
+// Story 4.1 / 4.3 Baseline writers — outside the use-cases barrel (F10 second module list).
 export {
   setBaseline,
   FIRST_SET_REASON,
@@ -240,8 +240,15 @@ export {
   type SetBaselineResult,
 } from './baseline/set-baseline';
 export {
+  reBaseline,
+  type ReBaselineDeps,
+  type ReBaselineResult,
+} from './baseline/re-baseline';
+export {
   getBaselineSetState,
+  getReBaselineState,
   type BaselineSetState,
+  type ReBaselineState,
 } from './baseline/set-baseline-state';
 export {
   reDerivePinnedBaseline,

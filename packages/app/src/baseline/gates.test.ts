@@ -6,7 +6,7 @@ import {
   recalculate,
 } from '@momo/domain';
 import { CAL, inputs, wp } from '../../../../tests/support/schedule-fixtures';
-import { evaluateBaselineSetGates } from './gates';
+import { evaluateBaselineSetGates, evaluateReBaselineGates } from './gates';
 
 const leaf = (
   id: string,
@@ -135,5 +135,70 @@ describe('evaluateBaselineSetGates', () => {
     if (result.ok) return;
     expect(result.reason).toBe('incomplete_plan');
     expect(result.blockingWpIds).toContain('wp-b');
+  });
+});
+
+describe('evaluateReBaselineGates', () => {
+  it('accepts when a Baseline already exists and the plan is schedulable', () => {
+    const pin = successfulPin('wp-a');
+    const result = evaluateReBaselineGates({
+      projectStart: '2026-09-01',
+      existingBaselineSeq: 1,
+      latestRun: { ...pin, haltedReason: null },
+      successfulRun: pin,
+      leaves: [leaf('wp-a')],
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.scheduleRunSeq).toBe(1);
+  });
+
+  it('refuses when no Baseline exists yet', () => {
+    const pin = successfulPin('wp-a');
+    const result = evaluateReBaselineGates({
+      projectStart: '2026-09-01',
+      existingBaselineSeq: null,
+      latestRun: { ...pin, haltedReason: null },
+      successfulRun: pin,
+      leaves: [leaf('wp-a')],
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.reason).toBe('no_baseline');
+    expect(result.details.hint).toEqual(['use_set_baseline']);
+  });
+
+  it('shares incomplete-plan refuse with Set', () => {
+    const pin = successfulPin('wp-a');
+    const result = evaluateReBaselineGates({
+      projectStart: '2026-09-01',
+      existingBaselineSeq: 1,
+      latestRun: { ...pin, haltedReason: null },
+      successfulRun: pin,
+      leaves: [leaf('wp-a'), leaf('wp-b', { durationDays: null })],
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.reason).toBe('incomplete_plan');
+    expect(result.blockingWpIds).toContain('wp-b');
+  });
+
+  it('shares halted-head refuse with Set', () => {
+    const older = successfulPin('wp-a');
+    const result = evaluateReBaselineGates({
+      projectStart: '2026-09-01',
+      existingBaselineSeq: 1,
+      latestRun: {
+        seq: 2,
+        haltedReason: 'calendar_range',
+        outputs: null,
+        inputs: older.inputs,
+      },
+      successfulRun: older,
+      leaves: [leaf('wp-a')],
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.reason).toBe('halted_or_missing_run');
   });
 });

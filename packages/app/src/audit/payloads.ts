@@ -181,6 +181,15 @@ export const AUDIT_PAYLOAD_BY_ACTION = {
       reason: z.string(),
     })
     .strict(),
+  'baseline.rebaseline': z
+    .object({
+      baselineVersionSeq: z.number().int(),
+      baselineVersionId: z.string(),
+      scheduleRunSeq: z.number().int(),
+      leafCount: z.number().int(),
+      reason: z.string(),
+    })
+    .strict(),
 } as const;
 
 /**

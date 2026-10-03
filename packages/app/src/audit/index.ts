@@ -62,6 +62,8 @@ export const AUDIT_ACTIONS = [
   'calendar.publish_version',
   // First Set Baseline (story 4.1 / FR-15).
   'baseline.set',
+  // Re-baseline with mandatory reason (story 4.3 / FR-16).
+  'baseline.rebaseline',
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
