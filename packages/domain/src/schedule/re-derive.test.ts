@@ -1,7 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { encode, stringify } from '../present/codec';
+import * as engineVersion from './engine-version';
 import { ENGINE_VERSION } from './engine-version';
 import { CORPUS } from './corpus/index';
+import { edge, inputs, wp } from './corpus/fixtures';
 import { recalculate } from './recalculate';
 import { reDeriveStoredRun } from './re-derive';
 import {
@@ -84,10 +86,93 @@ describe('reDeriveStoredRun (story 4.2)', () => {
     expect(gate.reason).toBe('mismatch');
   });
 
-  it('dispatches under the pin\'s own engine_version (registered key)', () => {
+  it('fails when dates / Float drift while criticalPath stays unchanged', () => {
+    const pin = storedFromCorpus('jp-weekend-slip');
+    const parsed = JSON.parse(stringify(encode(pin.outputs))) as StoredScheduleOutputs;
+    expect(parsed.wps[0]?.floatDays).not.toBeNull();
+    const drifted: StoredScheduleOutputs = {
+      ...parsed,
+      criticalPath: parsed.criticalPath,
+      wps: parsed.wps.map((row, i) =>
+        i === 0
+          ? {
+              ...row,
+              floatDays: (row.floatDays ?? 0) + 7,
+              earlyStart: '2099-01-01',
+            }
+          : row,
+      ),
+      violations: [
+        ...parsed.violations,
+        {
+          wpId: 0,
+          constraintType: 'must_finish_on',
+          askedDate: '2026-10-01',
+          derivedDate: '2026-10-15',
+          daysLate: 10,
+          chain: [0],
+        },
+      ],
+    };
+    expect(drifted.criticalPath).toEqual(parsed.criticalPath);
+
+    const gate = reDeriveStoredRun({ ...pin, outputs: encode(drifted) });
+    expect(gate.ok).toBe(false);
+    if (gate.ok) return;
+    expect(gate.reason).toBe('mismatch');
+  });
+
+  it('returns engine_halted when recalculateAt halts on stored inputs', () => {
+    // Complete-looking pin (outputs present, haltedReason null) whose inputs are a cycle.
+    const schedulable = inputs(
+      [wp('1', { durationDays: 2 }), wp('2', { durationDays: 2 })],
+      [edge('1', '2')],
+    );
+    const scheduled = recalculate(schedulable, null);
+    expect(scheduled.kind).toBe('scheduled');
+    if (scheduled.kind !== 'scheduled') return;
+
+    const cyclic = inputs(
+      [wp('1', { durationDays: 2 }), wp('2', { durationDays: 2 })],
+      [edge('1', '2'), edge('2', '1')],
+    );
+    expect(recalculate(cyclic, null).kind).toBe('halted');
+
+    const storedIn = encodeScheduleInputs(cyclic, new Map(), { calendarVersionSeq: 1 });
+    const storedOut = encodeScheduleOutputs(
+      scheduled.outputs,
+      storedIn.wps.map((w) => w.id),
+    );
+
+    const gate = reDeriveStoredRun({
+      engineVersion: ENGINE_VERSION,
+      inputs: encode(storedIn),
+      outputs: encode(storedOut),
+      prevInputs: null,
+      haltedReason: null,
+    });
+    expect(gate.ok).toBe(false);
+    if (gate.ok) return;
+    expect(gate.reason).toBe('engine_halted');
+    expect(gate.message).toMatch(/graph_invalid/);
+  });
+
+  it('invokes recalculateAt with the pin\'s stored engine_version, not today\'s constant (AR-51)', () => {
     const pin = storedFromCorpus('milestone');
-    expect(pin.engineVersion).toBe(ENGINE_VERSION);
-    expect(reDeriveStoredRun(pin)).toEqual({ ok: true });
+    const historical = 'schedule-2026-01-01-historical';
+    expect(historical).not.toBe(ENGINE_VERSION);
+
+    const spy = vi.spyOn(engineVersion, 'recalculateAt').mockImplementation((_version, inps, prev) =>
+      recalculate(inps, prev),
+    );
+    try {
+      const gate = reDeriveStoredRun({ ...pin, engineVersion: historical });
+      expect(spy).toHaveBeenCalled();
+      expect(spy.mock.calls[0]![0]).toBe(historical);
+      expect(gate).toEqual({ ok: true });
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it('throws RangeError naming an unknown engine_version', () => {

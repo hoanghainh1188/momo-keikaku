@@ -7,7 +7,7 @@
  * side. Critical path equality is ordered-array equality inside that form (AR-55).
  */
 import { encode, stringify } from '../present/codec';
-import { recalculateAt } from './engine-version';
+import * as engineVersion from './engine-version';
 import {
   decodeScheduleInputs,
   decodeScheduleOutputs,
@@ -72,7 +72,8 @@ export function reDeriveStoredRun(pin: StoredRunPin): ReDeriveResult {
   const orderedWpIds = storedInputs.wps.map((wp) => wp.id);
   const expected = decodeScheduleOutputs(parseStoredOutputs(pin.outputs), orderedWpIds);
 
-  const result = recalculateAt(pin.engineVersion, domainInputs, prevInputs);
+  // Namespace call so tests can spy the pin's stored key (AR-51) without a second registry entry.
+  const result = engineVersion.recalculateAt(pin.engineVersion, domainInputs, prevInputs);
   if (result.kind !== 'scheduled') {
     return {
       ok: false,

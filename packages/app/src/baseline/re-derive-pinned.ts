@@ -32,7 +32,8 @@ function asBound(bound: SchedulingBound): Bound {
 
 /**
  * Authorised re-derivation of the Project's latest Baseline pin.
- * Returns `invalid_input` when there is no Baseline, the pin row is missing, or the pin is incomplete.
+ * Returns `invalid_input` when there is no Baseline, the pin row is missing, the pin is
+ * incomplete, or the gate fails (`mismatch` / `engine_halted`).
  */
 export async function reDerivePinnedBaseline<Handle>(
   deps: ApplyPlanChangeDeps<Handle>,
@@ -79,9 +80,9 @@ export async function reDerivePinnedBaseline<Handle>(
         haltedReason: run.haltedReason,
       });
 
-      if (!gate.ok && gate.reason === 'incomplete_pin') {
+      if (!gate.ok) {
         return fail('invalid_input', {
-          pin: [gate.message],
+          pin: [gate.reason, gate.message],
         });
       }
 
