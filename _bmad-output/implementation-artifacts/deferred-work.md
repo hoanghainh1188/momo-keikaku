@@ -1122,6 +1122,7 @@ above can see where it went.
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-12-the-holiday-calendar-and-its-dated-versions.md`
   summary: Generate `packages/db/drizzle/meta/0003_snapshot.json` so drizzle-kit meta history matches journal entry `0003_calendar_day_event`.
   evidence: Review BH1 (2026-09-25): journal lists 0003 but only 0000–0002 snapshots exist. Runtime migration applies; kit history is incomplete. Defer regenerating the snapshot with drizzle-kit.
+  resolved: YES, 2026-09-25 in commit `9428676` (`fix(2.12): add missing drizzle 0003 snapshot for CI drift gate`). File lives at `packages/db/drizzle/meta/0003_snapshot.json`; epic-2 retro F16 / action item-15 closes the stale open row.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-12-the-holiday-calendar-and-its-dated-versions.md`
   summary: Localize Story 2.12 Holiday Calendar settings copy (section title, JP/VN labels, Project non-working-day controls) into packages/i18n.
