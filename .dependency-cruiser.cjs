@@ -28,8 +28,11 @@
 // spec-1-2-web-write-use-cases.md) — including the three forward-looking scheduling rules,
 // which match no file today and were proved live with a temporary file at each path.
 
-/** The schedule and plan-input repositories (AD-25, AD-27). Neither exists yet. */
+/** The schedule and plan-input repositories (AD-25, AD-27). */
 const SCHEDULING_REPOSITORIES = '^packages/db/src/repositories/(schedule|plan-input)([.][a-z.]+$|/)';
+
+/** Baseline writer repository (story 4.1) — only `app/baseline` may import it. */
+const BASELINE_REPOSITORIES = '^packages/db/src/repositories/baseline([.][a-z.]+$|/)';
 
 /** @type {import('dependency-cruiser').IConfiguration} */
 module.exports = {
@@ -194,17 +197,33 @@ module.exports = {
       severity: 'error',
       comment:
         'AD-1 / AD-25 / AD-27 / AR-54: db/repositories/schedule and db/repositories/plan-input are ' +
-        "app/schedule's and app/calendar's (publishCalendarVersion), so the scheduler stays the " +
-        'only writer of derived dates and every input write goes through its fence or calendar publish. ' +
-        '(The two repositories may import each other.)',
+        "app/schedule's, app/calendar's (publishCalendarVersion), and app/baseline's (setBaseline " +
+        'reads the latest successful run). The scheduler stays the only writer of derived dates ' +
+        'and every input write goes through its fence or calendar publish. (The two repositories ' +
+        'may import each other.)',
       from: {
         pathNot: [
           '^packages/app/src/schedule([.][a-z.]+$|/)',
           '^packages/app/src/calendar([.][a-z.]+$|/)',
+          '^packages/app/src/baseline([.][a-z.]+$|/)',
           SCHEDULING_REPOSITORIES,
         ],
       },
       to: { path: SCHEDULING_REPOSITORIES },
+    },
+    {
+      name: 'baseline-repositories-only-from-app-baseline',
+      severity: 'error',
+      comment:
+        'Story 4.1 / AR-22: db/repositories/baseline is app/baseline\'s alone — the only writer of ' +
+        'baseline_version / baseline_wp. Composition and other app modules must call setBaseline.',
+      from: {
+        pathNot: [
+          '^packages/app/src/baseline([.][a-z.]+$|/)',
+          BASELINE_REPOSITORIES,
+        ],
+      },
+      to: { path: BASELINE_REPOSITORIES },
     },
     {
       name: 'composition-root-not-to-scheduling-repositories',
@@ -215,6 +234,15 @@ module.exports = {
         'the carve-out it narrows is visible where the carve-out is granted.',
       from: { path: '^apps/web/src/server/composition[.]ts$' },
       to: { path: SCHEDULING_REPOSITORIES },
+    },
+    {
+      name: 'composition-root-not-to-baseline-repositories',
+      severity: 'error',
+      comment:
+        'AD-1: the composition root never imports db/repositories/baseline. Call setBaseline ' +
+        'through the app barrel instead.',
+      from: { path: '^apps/web/src/server/composition[.]ts$' },
+      to: { path: BASELINE_REPOSITORIES },
     },
   ],
   options: {

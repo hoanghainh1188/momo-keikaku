@@ -1,14 +1,15 @@
 /**
  * Second enumerated surface for Epic 1's role and audit gates (Epic 2 retro F10 / Q1→B).
  *
- * Schedule fence and calendar publish writers live on `@momo/app`'s package barrel but stay
- * outside `use-cases/index.ts`. The gates enumerate THIS module list mechanically — the same
- * spirit as `readSurfaceFunctionNames()` — so a new write export without a `*_ROLES` /
+ * Schedule fence, calendar publish, and Baseline writers live on `@momo/app`'s package barrel
+ * but stay outside `use-cases/index.ts`. The gates enumerate THIS module list mechanically —
+ * the same spirit as `readSurfaceFunctionNames()` — so a new write export without a `*_ROLES` /
  * `*_AUDIT` merge fails CI, named. Thin `plan-edit` / `apply-predecessor-set` wrappers are
  * deliberately not listed: they call `applyPlanChange` and inherit its declarations.
  */
 import type { RequestContext } from '../packages/app/src/authz/request-context';
 import type { Result } from '../packages/app/src/result';
+import * as setBaselineWrite from '../packages/app/src/baseline/set-baseline';
 import * as calendarWrites from '../packages/app/src/calendar/publish-calendar-version';
 import * as scheduleFence from '../packages/app/src/schedule/apply-plan-change';
 
@@ -22,6 +23,7 @@ type WriteFn = (
 const SCHEDULE_CALENDAR_WRITE_SURFACE = [
   { path: 'packages/app/src/schedule/apply-plan-change.ts', ns: scheduleFence },
   { path: 'packages/app/src/calendar/publish-calendar-version.ts', ns: calendarWrites },
+  { path: 'packages/app/src/baseline/set-baseline.ts', ns: setBaselineWrite },
 ] as const;
 
 /** Named in failure messages — derived from SCHEDULE_CALENDAR_WRITE_SURFACE. */

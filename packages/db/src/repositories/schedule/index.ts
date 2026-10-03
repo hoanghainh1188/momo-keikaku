@@ -81,6 +81,27 @@ export function scheduleRepositoryOn(bound: Bound) {
     },
 
     /**
+     * Story 4.1: latest successful (non-halted, outputs present) run for Baseline pin.
+     * Differs from `latestRun` when the head run halted — a Baseline must never pin that head.
+     */
+    async latestSuccessfulRun(projectId: string): Promise<LatestRunRow | null> {
+      const [row] = await tx
+        .select(runSelect)
+        .from(s.scheduleRun)
+        .where(
+          and(
+            eq(s.scheduleRun.tenantId, tenantId),
+            eq(s.scheduleRun.projectId, projectId),
+            isNull(s.scheduleRun.haltedReason),
+            isNotNull(s.scheduleRun.outputs),
+          ),
+        )
+        .orderBy(desc(s.scheduleRun.seq))
+        .limit(1);
+      return row ?? null;
+    },
+
+    /**
      * Story 2.15: previous successful (non-halted, outputs present) run before `beforeSeq`,
      * for What-moved before→after join. Null when this is the first successful run.
      */

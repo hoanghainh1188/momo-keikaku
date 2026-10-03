@@ -137,6 +137,8 @@ import {
   patchNationalCalendarFlags,
   addProjectNonWorkingDay,
   removeProjectNonWorkingDay,
+  setBaseline,
+  getBaselineSetState,
 } from '@momo/app';
 import { buildResetPasswordMail } from '@momo/i18n';
 import { mailerConsoleOn, productClockOn, systemClock, uuidV7IdsOn } from '@momo/adapters';
@@ -635,6 +637,18 @@ export async function addProjectCalendarDay(input: unknown, ctx?: RequestContext
 export async function removeProjectCalendarDay(input: unknown, ctx?: RequestContext) {
   const context = ctx ?? (await requestContext());
   return removeProjectNonWorkingDay(writeDeps(), context, input);
+}
+
+/** Story 4.1 — first Set Baseline. */
+export async function setProjectBaseline(input: unknown, ctx?: RequestContext) {
+  const context = ctx ?? (await requestContext());
+  return setBaseline(writeDeps(), context, input);
+}
+
+/** Story 4.1 — Set Baseline eligibility for Review / Plan / Baselines controls. */
+export async function baselineSetState(projectId: string, ctx?: RequestContext) {
+  const context = ctx ?? (await requestContext());
+  return getBaselineSetState(writeDeps(), context, { projectId });
 }
 
 /** First-observed activity evidence for the complete flow (read-only). */

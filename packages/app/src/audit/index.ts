@@ -60,6 +60,8 @@ export const AUDIT_ACTIONS = [
   'schedule.apply_plan_change',
   // Holiday Calendar publish (story 2.12 / AR-57): per-Project audit on publish / fan-out.
   'calendar.publish_version',
+  // First Set Baseline (story 4.1 / FR-15).
+  'baseline.set',
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];

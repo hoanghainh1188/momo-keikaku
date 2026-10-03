@@ -2,7 +2,7 @@
 title: 'Story 4.1 — Set a Baseline that points at the run behind it'
 type: 'feature'
 created: '2026-10-03'
-status: 'ready-for-dev'
+status: 'in-review'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: 'bfc7383d0b25904beb3688f296adfccc9af3e507'
@@ -81,12 +81,12 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `packages/db` Baseline repository — INSERT `baseline_version` + leaf `baseline_wp` under watermark; no migration.
-- [ ] `packages/app` `setBaseline` — authorize, lock, refuse incomplete/halted/second-set, audit, pin by FK.
-- [ ] Dependency-cruiser / role / audit gates — register writer; fence new repo path if added.
-- [ ] `apps/web` — wire *Set Baseline* on Review (and Plan entry if in scope); disable + exceptions-rail link when not schedulable; keep empty copy until first version.
-- [ ] Tests — matrix coverage: happy path, refuse incomplete, refuse halted/missing run, refuse second set, append-only, retention pin, catch-all copy, role `not_found`.
-- [ ] `sprint-status.yaml` — move `4-1-…` to `in-progress`/`review`/`done` as build proceeds; do not mark `epic-4` done.
+- [x] `packages/db` Baseline repository — INSERT `baseline_version` + leaf `baseline_wp` under watermark; no migration.
+- [x] `packages/app` `setBaseline` — authorize, lock, refuse incomplete/halted/second-set, audit, pin by FK.
+- [x] Dependency-cruiser / role / audit gates — register writer; fence new repo path if added.
+- [x] `apps/web` — wire *Set Baseline* on Review (and Plan entry if in scope); disable + exceptions-rail link when not schedulable; keep empty copy until first version.
+- [x] Tests — matrix coverage: happy path, refuse incomplete, refuse halted/missing run, refuse second set, append-only, retention pin, catch-all copy, role `not_found`.
+- [x] `sprint-status.yaml` — move `4-1-…` to `in-progress`/`review`/`done` as build proceeds; do not mark `epic-4` done.
 
 **Acceptance Criteria:**
 - Given a schedulable Current Plan with a successful latest `schedule_run` and no Baseline, when the PM sets a Baseline, then `baseline_version.schedule_run_seq` is a real FK to that run and inputs are pinned by reference only (AR-22, FR-15).
@@ -98,6 +98,12 @@ context:
 - Given `pnpm lint`, `pnpm typecheck`, `pnpm depcruise` and `pnpm test`, when they run, then all exit 0.
 
 ## Implementation Notes
+
+- **Date source for `baseline_wp`:** derived `start`/`finish` come from the pinned successful run's **outputs** (`earlyStart`/`earlyFinish`), matched by `wp_id` via `inputs.wps` order — not from live `wp_schedule`. Effort and flags (`baseline_mh`, `is_milestone`, `is_catch_all`) are copied from live `work_package` at set time (M-2 / catch-all value-at-set-time).
+- **First-set reason:** constant `FIRST_SET_REASON = 'Initial Baseline'` (DB + audit); free-text reason is 4.3.
+- **Latest-run refuse:** if the Current Plan's latest `schedule_run` is halted or missing outputs, Set is refused even when an older successful run exists — do not pin behind a halted head.
+- **Fences:** `packages/db/src/repositories/baseline` only from `packages/app/src/baseline`; schedule repos also readable from `app/baseline` for `latestSuccessfulRun`. Writer stays off the use-cases barrel (F10 list).
+- **UI:** Review empty copy shortened to UX-DR23 wording; Plan toolbar + Baselines get the same control; disabled state links to `/plan?exceptions=not_schedulable`.
 
 ## Spec Change Log
 
