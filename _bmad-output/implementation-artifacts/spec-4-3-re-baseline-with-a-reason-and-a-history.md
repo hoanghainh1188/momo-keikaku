@@ -2,7 +2,7 @@
 title: 'Story 4.3 — Re-baseline, with a reason and a history'
 type: 'feature'
 created: '2026-10-03'
-status: 'review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: 'bc0821d3709b8a2a3c07d16cad28742ecb7bd844'
@@ -103,14 +103,33 @@ context:
 ## Implementation Notes
 
 - **Gates:** `evaluatePinAndCompleteness` shared; `evaluateBaselineSetGates` refuses `already_exists`; `evaluateReBaselineGates` refuses `no_baseline` (+ `hint: use_set_baseline`).
-- **Writer:** `reBaseline` mirrors `setBaseline` lock → re-gate → `appendVersionWithWps` → audit `baseline.rebaseline`; reason trimmed; empty/whitespace → `invalid_input` / `reason: required`.
+- **Writer:** `reBaseline` mirrors `setBaseline` lock → re-gate → `appendVersionWithWps` → audit `baseline.rebaseline`; reason trimmed; empty/whitespace → `invalid_input` / `reason: required`; NUL refused via zod refine.
 - **Domain:** `BaselineVersion.actor` exposed; `repo.ts` maps DB column; FR-30 unit proves stamp-based Unplanned after Re-baseline includes WP.
-- **UI:** Baselines page hosts `ReBaselineControl` (mandatory reason); history table adds Author; Set stays hidden when `hasBaseline`.
-- **Fence:** `tests/schedule/fence-4-3-re-baseline.test.ts` — happy append + re-derive continuity, blank reason, no baseline, incomplete, append-only, role gate, state helper.
+- **UI:** Baselines page hosts `ReBaselineControl` (mandatory reason + client trim guard); history table adds Author and full `recordedAt` ISO; Set stays hidden when `hasBaseline`. Action requires `typeof reason === 'string'`.
+- **Fence:** `tests/schedule/fence-4-3-re-baseline.test.ts` — happy append + re-derive continuity, blank reason, no baseline, incomplete (+ `getReBaselineState` disable), append-only, role gate, state helper.
+- **Review patches (iteration 0):** NUL refine on reason; FormData string guard; client whitespace validity; history shows time; incomplete fence asserts re-baseline eligibility state.
 
 ## Spec Change Log
 
 ## Review Triage Log
+
+| Finding | Verdict | Evidence / route |
+|---------|---------|------------------|
+| History UI shows `recordedAt.slice(0, 10)` date-only — FR-16 “time” incomplete | medium | Confirmed at `baselines/page.tsx` — AC requires author, time, reason. Route: **patch** — render timestamp with time (full ISO or local datetime), not date-only. |
+| New `ja.json` Re-baseline / author keys are English copies | low | Same pre-existing ja locale pattern as story 4.1 (deferred). Reject — unlikely everyday harm; Japanese UI already largely English. |
+| Whitespace-only reason: HTML `required` passes; server refuses; `writeLanded` silent → looks like no-op | medium | Confirmed: control has `required` only; action always `String(formData.get('reason'))`; refuse has no toast (same as Set). Route: **patch** — client trim-guard before submit (setCustomValidity / block empty trim). |
+| Author column shows raw `user:…` actor id | low | Actor is the audit stamp identity stored on the row; no display-name map exists. Reject — inventing name presentation is out of intent. |
+| Fence missing halted-head refuse after Baseline | low | Shared pin path covered by `evaluateReBaselineGates` + Set halted unit; incomplete fence covers post-Baseline refuse. Reject — unlikely everyday miss beyond gate unit. |
+| Happy fence asserts audit action only, not payload fields | low | NFR-A1 is “produce audit row”; action member asserted. Payload schema is typed at write. Reject — payload field asserts are nice-to-have. |
+| Baselines page double `loadGateRows` via set + reBaseline state | low | Perf duplicate only; correct answers. Reject — coalescing is complexity beyond everyday harm. |
+| Spec `review` / empty Spec Change Log & Triage at review entry | false | Intermediate workflow state; triage log filled this pass. Not a product defect. |
+| `reason: z.string()` unbounded / no max length | false | Free-text FR-16 does not require a max; unbounded is intentional. |
+| Append-only fence voids `APPEND_ONLY_ERRCODE` and regex-matches | low | Still asserts SQLSTATE 42501/MOMO1. Reject — named constant unused is hygiene, not a product miss. |
+| FR-30 only domain unit, no DB fence stamp+rebaseline | false | Frozen intent: prove via `attribute()` + stamp; do not invent Epic 5 ingest. Domain unit is the specified proof. |
+| `reason` lacks NUL refine unlike `projectId` | medium | Confirmed `re-baseline.ts:33-36`. Route: **patch** — same `noNul` refine on reason. |
+| `FormData.get('reason')` coerced via `String()` — File becomes `[object File]` | medium | Confirmed `actions.ts:29`. Route: **patch** — require `typeof raw === 'string'`. |
+| I/O matrix halted-head not in fence (edge claim) | low | Same as halted fence row above — carried reject. |
+| `getReBaselineState` disable path after Baseline + incomplete unverified (VG) | medium | Pre-verified: incomplete fence never calls `getReBaselineState`; can flip `canReBaseline` without failing suite. Route: **patch** — assert state on incomplete fence case. |
 
 ## Design Notes
 
