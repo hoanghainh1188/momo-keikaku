@@ -32,7 +32,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 09-20-2026 16:55
-last_updated: 10-03-2026 17:50
+last_updated: 10-03-2026 19:55
 project: momo-keikaku
 project_key: NOKEY
 tracking_system: file-system
