@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { rmSync, writeFileSync } from 'node:fs';
+import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 /**
@@ -91,18 +91,36 @@ const PROBES = {
    * named the carve-out (F4 / `reviews/review-adversarial-ad1-worker-carve-out.md` F3).
    */
   workerAdapters: ['apps/worker/src/__probe-adapters.ts', "export { productClockOn } from '@momo/adapters';\n"],
+  /**
+   * Story 4.1: `baseline-repositories-only-from-app-baseline` — a non-baseline app module must
+   * not reach `db/repositories/baseline`. (Importing from `packages/app/src/baseline/` stays clean.)
+   */
+  baselineRepo: [
+    'packages/app/src/__probe-baseline-repo.ts',
+    "export { baselineRepositoryOn } from '../../db/src/repositories/baseline/index.js';\n",
+  ],
 } as const;
+
+const COMPOSITION = 'apps/web/src/server/composition.ts';
+const COMPOSITION_BASELINE_PROBE =
+  "\n// __probe-baseline-depcruise__\nexport { baselineRepositoryOn as __probeBaselineRepo } from '../../../../packages/db/src/repositories/baseline/index.js';\n";
 
 describe('the import fences fire where they should, and only there', () => {
   let fired: readonly { from: string; to: string; rule: { name: string } }[] = [];
+  let compositionOriginal = '';
 
   beforeAll(() => {
     for (const [path, source] of Object.values(PROBES)) writeFileSync(join(ROOT, path), source);
+    compositionOriginal = readFileSync(join(ROOT, COMPOSITION), 'utf8');
+    writeFileSync(join(ROOT, COMPOSITION), compositionOriginal + COMPOSITION_BASELINE_PROBE);
     fired = depcruise().summary.violations;
   }, 120_000);
 
   afterAll(() => {
     for (const [path] of Object.values(PROBES)) rmSync(join(ROOT, path), { force: true });
+    if (compositionOriginal !== '') {
+      writeFileSync(join(ROOT, COMPOSITION), compositionOriginal);
+    }
   });
 
   it('fires on application source importing tests/support directly', () => {
@@ -127,5 +145,23 @@ describe('the import fences fire where they should, and only there', () => {
     expect(
       fired.filter((v) => v.from === PROBES.workerAdapters[0]).map((v) => v.rule.name),
     ).toEqual(['apps-adapters-only-from-composition-root']);
+  });
+
+  it('fires baseline-repositories-only-from-app-baseline outside app/baseline', () => {
+    expect(
+      fired.filter((v) => v.from === PROBES.baselineRepo[0]).map((v) => v.rule.name),
+    ).toEqual(['baseline-repositories-only-from-app-baseline']);
+  });
+
+  it('fires both baseline rules when the composition root imports the baseline repository', () => {
+    expect(
+      fired
+        .filter((v) => v.from === COMPOSITION && /repositories\/baseline/.test(v.to))
+        .map((v) => v.rule.name)
+        .sort(),
+    ).toEqual([
+      'baseline-repositories-only-from-app-baseline',
+      'composition-root-not-to-baseline-repositories',
+    ]);
   });
 });

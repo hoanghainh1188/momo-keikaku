@@ -109,6 +109,28 @@ context:
 
 ## Review Triage Log
 
+| Finding | Verdict | Evidence / route |
+|---------|---------|------------------|
+| Concurrent first-Set: gate before `lockWatermark`, no re-read (`set-baseline.ts:86-140`) | high | Real TOCTOU — two transactions can both pass `existingBaselineSeq === null` and both INSERT. Route: **patch** — lock then re-load + re-gate before INSERT. |
+| `writeLanded(Result<SetBaselineResult>)` vs `Result<void>` (`baselines/actions.ts:14`) | high | Confirmed: `pnpm --filter @momo/web typecheck` fails TS2345; CI runs this step. Root `pnpm typecheck` excludes `apps`. Route: **patch** — widen `writeLanded` to `Result<unknown>` (or discard value). |
+| UI rail link only when `notSchedulableCount > 0`; `blockingWpIds` unused (`set-baseline-button.tsx` / control) | medium | Incomplete / no-start can refuse with blockers while engine NS count is 0; control shows generic `set_blocked` and no Plan link. Route: **patch** — show count+link when `notSchedulableCount > 0` **or** `blockingWpIds.length > 0` (count = max of both). |
+| `no_project_start` sets `notSchedulableCount = missingDuration.length` (`gates.ts:100-106`) | medium | Mis-labels duration gaps as NS count for the UI string. Same patch group as UI affordance — drive UI from blockers + real NS length. |
+| Deep-link `?exceptions=not_schedulable` opens drawer but never selects NS rail key (`plan-tree-grid.tsx:810-818`) | medium | Effect only `setDrawerOpen(true)`. Route: **patch** — select first `not_schedulable:*` key (or group) on mount. |
+| Halted-head refuse not exercised through DB/`setBaseline` fence | medium | Pre-verified gap — only `gates.test.ts` unit; fence "no run" is not halted-head. Route: **patch** — add fence case. |
+| `getBaselineSetState` happy / hasBaseline / href untested | medium | Pre-verified gap — only incomplete path. Route: **patch** — extend fence assertions. |
+| Set Baseline web UX (button/control/deep-link) has no unit test | medium | Pre-verified gap. Route: **patch** — small `apps/web` unit tests. |
+| New baseline depcruise rules not probed | medium | Pre-verified gap — rules can be deleted without CI noticing. Route: **patch** — temp-file probes in `depcruise-fences.test.ts`. |
+| Fence incomplete asserts `notSchedulableCount > 0` for missing-duration | medium | Gate NS count is engine-only; assertion can be wrong for pure incompleteness. Route: **patch** — assert `blockingWpIds` / `canSet` instead (covered by UI patch + state tests). |
+| Append-only probes only UPDATE version + DELETE wp | low | Half of AR-9 matrix per table missing. Route: **patch** — add UPDATE wp + DELETE version. |
+| Retention test hand-builds `pinnedSeqs`; `pinnedScheduleRunSeqs` unused | low | AR-11 proof via `scheduleRunRetention` meets matrix; GC wiring not in 4.1. Route: **patch** — fence should call `pinnedScheduleRunSeqs` into retention. Unused helper alone is not a product defect. |
+| `sprint-status.yaml` `last_updated` moved backward to `11:20` | low | Tracking hygiene. Route: **patch** — set a current timestamp. |
+| `baselines.initial_reason` i18n unused; writer uses `FIRST_SET_REASON` | low | Cosmetic dead key. Reject — unlikely everyday harm; deleting key is optional cleanup (not required). |
+| `ja.json` Set Baseline strings still English | low | Pre-existing ja locale pattern (many product strings English). Route: **defer**. |
+| Server action swallows refuse with no toast | false | Same `writeLanded` early-return pattern as other write actions; disabled control is the product gate. |
+| Review mounts Set Baseline only on `section === 'status'` | false | One primary CTA in the status empty state; other sections keep the tag without duplicating the control. |
+| Duplicate `SetBaselineButton` / `SetBaselineControl` | false | RSC vs client needed for Plan toolbar pending; shared props already align. |
+| AC only lists `pnpm typecheck` so web TS error is out of scope | false | Intent + CI require web typecheck green; defect is real at `actions.ts`. |
+
 ## Design Notes
 
 **Pin the run, project the cost.** The schedule's meaning lives in `schedule_run.inputs`; Baseline must not fork that document. `baseline_wp` exists so PV/BAC/Divergence can read a stable cost slice without joining the whole run on every Review paint.

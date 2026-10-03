@@ -1,12 +1,14 @@
 import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
 import { setBaselineAction } from '@/app/p/[projectId]/baselines/actions';
+import { setBaselineDisabledView } from '@/lib/set-baseline-ui';
 
 export type SetBaselineControlProps = {
   readonly projectId: string;
   readonly canSet: boolean;
   readonly hasBaseline: boolean;
   readonly notSchedulableCount: number;
+  readonly blockingWpIds: readonly string[];
   readonly exceptionsRailHref: string;
   /** Optional test id suffix so Review / Plan / Baselines do not collide. */
   readonly testId?: string;
@@ -21,25 +23,33 @@ export async function SetBaselineButton({
   canSet,
   hasBaseline,
   notSchedulableCount,
+  blockingWpIds,
   exceptionsRailHref,
   testId = 'set-baseline',
 }: SetBaselineControlProps) {
   const t = await getTranslations();
-  if (hasBaseline) return null;
+  const view = setBaselineDisabledView({
+    hasBaseline,
+    canSet,
+    notSchedulableCount,
+    blockingWpIdsLength: blockingWpIds.length,
+    exceptionsRailHref,
+  });
+  if (view.kind === 'hidden') return null;
 
-  if (!canSet) {
+  if (view.kind !== 'ready') {
     return (
       <div className="btn-row" data-testid={`${testId}-disabled`}>
         <button type="button" className="btn" disabled title={t('baselines.set_disabled_title')}>
           {t('baselines.set_baseline')}
         </button>
-        {notSchedulableCount > 0 ? (
+        {view.kind === 'link' ? (
           <Link
             className="caption"
-            href={exceptionsRailHref}
+            href={view.href}
             data-testid={`${testId}-exceptions-link`}
           >
-            {t('baselines.not_schedulable_link', { count: notSchedulableCount })}
+            {t('baselines.not_schedulable_link', { count: view.count })}
           </Link>
         ) : (
           <span className="caption" data-testid={`${testId}-blocked`}>

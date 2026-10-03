@@ -99,7 +99,8 @@ export function evaluateBaselineSetGates(input: BaselineSetGateInput): BaselineS
 
   if (input.projectStart === null) {
     const missingDuration = leavesMissingDuration(input.leaves);
-    return refuse('no_project_start', missingDuration, missingDuration.length, {
+    // Duration gaps are blockers only — not-schedulable count stays 0 here (no run parse yet).
+    return refuse('no_project_start', missingDuration, 0, {
       baseline: ['no_project_start'],
       projectStart: ['required'],
       ...(missingDuration.length > 0 ? { blockingWpIds: missingDuration } : {}),

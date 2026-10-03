@@ -113,11 +113,13 @@ describe('evaluateBaselineSetGates', () => {
       existingBaselineSeq: null,
       latestRun: { ...pin, haltedReason: null },
       successfulRun: pin,
-      leaves: [leaf('wp-a')],
+      leaves: [leaf('wp-a', { durationDays: null })],
     });
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.reason).toBe('no_project_start');
+    expect(result.notSchedulableCount).toBe(0);
+    expect(result.blockingWpIds).toContain('wp-a');
   });
 
   it('refuses incomplete leaves missing duration with blockers', () => {

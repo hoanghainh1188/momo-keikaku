@@ -51,6 +51,15 @@ describe('writeLanded', () => {
     expect(writeLanded(result)).toBe(true);
   });
 
+  // Valued writers (e.g. setBaseline → Result<SetBaselineResult>) must typecheck the same way.
+  it('is true for ok with a non-void value', () => {
+    const result: Result<{ baselineVersionSeq: number }> = {
+      ok: true,
+      value: { baselineVersionSeq: 1 },
+    };
+    expect(writeLanded(result)).toBe(true);
+  });
+
   it.each([
     ['not_found', { code: 'not_found', messageKey: 'errors.not_found' }],
     [

@@ -64,14 +64,14 @@ export default async function PlanPage({
           canSet: baselineState.canSet,
           hasBaseline: baselineState.hasBaseline,
           notSchedulableCount: baselineState.notSchedulableCount,
+          blockingWpIds: baselineState.blockingWpIds,
           exceptionsRailHref: baselineState.exceptionsRailHref,
           labels: {
             setBaseline: t('baselines.set_baseline'),
             disabledTitle: t('baselines.set_disabled_title'),
             blocked: t('baselines.set_blocked'),
-            notSchedulableLink: t('baselines.not_schedulable_link', {
-              count: baselineState.notSchedulableCount,
-            }),
+            notSchedulableLink: (count) =>
+              t('baselines.not_schedulable_link', { count }),
           },
         }}
       />

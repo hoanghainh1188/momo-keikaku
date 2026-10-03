@@ -17,6 +17,7 @@ import {
   buildProbeTenant,
   createProbeTenant,
 } from '../../packages/db/src/probe-tenants';
+import { baselineRepositoryOn } from '../../packages/db/src/repositories/baseline';
 import * as s from '../../packages/db/src/schema';
 import { APPEND_ONLY_ERRCODE } from '../../packages/db/src/sql/generate';
 import { inTenantTransaction } from '../../packages/db/src/tenant-transaction';
@@ -138,6 +139,16 @@ describe.skipIf(!reachable)('setBaseline fence (story 4.1)', () => {
         );
     });
 
+    const beforeState = await getBaselineSetState(deps(), ctx(), { projectId: PROBE.projectId });
+    expect(beforeState.ok).toBe(true);
+    if (beforeState.ok) {
+      expect(beforeState.value.canSet).toBe(true);
+      expect(beforeState.value.hasBaseline).toBe(false);
+      expect(beforeState.value.exceptionsRailHref).toBe(
+        `/p/${PROBE.projectId}/plan?exceptions=not_schedulable`,
+      );
+    }
+
     const result = await setBaseline(deps(), ctx(), { projectId: PROBE.projectId });
     expect(result.ok).toBe(true);
     if (!result.ok) {
@@ -145,6 +156,16 @@ describe.skipIf(!reachable)('setBaseline fence (story 4.1)', () => {
     }
     expect(result.value.scheduleRunSeq).toBe(runSeq);
     expect(result.value.leafCount).toBeGreaterThan(0);
+
+    const afterState = await getBaselineSetState(deps(), ctx(), { projectId: PROBE.projectId });
+    expect(afterState.ok).toBe(true);
+    if (afterState.ok) {
+      expect(afterState.value.canSet).toBe(false);
+      expect(afterState.value.hasBaseline).toBe(true);
+      expect(afterState.value.exceptionsRailHref).toBe(
+        `/p/${PROBE.projectId}/plan?exceptions=not_schedulable`,
+      );
+    }
 
     const versions = await withTenant(getDb(APP_DATABASE_URL!), PROBE.tenantId, async (tx) =>
       tx
@@ -191,25 +212,37 @@ describe.skipIf(!reachable)('setBaseline fence (story 4.1)', () => {
     );
     expect(audits).toHaveLength(1);
 
-    // Retention: pinned run's inputs must be retained while the Baseline exists.
-    const runs = await withTenant(getDb(APP_DATABASE_URL!), PROBE.tenantId, async (tx) =>
-      tx
-        .select({ seq: s.scheduleRun.seq, inputs: s.scheduleRun.inputs, outputs: s.scheduleRun.outputs })
-        .from(s.scheduleRun)
-        .where(
-          and(
-            eq(s.scheduleRun.tenantId, PROBE.tenantId),
-            eq(s.scheduleRun.projectId, PROBE.projectId),
-          ),
-        ),
+    // Retention: feed Baseline pins from the repository into scheduleRunRetention (AR-11).
+    const { runs, pinnedSeqs } = await withTenant(
+      getDb(APP_DATABASE_URL!),
+      PROBE.tenantId,
+      async (tx) => {
+        const bound = { tx, tenantId: PROBE.tenantId };
+        const pinned = await baselineRepositoryOn(bound).pinnedScheduleRunSeqs(PROBE.projectId);
+        const runRows = await tx
+          .select({
+            seq: s.scheduleRun.seq,
+            inputs: s.scheduleRun.inputs,
+            outputs: s.scheduleRun.outputs,
+          })
+          .from(s.scheduleRun)
+          .where(
+            and(
+              eq(s.scheduleRun.tenantId, PROBE.tenantId),
+              eq(s.scheduleRun.projectId, PROBE.projectId),
+            ),
+          );
+        return { runs: runRows, pinnedSeqs: pinned };
+      },
     );
+    expect(pinnedSeqs).toContain(runSeq);
     const decisions = scheduleRunRetention(
       runs.map((r) => ({
         seq: r.seq,
         hasInputs: r.inputs !== null,
         hasOutputs: r.outputs !== null,
       })),
-      [runSeq],
+      pinnedSeqs,
     );
     const pinned = decisions.find((d) => d.seq === runSeq);
     expect(pinned?.retainInputs).toBe(true);
@@ -307,7 +340,46 @@ describe.skipIf(!reachable)('setBaseline fence (story 4.1)', () => {
     expect(state.ok).toBe(true);
     if (!state.ok) return;
     expect(state.value.canSet).toBe(false);
-    expect(state.value.notSchedulableCount).toBeGreaterThan(0);
+    expect(state.value.blockingWpIds).toContain(leaves[1]!.id);
+    expect(state.value.exceptionsRailHref).toContain('exceptions=not_schedulable');
+  });
+
+  it('refuses when the latest run is halted', async () => {
+    const owner = getDb(OWNER_DATABASE_URL!);
+    const leaf = await prepareSchedulableLeaf(owner, PROBE);
+    await makeAllLeavesSchedulable(owner);
+    await scheduleLeaf(leaf.id);
+
+    // Force a halted head after a successful run (calendar_range).
+    const halted = await applyPlanChange(deps(), ctx(), {
+      kind: 'patch_constraint',
+      projectId: PROBE.projectId,
+      wpId: leaf.id,
+      constraintType: 'must_finish_on',
+      constraintDate: '2031-06-15',
+    });
+    expect(halted.ok).toBe(true);
+    if (!halted.ok) return;
+    expect(halted.value.kind).toBe('halted');
+
+    const result = await setBaseline(deps(), ctx(), { projectId: PROBE.projectId });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe('invalid_input');
+    expect(result.error.details?.baseline).toContain('halted_or_missing_run');
+
+    const versions = await withTenant(getDb(APP_DATABASE_URL!), PROBE.tenantId, async (tx) =>
+      tx
+        .select()
+        .from(s.baselineVersion)
+        .where(
+          and(
+            eq(s.baselineVersion.tenantId, PROBE.tenantId),
+            eq(s.baselineVersion.projectId, PROBE.projectId),
+          ),
+        ),
+    );
+    expect(versions).toHaveLength(0);
   });
 
   it('refuses when there is no successful schedule run', async () => {
@@ -336,21 +408,41 @@ describe.skipIf(!reachable)('setBaseline fence (story 4.1)', () => {
     const app = getDb(APP_DATABASE_URL!);
     const seq = set.value.baselineVersionSeq;
 
-    const updateCode = await refusalPgCode(
+    const updateVersionCode = await refusalPgCode(
       withTenant(app, PROBE.tenantId, (tx) =>
         tx.execute(
           sql`UPDATE baseline_version SET reason = 'tampered' WHERE seq = ${seq}`,
         ),
       ),
     );
-    expect(updateCode, 'UPDATE baseline_version must be refused').toMatch(/^(42501|MOMO1)$/);
+    expect(updateVersionCode, 'UPDATE baseline_version must be refused').toMatch(
+      /^(42501|MOMO1)$/,
+    );
 
-    const deleteCode = await refusalPgCode(
+    const updateWpCode = await refusalPgCode(
+      withTenant(app, PROBE.tenantId, (tx) =>
+        tx.execute(
+          sql`UPDATE baseline_wp SET is_catch_all = true WHERE baseline_version_seq = ${seq}`,
+        ),
+      ),
+    );
+    expect(updateWpCode, 'UPDATE baseline_wp must be refused').toMatch(/^(42501|MOMO1)$/);
+
+    const deleteWpCode = await refusalPgCode(
       withTenant(app, PROBE.tenantId, (tx) =>
         tx.execute(sql`DELETE FROM baseline_wp WHERE baseline_version_seq = ${seq}`),
       ),
     );
-    expect(deleteCode, 'DELETE baseline_wp must be refused').toMatch(/^(42501|MOMO1)$/);
+    expect(deleteWpCode, 'DELETE baseline_wp must be refused').toMatch(/^(42501|MOMO1)$/);
+
+    const deleteVersionCode = await refusalPgCode(
+      withTenant(app, PROBE.tenantId, (tx) =>
+        tx.execute(sql`DELETE FROM baseline_version WHERE seq = ${seq}`),
+      ),
+    );
+    expect(deleteVersionCode, 'DELETE baseline_version must be refused').toMatch(
+      /^(42501|MOMO1)$/,
+    );
 
     // Prefer grant refusal (42501); trigger (MOMO1) is also acceptable if grant were present.
     void APPEND_ONLY_ERRCODE;

@@ -83,26 +83,46 @@ export async function setBaseline<Handle>(
       const baseline = baselineRepositoryOn(bound);
       const schedule = scheduleRepositoryOn(bound);
 
-      // Long reads before the exclusive lock (AD-20).
-      const [projectStart, existingSeq, latestRun, successfulRun, leaves] = await Promise.all([
-        baseline.projectStart(command.projectId),
-        baseline.latestVersionSeq(command.projectId),
-        schedule.latestRun(command.projectId),
-        schedule.latestSuccessfulRun(command.projectId),
-        baseline.loadLeafProjections(command.projectId),
-      ]);
+      const loadGateInput = async () => {
+        const [projectStart, existingSeq, latestRun, successfulRun, leaves] = await Promise.all([
+          baseline.projectStart(command.projectId),
+          baseline.latestVersionSeq(command.projectId),
+          schedule.latestRun(command.projectId),
+          schedule.latestSuccessfulRun(command.projectId),
+          baseline.loadLeafProjections(command.projectId),
+        ]);
+        return { projectStart, existingSeq, latestRun, successfulRun, leaves };
+      };
 
+      // Long reads before the exclusive lock (AD-20) — early refuse without holding it.
+      const early = await loadGateInput();
+      const earlyGate = evaluateBaselineSetGates({
+        projectStart: early.projectStart,
+        existingBaselineSeq: early.existingSeq,
+        latestRun: early.latestRun,
+        successfulRun: early.successfulRun,
+        leaves: early.leaves,
+      });
+      if (!earlyGate.ok) {
+        refuse('invalid_input', earlyGate.details);
+      }
+
+      // AD-20: exclusive Project lock, then re-read + re-gate (closes concurrent first-Set TOCTOU).
+      await lockWatermark(bound, { kind: 'project', projectId: command.projectId });
+
+      const locked = await loadGateInput();
       const gate = evaluateBaselineSetGates({
-        projectStart,
-        existingBaselineSeq: existingSeq,
-        latestRun,
-        successfulRun,
-        leaves,
+        projectStart: locked.projectStart,
+        existingBaselineSeq: locked.existingSeq,
+        latestRun: locked.latestRun,
+        successfulRun: locked.successfulRun,
+        leaves: locked.leaves,
       });
       if (!gate.ok) {
         refuse('invalid_input', gate.details);
       }
       const { scheduleRunSeq, leafDates } = gate;
+      const leaves = locked.leaves;
 
       const versionId = deps.ids.next();
       const wpRows = leaves.map((leaf) => {
@@ -123,9 +143,6 @@ export async function setBaseline<Handle>(
           isCatchAll: leaf.isCatchAll,
         };
       });
-
-      // AD-20: exclusive Project lock before first Baseline INSERT (repo also locks; no-op if held).
-      await lockWatermark(bound, { kind: 'project', projectId: command.projectId });
 
       const { seq } = await baseline.appendVersionWithWps(
         {

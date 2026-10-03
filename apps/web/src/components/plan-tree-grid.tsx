@@ -48,6 +48,7 @@ import type { ExplainerTarget } from '@/lib/plan-exceptions';
 import {
   calendarRangeHaltBannerCopy,
   explainerFromRailKey,
+  firstNotSchedulableRailKey,
   flattenExceptionsRailKeys,
   focusWpIdForRailKey,
   genericScheduleStaleCopy,
@@ -807,7 +808,7 @@ export function PlanTreeGrid({
     wasPinnedRef.current = pinned;
   }, [pinned, drawerOpen]);
 
-  // Deep-link `?exceptions=not_schedulable`: open the rail once when not already pinned.
+  // Deep-link `?exceptions=not_schedulable`: open the rail and select that group once.
   useEffect(() => {
     if (!openExceptionsOnMount || openedExceptionsRef.current) return;
     openedExceptionsRef.current = true;
@@ -815,7 +816,11 @@ export function PlanTreeGrid({
       setDrawerOpen(true);
       drawerPrefRef.current = true;
     }
-  }, [openExceptionsOnMount, pinned]);
+    const key = firstNotSchedulableRailKey(exceptions);
+    if (key !== null) {
+      setRailSelectedKey(key);
+    }
+  }, [openExceptionsOnMount, pinned, exceptions]);
 
   useEffect(() => {
     setPreset(readStoredPreset(model.userId, model.projectId));

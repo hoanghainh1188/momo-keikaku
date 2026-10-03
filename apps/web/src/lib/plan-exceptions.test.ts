@@ -19,6 +19,7 @@ import {
   railKeyForGridException,
   rebindExplainer,
   rebindRailSelectedKey,
+  firstNotSchedulableRailKey,
   firstPresentChainIndex,
   scheduleStaleBannerKind,
   VIOLATION_HONESTY_LINE,
@@ -101,6 +102,12 @@ describe('plan-exceptions helpers (story 2.16)', () => {
     expect(focusWpIdForRailKey(violationItemKey('v1'), sampleRail)).toBe('v1');
     expect(focusWpIdForRailKey(oosItemKey('p', 's'), sampleRail)).toBe('s');
     expect(focusWpIdForRailKey(notSchedulableItemKey('n1'), sampleRail)).toBe('n1');
+  });
+
+  it('picks the first not_schedulable rail key for ?exceptions=not_schedulable deep-link', () => {
+    expect(firstNotSchedulableRailKey(sampleRail)).toBe(notSchedulableItemKey('n1'));
+    const emptyNs: PlanExceptionsRailView = { ...sampleRail, notSchedulable: [], totalCount: 3 };
+    expect(firstNotSchedulableRailKey(emptyNs)).toBeNull();
   });
 
   it('maps Exception-cell priority to the matching rail key (first OOS edge)', () => {

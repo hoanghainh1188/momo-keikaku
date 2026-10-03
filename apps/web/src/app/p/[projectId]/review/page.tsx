@@ -50,6 +50,7 @@ export default async function ReviewPage({
             canSet={baselineState.canSet}
             hasBaseline={baselineState.hasBaseline}
             notSchedulableCount={baselineState.notSchedulableCount}
+            blockingWpIds={baselineState.blockingWpIds}
             exceptionsRailHref={baselineState.exceptionsRailHref}
             testId="review-set-baseline"
           />

@@ -30,6 +30,7 @@ export default async function BaselinesPage({
           canSet={baselineState.canSet}
           hasBaseline={baselineState.hasBaseline}
           notSchedulableCount={baselineState.notSchedulableCount}
+          blockingWpIds={baselineState.blockingWpIds}
           exceptionsRailHref={baselineState.exceptionsRailHref}
           testId="baselines-set-baseline"
         />
