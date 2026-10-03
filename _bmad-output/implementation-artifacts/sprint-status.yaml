@@ -11,6 +11,9 @@
 #   - in-progress: Developer actively working on implementation
 #   - review: Implementation complete, ready for review
 #   - done: Story completed
+#     Process rule (epic-2 retro F18): do not mark a story done while a Core
+#     epics AC remains deferred, unless the story's done criteria carry an
+#     explicit founder reconcile note for that AC.
 
 # Retrospective Status:
 #   - optional: Can be completed but not required
@@ -29,7 +32,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 09-20-2026 16:55
-last_updated: 10-03-2026 17:55
+last_updated: 10-03-2026 18:10
 project: momo-keikaku
 project_key: NOKEY
 tracking_system: file-system
@@ -262,5 +265,5 @@ action_items:
     action: "Do not mark a story done while a Core epics AC remains deferred without
       an explicit founder reconcile note (retro F18 process)"
     owner: "founder"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-09-27.md"
