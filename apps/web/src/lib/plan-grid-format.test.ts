@@ -1,13 +1,11 @@
 /**
  * Story 2.13 — preset persistence + focus-preserving switcher (client helpers).
+ * Shared EN formatters are covered under `@momo/domain/present` (Epic 2 retro F2/F5).
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   capturePresetFocusRestore,
   dateInkClassName,
-  formatFloatDisplay,
-  formatPlanDate,
-  inkTone,
   presetFromDigitKey,
   presetStorageKey,
   readStoredPreset,
@@ -15,7 +13,6 @@ import {
   recordedPctWhole,
   recordedPercentToRatio,
   writeStoredPreset,
-  SUMMARY_NA_LABEL,
 } from './plan-grid-format';
 
 describe('plan-grid-format (web)', () => {
@@ -49,12 +46,8 @@ describe('plan-grid-format (web)', () => {
     expect(readStoredPreset('u1', 'p2')).toBe('schedule');
   });
 
-  it('mirrors ink / float / date / summary helpers', () => {
-    expect(formatPlanDate('2026-03-02')).toBe('2 Mar 2026');
-    expect(inkTone('2026-10-01', '2026-09-19')).toBe('full');
-    expect(formatFloatDisplay(-5, false).negative).toBe(true);
+  it('keeps recorded % display for the Progress preset', () => {
     expect(recordedPctDisplay(null)).toContain('0%');
-    expect(SUMMARY_NA_LABEL).toContain('rolled up');
   });
 
   it('applies muted vs full ink classes for dates straddling Data Date', () => {

@@ -28,7 +28,7 @@ import {
   type ExplainerTarget,
   violationItemKey,
 } from '@/lib/plan-exceptions';
-import { formatPlanDate } from '@/lib/plan-strip-what-moved';
+import { formatPlanDate } from '@momo/domain/present';
 import { PLAN_GRID_SLOTS } from '@/lib/plan-grid-view';
 
 export interface PlanExceptionsRailProps {

@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import type { WhatMovedBandView } from '@/components/plan-grid-types';
+import { formatPlanDate } from '@momo/domain/present';
 import {
-  formatPlanDate,
   formatWhatMovedAttribution,
   readWhatMovedDismissed,
   writeWhatMovedDismissed,

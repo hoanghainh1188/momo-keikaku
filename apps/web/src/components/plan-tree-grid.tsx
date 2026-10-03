@@ -56,15 +56,17 @@ import {
   walkExceptionsRailKey,
 } from '@/lib/plan-exceptions';
 import {
-  capturePresetFocusRestore,
-  dateInkClassName,
   formatFloatDisplay,
   formatPlanDate,
+  SUMMARY_NA_LABEL,
+} from '@momo/domain/present';
+import {
+  capturePresetFocusRestore,
+  dateInkClassName,
   presetFromDigitKey,
   readStoredPreset,
   recordedPctDisplay,
   recordedPctWhole,
-  SUMMARY_NA_LABEL,
   writeStoredPreset,
   type PlanPreset,
 } from '@/lib/plan-grid-format';

@@ -9,7 +9,7 @@ import {
   type PlanWriteOutcome,
 } from '@/app/p/[projectId]/plan/actions';
 import { planWriteRefuseMessage } from '@/lib/plan-write-refuse';
-import { formatMinFloat, formatPlanDate } from '@/lib/plan-strip-what-moved';
+import { formatMinFloat, formatPlanDate } from '@momo/domain/present';
 import { PLAN_GRID_SLOTS } from '@/lib/plan-grid-view';
 
 export interface PlanScheduleStripProps {
