@@ -334,6 +334,13 @@ describe('every use case declares its roles', () => {
             "pm",
           ],
         },
+        "reBaseline": {
+          "projectScoped": true,
+          "roles": [
+            "tenant_admin",
+            "pm",
+          ],
+        },
         "reassignProjectDepartment": {
           "projectScoped": false,
           "roles": [
@@ -375,13 +382,6 @@ describe('every use case declares its roles', () => {
           "projectScoped": false,
           "roles": [
             "tenant_admin",
-          ],
-        },
-        "reBaseline": {
-          "projectScoped": true,
-          "roles": [
-            "tenant_admin",
-            "pm",
           ],
         },
         "setBaseline": {

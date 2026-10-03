@@ -2,6 +2,7 @@
  * Story 4.3 — reBaseline matrix: happy append, blank reason, no baseline, incomplete refuse,
  * append-only, history actor, role gate; optional re-derive of the new pin.
  */
+import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { and, asc, eq, sql } from 'drizzle-orm';
 import { applyPlanChange } from '../../packages/app/src/schedule/apply-plan-change';
@@ -59,14 +60,12 @@ async function refusalPgCode(promise: Promise<unknown>): Promise<string | null> 
 }
 
 const ctx = () => pmCtx(PROBE, { userId: 'user-s43' });
+/** Globally unique ids — `baseline_wp.id` is a global PK across Set + Re-baseline appends. */
 const deps = () => ({
   handle: getDb(APP_DATABASE_URL!),
   transaction: inTenantTransaction,
   ids: {
-    next: (() => {
-      let n = 0;
-      return () => `bl-s43-${++n}`;
-    })(),
+    next: () => `bl-s43-${randomUUID()}`,
   },
 });
 

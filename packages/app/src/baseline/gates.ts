@@ -66,14 +66,18 @@ export type BaselineReBaselineGateResult =
   | BaselineGateOk
   | BaselineGateRefuse<BaselineReBaselineRefuseReason>;
 
+type BaselinePinGateResult =
+  | BaselineGateOk
+  | BaselineGateRefuse<BaselinePinRefuseReason>;
+
 /**
  * Pin + incomplete + halted checks shared by Set and Re-baseline. Caller has already applied
  * the existence gate (must-not-exist vs must-exist).
  */
-function evaluatePinAndCompleteness(input: BaselineGateInput): BaselineSetGateResult {
+function evaluatePinAndCompleteness(input: BaselineGateInput): BaselinePinGateResult {
   const latest = input.latestRun;
   if (latest === null) {
-    return refuse('no_successful_run', [], 0, {
+    return refusePin('no_successful_run', [], 0, {
       baseline: ['no_successful_run'],
       scheduleRun: ['missing'],
     });
@@ -81,7 +85,7 @@ function evaluatePinAndCompleteness(input: BaselineGateInput): BaselineSetGateRe
   // Matrix: refuse when the latest run is halted / missing outputs — do not pin an older
   // successful run while the Current Plan's head is halted.
   if (latest.haltedReason !== null || latest.outputs === null) {
-    return refuse('halted_or_missing_run', [], 0, {
+    return refusePin('halted_or_missing_run', [], 0, {
       baseline: ['halted_or_missing_run'],
       scheduleRun: ['halted_or_missing_outputs'],
       scheduleRunSeq: [String(latest.seq)],
@@ -96,7 +100,7 @@ function evaluatePinAndCompleteness(input: BaselineGateInput): BaselineSetGateRe
     inputs: latest.inputs,
   };
   if (pin.seq !== latest.seq) {
-    return refuse('halted_or_missing_run', [], 0, {
+    return refusePin('halted_or_missing_run', [], 0, {
       baseline: ['halted_or_missing_run'],
       scheduleRun: ['latest_not_successful'],
       scheduleRunSeq: [String(latest.seq)],
@@ -106,7 +110,7 @@ function evaluatePinAndCompleteness(input: BaselineGateInput): BaselineSetGateRe
   if (input.projectStart === null) {
     const missingDuration = leavesMissingDuration(input.leaves);
     // Duration gaps are blockers only — not-schedulable count stays 0 here (no run parse yet).
-    return refuse('no_project_start', missingDuration, 0, {
+    return refusePin('no_project_start', missingDuration, 0, {
       baseline: ['no_project_start'],
       projectStart: ['required'],
       ...(missingDuration.length > 0 ? { blockingWpIds: missingDuration } : {}),
@@ -120,7 +124,7 @@ function evaluatePinAndCompleteness(input: BaselineGateInput): BaselineSetGateRe
     storedInputs = parseStoredInputs(pin.inputs);
     storedOutputs = parseStoredOutputs(pin.outputs);
   } catch {
-    return refuse('halted_or_missing_run', [], 0, {
+    return refusePin('halted_or_missing_run', [], 0, {
       baseline: ['halted_or_missing_run'],
       scheduleRun: ['unreadable_outputs'],
       scheduleRunSeq: [String(pin.seq)],
@@ -148,7 +152,7 @@ function evaluatePinAndCompleteness(input: BaselineGateInput): BaselineSetGateRe
 
   const blocking = unique([...missingDuration, ...notSchedulableWpIds, ...leavesMissingDates]);
   if (blocking.length > 0) {
-    return refuse('incomplete_plan', blocking, notSchedulableWpIds.length, {
+    return refusePin('incomplete_plan', blocking, notSchedulableWpIds.length, {
       baseline: ['incomplete_plan'],
       blockingWpIds: blocking,
       notSchedulableCount: [String(notSchedulableWpIds.length)],
@@ -170,7 +174,7 @@ function evaluatePinAndCompleteness(input: BaselineGateInput): BaselineSetGateRe
  */
 export function evaluateBaselineSetGates(input: BaselineGateInput): BaselineSetGateResult {
   if (input.existingBaselineSeq !== null) {
-    return refuse('already_exists', [], 0, {
+    return refuseSet('already_exists', {
       baseline: ['already_exists'],
       hint: ['use_rebaseline'],
     });
@@ -207,13 +211,26 @@ function leavesMissingDuration(leaves: readonly BaselineLeafProjection[]): strin
     .map((leaf) => leaf.wpId);
 }
 
-function refuse(
-  reason: BaselineSetRefuseReason,
+function refusePin(
+  reason: BaselinePinRefuseReason,
   blockingWpIds: readonly string[],
   notSchedulableCount: number,
   details: Readonly<Record<string, readonly string[]>>,
-): BaselineSetGateRefuse {
+): BaselineGateRefuse<BaselinePinRefuseReason> {
   return { ok: false, reason, blockingWpIds, notSchedulableCount, details };
+}
+
+function refuseSet(
+  reason: 'already_exists',
+  details: Readonly<Record<string, readonly string[]>>,
+): BaselineSetGateRefuse {
+  return {
+    ok: false,
+    reason,
+    blockingWpIds: [],
+    notSchedulableCount: 0,
+    details,
+  };
 }
 
 function unique(ids: readonly string[]): string[] {
