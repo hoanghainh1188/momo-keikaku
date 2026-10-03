@@ -93,6 +93,25 @@ context:
 
 ## Review Triage Log
 
+Review pass 1 (2026-10-03), Blind Hunter (BH), Edge Case Hunter (EC), Verification Gap (VG).
+
+| # | Source | Finding | Verdict | Evidence | Route |
+|---|---|---|---|---|---|
+| 1 | BH | Spec status vs tasks/sprint done disagree | false | Spec is `in-review` for this review pass; sprint item-10 may be `done` once verified. Fix would only edit this build's spec | reject |
+| 2 | BH | Intent names 5 helpers but Always moves Short/Long too | false | Frozen Always explicitly includes Short/Long with MONTHS tables; not a code defect | reject |
+| 3 | BH | I/O matrix omits Short/Long / undefined / malformed ISO | false | Fix would edit this build's spec; present tests already cover Short/Long + null | reject |
+| 4 | BH | Missing `formatMinFloat(-3)` / undefined / invalid ISO tests | false | `formatMinFloat` negative path is `${n}` with empty sign — same as pre-move; float `-3` covered via `formatFloatDisplay`; no wrong output demonstrated | reject |
+| 5 | BH | Empty Spec Change Log / Review Triage Log | false | Those sections fill on loopback / this review pass — not a product defect | reject |
+| 6 | BH | Verification skips dependency-cruiser AD-1 check | false | Web imports only `@momo/domain/present`; rule already allows that entry. No new forbidden edge | reject |
+| 7 | BH | Suggested `rg` misses other helper export names | false | Fix would edit this build's spec Verification block; parent `rg` already confirmed sole definitions in `plan-display.ts` | reject |
+| 8 | BH | `plan-grid.test.ts` still asserts via re-exports | false | Spec Always allows keep behaviour tests via re-export; dual coverage is intentional | reject |
+| 9 | BH | `recordedPctDisplay` defer has no backlog id | false | Frozen Never excludes it; Design Notes already document follow-up | reject |
+| 10 | BH | Three date formatters repeat split/guard logic | low | Cosmetic DRY inside shared module; extracting a private helper adds complexity with no user-facing drift risk | reject |
+| 11 | EC | `inkTone('')` treats empty string as muted/full not na | medium | Pre-existing byte-identical behaviour; Plan dates are null or ISO from use cases / `dateInkClassName(date: string)` with real cells — not caused by this extract | defer |
+| 12 | EC | `formatMinFloat(NaN/Infinity)` can render literal text | medium | Pre-existing; schedule min Float is integer-or-null from outputs — not introduced here | defer |
+| 13 | EC | `formatFloatDisplay` non-finite floatDays | medium | Same as #12 for row.floatDays — pre-existing, unreachable from domain schedule outputs | defer |
+| 14 | VG | No verification gaps | false | Layer reported none | reject |
+
 ## Design Notes
 
 Web cannot import `@momo/app` schedule modules from client components (DB-bound use case graph). AD-1 already allows `@momo/domain/present` for page/component formatters (`hours`, `yen`, …). Plan EN display helpers belong there — not a new package, not an `@momo/app` subpath.

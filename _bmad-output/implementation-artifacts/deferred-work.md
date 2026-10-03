@@ -1254,3 +1254,7 @@ above can see where it went.
 - source_spec: `_bmad-output/implementation-artifacts/spec-f6-fence-test-harness.md`
   summary: REQUIRE_DB=1 unreachable path throws without an explicit `closeAllPools()` after a failed reachability probe may have opened pools.
   evidence: F6 review 2026-09-30 (EC). Pre-existing; `reachableAs` releases the client on failure, same as write suites.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-f2-f5-collapse-plan-display-helpers.md`
+  summary: Plan EN display helpers (`inkTone` / `formatMinFloat` / `formatFloatDisplay`) still treat empty-string dates and non-finite float numbers as ordinary values rather than NA.
+  evidence: F2/F5 review 2026-10-03 (EC). Byte-identical move from plan-grid / web mirrors; schedule/use-case callers supply null or finite integers today — hardening would be a separate guard change.
