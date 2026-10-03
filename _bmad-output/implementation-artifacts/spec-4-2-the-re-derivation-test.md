@@ -2,7 +2,7 @@
 title: 'Story 4.2 — The re-derivation test'
 type: 'feature'
 created: '2026-10-03'
-status: 'in-progress'
+status: 'in-review'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '4a48880905b01098527c7d8ec5d7b1b468d39c33'
@@ -102,6 +102,23 @@ context:
 ## Spec Change Log
 
 ## Review Triage Log
+
+| Finding | Verdict | Evidence / route |
+|---------|---------|------------------|
+| Spec `in-review` vs sprint `review` disagree | false | BMAD frontmatter uses `in-review`; sprint-status legend uses `review`. Both trackers are consistent with their own schemas — not a product defect. |
+| Spec Change Log / Triage Log empty at review entry | false | Empty until this first review pass fills the triage table — expected workflow state, not a defect. |
+| AR-51 “earlier engine_version after new current key” not covered (only one registry key; own-version test equals `ENGINE_VERSION`) | medium | Real verification gap: code passes `pin.engineVersion` into `recalculateAt`, but no test proves dispatch under a non-current registered key. Route: **patch** — spy/`vi.mock` that `recalculateAt` is called with the pin’s stored key (or register a second alias key in the test harness if available). |
+| `reDerivePinnedBaseline` returns outer `ok` when `gate` is `mismatch` / `engine_halted` | medium | Confirmed at `re-derive-pinned.ts:82-94` — only `incomplete_pin` becomes `Result` fail. Fence checks nested `gate.ok`, but any caller that only reads top-level `Result.ok` misses NFR-C1 failures. Route: **patch** — map `mismatch` and `engine_halted` to `fail('invalid_input', …)` (or equivalent). |
+| Fence has no red path for stored-output mismatch | low | Domain unit already fails on critical-path shuffle; fence’s job is pin→FK green + never-Current-Plan. Reject — unlikely everyday miss; red-path coverage belongs in domain (see codec dimensions patch). |
+| `engine_halted` branch untested | medium | Confirmed: `re-derive.ts:75-81` has no test asserting `reason === 'engine_halted'`. Route: **patch** — domain unit with complete-looking pin whose inputs halt `recalculateAt`. |
+| Codec mismatch tests only shuffle critical path; dates/Float/violations never negatively asserted | medium | Pre-verified (verification-gap): narrowing compare to criticalPath alone would leave current suite green. Code compares full codec form today. Route: **patch** — mutate `floatDays`/`earlyStart`/`violations` with path unchanged; expect `mismatch`. |
+| App refuse paths (missing pin row / missing prev / halted pin) not in fence | low | 4.1 refuses incomplete pins; missing FK rows are integrity edge cases. Domain covers incomplete_pin. Reject — not everyday. |
+| `latestPinnedScheduleRunSeq` duplicates `latestVersionSeq` query shape | low | DRY smell only; both order by max seq. Reject — no everyday harm. |
+| depcruise comment still mentions only setBaseline’s latest-successful read | low | Comment drift; fence rules still allow `app/baseline` → schedule repos. Reject — documentation only. |
+| empty-string `haltedReason` skips incomplete_pin (`re-derive.ts:54`) | false | Writers store `null` or a non-empty halt reason; `!== ''` treats empty as “not halted”, matching the successful-run shape. No writer emits `''`. |
+| absent project returns `no_baseline` not `not_found` | false | `authorize(PROJECT_REACH)` fails first without project reach; `latestPinnedScheduleRunSeq` returning null for empty Baseline history is correct for a Project with no Baseline. |
+| Full codec compare for dates/Float/violations only success-tested (VG) | medium | Same root as codec-dimensions row above — carried into that **patch** group. |
+| `engine_halted` failure path has no executing test (VG) | medium | Same root as engine_halted row above — carried into that **patch** group. |
 
 ## Design Notes
 
