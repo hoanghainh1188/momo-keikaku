@@ -243,3 +243,7 @@ export {
   getBaselineSetState,
   type BaselineSetState,
 } from './baseline/set-baseline-state';
+export {
+  reDerivePinnedBaseline,
+  type ReDerivePinnedBaselineResult,
+} from './baseline/re-derive-pinned';
