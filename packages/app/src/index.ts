@@ -231,3 +231,15 @@ export {
   type PublishCalendarResult,
   type FanOutProjectResult,
 } from './calendar/publish-calendar-version';
+
+// Story 4.1 Baseline writer — outside the use-cases barrel (F10 second module list).
+export {
+  setBaseline,
+  FIRST_SET_REASON,
+  type SetBaselineDeps,
+  type SetBaselineResult,
+} from './baseline/set-baseline';
+export {
+  getBaselineSetState,
+  type BaselineSetState,
+} from './baseline/set-baseline-state';

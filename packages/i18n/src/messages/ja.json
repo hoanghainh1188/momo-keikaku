@@ -149,7 +149,13 @@
     "whether_an_hour_counts_as_baselined_is_judged_ag": "Whether an hour counts as baselined is judged against the Baseline version active when its ledger entry was recorded, so a Re-baseline never erases Unplanned history. The active Baseline is selected by sequence, never by comparing timestamps.",
     "active_tag": "active",
     "none_recorded": "No Baseline has been recorded yet.",
-    "demo_not_wired": "Not in this demo: Set Baseline / Re-baseline actions and version comparison (FR-16). BAC today is {bac}h."
+    "demo_not_wired": "Not in this demo: Set Baseline / Re-baseline actions and version comparison (FR-16). BAC today is {bac}h.",
+    "set_baseline": "Set Baseline",
+    "set_disabled_title": "Set Baseline is unavailable until every leaf is schedulable and the latest schedule run succeeded.",
+    "set_blocked": "Fix Project start or incomplete leaf durations before setting a Baseline.",
+    "not_schedulable_link": "{count} not schedulable yet — open exceptions rail",
+    "initial_reason": "Initial Baseline",
+    "bac_with_active": "Active Baseline BAC is {bac}h. Re-baseline and version comparison land in later stories."
   },
   "connectors": {
     "backlog_connector": "Backlog Connector",
@@ -298,7 +304,8 @@
     "work_package": "Work Package",
     "baseline_finish": "Baseline finish",
     "actual_finish": "Actual finish",
-    "no_baseline_yet": "No Baseline yet — EVM, SPI, CPI and the forecast appear once a Baseline is recorded. Coverage and actual hours do not need one. The Unplanned Work split is shown for information and is not judged until a Baseline is recorded, because until then every mapped hour counts as non-baselined.",
+    "no_baseline_yet": "No Baseline yet. EVM starts once you set one.",
+    "no_baseline_yet_detail": "Coverage and actual hours do not need a Baseline. The Unplanned Work split is shown for information and is not judged until a Baseline is recorded, because until then every mapped hour counts as non-baselined.",
     "baseline_h": "Baseline h",
     "ev_h": "EV h",
     "ac_h": "AC h",

@@ -33,6 +33,10 @@ import {
   PlanExceptionsRail,
   useExceptionsPinned,
 } from '@/components/plan-exceptions-rail';
+import {
+  SetBaselineControl,
+  type SetBaselineControlModel,
+} from '@/components/set-baseline-control';
 import type {
   ExceptionsRailItemKey,
   PlanGridLeafCandidateView,
@@ -44,6 +48,7 @@ import type { ExplainerTarget } from '@/lib/plan-exceptions';
 import {
   calendarRangeHaltBannerCopy,
   explainerFromRailKey,
+  firstNotSchedulableRailKey,
   flattenExceptionsRailKeys,
   focusWpIdForRailKey,
   genericScheduleStaleCopy,
@@ -704,9 +709,14 @@ function ConstraintCell({
 export function PlanTreeGrid({
   model,
   proposedFinish,
+  setBaseline,
+  openExceptionsOnMount = false,
 }: {
   readonly model: PlanGridViewModel;
   readonly proposedFinish: string;
+  readonly setBaseline?: SetBaselineControlModel;
+  /** Deep-link from Review/Baselines: open the exceptions drawer on mount. */
+  readonly openExceptionsOnMount?: boolean;
 }) {
   const gridId = useId();
   const [preset, setPreset] = useState<PlanPreset>('schedule');
@@ -742,8 +752,9 @@ export function PlanTreeGrid({
     floatAnchorSentence: string | null;
   } | null>(null);
   const pinned = useExceptionsPinned();
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const drawerPrefRef = useRef(false);
+  const [drawerOpen, setDrawerOpen] = useState(openExceptionsOnMount);
+  const drawerPrefRef = useRef(openExceptionsOnMount);
+  const openedExceptionsRef = useRef(false);
   const wasPinnedRef = useRef(pinned);
   const [railSelectedKey, setRailSelectedKey] = useState<ExceptionsRailItemKey | null>(null);
   const [explainer, setExplainer] = useState<ExplainerTarget | null>(null);
@@ -796,6 +807,20 @@ export function PlanTreeGrid({
     }
     wasPinnedRef.current = pinned;
   }, [pinned, drawerOpen]);
+
+  // Deep-link `?exceptions=not_schedulable`: open the rail and select that group once.
+  useEffect(() => {
+    if (!openExceptionsOnMount || openedExceptionsRef.current) return;
+    openedExceptionsRef.current = true;
+    if (!pinned) {
+      setDrawerOpen(true);
+      drawerPrefRef.current = true;
+    }
+    const key = firstNotSchedulableRailKey(exceptions);
+    if (key !== null) {
+      setRailSelectedKey(key);
+    }
+  }, [openExceptionsOnMount, pinned, exceptions]);
 
   useEffect(() => {
     setPreset(readStoredPreset(model.userId, model.projectId));
@@ -1385,6 +1410,7 @@ export function PlanTreeGrid({
             All
           </button>
         </div>
+        {setBaseline ? <SetBaselineControl model={setBaseline} /> : null}
         <ExceptionsRailToggle
           totalCount={exceptions.totalCount}
           pinned={pinned}

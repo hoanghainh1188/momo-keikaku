@@ -2,7 +2,7 @@
 title: 'Story 4.1 — Set a Baseline that points at the run behind it'
 type: 'feature'
 created: '2026-10-03'
-status: 'ready-for-dev'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: 'bfc7383d0b25904beb3688f296adfccc9af3e507'
@@ -81,12 +81,12 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `packages/db` Baseline repository — INSERT `baseline_version` + leaf `baseline_wp` under watermark; no migration.
-- [ ] `packages/app` `setBaseline` — authorize, lock, refuse incomplete/halted/second-set, audit, pin by FK.
-- [ ] Dependency-cruiser / role / audit gates — register writer; fence new repo path if added.
-- [ ] `apps/web` — wire *Set Baseline* on Review (and Plan entry if in scope); disable + exceptions-rail link when not schedulable; keep empty copy until first version.
-- [ ] Tests — matrix coverage: happy path, refuse incomplete, refuse halted/missing run, refuse second set, append-only, retention pin, catch-all copy, role `not_found`.
-- [ ] `sprint-status.yaml` — move `4-1-…` to `in-progress`/`review`/`done` as build proceeds; do not mark `epic-4` done.
+- [x] `packages/db` Baseline repository — INSERT `baseline_version` + leaf `baseline_wp` under watermark; no migration.
+- [x] `packages/app` `setBaseline` — authorize, lock, refuse incomplete/halted/second-set, audit, pin by FK.
+- [x] Dependency-cruiser / role / audit gates — register writer; fence new repo path if added.
+- [x] `apps/web` — wire *Set Baseline* on Review (and Plan entry if in scope); disable + exceptions-rail link when not schedulable; keep empty copy until first version.
+- [x] Tests — matrix coverage: happy path, refuse incomplete, refuse halted/missing run, refuse second set, append-only, retention pin, catch-all copy, role `not_found`.
+- [x] `sprint-status.yaml` — move `4-1-…` to `in-progress`/`review`/`done` as build proceeds; do not mark `epic-4` done.
 
 **Acceptance Criteria:**
 - Given a schedulable Current Plan with a successful latest `schedule_run` and no Baseline, when the PM sets a Baseline, then `baseline_version.schedule_run_seq` is a real FK to that run and inputs are pinned by reference only (AR-22, FR-15).
@@ -99,9 +99,37 @@ context:
 
 ## Implementation Notes
 
+- **Date source for `baseline_wp`:** derived `start`/`finish` come from the pinned successful run's **outputs** (`earlyStart`/`earlyFinish`), matched by `wp_id` via `inputs.wps` order — not from live `wp_schedule`. Effort and flags (`baseline_mh`, `is_milestone`, `is_catch_all`) are copied from live `work_package` at set time (M-2 / catch-all value-at-set-time).
+- **First-set reason:** constant `FIRST_SET_REASON = 'Initial Baseline'` (DB + audit); free-text reason is 4.3.
+- **Latest-run refuse:** if the Current Plan's latest `schedule_run` is halted or missing outputs, Set is refused even when an older successful run exists — do not pin behind a halted head.
+- **Fences:** `packages/db/src/repositories/baseline` only from `packages/app/src/baseline`; schedule repos also readable from `app/baseline` for `latestSuccessfulRun`. Writer stays off the use-cases barrel (F10 list).
+- **UI:** Review empty copy shortened to UX-DR23 wording; Plan toolbar + Baselines get the same control; disabled state links to `/plan?exceptions=not_schedulable`.
+
 ## Spec Change Log
 
 ## Review Triage Log
+
+| Finding | Verdict | Evidence / route |
+|---------|---------|------------------|
+| Concurrent first-Set: gate before `lockWatermark`, no re-read (`set-baseline.ts:86-140`) | high | Real TOCTOU — two transactions can both pass `existingBaselineSeq === null` and both INSERT. Route: **patch** — lock then re-load + re-gate before INSERT. |
+| `writeLanded(Result<SetBaselineResult>)` vs `Result<void>` (`baselines/actions.ts:14`) | high | Confirmed: `pnpm --filter @momo/web typecheck` fails TS2345; CI runs this step. Root `pnpm typecheck` excludes `apps`. Route: **patch** — widen `writeLanded` to `Result<unknown>` (or discard value). |
+| UI rail link only when `notSchedulableCount > 0`; `blockingWpIds` unused (`set-baseline-button.tsx` / control) | medium | Incomplete / no-start can refuse with blockers while engine NS count is 0; control shows generic `set_blocked` and no Plan link. Route: **patch** — show count+link when `notSchedulableCount > 0` **or** `blockingWpIds.length > 0` (count = max of both). |
+| `no_project_start` sets `notSchedulableCount = missingDuration.length` (`gates.ts:100-106`) | medium | Mis-labels duration gaps as NS count for the UI string. Same patch group as UI affordance — drive UI from blockers + real NS length. |
+| Deep-link `?exceptions=not_schedulable` opens drawer but never selects NS rail key (`plan-tree-grid.tsx:810-818`) | medium | Effect only `setDrawerOpen(true)`. Route: **patch** — select first `not_schedulable:*` key (or group) on mount. |
+| Halted-head refuse not exercised through DB/`setBaseline` fence | medium | Pre-verified gap — only `gates.test.ts` unit; fence "no run" is not halted-head. Route: **patch** — add fence case. |
+| `getBaselineSetState` happy / hasBaseline / href untested | medium | Pre-verified gap — only incomplete path. Route: **patch** — extend fence assertions. |
+| Set Baseline web UX (button/control/deep-link) has no unit test | medium | Pre-verified gap. Route: **patch** — small `apps/web` unit tests. |
+| New baseline depcruise rules not probed | medium | Pre-verified gap — rules can be deleted without CI noticing. Route: **patch** — temp-file probes in `depcruise-fences.test.ts`. |
+| Fence incomplete asserts `notSchedulableCount > 0` for missing-duration | medium | Gate NS count is engine-only; assertion can be wrong for pure incompleteness. Route: **patch** — assert `blockingWpIds` / `canSet` instead (covered by UI patch + state tests). |
+| Append-only probes only UPDATE version + DELETE wp | low | Half of AR-9 matrix per table missing. Route: **patch** — add UPDATE wp + DELETE version. |
+| Retention test hand-builds `pinnedSeqs`; `pinnedScheduleRunSeqs` unused | low | AR-11 proof via `scheduleRunRetention` meets matrix; GC wiring not in 4.1. Route: **patch** — fence should call `pinnedScheduleRunSeqs` into retention. Unused helper alone is not a product defect. |
+| `sprint-status.yaml` `last_updated` moved backward to `11:20` | low | Tracking hygiene. Route: **patch** — set a current timestamp. |
+| `baselines.initial_reason` i18n unused; writer uses `FIRST_SET_REASON` | low | Cosmetic dead key. Reject — unlikely everyday harm; deleting key is optional cleanup (not required). |
+| `ja.json` Set Baseline strings still English | low | Pre-existing ja locale pattern (many product strings English). Route: **defer**. |
+| Server action swallows refuse with no toast | false | Same `writeLanded` early-return pattern as other write actions; disabled control is the product gate. |
+| Review mounts Set Baseline only on `section === 'status'` | false | One primary CTA in the status empty state; other sections keep the tag without duplicating the control. |
+| Duplicate `SetBaselineButton` / `SetBaselineControl` | false | RSC vs client needed for Plan toolbar pending; shared props already align. |
+| AC only lists `pnpm typecheck` so web TS error is out of scope | false | Intent + CI require web typecheck green; defect is real at `actions.ts`. |
 
 ## Design Notes
 

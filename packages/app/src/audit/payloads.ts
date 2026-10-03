@@ -72,6 +72,16 @@ export const auditPayloadSchema = z.union([
       effect: z.enum(['add', 'remove']).optional(),
     })
     .strict(),
+  // First Set Baseline (story 4.1).
+  z
+    .object({
+      baselineVersionSeq: z.number().int(),
+      baselineVersionId: z.string(),
+      scheduleRunSeq: z.number().int(),
+      leafCount: z.number().int(),
+      reason: z.string(),
+    })
+    .strict(),
 ]);
 
 /**
@@ -160,6 +170,15 @@ export const AUDIT_PAYLOAD_BY_ACTION = {
       calendarVn: z.boolean().optional(),
       day: z.string().optional(),
       effect: z.enum(['add', 'remove']).optional(),
+    })
+    .strict(),
+  'baseline.set': z
+    .object({
+      baselineVersionSeq: z.number().int(),
+      baselineVersionId: z.string(),
+      scheduleRunSeq: z.number().int(),
+      leafCount: z.number().int(),
+      reason: z.string(),
     })
     .strict(),
 } as const;

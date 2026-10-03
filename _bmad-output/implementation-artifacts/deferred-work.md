@@ -1259,3 +1259,7 @@ above can see where it went.
 - source_spec: `_bmad-output/implementation-artifacts/spec-f2-f5-collapse-plan-display-helpers.md`
   summary: Plan EN display helpers (`inkTone` / `formatMinFloat` / `formatFloatDisplay`) still treat empty-string dates and non-finite float numbers as ordinary values rather than NA.
   evidence: F2/F5 review 2026-10-03 (EC). Byte-identical move from plan-grid / web mirrors; schedule/use-case callers supply null or finite integers today — hardening would be a separate guard change.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-1-set-a-baseline-that-points-at-the-run-behind-it.md`
+  summary: Japanese locale still ships English copy for Story 4.1 Set Baseline / Review empty-state strings (`baselines.*`, `review.no_baseline_yet*`).
+  evidence: Build review 2026-10-03 (BH). Pre-existing ja.json pattern — many product strings remain English; not introduced as a new translation policy by 4.1.

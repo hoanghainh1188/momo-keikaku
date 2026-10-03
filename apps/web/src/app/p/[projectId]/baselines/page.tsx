@@ -1,12 +1,13 @@
 import { getTranslations } from 'next-intl/server';
-import { getProjectReview } from '@/server/composition';
+import { baselineSetState, getProjectReview, requestContext } from '@/server/composition';
 import { valueOrNotFound } from '@/server/result';
 import { hours } from '@momo/domain/present';
 import { Section } from '@/components/ui';
+import { SetBaselineButton } from '@/components/set-baseline-button';
 
 export const dynamic = 'force-dynamic';
 
-/** FR-15, FR-16: Baseline history. Re-baseline is not wired in the demo. */
+/** FR-15, FR-16: Baseline history. Re-baseline / compare are later stories. */
 export default async function BaselinesPage({
   params,
 }: {
@@ -14,11 +15,26 @@ export default async function BaselinesPage({
 }) {
   const t = await getTranslations();
   const { projectId } = await params;
-  const { bundle, review } = valueOrNotFound(await getProjectReview({ projectId }));
+  const ctx = await requestContext();
+  const [{ bundle, review }, baselineState] = await Promise.all([
+    getProjectReview({ projectId }, ctx).then(valueOrNotFound),
+    baselineSetState(projectId, ctx).then(valueOrNotFound),
+  ]);
   return (
     <div className="sheet">
       <h1 className="report-title">{t('baselines.baselines')}</h1>
       <div className="report-sub">{t('baselines.a_baseline_is_never_edited_every_version_is_kept')}</div>
+      <div style={{ marginTop: 12 }}>
+        <SetBaselineButton
+          projectId={projectId}
+          canSet={baselineState.canSet}
+          hasBaseline={baselineState.hasBaseline}
+          notSchedulableCount={baselineState.notSchedulableCount}
+          blockingWpIds={baselineState.blockingWpIds}
+          exceptionsRailHref={baselineState.exceptionsRailHref}
+          testId="baselines-set-baseline"
+        />
+      </div>
       <Section title={t('baselines.history')} id="baseline-history">
         <table className="ledger" data-testid="baseline-history">
           <thead>
@@ -56,7 +72,7 @@ export default async function BaselinesPage({
           {review.evm === null ? (
             <span className="tag">{t('review.no_baseline_yet')}</span>
           ) : (
-            t('baselines.demo_not_wired', { bac: hours(review.evm.bacMh) })
+            t('baselines.bac_with_active', { bac: hours(review.evm.bacMh) })
           )}
         </p>
       </Section>

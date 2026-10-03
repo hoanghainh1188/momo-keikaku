@@ -9,6 +9,7 @@
  * no database, naming any exported use case that is neither a registered read nor declared here.
  */
 import type { AuditDeclaration } from '../audit';
+import { SET_BASELINE_AUDIT } from '../baseline/set-baseline';
 import { CALENDAR_AUDIT } from '../calendar/publish-calendar-version';
 import { SCHEDULE_AUDIT } from '../schedule/apply-plan-change';
 import { MEMBERSHIP_WRITE_AUDIT } from './membership-writes';
@@ -29,4 +30,5 @@ export const USE_CASE_AUDIT: Readonly<Record<string, AuditDeclaration>> = {
   ...TENANT_CURRENCY_AUDIT,
   ...SCHEDULE_AUDIT,
   ...CALENDAR_AUDIT,
+  ...SET_BASELINE_AUDIT,
 };

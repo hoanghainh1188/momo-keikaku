@@ -48,6 +48,14 @@ export function notSchedulableItemKey(wpId: string): ExceptionsRailItemKey {
   return `not_schedulable:${wpId}`;
 }
 
+/** Deep-link `?exceptions=not_schedulable` — first key in that rail group, or null when empty. */
+export function firstNotSchedulableRailKey(
+  rail: PlanExceptionsRailView,
+): ExceptionsRailItemKey | null {
+  const first = rail.notSchedulable[0];
+  return first === undefined ? null : notSchedulableItemKey(first.wpId);
+}
+
 /** Flat walk order: violations → OOS → not-schedulable (UX-DR8 group order). */
 export function flattenExceptionsRailKeys(
   rail: PlanExceptionsRailView,

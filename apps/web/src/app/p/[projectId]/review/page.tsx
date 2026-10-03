@@ -1,11 +1,12 @@
 import { getTranslations } from 'next-intl/server';
 import Link from 'next/link';
-import { getProjectReview } from '@/server/composition';
+import { baselineSetState, getProjectReview, requestContext } from '@/server/composition';
 import { valueOrNotFound } from '@/server/result';
 import { hours, hoursSigned, present, share, wholePercent, yen } from '@momo/domain/present';
 import { HealthBadge, Internal, MetricCell, Section, UnplannedChip } from '@/components/ui';
 import { ScopeLedgerBar } from '@/components/scope-ledger-bar';
 import { DispositionRail } from '@/components/disposition-rail';
+import { SetBaselineButton } from '@/components/set-baseline-button';
 import { UnmappedGroupRows } from '@/components/unmapped-group-rows';
 import { REPORT_LOCALE } from '@/lib/report-locale';
 
@@ -20,7 +21,11 @@ export default async function ReviewPage({
   const em = t('common.em_dash');
   const money = (jpy: Parameters<typeof yen>[0]) => yen(jpy, REPORT_LOCALE);
   const { projectId } = await params;
-  const { bundle, review: r } = valueOrNotFound(await getProjectReview({ projectId }));
+  const ctx = await requestContext();
+  const [{ bundle, review: r }, baselineState] = await Promise.all([
+    getProjectReview({ projectId }, ctx).then(valueOrNotFound),
+    baselineSetState(projectId, ctx).then(valueOrNotFound),
+  ]);
   const p = bundle.project;
   const period = bundle.input.period;
   const leafWps = bundle.wps.filter((w) => w.isLeaf && !w.isMilestone);
@@ -31,9 +36,27 @@ export default async function ReviewPage({
   const { evm, forecast, milestones, divergence } = r;
   const evmMoney = r.money;
   const noBaseline = (section: string) => (
-    <p className="caption" data-testid={`no-baseline-${section}`}>
-      <span className="tag">{t('review.no_baseline_yet')}</span>
-    </p>
+    <div className="caption" data-testid={`no-baseline-${section}`}>
+      <p>
+        <span className="tag">{t('review.no_baseline_yet')}</span>
+      </p>
+      <p className="caption" style={{ marginTop: 4 }}>
+        {t('review.no_baseline_yet_detail')}
+      </p>
+      {section === 'status' ? (
+        <div style={{ marginTop: 8 }}>
+          <SetBaselineButton
+            projectId={projectId}
+            canSet={baselineState.canSet}
+            hasBaseline={baselineState.hasBaseline}
+            notSchedulableCount={baselineState.notSchedulableCount}
+            blockingWpIds={baselineState.blockingWpIds}
+            exceptionsRailHref={baselineState.exceptionsRailHref}
+            testId="review-set-baseline"
+          />
+        </div>
+      ) : null}
+    </div>
   );
 
   return (
