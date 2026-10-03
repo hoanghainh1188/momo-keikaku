@@ -2,7 +2,7 @@
 title: 'Story 4.2 — The re-derivation test'
 type: 'feature'
 created: '2026-10-03'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '4a48880905b01098527c7d8ec5d7b1b468d39c33'
@@ -98,6 +98,7 @@ context:
 - **DB:** `schedule.runBySeq` returns `prevRunSeq`; `LatestRunRow` select extended. Baseline `latestPinnedScheduleRunSeq` feeds the gate path (pin → runBySeq → optional prev).
 - **App:** `reDerivePinnedBaseline` in `packages/app/src/baseline/re-derive-pinned.ts` — read-only, never `resolveScheduleInputs` / `latestRun` for gate inputs. Exported from the app barrel; no new write / audit action.
 - **Fence:** `tests/schedule/fence-4-2-re-derivation.test.ts` — null-prev first pin; with-prev (two schedules then Set); Current Plan mutation after pin still green against the pin FK.
+- **Review patches (iteration 0):** domain units now negatively assert Float/date/violation drift and `engine_halted`; AR-51 spies `recalculateAt` with a non-current stored key; `reDerivePinnedBaseline` maps every gate failure (`incomplete_pin` / `mismatch` / `engine_halted`) to outer `fail('invalid_input', …)`.
 
 ## Spec Change Log
 
