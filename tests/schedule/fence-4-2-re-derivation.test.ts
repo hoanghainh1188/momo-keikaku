@@ -33,7 +33,8 @@ const { reachable } = await connectFenceHarness({
   requireDb: process.env.REQUIRE_DB === '1',
 });
 
-const PROBE = buildProbeTenant('xtprobe-s42', 960_000_000);
+// Keep below seed-sequences.test.ts's high water (960_000_500) and clear of 4.1's 959M band.
+const PROBE = buildProbeTenant('xtprobe-s42', 942_000_000);
 assertProbeTenantsDisjoint([PROBE]);
 await installFenceAfterAll({ reachable, ownerUrl: OWNER_DATABASE_URL, probe: PROBE });
 
