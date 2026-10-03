@@ -1,11 +1,10 @@
 /**
- * Story 2.15 — schedule strip / What-moved helpers (client mirrors).
+ * Story 2.15 — schedule strip / What-moved helpers (client-only).
+ * Shared EN date/float formatters are covered under `@momo/domain/present` (Epic 2 retro F2/F5).
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   blankDerivedWhilePending,
-  formatMinFloat,
-  formatPlanDate,
   formatRelativeAgo,
   formatWhatMovedAttribution,
   readWhatMovedDismissed,
@@ -38,14 +37,6 @@ describe('plan-strip-what-moved (story 2.15)', () => {
 
   afterEach(() => {
     Reflect.deleteProperty(globalThis, 'window');
-  });
-
-  it('formats strip dates and min Float — null is honest "—"', () => {
-    expect(formatPlanDate('2027-03-31')).toBe('31 Mar 2027');
-    expect(formatPlanDate(null)).toBe('—');
-    expect(formatMinFloat(4)).toBe('+4');
-    expect(formatMinFloat(-3)).toBe('-3');
-    expect(formatMinFloat(null)).toBe('—');
   });
 
   it('blanks derived dates with "…" only while pending and a date exists', () => {

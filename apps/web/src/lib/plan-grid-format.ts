@@ -1,42 +1,9 @@
 /**
- * Plan grid display helpers (story 2.13). Mirrors `packages/app/src/schedule/plan-grid.ts`
- * pure formatters — web may not import that module (DB-bound use case).
+ * Plan grid display helpers (story 2.13) — web-only pct/preset/ink-class helpers.
+ * Shared EN formatters live in `@momo/domain/present` (Epic 2 retro F2/F5).
  */
 
-export const SUMMARY_NA_LABEL =
-  'not applicable — summary work package, rolled up from its children';
-
-const MONTHS = [
-  'Jan',
-  'Feb',
-  'Mar',
-  'Apr',
-  'May',
-  'Jun',
-  'Jul',
-  'Aug',
-  'Sep',
-  'Oct',
-  'Nov',
-  'Dec',
-] as const;
-
-/** EN display date: `19 Sep 2026`. */
-export function formatPlanDate(iso: string | null | undefined): string {
-  if (!iso) return '—';
-  const [y, m, d] = iso.split('-').map(Number);
-  if (!y || !m || !d) return iso;
-  return `${d} ${MONTHS[m - 1] ?? 'Jan'} ${y}`;
-}
-
-export function inkTone(
-  date: string | null,
-  dataDate: string | null,
-): 'muted' | 'full' | 'na' {
-  if (date === null) return 'na';
-  if (dataDate === null) return 'full';
-  return date <= dataDate ? 'muted' : 'full';
-}
+import { inkTone } from '@momo/domain/present';
 
 /** CSS classes for a derived-date cell (Data Date ink). */
 export function dateInkClassName(date: string, dataDate: string | null): string {
@@ -62,16 +29,6 @@ export function recordedPercentToRatio(
 ): { readonly num: bigint; readonly den: bigint } | null {
   if (!Number.isInteger(percent) || percent < 0 || percent > 100) return null;
   return { num: BigInt(percent), den: 100n };
-}
-
-
-export function formatFloatDisplay(floatDays: number | null, notSchedulable: boolean): {
-  readonly text: string;
-  readonly negative: boolean;
-} {
-  if (notSchedulable || floatDays === null) return { text: '—', negative: false };
-  const sign = floatDays > 0 ? '+' : '';
-  return { text: `${sign}${floatDays}`, negative: floatDays < 0 };
 }
 
 export function recordedPctDisplay(

@@ -16,6 +16,15 @@ import {
   type ScheduleAnchor,
   type WpMoveCause,
 } from '@momo/domain';
+import {
+  SUMMARY_NA_LABEL,
+  formatFloatDisplay,
+  formatMinFloat,
+  formatPlanDate,
+  formatPlanDateLong,
+  formatPlanDateShort,
+  inkTone,
+} from '@momo/domain/present';
 import type { Bound } from '../../../db/src/bound';
 import { projectNotFound } from '../../../db/src/project-not-found';
 import { planInputRepositoryOn } from '../../../db/src/repositories/plan-input';
@@ -28,15 +37,22 @@ import { ok, type Result } from '../result';
 import type { ApplyPlanChangeDeps } from './apply-plan-change';
 import { PROJECT_FINISH_TEACHING } from './plan-edit';
 
+export {
+  SUMMARY_NA_LABEL,
+  formatFloatDisplay,
+  formatMinFloat,
+  formatPlanDate,
+  formatPlanDateLong,
+  formatPlanDateShort,
+  inkTone,
+};
+
 /** Audit / schedule_run actor stamps are `user:<id>`; bare id for auth lookup + UI compare. */
 const USER_ACTOR = /^user:(.+)$/;
 
 export function actorUserIdOf(actor: string): string {
   return USER_ACTOR.exec(actor)?.[1] ?? actor;
 }
-
-export const SUMMARY_NA_LABEL =
-  'not applicable — summary work package, rolled up from its children';
 
 export type PlanGridExceptionKind = 'violation' | 'out_of_sequence' | 'not_schedulable';
 
@@ -402,60 +418,6 @@ function asBound(scheduling: SchedulingBound): Bound {
   return scheduling as Bound;
 }
 
-const MONTHS = [
-  'Jan',
-  'Feb',
-  'Mar',
-  'Apr',
-  'May',
-  'Jun',
-  'Jul',
-  'Aug',
-  'Sep',
-  'Oct',
-  'Nov',
-  'Dec',
-] as const;
-
-const MONTHS_LONG = [
-  'January',
-  'February',
-  'March',
-  'April',
-  'May',
-  'June',
-  'July',
-  'August',
-  'September',
-  'October',
-  'November',
-  'December',
-] as const;
-
-/** EN display date: `19 Sep 2026` (EXPERIENCE). */
-export function formatPlanDate(iso: string | null | undefined): string {
-  if (!iso) return '—';
-  const [y, m, d] = iso.split('-').map(Number);
-  if (!y || !m || !d) return iso;
-  return `${d} ${MONTHS[m - 1] ?? 'Jan'} ${y}`;
-}
-
-/** Short EN date without year — used in What-moved arrows. */
-export function formatPlanDateShort(iso: string | null | undefined): string {
-  if (!iso) return '—';
-  const [y, m, d] = iso.split('-').map(Number);
-  if (!y || !m || !d) return iso;
-  return `${d} ${MONTHS[m - 1] ?? 'Jan'}`;
-}
-
-/** Long month for polite announce: `26 March 2027`. */
-export function formatPlanDateLong(iso: string | null | undefined): string {
-  if (!iso) return '—';
-  const [y, m, d] = iso.split('-').map(Number);
-  if (!y || !m || !d) return iso;
-  return `${d} ${MONTHS_LONG[m - 1] ?? 'January'} ${y}`;
-}
-
 export function formatConstraintLabel(
   constraintType: string,
   constraintDate: string | null,
@@ -527,12 +489,6 @@ export function minFloatFromRows(
     if (min === null || row.floatDays < min) min = row.floatDays;
   }
   return min;
-}
-
-export function formatMinFloat(minFloat: number | null): string {
-  if (minFloat === null) return '—';
-  const sign = minFloat > 0 ? '+' : '';
-  return `${sign}${minFloat}`;
 }
 
 /** Spoken Float for polite announce: "minus 3" / "plus 4" / "0". */
@@ -681,24 +637,6 @@ export function blankDerivedDates(input: {
 }): boolean {
   if (input.haltedReason === 'calendar_range') return false;
   return input.haltedReason !== null || input.scheduleStale;
-}
-
-export function inkTone(
-  date: string | null,
-  dataDate: string | null,
-): 'muted' | 'full' | 'na' {
-  if (date === null) return 'na';
-  if (dataDate === null) return 'full';
-  return date <= dataDate ? 'muted' : 'full';
-}
-
-export function formatFloatDisplay(floatDays: number | null, notSchedulable: boolean): {
-  readonly text: string;
-  readonly negative: boolean;
-} {
-  if (notSchedulable || floatDays === null) return { text: '—', negative: false };
-  const sign = floatDays > 0 ? '+' : '';
-  return { text: `${sign}${floatDays}`, negative: floatDays < 0 };
 }
 
 export function recordedPctDisplay(

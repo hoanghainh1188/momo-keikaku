@@ -1,35 +1,7 @@
 /**
  * Story 2.15 — client-side schedule strip / What-moved helpers.
- * Mirrors packages/app plan-grid formatters the web cannot import.
+ * Shared EN date/float formatters live in `@momo/domain/present` (Epic 2 retro F2/F5).
  */
-
-const MONTHS = [
-  'Jan',
-  'Feb',
-  'Mar',
-  'Apr',
-  'May',
-  'Jun',
-  'Jul',
-  'Aug',
-  'Sep',
-  'Oct',
-  'Nov',
-  'Dec',
-] as const;
-
-export function formatPlanDate(iso: string | null | undefined): string {
-  if (!iso) return '—';
-  const [y, m, d] = iso.split('-').map(Number);
-  if (!y || !m || !d) return iso;
-  return `${d} ${MONTHS[m - 1] ?? 'Jan'} ${y}`;
-}
-
-export function formatMinFloat(minFloat: number | null): string {
-  if (minFloat === null) return '—';
-  const sign = minFloat > 0 ? '+' : '';
-  return `${sign}${minFloat}`;
-}
 
 /**
  * UX-DR23: blank derived date cells with "…" while a recalc is in flight — never paint

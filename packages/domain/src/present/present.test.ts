@@ -2,11 +2,18 @@ import { describe, expect, it } from 'vitest';
 import { ratio, unavailable } from '../units';
 import {
   cssPercent,
+  formatFloatDisplay,
+  formatMinFloat,
+  formatPlanDate,
+  formatPlanDateLong,
+  formatPlanDateShort,
   hours,
   hoursSigned,
+  inkTone,
   present,
   ratioText,
   share,
+  SUMMARY_NA_LABEL,
   thresholdText,
   wholePercent,
   yen,
@@ -76,10 +83,17 @@ describe('@momo/domain/present, the one domain module apps/web may import (AD-1)
     // pages computing code again with the gate green. This list is that gate. The codec is
     // absent on purpose; types are erased and do not appear.
     expect(Object.keys(await import('./index')).sort()).toEqual([
+      'SUMMARY_NA_LABEL',
       'cssPercent',
+      'formatFloatDisplay',
+      'formatMinFloat',
+      'formatPlanDate',
+      'formatPlanDateLong',
+      'formatPlanDateShort',
       'geometryFraction',
       'hours',
       'hoursSigned',
+      'inkTone',
       'present',
       'ratioText',
       'share',
@@ -87,5 +101,38 @@ describe('@momo/domain/present, the one domain module apps/web may import (AD-1)
       'wholePercent',
       'yen',
     ]);
+  });
+});
+
+describe('plan-display helpers (Epic 2 retro F2/F5)', () => {
+  it('formats EN plan dates — happy, null, short, long', () => {
+    expect(formatPlanDate('2026-09-19')).toBe('19 Sep 2026');
+    expect(formatPlanDate(null)).toBe('—');
+    expect(formatPlanDateShort('2026-09-19')).toBe('19 Sep');
+    expect(formatPlanDateLong('2027-03-26')).toBe('26 March 2027');
+  });
+
+  it('formats min Float and Float display with signed / NA rules', () => {
+    expect(formatMinFloat(4)).toBe('+4');
+    expect(formatMinFloat(null)).toBe('—');
+    expect(formatFloatDisplay(4, false)).toEqual({ text: '+4', negative: false });
+    expect(formatFloatDisplay(-3, false)).toEqual({ text: '-3', negative: true });
+    expect(formatFloatDisplay(0, false)).toEqual({ text: '0', negative: false });
+    expect(formatFloatDisplay(-1, true)).toEqual({ text: '—', negative: false });
+    expect(formatFloatDisplay(null, false)).toEqual({ text: '—', negative: false });
+  });
+
+  it('splits Data Date ink muted / full / na', () => {
+    expect(inkTone('2026-09-19', '2026-09-19')).toBe('muted');
+    expect(inkTone('2026-09-18', '2026-09-19')).toBe('muted');
+    expect(inkTone('2026-09-20', '2026-09-19')).toBe('full');
+    expect(inkTone(null, '2026-09-19')).toBe('na');
+    expect(inkTone('2026-09-20', null)).toBe('full');
+  });
+
+  it('keeps SUMMARY_NA_LABEL aria string', () => {
+    expect(SUMMARY_NA_LABEL).toBe(
+      'not applicable — summary work package, rolled up from its children',
+    );
   });
 });
