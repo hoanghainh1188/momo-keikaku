@@ -87,7 +87,7 @@ export default async function BaselinesPage({
                 <td className="num">{b.seq}</td>
                 <td>{b.id}</td>
                 <td data-testid={`baseline-history-author-${b.seq}`}>{b.actor}</td>
-                <td>{b.recordedAt.slice(0, 10)}</td>
+                <td>{b.recordedAt}</td>
                 <td>{b.reason}</td>
                 <td className="num">{b.wps.filter((w) => w.baselineMh > 0n).length}</td>
                 <td className="num">{hours(b.wps.reduce((total, w) => total + w.baselineMh, 0n))}h</td>

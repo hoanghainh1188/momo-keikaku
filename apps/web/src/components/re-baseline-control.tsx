@@ -77,6 +77,17 @@ export function ReBaselineControl({
       className="stack"
       style={{ marginTop: 8, gap: 8, maxWidth: 480 }}
       data-testid={testId}
+      onSubmit={(e) => {
+        const reason = e.currentTarget.elements.namedItem('reason');
+        if (!(reason instanceof HTMLTextAreaElement)) return;
+        if (reason.value.trim() === '') {
+          e.preventDefault();
+          reason.setCustomValidity(model.labels.reasonRequired);
+          reason.reportValidity();
+          return;
+        }
+        reason.setCustomValidity('');
+      }}
       action={(fd) => {
         start(() => {
           void reBaselineAction(fd);
@@ -93,6 +104,9 @@ export function ReBaselineControl({
           placeholder={model.labels.reasonPlaceholder}
           data-testid={`${testId}-reason`}
           title={model.labels.reasonRequired}
+          onInput={(e) => {
+            e.currentTarget.setCustomValidity('');
+          }}
         />
       </label>
       <div className="btn-row">

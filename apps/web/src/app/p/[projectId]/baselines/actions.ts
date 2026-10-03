@@ -26,9 +26,11 @@ export async function setBaselineAction(formData: FormData): Promise<void> {
  */
 export async function reBaselineAction(formData: FormData): Promise<void> {
   const projectId = String(formData.get('projectId') ?? '');
-  const reason = String(formData.get('reason') ?? '');
+  const reasonRaw = formData.get('reason');
   if (projectId === '') return;
+  // File / non-string FormData entries must not coerce to "[object File]".
+  if (typeof reasonRaw !== 'string') return;
   const ctx = await requestContext();
-  if (!writeLanded(await reProjectBaseline({ projectId, reason }, ctx))) return;
+  if (!writeLanded(await reProjectBaseline({ projectId, reason: reasonRaw }, ctx))) return;
   revalidateBaselinePaths(projectId);
 }

@@ -32,7 +32,7 @@ const id = z.string().min(1).refine(noNul, 'must not contain a NUL character');
 
 const reBaselineSchema = z.object({
   projectId: id,
-  reason: z.string(),
+  reason: z.string().refine(noNul, 'must not contain a NUL character'),
 });
 
 export type ReBaselineDeps<Handle> = ApplyPlanChangeDeps<Handle> & {

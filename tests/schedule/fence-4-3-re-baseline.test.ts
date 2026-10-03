@@ -294,6 +294,14 @@ describe.skipIf(!reachable)('reBaseline fence (story 4.3)', () => {
         );
     });
 
+    const state = await getReBaselineState(deps(), ctx(), { projectId: PROBE.projectId });
+    expect(state.ok).toBe(true);
+    if (state.ok) {
+      expect(state.value.canReBaseline).toBe(false);
+      expect(state.value.blockingWpIds).toContain(other.id);
+      expect(state.value.exceptionsRailHref).toContain('exceptions=not_schedulable');
+    }
+
     const result = await reBaseline(deps(), ctx(), {
       projectId: PROBE.projectId,
       reason: 'should refuse',
