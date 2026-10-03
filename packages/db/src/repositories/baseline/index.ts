@@ -74,6 +74,25 @@ export function baselineRepositoryOn(bound: Bound) {
       return rows.map((r) => r.scheduleRunSeq);
     },
 
+    /**
+     * Story 4.2: the latest Baseline version's pinned `schedule_run_seq`, or null when none.
+     * Gate path: this pin → `schedule.runBySeq` — never Current Plan / `latestRun`.
+     */
+    async latestPinnedScheduleRunSeq(projectId: string): Promise<number | null> {
+      const [row] = await tx
+        .select({ scheduleRunSeq: s.baselineVersion.scheduleRunSeq })
+        .from(s.baselineVersion)
+        .where(
+          and(
+            eq(s.baselineVersion.tenantId, tenantId),
+            eq(s.baselineVersion.projectId, projectId),
+          ),
+        )
+        .orderBy(desc(s.baselineVersion.seq))
+        .limit(1);
+      return row?.scheduleRunSeq ?? null;
+    },
+
     async projectStart(projectId: string): Promise<string | null> {
       const [row] = await tx
         .select({ projectStart: s.project.projectStart })

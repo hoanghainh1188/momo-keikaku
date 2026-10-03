@@ -50,6 +50,8 @@ export interface LatestRunRow {
   readonly anchor: string | null;
   readonly computedFinish: string | null;
   readonly holidayCalendarVersionSeq: number;
+  /** Story 4.2: FK to the previous run whose inputs feed cause overlay. */
+  readonly prevRunSeq: number | null;
 }
 
 const runSelect = {
@@ -64,6 +66,7 @@ const runSelect = {
   anchor: s.scheduleRun.anchor,
   computedFinish: s.scheduleRun.computedFinish,
   holidayCalendarVersionSeq: s.scheduleRun.holidayCalendarVersionSeq,
+  prevRunSeq: s.scheduleRun.prevRunSeq,
 } as const;
 
 export function scheduleRepositoryOn(bound: Bound) {
@@ -76,6 +79,25 @@ export function scheduleRepositoryOn(bound: Bound) {
         .from(s.scheduleRun)
         .where(and(eq(s.scheduleRun.tenantId, tenantId), eq(s.scheduleRun.projectId, projectId)))
         .orderBy(desc(s.scheduleRun.seq))
+        .limit(1);
+      return row ?? null;
+    },
+
+    /**
+     * Story 4.2: load one run by seq for re-derivation. Returns the pin's row (including
+     * `prevRunSeq`) — never "latest" / Current Plan.
+     */
+    async runBySeq(projectId: string, seq: number): Promise<LatestRunRow | null> {
+      const [row] = await tx
+        .select(runSelect)
+        .from(s.scheduleRun)
+        .where(
+          and(
+            eq(s.scheduleRun.tenantId, tenantId),
+            eq(s.scheduleRun.projectId, projectId),
+            eq(s.scheduleRun.seq, seq),
+          ),
+        )
         .limit(1);
       return row ?? null;
     },
