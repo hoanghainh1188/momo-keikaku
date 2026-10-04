@@ -181,7 +181,10 @@ export type {
 } from './ports/ingest-snapshot-queue';
 export {
   INGEST_SNAPSHOT_QUEUE,
+  INGEST_SNAPSHOT_QUEUE_OPTIONS,
+  SNAPSHOT_TICK_CRON,
   SNAPSHOT_TICK_QUEUE,
+  SNAPSHOT_TICK_SCHEDULE_OPTIONS,
 } from './ports/ingest-snapshot-queue';
 export {
   APPROVAL_REQUIRED_MESSAGE,

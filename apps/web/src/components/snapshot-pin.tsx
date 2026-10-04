@@ -96,7 +96,13 @@ export function SnapshotPin({
           projectId,
           reviewPinnedSnapshotId,
         });
-        if (reloaded.ok) setPin(reloaded.value);
+        if (reloaded.ok) {
+          setPin(reloaded.value);
+          setAgeMinutes(reloaded.value.snapshotAgeMinutes);
+          if (reloaded.value.latestSnapshot) {
+            setLabel(formatJst(reloaded.value.latestSnapshot.observedAt));
+          }
+        }
       }
     });
   }

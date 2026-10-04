@@ -53,6 +53,33 @@ describe('schedule pure helpers (story 5.4)', () => {
     expect(exceedsSearchBudget(40, 150)).toBe(false);
   });
 
+  it('treats searchLimit <= 0 as over-budget slowdown', () => {
+    const due = selectDueConnectors(
+      [
+        {
+          connector: connector({ searchLimit: 0 }),
+          lastActivityAt: new Date(AT.getTime() - HOURLY_INTERVAL_MS),
+          latestTicketCount: 1,
+        },
+      ],
+      { now: AT },
+    );
+    // Hourly window but slowdown forces 6 h floor — not due after only 1 h.
+    expect(due).toEqual([]);
+    const later = selectDueConnectors(
+      [
+        {
+          connector: connector({ searchLimit: 0 }),
+          lastActivityAt: new Date(AT.getTime() - OFF_WINDOW_INTERVAL_MS),
+          latestTicketCount: 1,
+        },
+      ],
+      { now: AT },
+    );
+    expect(later).toHaveLength(1);
+    expect(later[0]!.searchBudgetSlowdown).toBe(true);
+  });
+
   it('takes max(snapshot, attempt) as the due watermark', () => {
     const snap = new Date('2026-10-05T00:00:00.000Z');
     const attempt = new Date('2026-10-05T02:00:00.000Z');

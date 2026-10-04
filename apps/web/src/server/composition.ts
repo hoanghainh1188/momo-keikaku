@@ -69,6 +69,7 @@ import {
   getProjectMapping as getProjectMappingUseCase,
   getProjectReview as getProjectReviewUseCase,
   INGEST_SNAPSHOT_QUEUE,
+  INGEST_SNAPSHOT_QUEUE_OPTIONS,
   listAuditLog as listAuditLogUseCase,
   listSnapshotAttempts as listSnapshotAttemptsUseCase,
   listDepartments as listDepartmentsUseCase,
@@ -666,19 +667,21 @@ let webBoss: ReturnType<typeof createBoss> | undefined;
 let webBossReady: Promise<void> | undefined;
 async function webIngestQueue(): Promise<IngestSnapshotQueuePort> {
   if (!webBoss) {
-    webBoss = createBoss(config.APP_DATABASE_URL, { schedule: false });
-    webBossReady = webBoss.start().then(async () => {
-      await webBoss!.createQueue(INGEST_SNAPSHOT_QUEUE, {
-        policy: 'stately',
-        retryLimit: 3,
-        retryDelay: 60,
-        retryBackoff: true,
-        retryDelayMax: 15 * 60,
+    const boss = createBoss(config.APP_DATABASE_URL, { schedule: false });
+    webBoss = boss;
+    webBossReady = boss
+      .start()
+      .then(async () => {
+        await boss.createQueue(INGEST_SNAPSHOT_QUEUE, { ...INGEST_SNAPSHOT_QUEUE_OPTIONS });
+      })
+      .catch((error) => {
+        webBoss = undefined;
+        webBossReady = undefined;
+        throw error;
       });
-    });
   }
   await webBossReady;
-  const boss = webBoss;
+  const boss = webBoss!;
   return {
     async enqueue(input) {
       // Computed key: web-composition.test.ts bans a `tenantId:` property literal in apps/web
@@ -690,10 +693,10 @@ async function webIngestQueue(): Promise<IngestSnapshotQueuePort> {
       } satisfies IngestSnapshotJobData;
       await boss.send(INGEST_SNAPSHOT_QUEUE, data, {
         singletonKey: input.connectorId,
-        retryLimit: 3,
-        retryDelay: 60,
-        retryBackoff: true,
-        retryDelayMax: 15 * 60,
+        retryLimit: INGEST_SNAPSHOT_QUEUE_OPTIONS.retryLimit,
+        retryDelay: INGEST_SNAPSHOT_QUEUE_OPTIONS.retryDelay,
+        retryBackoff: INGEST_SNAPSHOT_QUEUE_OPTIONS.retryBackoff,
+        retryDelayMax: INGEST_SNAPSHOT_QUEUE_OPTIONS.retryDelayMax,
         ...(input.startAfter ? { startAfter: input.startAfter } : {}),
       });
     },

@@ -12,7 +12,10 @@ import {
 } from '@momo/adapters';
 import {
   INGEST_SNAPSHOT_QUEUE,
+  INGEST_SNAPSHOT_QUEUE_OPTIONS,
+  SNAPSHOT_TICK_CRON,
   SNAPSHOT_TICK_QUEUE,
+  SNAPSHOT_TICK_SCHEDULE_OPTIONS,
   config,
   createLogger,
   dueWatermark,
@@ -135,10 +138,10 @@ const ingestQueue: IngestSnapshotQueuePort = {
       } satisfies IngestSnapshotJobData,
       {
         singletonKey: input.connectorId,
-        retryLimit: 3,
-        retryDelay: 60,
-        retryBackoff: true,
-        retryDelayMax: 15 * 60,
+        retryLimit: INGEST_SNAPSHOT_QUEUE_OPTIONS.retryLimit,
+        retryDelay: INGEST_SNAPSHOT_QUEUE_OPTIONS.retryDelay,
+        retryBackoff: INGEST_SNAPSHOT_QUEUE_OPTIONS.retryBackoff,
+        retryDelayMax: INGEST_SNAPSHOT_QUEUE_OPTIONS.retryDelayMax,
         ...(input.startAfter ? { startAfter: input.startAfter } : {}),
       },
     );
@@ -174,18 +177,11 @@ process.on('SIGTERM', (signal) => void shutdown(signal));
 
 await boss.start();
 
-await boss.createQueue(INGEST_SNAPSHOT_QUEUE, {
-  policy: 'stately',
-  retryLimit: 3,
-  retryDelay: 60,
-  retryBackoff: true,
-  retryDelayMax: 15 * 60,
-});
+await boss.createQueue(INGEST_SNAPSHOT_QUEUE, { ...INGEST_SNAPSHOT_QUEUE_OPTIONS });
 await boss.createQueue(SNAPSHOT_TICK_QUEUE);
 
-await boss.schedule(SNAPSHOT_TICK_QUEUE, '0 * * * *', null, {
-  tz: 'Asia/Tokyo',
-  missed: 'skip',
+await boss.schedule(SNAPSHOT_TICK_QUEUE, SNAPSHOT_TICK_CRON, null, {
+  ...SNAPSHOT_TICK_SCHEDULE_OPTIONS,
 });
 
 await boss.work(SNAPSHOT_TICK_QUEUE, async () => {
@@ -194,35 +190,39 @@ await boss.work(SNAPSHOT_TICK_QUEUE, async () => {
   const tenantIds = await listTenantIds(db);
   let enqueued = 0;
   for (const tenantId of tenantIds) {
-    const dueRows = await inTenantTransaction(db, tenantId, async (scope) => {
-      const connectors = await scope.connectorWrite.listConnectors();
-      const rows = [];
-      for (const connector of connectors) {
-        const snap = await scope.connectorWrite.latestSnapshot(connector.id);
-        const attemptAt = await scope.connectorWrite.latestAttemptAt(connector.id);
-        rows.push({
-          connector,
-          lastActivityAt: dueWatermark(snap?.observedAt ?? null, attemptAt),
-          latestTicketCount: snap?.ticketCount ?? 0,
-        });
-      }
-      return rows;
-    });
-    const due = selectDueConnectors(dueRows, { now, calendar: cal });
-    for (const item of due) {
-      await ingestQueue.enqueue({
-        tenantId,
-        projectId: item.connector.projectId,
-        connectorId: item.connector.id,
-        startAfter: item.startAfter ?? undefined,
+    try {
+      const dueRows = await inTenantTransaction(db, tenantId, async (scope) => {
+        const connectors = await scope.connectorWrite.listConnectors();
+        const rows = [];
+        for (const connector of connectors) {
+          const snap = await scope.connectorWrite.latestSnapshot(connector.id);
+          const attemptAt = await scope.connectorWrite.latestAttemptAt(connector.id);
+          rows.push({
+            connector,
+            lastActivityAt: dueWatermark(snap?.observedAt ?? null, attemptAt),
+            latestTicketCount: snap?.ticketCount ?? 0,
+          });
+        }
+        return rows;
       });
-      enqueued += 1;
-      if (item.searchBudgetSlowdown) {
-        log.info(
-          { connectorId: item.connector.id, tenantId },
-          'snapshot schedule slowed for Search budget',
-        );
+      const due = selectDueConnectors(dueRows, { now, calendar: cal });
+      for (const item of due) {
+        await ingestQueue.enqueue({
+          tenantId,
+          projectId: item.connector.projectId,
+          connectorId: item.connector.id,
+          startAfter: item.startAfter ?? undefined,
+        });
+        enqueued += 1;
+        if (item.searchBudgetSlowdown) {
+          log.info(
+            { connectorId: item.connector.id, tenantId },
+            'snapshot schedule slowed for Search budget',
+          );
+        }
       }
+    } catch (error) {
+      log.error({ err: error, tenantId }, 'snapshot-tick tenant failed — continuing');
     }
   }
   log.info({ enqueued, at: now.toISOString() }, 'snapshot-tick complete');
@@ -256,13 +256,28 @@ await boss.work<IngestSnapshotJobData>(INGEST_SNAPSHOT_QUEUE, async (jobs) => {
             scope.connectorWrite.loadEncryptedCredentials(connectorId),
           );
           if (!stored) return null;
-          return crypto.decrypt(stored);
+          try {
+            return crypto.decrypt(stored);
+          } catch {
+            return null;
+          }
         },
       },
       ctx,
       { projectId: data.projectId, connectorId: data.connectorId },
     );
     if (!result.ok) {
+      if (result.error.code === 'not_found') {
+        log.warn(
+          {
+            connectorId: data.connectorId,
+            tenantId: data.tenantId,
+            messageKey: result.error.messageKey,
+          },
+          'ingest-snapshot not_found — completing without retry',
+        );
+        continue;
+      }
       throw new Error(`ingest-snapshot refused: ${result.error.messageKey}`);
     }
     log.info(

@@ -528,14 +528,14 @@
     "ageHours": "{hours} h ago",
     "ageDays": "{days} d ago",
     "nav_aria_project_surfaces": "Project surfaces",
-    "snapshotTime": "Snapshot time",
-    "connectors": "Connectors",
-    "nextScheduled": "Next scheduled",
-    "refreshNow": "Refresh now",
-    "refreshQueued": "Refresh queued.",
-    "newerSnapshotAvailable": "Newer snapshot available — Re-pin",
-    "repin": "Re-pin",
-    "scheduleSlowdown": "Snapshot schedule slowed: one full Search would use more than 25% of the Search budget, so cadence is at least every 6 hours."
+    "snapshotTime": "スナップショット時刻",
+    "connectors": "コネクタ",
+    "nextScheduled": "次回予定",
+    "refreshNow": "今すぐ更新",
+    "refreshQueued": "更新をキューに入れました。",
+    "newerSnapshotAvailable": "新しいスナップショットがあります — 再ピン",
+    "repin": "再ピン",
+    "scheduleSlowdown": "スナップショット予定を減速しました: 1回のフル Search が Search 予算の25%を超えるため、少なくとも6時間ごとです。"
   },
   "ui": {
     "internal": "Internal"

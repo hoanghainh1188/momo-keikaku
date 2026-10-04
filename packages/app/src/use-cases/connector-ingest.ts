@@ -72,6 +72,18 @@ function isRefusal(error: unknown, code: string): boolean {
 }
 
 /**
+ * True for tracker auth failures (BacklogHttpError `kind: 'auth'` or HTTP 401/403).
+ * Structural — packages/app must not import `@momo/adapters`. Other errors rethrow so
+ * pg-boss `retryLimit` can run (story 5.4 review).
+ */
+function isCredentialAuthFailure(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) return false;
+  const e = error as { readonly kind?: unknown; readonly status?: unknown };
+  if (e.kind === 'auth') return true;
+  return e.status === 401 || e.status === 403;
+}
+
+/**
  * App ingest gate: when approval is missing, append a failed attempt with a PM-visible
  * reason and answer `refused`. When present, answer `approved` (writer is 5.5).
  */
@@ -320,7 +332,8 @@ export async function runIngestSnapshotJob<Handle>(
   let read: ScopeRead;
   try {
     read = await deps.tracker.readScope(connectorConfig, credentials);
-  } catch {
+  } catch (error) {
+    if (!isCredentialAuthFailure(error)) throw error;
     const notified = await notifyCredentialFailure(
       { ...deps, mailer: deps.mailer },
       ctx,

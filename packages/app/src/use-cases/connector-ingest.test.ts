@@ -3,6 +3,7 @@ import { ApprovalRequiredError, ingestSnapshot, type TicketObservation } from '@
 import type { RequestContext } from '../authz/request-context';
 import type { ConnectorWriteDeps, ConnectorWriteScope } from '../ports/connector-write';
 import {
+  RATE_LIMIT_PACED_REASON,
   READ_COMPLETE_WRITER_PENDING_REASON,
 } from './connector-schedule';
 import {
@@ -364,6 +365,47 @@ describe('runIngestSnapshotJob (story 5.4 pre-writer)', () => {
     expect(result).toEqual({ ok: false, error: expect.objectContaining({ code: 'not_found' }) });
     expect(reads).toBe(0);
     expect(attempts).toEqual([]);
+  });
+
+  it('paces the next send when rateLimit remaining is 0 and resetAt is future', async () => {
+    const { deps, attempts } = depsWith(AT);
+    const queued: unknown[] = [];
+    const resetAt = new Date(AT.getTime() + 120_000).toISOString();
+    const result = await runIngestSnapshotJob(
+      {
+        ...deps,
+        queue: {
+          enqueue: async (input) => {
+            queued.push(input);
+          },
+        },
+        tracker: {
+          readScope: async () => ({
+            complete: true,
+            observedAt: AT.toISOString(),
+            tickets: [],
+            accounts: [],
+            hoursFieldPresent: true,
+            rateLimit: { remaining: 0, resetAt },
+            adapterKind: 'backlog',
+          }),
+        },
+        loadCredentials: async () => ({ apiKey: 'k' }),
+      },
+      CTX,
+      { projectId: 'prj-1', connectorId: 'con-1' },
+    );
+    expect(result).toEqual({ ok: true, value: 'rate_limit_paced' });
+    expect(queued).toEqual([
+      expect.objectContaining({
+        connectorId: 'con-1',
+        startAfter: new Date(resetAt),
+      }),
+    ]);
+    expect(attempts.map((a) => (a as { reasonCode: string }).reasonCode)).toEqual([
+      READ_COMPLETE_WRITER_PENDING_REASON,
+      RATE_LIMIT_PACED_REASON,
+    ]);
   });
 });
 

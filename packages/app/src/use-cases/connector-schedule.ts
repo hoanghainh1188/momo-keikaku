@@ -56,6 +56,19 @@ export function exceedsSearchBudget(ticketCount: number, searchLimit: number): b
 }
 
 /**
+ * Search-budget slowdown for the schedule. `null` = fixture / unknown (no slowdown).
+ * `searchLimit <= 0` is treated as already over budget (story 5.4 review).
+ */
+export function isSearchBudgetSlowdown(
+  searchLimit: number | null,
+  ticketCount: number,
+): boolean {
+  if (searchLimit == null) return false;
+  if (searchLimit <= 0) return true;
+  return exceedsSearchBudget(ticketCount, searchLimit);
+}
+
+/**
  * Due watermark: max(latest snapshot.observedAt, latest attempt.attemptedAt).
  * Null when the Connector has never been attempted or snapshotted.
  */
@@ -149,11 +162,10 @@ export function selectDueConnectors(
   const inWindow = isSnapshotBusinessWindow(input.now, cal);
   const due: DueConnector[] = [];
   for (const row of rows) {
-    const searchLimit = row.connector.searchLimit;
-    const slowdown =
-      searchLimit != null &&
-      searchLimit > 0 &&
-      exceedsSearchBudget(row.latestTicketCount, searchLimit);
+    const slowdown = isSearchBudgetSlowdown(
+      row.connector.searchLimit,
+      row.latestTicketCount,
+    );
     if (
       !isConnectorDue({
         now: input.now,
@@ -299,10 +311,7 @@ export async function getSnapshotPinState<Handle>(
         const attemptAt = await scope.connectorWrite.latestAttemptAt(connector.id);
         const lastActivity = dueWatermark(snap?.observedAt ?? null, attemptAt);
         const ticketCount = snap?.ticketCount ?? 0;
-        const slowdown =
-          connector.searchLimit != null &&
-          connector.searchLimit > 0 &&
-          exceedsSearchBudget(ticketCount, connector.searchLimit);
+        const slowdown = isSearchBudgetSlowdown(connector.searchLimit, ticketCount);
         if (slowdown) anySlowdown = true;
         pinConnectors.push({
           id: connector.id,

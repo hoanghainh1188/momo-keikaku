@@ -2,7 +2,7 @@
 title: 'Story 5.4 — Snapshots run on a schedule the PM can see'
 type: 'feature'
 created: '2026-10-04'
-status: 'in-progress'
+status: 'in-review'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '31e687167b280f5e84f46dbb966181e820adb1c4'
@@ -97,6 +97,13 @@ context:
 - Given epic write/compaction/NFR-P1 write ACs, when this story ships, then they remain deferred — not implemented.
 
 ## Implementation Notes
+
+- **Calendar.** `isSnapshotBusinessWindow(instant, cal)` — 09–19 JST; JP-or-VN working day = weekday and not holiday in *both* sets (`buildCalendar({ jp, vn })` kinds).
+- **Due / slowdown.** Pure helpers in `connector-schedule.ts`; watermark `max(snapshot.observedAt, attempt.attemptedAt)`; Search overrun forces 6 h floor inside the window too.
+- **Job body.** `runIngestSnapshotJob` → gate → creds → `readScope` → `admitScopeRead` → `read_complete_writer_pending` (no writer). Rate-limit paces the *next* send via `startAfter` + attempt row.
+- **Worker.** `schedule: true`; `ingest-snapshot` `stately` + `retryLimit: 3` / backoff max 15 min; hourly `snapshot-tick` `tz: Asia/Tokyo` `missed: skip`; service `tenant_admin` context; `@momo/db` carve-out on `apps/worker/src/index.ts`.
+- **Pin UI.** Client popover + live age/min; Review registers pin id via context for Re-pin offer.
+- **Verification.** `pnpm lint`, `typecheck`, `depcruise`, `test` all exit 0 (1279 passed, 461 skipped). No Postgres here — REQUIRE_DB suites skipped.
 
 ## Spec Change Log
 
