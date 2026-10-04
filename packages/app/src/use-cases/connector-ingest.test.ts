@@ -3,6 +3,10 @@ import { ApprovalRequiredError, ingestSnapshot, type TicketObservation } from '@
 import type { RequestContext } from '../authz/request-context';
 import type { ConnectorWriteDeps, ConnectorWriteScope } from '../ports/connector-write';
 import {
+  RATE_LIMIT_PACED_REASON,
+  READ_COMPLETE_WRITER_PENDING_REASON,
+} from './connector-schedule';
+import {
   APPROVAL_REQUIRED_MESSAGE,
   APPROVAL_REQUIRED_REASON,
   CREDENTIAL_AUTH_FAILED_REASON,
@@ -13,6 +17,7 @@ import {
   gateIngestApproval,
   notifyCredentialFailure,
   recordIncompleteRead,
+  runIngestSnapshotJob,
 } from './connector-ingest';
 
 const AT = new Date('2026-09-01T00:00:00Z');
@@ -44,8 +49,10 @@ function depsWith(approvalRecordedAt: Date | null) {
       lastErrorMessage: null,
       lastErrorAt: null,
       hasCredentials: true,
+      searchLimit: 150,
     }),
     findConnectorForProject: async () => null,
+    listConnectors: async () => [],
     insertConnector: async () => {},
     rotateCredentials: async () => {},
     updateScope: async () => {},
@@ -54,6 +61,10 @@ function depsWith(approvalRecordedAt: Date | null) {
     appendSnapshotAttempt: async (input: unknown) => {
       attempts.push(input);
     },
+    listSnapshotAttempts: async () => [],
+    latestAttemptAt: async () => null,
+    latestSnapshot: async () => null,
+    latestSnapshotForProject: async () => null,
     setLastError: async (id: string, error: unknown) => {
       errors.push({ id, error });
     },
@@ -268,6 +279,133 @@ describe('recordIncompleteRead / admitScopeRead (story 5.3)', () => {
     expect(result).toEqual({ ok: false, error: expect.objectContaining({ code: 'not_found' }) });
     expect(attempts).toEqual([]);
     expect(transactions()).toBe(0);
+  });
+});
+
+describe('runIngestSnapshotJob (story 5.4 pre-writer)', () => {
+  it('appends read_complete_writer_pending on an admitted complete read and does not write a snapshot', async () => {
+    const { deps, attempts } = depsWith(AT);
+    const queued: unknown[] = [];
+    const result = await runIngestSnapshotJob(
+      {
+        ...deps,
+        queue: {
+          enqueue: async (input) => {
+            queued.push(input);
+          },
+        },
+        tracker: {
+          readScope: async () => ({
+            complete: true,
+            observedAt: AT.toISOString(),
+            tickets: [],
+            accounts: [],
+            hoursFieldPresent: true,
+            rateLimit: null,
+            adapterKind: 'backlog',
+          }),
+        },
+        loadCredentials: async () => ({ apiKey: 'k' }),
+      },
+      CTX,
+      { projectId: 'prj-1', connectorId: 'con-1' },
+    );
+    expect(result).toEqual({ ok: true, value: 'writer_pending' });
+    expect(attempts).toEqual([
+      expect.objectContaining({ reasonCode: READ_COMPLETE_WRITER_PENDING_REASON }),
+    ]);
+    expect(queued).toEqual([]);
+  });
+
+  it('records read_incomplete when the scope read is incomplete', async () => {
+    const { deps, attempts } = depsWith(AT);
+    const result = await runIngestSnapshotJob(
+      {
+        ...deps,
+        queue: { enqueue: async () => {} },
+        tracker: {
+          readScope: async () => ({
+            complete: false,
+            observedAt: AT.toISOString(),
+            tickets: [],
+            accounts: [],
+            hoursFieldPresent: true,
+            rateLimit: null,
+            adapterKind: 'backlog',
+          }),
+        },
+        loadCredentials: async () => ({ apiKey: 'k' }),
+      },
+      CTX,
+      { projectId: 'prj-1', connectorId: 'con-1' },
+    );
+    expect(result).toEqual({ ok: true, value: 'read_incomplete' });
+    expect(attempts).toEqual([expect.objectContaining({ reasonCode: READ_INCOMPLETE_REASON })]);
+  });
+
+  it('answers not_found for a viewer before touching the tracker', async () => {
+    const { deps, attempts } = depsWith(AT);
+    let reads = 0;
+    const viewer: RequestContext = { ...CTX, roles: [], projectIds: [] };
+    const result = await runIngestSnapshotJob(
+      {
+        ...deps,
+        queue: { enqueue: async () => {} },
+        tracker: {
+          readScope: async () => {
+            reads += 1;
+            throw new Error('should not read');
+          },
+        },
+        loadCredentials: async () => ({ apiKey: 'k' }),
+      },
+      viewer,
+      { projectId: 'prj-1', connectorId: 'con-1' },
+    );
+    expect(result).toEqual({ ok: false, error: expect.objectContaining({ code: 'not_found' }) });
+    expect(reads).toBe(0);
+    expect(attempts).toEqual([]);
+  });
+
+  it('paces the next send when rateLimit remaining is 0 and resetAt is future', async () => {
+    const { deps, attempts } = depsWith(AT);
+    const queued: unknown[] = [];
+    const resetAt = new Date(AT.getTime() + 120_000).toISOString();
+    const result = await runIngestSnapshotJob(
+      {
+        ...deps,
+        queue: {
+          enqueue: async (input) => {
+            queued.push(input);
+          },
+        },
+        tracker: {
+          readScope: async () => ({
+            complete: true,
+            observedAt: AT.toISOString(),
+            tickets: [],
+            accounts: [],
+            hoursFieldPresent: true,
+            rateLimit: { remaining: 0, resetAt },
+            adapterKind: 'backlog',
+          }),
+        },
+        loadCredentials: async () => ({ apiKey: 'k' }),
+      },
+      CTX,
+      { projectId: 'prj-1', connectorId: 'con-1' },
+    );
+    expect(result).toEqual({ ok: true, value: 'rate_limit_paced' });
+    expect(queued).toEqual([
+      expect.objectContaining({
+        connectorId: 'con-1',
+        startAfter: new Date(resetAt),
+      }),
+    ]);
+    expect(attempts.map((a) => (a as { reasonCode: string }).reasonCode)).toEqual([
+      READ_COMPLETE_WRITER_PENDING_REASON,
+      RATE_LIMIT_PACED_REASON,
+    ]);
   });
 });
 

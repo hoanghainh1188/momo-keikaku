@@ -59,6 +59,7 @@ function recordingDeps() {
       lastErrorMessage: null,
       lastErrorAt: null,
       hasCredentials: false,
+      searchLimit: null,
     }),
     appendSnapshotAttempt: async (input) => {
       attempts.push(input);

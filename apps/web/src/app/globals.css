@@ -130,8 +130,14 @@ a {
   font-size: 13px;
 }
 
-.snapshot-pin {
+.snapshot-pin-wrap {
   margin-left: auto;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.snapshot-pin {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -141,11 +147,45 @@ a {
   padding: 3px 10px;
   font-size: 12px;
   color: var(--ink);
+  cursor: pointer;
+  font: inherit;
 }
 .snapshot-pin.stale {
   background: var(--health-amber-soft);
   color: var(--health-amber);
   border-color: var(--health-amber-glyph);
+}
+.snapshot-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 40;
+  min-width: 280px;
+  max-width: 360px;
+  background: var(--paper, #fff);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  padding: 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+}
+.snapshot-popover-row {
+  margin: 0 0 8px;
+  font-size: 12px;
+}
+.snapshot-attempts {
+  margin: 0 0 10px;
+  padding-left: 16px;
+  font-size: 11px;
+}
+.snapshot-refresh-form {
+  margin-top: 4px;
+}
+.snapshot-repin {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--health-amber);
 }
 
 .userchip {

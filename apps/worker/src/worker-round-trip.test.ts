@@ -281,14 +281,14 @@ describe.skipIf(!reachable)('the worker runs pg-boss as the restricted applicati
         await withTimeout(
           // Story 1.7 moved the entry point onto pino JSON (`createLogger`); the old
           // `[worker] started` console prefix is gone.
-          pollUntil(() => output.includes('"msg":"started with migration disabled"')),
+          pollUntil(() => output.includes('"msg":"started with schedule enabled"')),
           `the worker never reported started. Output so far: ${output}`,
         );
 
         // Story 1.8: fixture Clock selected at boot — started JSON carries mode + now.
         const startedLine = output
           .split('\n')
-          .find((line) => line.includes('"msg":"started with migration disabled"'));
+          .find((line) => line.includes('"msg":"started with schedule enabled"'));
         expect(startedLine, `started line missing. Output: ${output}`).toBeTruthy();
         const started = JSON.parse(startedLine!) as {
           clockMode: string;

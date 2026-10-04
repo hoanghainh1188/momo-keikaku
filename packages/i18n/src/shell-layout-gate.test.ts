@@ -71,6 +71,8 @@ const KNOWN_OVERFLOW: Readonly<Record<string, number>> = {
   'auth.forgotPassword.sent.oneHour': 968,
   'auth.noAccess.you_are_signed_in_but_no_workspace_can_be_opened': 984,
   'auth.resetPassword.that_did_not_work_the_link_may_have_been_used_al': 1120,
+  // Story 5.4: pin popover slowdown reason — wide caption, not auth-sheet width.
+  'shell.scheduleSlowdown': 1304,
 };
 
 function shellKeys(): string[] {

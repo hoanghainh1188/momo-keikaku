@@ -527,7 +527,15 @@
     "ageMinutes": "{minutes} min ago",
     "ageHours": "{hours} h ago",
     "ageDays": "{days} d ago",
-    "nav_aria_project_surfaces": "Project surfaces"
+    "nav_aria_project_surfaces": "Project surfaces",
+    "snapshotTime": "スナップショット時刻",
+    "connectors": "コネクタ",
+    "nextScheduled": "次回予定",
+    "refreshNow": "今すぐ更新",
+    "refreshQueued": "更新をキューに入れました。",
+    "newerSnapshotAvailable": "新しいスナップショットがあります — 再ピン",
+    "repin": "再ピン",
+    "scheduleSlowdown": "スナップショット予定を減速しました: 1回のフル Search が Search 予算の25%を超えるため、少なくとも6時間ごとです。"
   },
   "ui": {
     "internal": "Internal"

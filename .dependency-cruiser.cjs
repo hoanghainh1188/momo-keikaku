@@ -102,16 +102,15 @@ module.exports = {
       name: 'apps-adapters-only-from-composition-root',
       severity: 'error',
       comment:
-        'AD-1 (amended for story 1.3 slice 2 / 1.8): packages/adapters implements the outbound ' +
-        'ports packages/app declares (the Clock, the id generator), and the apps/* files allowed ' +
-        'to import it are the named composition roots — apps/web/src/server/composition.ts and ' +
-        'apps/worker/src/index.ts — which wire them into use cases / the worker process. A page ' +
-        'or job handler reading the clock or minting ids itself is a use case\'s decision taken ' +
-        'in an inbound adapter.',
+        'AD-1 (amended for story 1.3 slice 2 / 1.8 / 5.4): packages/adapters implements the ' +
+        'outbound ports packages/app declares. The apps/* files allowed to import it are the ' +
+        'named composition roots — apps/web/src/server/composition.ts, apps/worker/src/index.ts, ' +
+        'and apps/worker/src/boss.ts (shared createBoss re-export). A page or job handler reading ' +
+        'the clock or minting ids itself is a use case\'s decision taken in an inbound adapter.',
       from: {
         path: '^apps/',
         pathNot:
-          '^apps/web/src/server/composition[.]ts$|^apps/worker/src/index[.]ts$',
+          '^apps/web/src/server/composition[.]ts$|^apps/worker/src/index[.]ts$|^apps/worker/src/boss[.]ts$',
       },
       to: { path: '^packages/adapters/' },
     },
@@ -156,10 +155,26 @@ module.exports = {
       name: 'other-apps-not-to-db',
       severity: 'error',
       comment:
-        'AD-1: an app other than apps/web has no composition root and no packages/db/auth ' +
-        'carve-out (the spine names one per app before it may have one), so it imports ' +
-        'nothing from packages/db at all.',
-      from: { path: '^apps/', pathNot: '^apps/web/' },
+        'AD-1: apps other than the named composition roots import nothing from packages/db. ' +
+        'Story 5.4 names apps/worker/src/index.ts as the worker composition root (same carve-out ' +
+        'pattern as apps/web/src/server/composition.ts) so it can wire connector/fixture ports.',
+      from: {
+        path: '^apps/',
+        pathNot:
+          '^apps/web/|^apps/worker/src/index[.]ts$',
+      },
+      to: { path: '^packages/db/' },
+    },
+    {
+      name: 'worker-db-only-from-composition-root',
+      severity: 'error',
+      comment:
+        'AD-1 (story 5.4): in apps/worker only the composition root imports packages/db. Job ' +
+        'handlers call use cases; the root wires getDb / inTenantTransaction / fixture cursors.',
+      from: {
+        path: '^apps/worker/',
+        pathNot: '^apps/worker/src/index[.]ts$',
+      },
       to: { path: '^packages/db/' },
     },
     {

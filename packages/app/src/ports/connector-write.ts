@@ -29,6 +29,25 @@ export interface ConnectorPublicRow {
   readonly lastErrorAt: Date | null;
   /** True when ciphertext is present; never the secret itself. */
   readonly hasCredentials: boolean;
+  /** Backlog Search-bucket limit at set-up (story 5.3/5.4); null for fixtures. */
+  readonly searchLimit: number | null;
+}
+
+/** One PM-visible snapshot attempt row (story 5.4). */
+export interface SnapshotAttemptRow {
+  readonly seq: number;
+  readonly connectorId: string;
+  readonly reasonCode: string;
+  readonly message: string;
+  readonly attemptedAt: Date;
+}
+
+/** Latest successful snapshot header for pin / due watermark (story 5.4). */
+export interface LatestSnapshotRow {
+  readonly id: string;
+  readonly connectorId: string;
+  readonly observedAt: Date;
+  readonly ticketCount: number;
 }
 
 export interface InsertConnectorInput {
@@ -64,6 +83,8 @@ export interface ConnectorWriteRepository {
   readonly projectAnchor: (projectId: string) => Promise<Date>;
   readonly findConnector: (connectorId: string) => Promise<ConnectorPublicRow | null>;
   readonly findConnectorForProject: (projectId: string) => Promise<ConnectorPublicRow | null>;
+  /** Every Connector in the bound Tenant (story 5.4 due scan). */
+  readonly listConnectors: () => Promise<readonly ConnectorPublicRow[]>;
   readonly insertConnector: (input: InsertConnectorInput) => Promise<void>;
   readonly rotateCredentials: (
     connectorId: string,
@@ -73,6 +94,17 @@ export interface ConnectorWriteRepository {
   readonly appendScopeEvent: (input: AppendScopeEventInput) => Promise<number>;
   readonly latestScopeSeq: (connectorId: string) => Promise<number | null>;
   readonly appendSnapshotAttempt: (input: AppendSnapshotAttemptInput) => Promise<void>;
+  /** Newest-first attempts for a Connector (story 5.4 pin / Connectors UI). */
+  readonly listSnapshotAttempts: (
+    connectorId: string,
+    limit: number,
+  ) => Promise<readonly SnapshotAttemptRow[]>;
+  /** Latest attempt timestamp for due watermark; null when none. */
+  readonly latestAttemptAt: (connectorId: string) => Promise<Date | null>;
+  /** Latest successful snapshot for a Connector; null when none (seeded until 5.5). */
+  readonly latestSnapshot: (connectorId: string) => Promise<LatestSnapshotRow | null>;
+  /** Latest successful snapshot among Connectors on a Project (top-bar pin). */
+  readonly latestSnapshotForProject: (projectId: string) => Promise<LatestSnapshotRow | null>;
   readonly setLastError: (
     connectorId: string,
     error: { code: string; message: string; at: Date } | null,

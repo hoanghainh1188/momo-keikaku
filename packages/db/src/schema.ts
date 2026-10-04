@@ -898,7 +898,8 @@ export const connectorScopeEvent = pgTable(
 
 /**
  * Failed snapshot attempts visible to the PM (story 5.2 / AR-16). Approval refuse and
- * credential auth failures write rows; the full retry/schedule UX is 5.4.
+ * credential auth failures, incomplete reads, writer-pending (5.4), and paced
+ * rate-limit rows write here; the durable snapshot writer is 5.5.
  */
 export const trackerSnapshotAttempt = pgTable(
   'tracker_snapshot_attempt',

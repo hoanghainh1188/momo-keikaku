@@ -4,7 +4,7 @@
  * Public reads never return ciphertext or plaintext secrets. Decrypt-for-adapter loads
  * encrypted bytes only for the trusted ingest composition path.
  */
-import { and, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import type { Bound } from '../../bound';
 import { projectNotFound } from '../../project-not-found';
 import * as s from '../../schema';
@@ -28,6 +28,22 @@ export interface ConnectorPublicRow {
   readonly lastErrorMessage: string | null;
   readonly lastErrorAt: Date | null;
   readonly hasCredentials: boolean;
+  readonly searchLimit: number | null;
+}
+
+export interface SnapshotAttemptRow {
+  readonly seq: number;
+  readonly connectorId: string;
+  readonly reasonCode: string;
+  readonly message: string;
+  readonly attemptedAt: Date;
+}
+
+export interface LatestSnapshotRow {
+  readonly id: string;
+  readonly connectorId: string;
+  readonly observedAt: Date;
+  readonly ticketCount: number;
 }
 
 function toPublic(row: typeof s.connector.$inferSelect): ConnectorPublicRow {
@@ -44,6 +60,7 @@ function toPublic(row: typeof s.connector.$inferSelect): ConnectorPublicRow {
     lastErrorMessage: row.lastErrorMessage,
     lastErrorAt: row.lastErrorAt,
     hasCredentials: row.credentialsCiphertext != null && row.credentialsNonce != null,
+    searchLimit: row.searchLimit,
   };
 }
 
@@ -85,6 +102,14 @@ export function connectorWriteRepositoryOn(bound: Bound) {
         .where(and(eq(s.connector.tenantId, tenantId), eq(s.connector.projectId, projectId)))
         .limit(1);
       return row ? toPublic(row) : null;
+    },
+
+    async listConnectors(): Promise<readonly ConnectorPublicRow[]> {
+      const rows = await tx
+        .select()
+        .from(s.connector)
+        .where(eq(s.connector.tenantId, tenantId));
+      return rows.map(toPublic);
     },
 
     async insertConnector(input: {
@@ -191,6 +216,92 @@ export function connectorWriteRepositoryOn(bound: Bound) {
         message: input.message,
         attemptedAt: input.attemptedAt,
       });
+    },
+
+    async listSnapshotAttempts(
+      connectorId: string,
+      limit: number,
+    ): Promise<readonly SnapshotAttemptRow[]> {
+      const rows = await tx
+        .select({
+          seq: s.trackerSnapshotAttempt.seq,
+          connectorId: s.trackerSnapshotAttempt.connectorId,
+          reasonCode: s.trackerSnapshotAttempt.reasonCode,
+          message: s.trackerSnapshotAttempt.message,
+          attemptedAt: s.trackerSnapshotAttempt.attemptedAt,
+        })
+        .from(s.trackerSnapshotAttempt)
+        .where(
+          and(
+            eq(s.trackerSnapshotAttempt.tenantId, tenantId),
+            eq(s.trackerSnapshotAttempt.connectorId, connectorId),
+          ),
+        )
+        .orderBy(desc(s.trackerSnapshotAttempt.seq))
+        .limit(limit);
+      return rows;
+    },
+
+    async latestAttemptAt(connectorId: string): Promise<Date | null> {
+      const [row] = await tx
+        .select({ attemptedAt: s.trackerSnapshotAttempt.attemptedAt })
+        .from(s.trackerSnapshotAttempt)
+        .where(
+          and(
+            eq(s.trackerSnapshotAttempt.tenantId, tenantId),
+            eq(s.trackerSnapshotAttempt.connectorId, connectorId),
+          ),
+        )
+        .orderBy(desc(s.trackerSnapshotAttempt.seq))
+        .limit(1);
+      return row?.attemptedAt ?? null;
+    },
+
+    async latestSnapshot(connectorId: string): Promise<LatestSnapshotRow | null> {
+      const [row] = await tx
+        .select({
+          id: s.trackerSnapshot.id,
+          connectorId: s.trackerSnapshot.connectorId,
+          observedAt: s.trackerSnapshot.observedAt,
+          ticketCount: s.trackerSnapshot.ticketCount,
+        })
+        .from(s.trackerSnapshot)
+        .where(
+          and(
+            eq(s.trackerSnapshot.tenantId, tenantId),
+            eq(s.trackerSnapshot.connectorId, connectorId),
+          ),
+        )
+        .orderBy(desc(s.trackerSnapshot.seq))
+        .limit(1);
+      return row ?? null;
+    },
+
+    async latestSnapshotForProject(projectId: string): Promise<LatestSnapshotRow | null> {
+      const [row] = await tx
+        .select({
+          id: s.trackerSnapshot.id,
+          connectorId: s.trackerSnapshot.connectorId,
+          observedAt: s.trackerSnapshot.observedAt,
+          ticketCount: s.trackerSnapshot.ticketCount,
+        })
+        .from(s.trackerSnapshot)
+        .innerJoin(
+          s.connector,
+          and(
+            eq(s.connector.tenantId, s.trackerSnapshot.tenantId),
+            eq(s.connector.id, s.trackerSnapshot.connectorId),
+          ),
+        )
+        .where(
+          and(
+            eq(s.trackerSnapshot.tenantId, tenantId),
+            eq(s.connector.projectId, projectId),
+          ),
+        )
+        .orderBy(desc(s.trackerSnapshot.seq))
+        .limit(1);
+      return row ?? null;
     },
 
     async setLastError(

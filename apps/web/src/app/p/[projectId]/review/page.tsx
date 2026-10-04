@@ -6,6 +6,7 @@ import { hours, hoursSigned, present, share, wholePercent, yen } from '@momo/dom
 import { HealthBadge, Internal, MetricCell, Section, UnplannedChip } from '@/components/ui';
 import { ScopeLedgerBar } from '@/components/scope-ledger-bar';
 import { DispositionRail } from '@/components/disposition-rail';
+import { ReviewPinRegistrar } from '@/components/review-pin-context';
 import { SetBaselineButton } from '@/components/set-baseline-button';
 import { UnmappedGroupRows } from '@/components/unmapped-group-rows';
 import { REPORT_LOCALE } from '@/lib/report-locale';
@@ -61,6 +62,7 @@ export default async function ReviewPage({
 
   return (
     <div className="layout-review">
+      {r.snapshot.id ? <ReviewPinRegistrar snapshotId={r.snapshot.id} /> : null}
       <div className="sheet">
         <header>
           <h1 className="report-title" data-testid="report-title">

@@ -84,11 +84,12 @@ const PROBES = {
   tooling: ['packages/app/src/__probe-tooling.ts', "export { peekTenant } from '../../../scripts/peek.js';\n"],
   carveOut: ['packages/app/src/__probe-carve-out.test.ts', "export { startFakeOidc } from '../../../tests/support/fake-oidc.js';\n"],
   /**
-   * A SECOND path under `apps/worker`, for a different rule. AD-1 carve-out 3 names exactly
-   * `apps/worker/src/index.ts`, and `apps-adapters-only-from-composition-root` is what holds it
-   * to that one file — a `pathNot` widened to `^apps/worker/` by accident would grant the whole
-   * app and nothing would notice. The rule had no probe at all until the Epic 1 retrospective
-   * named the carve-out (F4 / `reviews/review-adversarial-ad1-worker-carve-out.md` F3).
+   * A SECOND path under `apps/worker`, for a different rule. AD-1 carve-out 3 names
+   * `apps/worker/src/index.ts` and `apps/worker/src/boss.ts`, and
+   * `apps-adapters-only-from-composition-root` is what holds it to those files — a `pathNot`
+   * widened to `^apps/worker/` by accident would grant the whole app and nothing would notice.
+   * The rule had no probe at all until the Epic 1 retrospective named the carve-out
+   * (F4 / `reviews/review-adversarial-ad1-worker-carve-out.md` F3).
    */
   workerAdapters: ['apps/worker/src/__probe-adapters.ts', "export { productClockOn } from '@momo/adapters';\n"],
   /**
@@ -140,7 +141,7 @@ describe('the import fences fire where they should, and only there', () => {
   });
 
   it('fires on a SECOND apps/worker file importing packages/adapters', () => {
-    // The carve-out is one named path (`apps/worker/src/index.ts`), not the app. Were this to
+    // The carve-out is named paths (`index.ts`, `boss.ts`), not the app. Were this to
     // pass, the gate would be granting `apps/worker/**` and AD-1 carve-out 3 would be fiction.
     expect(
       fired.filter((v) => v.from === PROBES.workerAdapters[0]).map((v) => v.rule.name),

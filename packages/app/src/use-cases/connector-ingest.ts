@@ -1,19 +1,32 @@
 /**
- * Ingest approval refuse + credential-failure notify (story 5.2 / FR-17), and the incomplete-read
- * gate (story 5.3 / AR-13).
+ * Ingest approval refuse + credential-failure notify (story 5.2 / FR-17), the incomplete-read
+ * gate (story 5.3 / AR-13), and the pre-writer job body (story 5.4).
  *
  * Full snapshot writer is 5.5. Approval refusals and incomplete reads append a failed attempt
- * only; credential auth failures also set the banner fields and send mail. Scheduled interval
- * delivery lands with 5.4.
+ * only; credential auth failures also set the banner fields and send mail. On an admitted
+ * complete read, 5.4 appends `read_complete_writer_pending` and stops — no snapshot/ledger rows.
  */
 import { ApprovalRequiredError, requireConnectorApproval } from '@momo/domain';
 import { PROJECT_REACH, PROJECT_REACH_ROLES, authorize, type RoleDeclaration } from '../authz/authorize';
 import type { RequestContext } from '../authz/request-context';
 import type { ConnectorWriteDeps } from '../ports/connector-write';
 import type { MailerPort } from '../ports/mailer';
-import type { ScopeRead } from '../ports/tracker';
+import type {
+  ScopeRead,
+  TrackerConnectorConfig,
+  TrackerCredentials,
+  TrackerPort,
+} from '../ports/tracker';
+import type { IngestSnapshotQueuePort } from '../ports/ingest-snapshot-queue';
 import { fail, ok, type Result } from '../result';
 import { refuse } from './audited-write';
+import {
+  RATE_LIMIT_PACED_MESSAGE,
+  RATE_LIMIT_PACED_REASON,
+  READ_COMPLETE_WRITER_PENDING_MESSAGE,
+  READ_COMPLETE_WRITER_PENDING_REASON,
+  rateLimitStartAfter,
+} from './connector-schedule';
 
 export const APPROVAL_REQUIRED_REASON = 'approval_required' as const;
 export const CREDENTIAL_AUTH_FAILED_REASON = 'credential_auth_failed' as const;
@@ -56,6 +69,18 @@ export interface NotifyCredentialFailureInput {
 
 function isRefusal(error: unknown, code: string): boolean {
   return error instanceof Error && error.message === `refused: ${code}`;
+}
+
+/**
+ * True for tracker auth failures (BacklogHttpError `kind: 'auth'` or HTTP 401/403).
+ * Structural — packages/app must not import `@momo/adapters`. Other errors rethrow so
+ * pg-boss `retryLimit` can run (story 5.4 review).
+ */
+function isCredentialAuthFailure(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) return false;
+  const e = error as { readonly kind?: unknown; readonly status?: unknown };
+  if (e.kind === 'auth') return true;
+  return e.status === 401 || e.status === 403;
 }
 
 /**
@@ -221,9 +246,165 @@ export async function admitScopeRead<Handle>(
   return ok('incomplete');
 }
 
+export interface RunIngestSnapshotJobInput {
+  readonly projectId: string;
+  readonly connectorId: string;
+}
+
+export type IngestSnapshotJobDeps<Handle> = ConnectorWriteDeps<Handle> & {
+  readonly tracker: TrackerPort;
+  readonly queue: IngestSnapshotQueuePort;
+  readonly mailer: MailerPort;
+  /**
+   * Build TrackerPort credentials from stored ciphertext. Composition decrypts;
+   * the use case never sees the crypto port's key material beyond this callback.
+   */
+  readonly loadCredentials: (
+    connectorId: string,
+  ) => Promise<TrackerCredentials | null>;
+};
+
+export type IngestSnapshotJobOutcome =
+  | 'approval_refused'
+  | 'credential_failed'
+  | 'read_incomplete'
+  | 'rate_limit_paced'
+  | 'writer_pending';
+
+/**
+ * Pre-writer ingest job body (story 5.4): gate approval → load creds → `readScope` →
+ * `admitScopeRead`; on `admitted`, append `read_complete_writer_pending` and stop.
+ * Failures keep existing attempt reasons. When `rateLimit` requires a wait, enqueue a
+ * deferred follow-up and record a paced attempt.
+ */
+export async function runIngestSnapshotJob<Handle>(
+  deps: IngestSnapshotJobDeps<Handle>,
+  ctx: RequestContext,
+  input: RunIngestSnapshotJobInput,
+): Promise<Result<IngestSnapshotJobOutcome>> {
+  const roles = authorize(ctx, { roles: PROJECT_REACH_ROLES, projectId: input.projectId });
+  if (!roles.ok) return roles;
+
+  const gated = await gateIngestApproval(deps, ctx, input);
+  if (!gated.ok) return gated;
+  if (gated.value === 'refused') return ok('approval_refused');
+
+  let connectorConfig: TrackerConnectorConfig;
+  let lastGoodLabel = 'never';
+  try {
+    const loaded = await deps.transaction(deps.handle, ctx.tenantId, async (scope) => {
+      const connector = await scope.connectorWrite.findConnector(input.connectorId);
+      if (!connector || connector.projectId !== input.projectId) refuse('not_found');
+      const latest = await scope.connectorWrite.latestSnapshot(input.connectorId);
+      return {
+        config: {
+          connectorId: connector.id,
+          tenantId: ctx.tenantId,
+          site: connector.site,
+          scope: connector.scope,
+          adapter: (connector.adapter === 'fixture' ? 'fixture' : 'backlog') as 'fixture' | 'backlog',
+        } satisfies TrackerConnectorConfig,
+        lastGoodLabel: latest ? latest.observedAt.toISOString() : 'never',
+      };
+    });
+    connectorConfig = loaded.config;
+    lastGoodLabel = loaded.lastGoodLabel;
+  } catch (error) {
+    if (isRefusal(error, 'not_found')) return fail('not_found');
+    throw error;
+  }
+
+  const credentials = await deps.loadCredentials(input.connectorId);
+  if (!credentials || (connectorConfig.adapter === 'backlog' && !credentials.apiKey)) {
+    const notified = await notifyCredentialFailure(
+      { ...deps, mailer: deps.mailer },
+      ctx,
+      {
+        projectId: input.projectId,
+        connectorId: input.connectorId,
+        lastGoodLabel,
+      },
+    );
+    if (!notified.ok) return notified;
+    return ok('credential_failed');
+  }
+
+  let read: ScopeRead;
+  try {
+    read = await deps.tracker.readScope(connectorConfig, credentials);
+  } catch (error) {
+    if (!isCredentialAuthFailure(error)) throw error;
+    const notified = await notifyCredentialFailure(
+      { ...deps, mailer: deps.mailer },
+      ctx,
+      {
+        projectId: input.projectId,
+        connectorId: input.connectorId,
+        lastGoodLabel,
+      },
+    );
+    if (!notified.ok) return notified;
+    return ok('credential_failed');
+  }
+
+  const admitted = await admitScopeRead(deps, ctx, {
+    projectId: input.projectId,
+    connectorId: input.connectorId,
+    read,
+  });
+  if (!admitted.ok) return admitted;
+  if (admitted.value === 'incomplete') return ok('read_incomplete');
+
+  try {
+    await deps.transaction(deps.handle, ctx.tenantId, async (scope) => {
+      const connector = await scope.connectorWrite.findConnector(input.connectorId);
+      if (!connector || connector.projectId !== input.projectId) refuse('not_found');
+      await scope.connectorWrite.appendSnapshotAttempt({
+        connectorId: input.connectorId,
+        reasonCode: READ_COMPLETE_WRITER_PENDING_REASON,
+        message: READ_COMPLETE_WRITER_PENDING_MESSAGE,
+        attemptedAt: deps.clock.now(),
+      });
+    });
+  } catch (error) {
+    if (isRefusal(error, 'not_found')) return fail('not_found');
+    throw error;
+  }
+
+  // Pace the *next* send when the just-finished read reports an exhausted bucket.
+  const pacedUntil = rateLimitStartAfter(read.rateLimit, deps.clock.now());
+  if (pacedUntil) {
+    await deps.queue.enqueue({
+      tenantId: ctx.tenantId,
+      projectId: input.projectId,
+      connectorId: input.connectorId,
+      startAfter: pacedUntil,
+    });
+    try {
+      await deps.transaction(deps.handle, ctx.tenantId, async (scope) => {
+        const connector = await scope.connectorWrite.findConnector(input.connectorId);
+        if (!connector || connector.projectId !== input.projectId) refuse('not_found');
+        await scope.connectorWrite.appendSnapshotAttempt({
+          connectorId: input.connectorId,
+          reasonCode: RATE_LIMIT_PACED_REASON,
+          message: RATE_LIMIT_PACED_MESSAGE,
+          attemptedAt: deps.clock.now(),
+        });
+      });
+    } catch (error) {
+      if (isRefusal(error, 'not_found')) return fail('not_found');
+      throw error;
+    }
+    return ok('rate_limit_paced');
+  }
+
+  return ok('writer_pending');
+}
+
 export const CONNECTOR_INGEST_ROLES = {
   gateIngestApproval: PROJECT_REACH,
   notifyCredentialFailure: PROJECT_REACH,
   recordIncompleteRead: PROJECT_REACH,
   admitScopeRead: PROJECT_REACH,
+  runIngestSnapshotJob: PROJECT_REACH,
 } as const satisfies Readonly<Record<string, RoleDeclaration>>;

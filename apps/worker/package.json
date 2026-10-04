@@ -7,6 +7,8 @@
   "dependencies": {
     "pg-boss": "12.33.2",
     "@momo/app": "workspace:*",
-    "@momo/adapters": "workspace:*"
+    "@momo/adapters": "workspace:*",
+    "@momo/db": "workspace:*",
+    "@momo/i18n": "workspace:*"
   }
 }

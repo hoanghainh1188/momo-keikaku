@@ -213,16 +213,22 @@ const FAKE_FAMILIES: {
             lastErrorMessage: null,
             lastErrorAt: null,
             hasCredentials: true,
+            searchLimit: 150,
           }
         : null,
     findConnectorForProject: async (projectId) =>
       projectId === WORLD.project.id ? null : null, // allow addConnector on the gate Project
+    listConnectors: async () => [],
     insertConnector: write('connectorWrite.insertConnector', undefined),
     rotateCredentials: write('connectorWrite.rotateCredentials', undefined),
     updateScope: write('connectorWrite.updateScope', undefined),
     appendScopeEvent: write('connectorWrite.appendScopeEvent', 1),
     latestScopeSeq: async () => 1,
     appendSnapshotAttempt: write('connectorWrite.appendSnapshotAttempt', undefined),
+    listSnapshotAttempts: async () => [],
+    latestAttemptAt: async () => null,
+    latestSnapshot: async () => null,
+    latestSnapshotForProject: async () => null,
     setLastError: write('connectorWrite.setLastError', undefined),
     countMappingEventsForProject: async () => 0,
     loadEncryptedCredentials: async () => null,

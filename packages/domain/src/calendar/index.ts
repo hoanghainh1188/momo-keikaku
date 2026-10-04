@@ -76,6 +76,50 @@ export function isWorkingDay(d: IsoDate, cal: HolidayCalendar): boolean {
   return !isWeekend(d) && !(d in cal.holidays);
 }
 
+/** Fixed Asia/Tokyo offset used by the snapshot schedule (AD-15 / AR-28). */
+export const ASIA_TOKYO_OFFSET_MINUTES = 9 * 60;
+
+/**
+ * Project-local calendar date and hour-of-day for a fixed-offset zone.
+ * Pure: never reads the clock; `instant` is caller-supplied (AD-15).
+ */
+export function projectDateAndHour(
+  instant: Date,
+  tzOffsetMinutes: number = ASIA_TOKYO_OFFSET_MINUTES,
+): { readonly date: IsoDate; readonly hour: number } {
+  const shifted = new Date(instant.getTime() + tzOffsetMinutes * 60_000);
+  return {
+    date: formatDate(shifted),
+    hour: shifted.getUTCHours(),
+  };
+}
+
+/**
+ * True when `instant` is inside the snapshot business window: 09:00–19:00 Asia/Tokyo
+ * on a day that is a working day for JP **or** VN (AR-28 / FR-19).
+ *
+ * A day is a JP-or-VN working day when it is a weekday and not a holiday for *both*
+ * countries — a JP-only holiday still counts when VN works (and the reverse). Weekends
+ * and days that are holidays in both sets fall outside the window (matrix: both JP+VN
+ * holiday → off-window / ≥6 h cadence).
+ *
+ * `cal.holidays` must carry per-date `HolidayKind[]` so JP and VN can be distinguished
+ * (as `buildCalendar({ jp: true, vn: true })` does).
+ */
+export function isSnapshotBusinessWindow(
+  instant: Date,
+  cal: HolidayCalendar,
+  tzOffsetMinutes: number = ASIA_TOKYO_OFFSET_MINUTES,
+): boolean {
+  const { date, hour } = projectDateAndHour(instant, tzOffsetMinutes);
+  if (hour < 9 || hour >= 19) return false;
+  if (isWeekend(date)) return false;
+  const kinds = cal.holidays[date] ?? [];
+  const jpHoliday = kinds.includes('jp');
+  const vnHoliday = kinds.includes('vn');
+  return !(jpHoliday && vnHoliday);
+}
+
 /** Inclusive count of working days in [start, end]. Returns 0 when end < start. */
 export function workingDaysBetween(start: IsoDate, end: IsoDate, cal: HolidayCalendar): number {
   if (end < start) return 0;
