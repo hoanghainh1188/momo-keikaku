@@ -1044,6 +1044,27 @@ describe('the request context the bindings run with', () => {
       vi.resetModules();
     }
   });
+
+  it('fails naming Epic 8 when CREDENTIALS_CRYPTO=kms on the first connector write binding', async () => {
+    vi.resetModules();
+    vi.stubEnv('CREDENTIALS_CRYPTO', 'kms');
+    try {
+      const freshComposition = await import('../apps/web/src/server/composition');
+      await expect(
+        freshComposition.addConnector({
+          projectId: 'prj-1',
+          spaceUrl: 'https://example.backlog.jp',
+          apiKey: 'k',
+          projectKey: 'EC2',
+          approvalName: 'Client PM',
+          approvalRecordedAt: '2026-09-19T09:00:00.000Z',
+        }),
+      ).rejects.toThrow(/CREDENTIALS_CRYPTO=kms/);
+    } finally {
+      vi.stubEnv('CREDENTIALS_CRYPTO', 'local');
+      vi.resetModules();
+    }
+  });
 });
 
 /**
