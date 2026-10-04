@@ -94,11 +94,44 @@ describe('plan-baseline-compare-cells (epic 4 retro F5)', () => {
     );
     expect(html.match(/<td/g)?.length).toBe(12);
     expect(html).toContain('1 Aug 2026');
+    expect(html).toContain('20 Aug 2026');
     expect(html).toContain('1 Sep 2026');
+    expect(html).toContain('1 Oct 2026');
     expect(html).toContain('+5');
     expect(html).toContain('+6');
     expect(html).toContain('+2');
+    // Baseline duration 8d, Current Plan duration 10d, effort 32h / 40h / +8.0h family.
+    expect(html).toContain('>8<span class="plan-u">d</span>');
+    expect(html).toContain('>10<span class="plan-u">d</span>');
     expect(html).toContain('plan-u');
+    expect(html).toMatch(/32(\.0)?/);
+    expect(html).toMatch(/40(\.0)?/);
+    expect(html).toMatch(/\+8(\.0)?/);
+  });
+
+  it('uses plain dash (not summary N/A) for null leaf Baseline fields', () => {
+    const html = renderToStaticMarkup(
+      createElement(
+        'tr',
+        null,
+        createElement(BaselineCompareCells, {
+          row: leafRow({
+            baselineStart: null,
+            baselineFinish: null,
+            baselineDurationDays: null,
+            baselineMh: null,
+            durationDays: null,
+            plannedMh: null,
+            startDeltaDays: null,
+            finishDeltaDays: null,
+            durationDeltaDays: null,
+            effortDeltaMh: null,
+          }),
+        }),
+      ) as ReactNode,
+    );
+    expect(html).not.toContain(`aria-label="${SUMMARY_NA_LABEL}"`);
+    expect((html.match(/class="plan-dash"/g) ?? []).length).toBeGreaterThanOrEqual(4);
   });
 
   it('shows summary N/A on Baseline-side fields for non-leaf rows', () => {
@@ -119,9 +152,7 @@ describe('plan-baseline-compare-cells (epic 4 retro F5)', () => {
         }),
       ) as ReactNode,
     );
-    // Baseline date/duration/effort + Current Plan dates/duration use SummaryDash for summaries.
-    expect((html.match(new RegExp(`aria-label="${SUMMARY_NA_LABEL}"`, 'g')) ?? []).length).toBeGreaterThanOrEqual(
-      4,
-    );
+    // baseline start/finish/dur/effort + current start/finish/dur → seven SummaryDash labels.
+    expect((html.match(new RegExp(`aria-label="${SUMMARY_NA_LABEL}"`, 'g')) ?? []).length).toBe(7);
   });
 });

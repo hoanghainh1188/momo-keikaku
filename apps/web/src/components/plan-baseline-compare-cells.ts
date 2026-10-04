@@ -119,20 +119,7 @@ export function BaselineCompareCells({
     createElement('td', null, dateCell(row.earlyFinish, !row.isLeaf)),
     createElement('td', { className: 'num' }, deltaDay(row.finishDeltaDays)),
     createElement('td', { className: 'num' }, dayCell(baselineDur, !row.isLeaf)),
-    createElement(
-      'td',
-      { className: 'num' },
-      row.isLeaf
-        ? row.durationDays === null
-          ? createElement('span', { className: 'plan-dash' }, '—')
-          : createElement(
-              Fragment,
-              null,
-              row.durationDays,
-              createElement('span', { className: 'plan-u' }, 'd'),
-            )
-        : SummaryDash(),
-    ),
+    createElement('td', { className: 'num' }, dayCell(row.durationDays, !row.isLeaf)),
     createElement('td', { className: 'num' }, deltaDay(row.durationDeltaDays)),
     createElement('td', { className: 'num' }, effortCell(baselineMh, !row.isLeaf)),
     createElement('td', { className: 'num' }, effortCell(plannedMh, false)),
