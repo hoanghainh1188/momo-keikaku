@@ -4,6 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import type { PlanGridState } from '@momo/app';
 import {
+  BASELINE_COMPARE_COLUMNS,
   PLAN_GRID_SLOTS,
   PROGRESS_ABSENT,
   PROGRESS_COLUMNS,
@@ -37,6 +38,7 @@ const sample: PlanGridState = {
     outOfSequence: [],
     notSchedulable: [],
   },
+  hasBaseline: true,
   rows: [
     {
       wpId: 'leaf',
@@ -68,6 +70,15 @@ const sample: PlanGridState = {
       recordedPct: { num: 1n, den: 4n },
       remainingDays: 8,
       exception: { kind: 'violation', label: '▲ Late 6d', daysLate: 6 },
+      plannedMh: 40_000n,
+      baselineStart: '2026-08-01',
+      baselineFinish: '2026-08-20',
+      baselineDurationDays: 8,
+      baselineMh: 32_000n,
+      startDeltaDays: 5,
+      finishDeltaDays: 6,
+      durationDeltaDays: 2,
+      effortDeltaMh: 8_000n,
     },
   ],
   leafCandidates: [{ wpId: 'leaf', wbsCode: '1.1', name: 'Leaf' }],
@@ -91,7 +102,7 @@ describe('plan-grid-view (story 2.13)', () => {
     expect(view.leafCandidates).toEqual([{ wpId: 'leaf', wbsCode: '1.1', name: 'Leaf' }]);
   });
 
-  it('names UX-DR2 slots and Schedule/Progress column sets (Q4→A)', () => {
+  it('names UX-DR2 slots and Schedule/Progress/Baseline column sets (Q4→A / 4.5)', () => {
     expect(PLAN_GRID_SLOTS).toEqual([
       'schedule-strip-slot',
       'plan-toolbar',
@@ -107,6 +118,9 @@ describe('plan-grid-view (story 2.13)', () => {
       'Recorded %',
       'Remaining',
     ]);
+    expect(BASELINE_COMPARE_COLUMNS).toHaveLength(12);
+    expect(BASELINE_COMPARE_COLUMNS[0]).toBe('Baseline start');
+    expect(BASELINE_COMPARE_COLUMNS[11]).toBe('Δ');
     for (const absent of PROGRESS_ABSENT) {
       expect(PROGRESS_COLUMNS).not.toContain(absent);
       expect(SCHEDULE_COLUMNS).not.toContain(absent);
@@ -114,6 +128,15 @@ describe('plan-grid-view (story 2.13)', () => {
     // PlanTreeGrid imports these constants for headers + slot testids (story 2.13 review).
     expect(PLAN_GRID_SLOTS.length).toBe(5);
     expect(SCHEDULE_COLUMNS.length).toBe(9);
+  });
+
+  it('serialises Baseline compare BigInt fields (story 4.5)', () => {
+    const view = toPlanGridViewModel(sample, 'user-1');
+    expect(view.hasBaseline).toBe(true);
+    expect(view.rows[0]!.plannedMh).toBe('40000');
+    expect(view.rows[0]!.baselineMh).toBe('32000');
+    expect(view.rows[0]!.effortDeltaMh).toBe('8000');
+    expect(view.rows[0]!.startDeltaDays).toBe(5);
   });
 
   it('maps Schedule default fields for the matrix (dates, float, critical, exception)', () => {

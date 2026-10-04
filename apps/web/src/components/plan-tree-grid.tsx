@@ -61,8 +61,11 @@ import {
   walkExceptionsRailKey,
 } from '@/lib/plan-exceptions';
 import {
+  daysSigned,
   formatFloatDisplay,
   formatPlanDate,
+  hours,
+  hoursDeltaSigned,
   SUMMARY_NA_LABEL,
 } from '@momo/domain/present';
 import {
@@ -75,7 +78,9 @@ import {
   writeStoredPreset,
   type PlanPreset,
 } from '@/lib/plan-grid-format';
+import { baselineComparePresetControl } from '@/lib/baseline-compare-preset-ui';
 import {
+  BASELINE_COMPARE_COLUMNS,
   PLAN_GRID_SLOTS,
   PROGRESS_COLUMNS,
   SCHEDULE_COLUMNS,
@@ -822,9 +827,14 @@ export function PlanTreeGrid({
     }
   }, [openExceptionsOnMount, pinned, exceptions]);
 
+  const hasBaseline = model.hasBaseline || (setBaseline?.hasBaseline ?? false);
+
   useEffect(() => {
-    setPreset(readStoredPreset(model.userId, model.projectId));
-  }, [model.userId, model.projectId]);
+    const stored = readStoredPreset(model.userId, model.projectId);
+    // UX-DR23: stored Baseline compare falls back when the Project has no Baseline.
+    if (stored === 'baseline' && !hasBaseline) setPreset('schedule');
+    else setPreset(stored);
+  }, [model.userId, model.projectId, hasBaseline]);
 
   useEffect(() => {
     if (focusedWpId !== null && !model.rows.some((r) => r.wpId === focusedWpId)) {
@@ -945,11 +955,12 @@ export function PlanTreeGrid({
 
   const setPresetKeepFocus = useCallback(
     (next: PlanPreset) => {
+      if (next === 'baseline' && !hasBaseline) return;
       focusRestore.current = capturePresetFocusRestore(focusedWpId);
       setPreset(next);
       writeStoredPreset(model.userId, model.projectId, next);
     },
-    [focusedWpId, model.userId, model.projectId],
+    [focusedWpId, hasBaseline, model.userId, model.projectId],
   );
 
   const toggleExpand = (wpId: string) => {
@@ -1107,11 +1118,12 @@ export function PlanTreeGrid({
     const fromDigit = presetFromDigitKey(e.key);
     if (fromDigit !== null) {
       e.preventDefault();
+      // Key `3` is a no-op when Baseline compare is disabled (UX-DR23).
       setPresetKeepFocus(fromDigit);
       return;
     }
-    // 3 / 4 reserved for Baseline / All — no-op (Q4→A).
-    if (e.key === '3' || e.key === '4') {
+    // `4` reserved for *All* — still stubbed (Q4→A / UX-DR4 Comfort).
+    if (e.key === '4') {
       e.preventDefault();
       return;
     }
@@ -1366,7 +1378,109 @@ export function PlanTreeGrid({
     </>
   );
 
+  /** Story 4.5 — twelve Baseline compare columns (no bars; FR-7 / UX-DR4). */
+  const renderBaselineCompareCells = (row: PlanGridRowView): ReactNode => {
+    const baselineStart = row.baselineStart;
+    const baselineFinish = row.baselineFinish;
+    const baselineDur = row.baselineDurationDays;
+    const baselineMh =
+      row.baselineMh === null || row.baselineMh === undefined ? null : BigInt(row.baselineMh);
+    const plannedMh =
+      row.plannedMh === null || row.plannedMh === undefined ? null : BigInt(row.plannedMh);
+    const effortDelta =
+      row.effortDeltaMh === null || row.effortDeltaMh === undefined
+        ? null
+        : BigInt(row.effortDeltaMh);
+
+    const dateCell = (date: string | null, summaryNa: boolean) => {
+      if (summaryNa || date === null) {
+        return summaryNa ? <SummaryDash /> : <span className="plan-dash">—</span>;
+      }
+      return formatPlanDate(date);
+    };
+    const dayCell = (value: number | null, summaryNa: boolean) => {
+      if (summaryNa || value === null) {
+        return summaryNa ? <SummaryDash /> : <span className="plan-dash">—</span>;
+      }
+      return (
+        <>
+          {value}
+          <span className="plan-u">d</span>
+        </>
+      );
+    };
+    const effortCell = (mh: bigint | null, summaryNa: boolean) => {
+      if (summaryNa || mh === null) {
+        return summaryNa ? <SummaryDash /> : <span className="plan-dash">—</span>;
+      }
+      return (
+        <>
+          {hours(mh)}
+          <span className="plan-u">h</span>
+        </>
+      );
+    };
+    const deltaDay = (delta: number | null) => (
+      <span className="num">{daysSigned(delta)}</span>
+    );
+
+    return (
+      <>
+        <td>{dateCell(baselineStart, !row.isLeaf)}</td>
+        <td>
+          <DateCell
+            date={row.earlyStart}
+            dataDate={stripOverrides?.dataDate ?? model.dataDate}
+            notSchedulable={row.notSchedulable}
+            isSummary={!row.isLeaf}
+            inFlight={recalcPending}
+            highlighted={highlightedWpIds.has(row.wpId)}
+            stale={row.stale}
+            onRefuseDerived={() => undefined}
+          />
+        </td>
+        <td className="num">{deltaDay(row.startDeltaDays)}</td>
+        <td>{dateCell(baselineFinish, !row.isLeaf)}</td>
+        <td>
+          <DateCell
+            date={row.earlyFinish}
+            dataDate={stripOverrides?.dataDate ?? model.dataDate}
+            notSchedulable={row.notSchedulable}
+            isSummary={!row.isLeaf}
+            inFlight={recalcPending}
+            highlighted={highlightedWpIds.has(row.wpId)}
+            stale={row.stale}
+            onRefuseDerived={() => undefined}
+          />
+        </td>
+        <td className="num">{deltaDay(row.finishDeltaDays)}</td>
+        <td className="num">{dayCell(baselineDur, !row.isLeaf)}</td>
+        <td className="num">
+          {row.isLeaf ? (
+            row.durationDays === null ? (
+              <span className="plan-dash">—</span>
+            ) : (
+              <>
+                {row.durationDays}
+                <span className="plan-u">d</span>
+              </>
+            )
+          ) : (
+            <SummaryDash />
+          )}
+        </td>
+        <td className="num">{deltaDay(row.durationDeltaDays)}</td>
+        <td className="num">{effortCell(baselineMh, !row.isLeaf)}</td>
+        <td className="num">{effortCell(plannedMh, false)}</td>
+        <td className="num">
+          <span className="num">{hoursDeltaSigned(effortDelta)}</span>
+        </td>
+      </>
+    );
+  };
+
   const staleBanner = scheduleStaleBannerKind(haltedReason, scheduleStale);
+  const baselinePresetControl = baselineComparePresetControl(hasBaseline);
 
   return (
     <div className="plan-surface" data-testid="plan-surface" data-pending={recalcPending ? '1' : '0'}>
@@ -1403,7 +1517,14 @@ export function PlanTreeGrid({
           >
             Progress
           </button>
-          <button type="button" aria-pressed={false} disabled title="Later epic">
+          <button
+            type="button"
+            aria-pressed={preset === 'baseline'}
+            disabled={baselinePresetControl.disabled}
+            title={baselinePresetControl.title}
+            onClick={() => setPresetKeepFocus('baseline')}
+            data-testid="preset-baseline-compare"
+          >
             Baseline compare
           </button>
           <button type="button" aria-pressed={false} disabled title="Later epic">
@@ -1509,6 +1630,22 @@ export function PlanTreeGrid({
                   <col style={{ width: 130 }} />
                   <col style={{ width: 88 }} />
                 </>
+              ) : preset === 'baseline' ? (
+                <>
+                  {/* Sized budget ~899px scrolling (UX-DR4): compact Δ, tighter dates/effort. */}
+                  <col style={{ width: 88 }} />
+                  <col style={{ width: 88 }} />
+                  <col style={{ width: 44 }} />
+                  <col style={{ width: 88 }} />
+                  <col style={{ width: 88 }} />
+                  <col style={{ width: 44 }} />
+                  <col style={{ width: 64 }} />
+                  <col style={{ width: 48 }} />
+                  <col style={{ width: 44 }} />
+                  <col style={{ width: 72 }} />
+                  <col style={{ width: 64 }} />
+                  <col style={{ width: 48 }} />
+                </>
               ) : (
                 <>
                   <col style={{ width: 110 }} />
@@ -1543,16 +1680,34 @@ export function PlanTreeGrid({
                         </th>
                       );
                     })
-                  : PROGRESS_COLUMNS.map((label) => (
-                      <th
-                        key={label}
-                        className={
-                          label === 'Recorded %' || label === 'Remaining' ? 'num' : undefined
-                        }
-                      >
-                        {label}
-                      </th>
-                    ))}
+                  : preset === 'baseline'
+                    ? BASELINE_COMPARE_COLUMNS.map((label, i) => {
+                        const num =
+                          label === 'Δ' ||
+                          label === 'Dur' ||
+                          label === 'Baseline duration' ||
+                          label === 'Baseline effort' ||
+                          label === 'Effort';
+                        // Duplicate "Δ" headers need a stable key.
+                        return (
+                          <th key={`${label}-${i}`} className={num ? 'num' : undefined}>
+                            {label}
+                            {label === 'Start' || label === 'Finish' ? (
+                              <span className="plan-anch">derived</span>
+                            ) : null}
+                          </th>
+                        );
+                      })
+                    : PROGRESS_COLUMNS.map((label) => (
+                        <th
+                          key={label}
+                          className={
+                            label === 'Recorded %' || label === 'Remaining' ? 'num' : undefined
+                          }
+                        >
+                          {label}
+                        </th>
+                      ))}
               </tr>
             </thead>
             <tbody>
@@ -1615,7 +1770,9 @@ export function PlanTreeGrid({
                     </td>
                     {preset === 'schedule'
                       ? renderScheduleCells(row)
-                      : renderProgressCells(row)}
+                      : preset === 'baseline'
+                        ? renderBaselineCompareCells(row)
+                        : renderProgressCells(row)}
                   </tr>
                 );
               })}

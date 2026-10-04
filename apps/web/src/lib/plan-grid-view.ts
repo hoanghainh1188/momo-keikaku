@@ -126,6 +126,15 @@ export function toPlanGridViewModel(
     remainingDays: r.remainingDays,
     exceptionLabel: r.exception?.label ?? null,
     exceptionKind: r.exception?.kind ?? null,
+    plannedMh: r.plannedMh === null ? null : r.plannedMh.toString(),
+    baselineStart: r.baselineStart,
+    baselineFinish: r.baselineFinish,
+    baselineDurationDays: r.baselineDurationDays,
+    baselineMh: r.baselineMh === null ? null : r.baselineMh.toString(),
+    startDeltaDays: r.startDeltaDays,
+    finishDeltaDays: r.finishDeltaDays,
+    durationDeltaDays: r.durationDeltaDays,
+    effortDeltaMh: r.effortDeltaMh === null ? null : r.effortDeltaMh.toString(),
   }));
 
   return {
@@ -149,6 +158,7 @@ export function toPlanGridViewModel(
       wbsCode: c.wbsCode,
       name: c.name,
     })),
+    hasBaseline: grid.hasBaseline,
     rows,
   };
 }
@@ -182,3 +192,19 @@ export const PROGRESS_COLUMNS = [
 ] as const;
 
 export const PROGRESS_ABSENT = ['Observed %', 'Gap', 'Evidence'] as const;
+
+/** Story 4.5 — Baseline compare preset headers (EXPERIENCE order; FR-7 / UX-DR4). */
+export const BASELINE_COMPARE_COLUMNS = [
+  'Baseline start',
+  'Start',
+  'Δ',
+  'Baseline finish',
+  'Finish',
+  'Δ',
+  'Baseline duration',
+  'Dur',
+  'Δ',
+  'Baseline effort',
+  'Effort',
+  'Δ',
+] as const;

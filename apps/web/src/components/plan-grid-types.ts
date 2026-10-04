@@ -46,6 +46,16 @@ export interface PlanGridRowView {
   readonly remainingDays: number | null;
   readonly exceptionLabel: string | null;
   readonly exceptionKind: 'violation' | 'out_of_sequence' | 'not_schedulable' | null;
+  /** Story 4.5 — Baseline compare (milli-hours as decimal strings for RSC). */
+  readonly plannedMh: string | null;
+  readonly baselineStart: string | null;
+  readonly baselineFinish: string | null;
+  readonly baselineDurationDays: number | null;
+  readonly baselineMh: string | null;
+  readonly startDeltaDays: number | null;
+  readonly finishDeltaDays: number | null;
+  readonly durationDeltaDays: number | null;
+  readonly effortDeltaMh: string | null;
 }
 
 export type WhatMovedCauseView =
@@ -166,5 +176,7 @@ export interface PlanGridViewModel {
   readonly whatMoved: WhatMovedBandView | null;
   readonly exceptions: PlanExceptionsRailView;
   readonly leafCandidates: readonly PlanGridLeafCandidateView[];
+  /** Story 4.5 — enables Baseline compare preset. */
+  readonly hasBaseline: boolean;
   readonly rows: readonly PlanGridRowView[];
 }

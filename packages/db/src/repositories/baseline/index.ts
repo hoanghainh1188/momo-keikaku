@@ -115,6 +115,47 @@ export function baselineRepositoryOn(bound: Bound) {
       return row?.scheduleRunSeq ?? null;
     },
 
+    /**
+     * Story 4.5: leaf `baseline_wp` rows for the active Baseline (max `seq`), or [] when none.
+     * Display / Divergence projection only — never a schedule input.
+     */
+    async loadActiveBaselineWps(projectId: string): Promise<
+      readonly {
+        readonly wpId: string;
+        readonly start: string;
+        readonly finish: string;
+        readonly baselineMh: bigint;
+      }[]
+    > {
+      const [head] = await tx
+        .select({ seq: s.baselineVersion.seq })
+        .from(s.baselineVersion)
+        .where(
+          and(
+            eq(s.baselineVersion.tenantId, tenantId),
+            eq(s.baselineVersion.projectId, projectId),
+          ),
+        )
+        .orderBy(desc(s.baselineVersion.seq))
+        .limit(1);
+      if (head === undefined) return [];
+      return tx
+        .select({
+          wpId: s.baselineWp.wpId,
+          start: s.baselineWp.start,
+          finish: s.baselineWp.finish,
+          baselineMh: s.baselineWp.baselineMh,
+        })
+        .from(s.baselineWp)
+        .where(
+          and(
+            eq(s.baselineWp.tenantId, tenantId),
+            eq(s.baselineWp.projectId, projectId),
+            eq(s.baselineWp.baselineVersionSeq, head.seq),
+          ),
+        );
+    },
+
     async projectStart(projectId: string): Promise<string | null> {
       const [row] = await tx
         .select({ projectStart: s.project.projectStart })

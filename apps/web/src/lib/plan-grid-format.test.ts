@@ -38,11 +38,13 @@ describe('plan-grid-format (web)', () => {
     Reflect.deleteProperty(globalThis, 'window');
   });
 
-  it('persists Schedule/Progress per user+project', () => {
+  it('persists Schedule/Progress/Baseline per user+project', () => {
     expect(presetStorageKey('u1', 'p1')).toBe('momo.plan.preset:u1:p1');
     expect(readStoredPreset('u1', 'p1')).toBe('schedule');
     writeStoredPreset('u1', 'p1', 'progress');
     expect(readStoredPreset('u1', 'p1')).toBe('progress');
+    writeStoredPreset('u1', 'p1', 'baseline');
+    expect(readStoredPreset('u1', 'p1')).toBe('baseline');
     expect(readStoredPreset('u1', 'p2')).toBe('schedule');
   });
 
@@ -69,12 +71,12 @@ describe('plan-grid-format (web)', () => {
     expect(recordedPercentToRatio(12.5)).toBeNull();
   });
 
-  it('keeps focused row id across preset switch and maps only keys 1/2', () => {
+  it('keeps focused row id across preset switch and maps keys 1/2/3', () => {
     expect(capturePresetFocusRestore('wp-leaf')).toBe('wp-leaf');
     expect(capturePresetFocusRestore(null)).toBeNull();
     expect(presetFromDigitKey('1')).toBe('schedule');
     expect(presetFromDigitKey('2')).toBe('progress');
-    expect(presetFromDigitKey('3')).toBeNull();
+    expect(presetFromDigitKey('3')).toBe('baseline');
     expect(presetFromDigitKey('4')).toBeNull();
   });
 });

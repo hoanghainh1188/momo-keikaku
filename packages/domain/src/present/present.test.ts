@@ -7,7 +7,9 @@ import {
   formatPlanDate,
   formatPlanDateLong,
   formatPlanDateShort,
+  daysSigned,
   hours,
+  hoursDeltaSigned,
   hoursSigned,
   inkTone,
   present,
@@ -43,6 +45,14 @@ describe('present (AD-4: the only rounding site, from the exact value, half-even
     expect(hoursSigned(-40n)).toBe('0.0');
     expect(hoursSigned(50n)).toBe('0.0'); // 0.05 -> 0.0, ties to even
     expect(hoursSigned(60n)).toBe('+0.1');
+    expect(hoursDeltaSigned(1_000n)).toBe('+1.0');
+    expect(hoursDeltaSigned(-1_000n)).toBe('\u22121.0');
+    expect(hoursDeltaSigned(0n)).toBe('0.0');
+    expect(hoursDeltaSigned(null)).toBe('—');
+    expect(daysSigned(3)).toBe('+3');
+    expect(daysSigned(-2)).toBe('\u22122');
+    expect(daysSigned(0)).toBe('0');
+    expect(daysSigned(null)).toBe('—');
   });
 
   it('renders yen grouped, shares to 1 dp and whole percentages', () => {
@@ -85,6 +95,7 @@ describe('@momo/domain/present, the one domain module apps/web may import (AD-1)
     expect(Object.keys(await import('./index')).sort()).toEqual([
       'SUMMARY_NA_LABEL',
       'cssPercent',
+      'daysSigned',
       'formatFloatDisplay',
       'formatMinFloat',
       'formatPlanDate',
@@ -92,6 +103,7 @@ describe('@momo/domain/present, the one domain module apps/web may import (AD-1)
       'formatPlanDateShort',
       'geometryFraction',
       'hours',
+      'hoursDeltaSigned',
       'hoursSigned',
       'inkTone',
       'present',

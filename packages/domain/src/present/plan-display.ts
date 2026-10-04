@@ -83,3 +83,14 @@ export function formatFloatDisplay(floatDays: number | null, notSchedulable: boo
   const sign = floatDays > 0 ? '+' : '';
   return { text: `${sign}${floatDays}`, negative: floatDays < 0 };
 }
+
+/**
+ * Signed whole-day Δ for Baseline compare columns (DESIGN): `+` / real minus `−` / `0` /
+ * em dash when N/A. Zero is never blank.
+ */
+export function daysSigned(delta: number | null | undefined): string {
+  if (delta === null || delta === undefined) return '—';
+  if (delta === 0) return '0';
+  if (delta > 0) return `+${delta}`;
+  return `\u2212${Math.abs(delta)}`;
+}
