@@ -10,6 +10,7 @@
  */
 import { afterAll, expect } from 'vitest';
 import { and, eq } from 'drizzle-orm';
+import { stringify } from '@momo/domain';
 import type { Locale, RequestContext, Role } from '../../packages/app/src/authz/request-context';
 import {
   applyPlanChange,
@@ -177,7 +178,7 @@ export async function scheduleLeaf(
   });
   expect(result.ok).toBe(true);
   if (!result.ok) {
-    expect.fail(`schedule failed: ${result.error.code} ${JSON.stringify(result.error.details)}`);
+    expect.fail(`schedule failed: ${result.error.code} ${stringify(result.error.details)}`);
   }
   expect(result.value.kind).toBe('scheduled');
   return result.value.seq!;
