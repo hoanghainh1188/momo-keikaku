@@ -279,3 +279,45 @@ export function checkLedgerInvariant(
   }
   return { ok: violations.length === 0, violations };
 }
+
+/**
+ * Story 5.6: durable `left_scope` after two consecutive complete absences.
+ * Sighting clears streak/flag; already-left Tickets stay left until seen again.
+ * Incomplete reads must never call this (writer gate).
+ */
+export function advanceLeftScopeState(
+  current: { readonly leftScope: boolean; readonly absentCompleteStreak: number },
+  presentInCompleteRead: boolean,
+): { leftScope: boolean; absentCompleteStreak: number } {
+  if (presentInCompleteRead) return { leftScope: false, absentCompleteStreak: 0 };
+  if (current.leftScope) {
+    return { leftScope: true, absentCompleteStreak: current.absentCompleteStreak };
+  }
+  const streak = current.absentCompleteStreak + 1;
+  return { leftScope: streak >= 2, absentCompleteStreak: streak };
+}
+
+/**
+ * Story 5.6: partition a Connector's read into owned Tickets (ledger) vs overlap claims
+ * (no ledger). Unknown issue ids are owned by the claiming Connector (first insert).
+ */
+export function partitionOwnedTickets<T extends { readonly trackerIssueId: string }>(
+  tickets: readonly T[],
+  ownerByIssueId: ReadonlyMap<string, string>,
+  connectorId: string,
+): {
+  owned: T[];
+  overlaps: { ticket: T; ownerConnectorId: string }[];
+} {
+  const owned: T[] = [];
+  const overlaps: { ticket: T; ownerConnectorId: string }[] = [];
+  for (const ticket of tickets) {
+    const owner = ownerByIssueId.get(ticket.trackerIssueId);
+    if (owner !== undefined && owner !== connectorId) {
+      overlaps.push({ ticket, ownerConnectorId: owner });
+    } else {
+      owned.push(ticket);
+    }
+  }
+  return { owned, overlaps };
+}

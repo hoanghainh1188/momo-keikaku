@@ -9,10 +9,12 @@ import { and, desc, eq, inArray } from 'drizzle-orm';
 import {
   AdapterKindMismatchError,
   LedgerInvariantError,
+  advanceLeftScopeState,
   applyRules,
   checkLedgerInvariant,
   ingestSnapshot,
   mappingHead,
+  partitionOwnedTickets,
   type AdapterKind,
   type LedgerEntry,
   type MappingEvent,
@@ -321,14 +323,21 @@ export function ingestWriteRepositoryOn(bound: Bound) {
       );
 
     for (const row of owned) {
-      if (input.nextIssueIds.has(row.trackerIssueId)) continue;
-      if (row.leftScope) continue;
-      const streak = row.absentCompleteStreak + 1;
+      const next = advanceLeftScopeState(
+        { leftScope: row.leftScope, absentCompleteStreak: row.absentCompleteStreak },
+        input.nextIssueIds.has(row.trackerIssueId),
+      );
+      if (
+        next.leftScope === row.leftScope &&
+        next.absentCompleteStreak === row.absentCompleteStreak
+      ) {
+        continue;
+      }
       await tx
         .update(s.ticket)
         .set({
-          absentCompleteStreak: streak,
-          leftScope: streak >= 2,
+          absentCompleteStreak: next.absentCompleteStreak,
+          leftScope: next.leftScope,
         })
         .where(
           and(
@@ -476,24 +485,20 @@ export function ingestWriteRepositoryOn(bound: Bound) {
       const ticketIds = input.read.tickets.map((t) => t.trackerIssueId);
       const existingTickets = await loadTicketsByIssueIds(trackerKind, trackerSite, ticketIds);
 
-      const ownedTickets: TicketObservation[] = [];
-      const overlaps: {
-        trackerIssueId: string;
-        key: string;
-        ownerConnectorId: string;
-      }[] = [];
-      for (const ticket of input.read.tickets) {
-        const row = existingTickets.get(ticket.trackerIssueId);
-        if (row && row.ownerConnectorId !== input.connectorId) {
-          overlaps.push({
-            trackerIssueId: ticket.trackerIssueId,
-            key: ticket.key,
-            ownerConnectorId: row.ownerConnectorId,
-          });
-        } else {
-          ownedTickets.push(ticket);
-        }
-      }
+      const ownerByIssueId = new Map(
+        [...existingTickets.entries()].map(([id, row]) => [id, row.ownerConnectorId]),
+      );
+      const partitioned = partitionOwnedTickets(
+        input.read.tickets,
+        ownerByIssueId,
+        input.connectorId,
+      );
+      const ownedTickets = partitioned.owned;
+      const overlaps = partitioned.overlaps.map(({ ticket, ownerConnectorId }) => ({
+        trackerIssueId: ticket.trackerIssueId,
+        key: ticket.key,
+        ownerConnectorId,
+      }));
 
       // Prev may still list Tickets this Connector no longer owns — drop them from the
       // derive baseline so absences/overlap skips stay honest.

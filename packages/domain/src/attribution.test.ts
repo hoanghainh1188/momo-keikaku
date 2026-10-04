@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { attribute, rateOnDate } from './attribution';
 import { periodOf } from './calendar';
-import { AdapterKindMismatchError, checkLedgerInvariant, ingestSnapshot } from './ledger';
+import {
+  AdapterKindMismatchError,
+  advanceLeftScopeState,
+  checkLedgerInvariant,
+  ingestSnapshot,
+  partitionOwnedTickets,
+} from './ledger';
 import { applyRules, evaluateRules, mappingHead } from './mapping';
 import { DEFAULT_THRESHOLDS, type LedgerEntry, type MappingEvent, type ProjectConfig, type Resource, type SnapshotRead, type TicketObservation, type WorkPackage } from './types';
 import { hoursToMh } from './units';
@@ -297,6 +303,68 @@ describe('ingestSnapshot (FR-25, FR-42)', () => {
     });
     expect(r2.entries.map((e) => [e.ticketId, e.kind, e.deltaMh])).toEqual([
       ['t-old', 'delta', hoursToMh(40)],
+    ]);
+  });
+
+  it('advances durable left_scope only after two consecutive complete absences', () => {
+    expect(advanceLeftScopeState({ leftScope: false, absentCompleteStreak: 0 }, true)).toEqual({
+      leftScope: false,
+      absentCompleteStreak: 0,
+    });
+    expect(advanceLeftScopeState({ leftScope: false, absentCompleteStreak: 0 }, false)).toEqual({
+      leftScope: false,
+      absentCompleteStreak: 1,
+    });
+    expect(advanceLeftScopeState({ leftScope: false, absentCompleteStreak: 1 }, false)).toEqual({
+      leftScope: true,
+      absentCompleteStreak: 2,
+    });
+    expect(advanceLeftScopeState({ leftScope: true, absentCompleteStreak: 2 }, false)).toEqual({
+      leftScope: true,
+      absentCompleteStreak: 2,
+    });
+    expect(advanceLeftScopeState({ leftScope: true, absentCompleteStreak: 2 }, true)).toEqual({
+      leftScope: false,
+      absentCompleteStreak: 0,
+    });
+  });
+
+  it('keeps Ticket identity on trackerIssueId when the display key changes', () => {
+    const s1 = snap('2026-09-01T09:00:00.000Z', [obs('id-1', 10, { key: 'OLD-1' })]);
+    const s2 = snap('2026-09-08T09:00:00.000Z', [obs('id-1', 14, { key: 'NEW-1' })]);
+    const approval = '2026-09-01T00:00:00.000Z';
+    const r1 = ingestSnapshot({
+      prev: null,
+      next: s1,
+      activeBaselineVersionSeq: 1,
+      seqFrom: 1,
+      approvalRecordedAt: approval,
+    });
+    const r2 = ingestSnapshot({
+      prev: s1,
+      next: s2,
+      activeBaselineVersionSeq: 1,
+      seqFrom: r1.nextSeq,
+      approvalRecordedAt: approval,
+    });
+    expect(r1.entries.map((e) => e.ticketId)).toEqual(['id-1']);
+    expect(r2.entries.map((e) => [e.ticketId, e.kind, e.deltaMh])).toEqual([
+      ['id-1', 'delta', hoursToMh(4)],
+    ]);
+    expect(checkLedgerInvariant([...r1.entries, ...r2.entries], s2).ok).toBe(true);
+  });
+
+  it('partitions overlap claims so non-owner Tickets never enter the owned ledger set', () => {
+    const tickets = [obs('owned', 1), obs('claimed', 2), obs('fresh', 3)];
+    const owners = new Map([
+      ['owned', 'con-a'],
+      ['claimed', 'con-a'],
+    ]);
+    const { owned, overlaps } = partitionOwnedTickets(tickets, owners, 'con-b');
+    expect(owned.map((t) => t.trackerIssueId)).toEqual(['fresh']);
+    expect(overlaps.map((o) => [o.ticket.trackerIssueId, o.ownerConnectorId])).toEqual([
+      ['owned', 'con-a'],
+      ['claimed', 'con-a'],
     ]);
   });
 
