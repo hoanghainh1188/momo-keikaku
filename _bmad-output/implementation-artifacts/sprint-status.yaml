@@ -295,7 +295,7 @@ action_items:
     action: "Extract shared Set/Re-baseline writer and lift Epic 4 fence schedulability
       helpers into fence-harness before Epic 5 fence growth (retro F3/F4)"
     owner: "dev"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-4-retro-2026-10-04.md"
   - id: "epic-4-retro-item-23-reconcile-epics-md-epic-4-prose-with-fou"
     epic: 4

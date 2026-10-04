@@ -6,13 +6,10 @@
  * Refuses incomplete plans, halted/missing runs, and a second Set (Re-baseline is 4.3).
  *
  * Outside the use-cases barrel — role/audit gates enumerate this module via the F10 second
- * list (`tests/schedule-calendar-writes.ts`).
+ * list (`tests/schedule-calendar-writes.ts`). Append skeleton lives in
+ * `append-baseline-version.ts` (Epic 4 retro F3).
  */
 import { z } from 'zod';
-import type { Bound } from '../../../db/src/bound';
-import { lockWatermark } from '../../../db/src/watermark-lock';
-import { baselineRepositoryOn } from '../../../db/src/repositories/baseline';
-import { scheduleRepositoryOn } from '../../../db/src/repositories/schedule';
 import {
   authorize,
   PROJECT_REACH,
@@ -20,14 +17,14 @@ import {
   type RoleDeclaration,
 } from '../authz/authorize';
 import type { RequestContext } from '../authz/request-context';
-import { audit, type AuditDeclaration } from '../audit';
+import type { AuditDeclaration } from '../audit';
 import { isProjectNotFound } from '../ports/project-read';
 import type { WriteStamp } from '../ports/audited-write';
 import type { IdGenerator } from '../ports/ids';
-import type { SchedulingBound } from '../ports/schedule-write';
 import type { Result } from '../result';
-import { refuse, runAuditedWrite } from '../use-cases/audited-write';
+import { runAuditedWrite } from '../use-cases/audited-write';
 import type { ApplyPlanChangeDeps } from '../schedule/apply-plan-change';
+import { appendBaselineVersionWithLeaves } from './append-baseline-version';
 import { evaluateBaselineSetGates } from './gates';
 
 /** Fixed first-set reason — free-text mandatory reason is story 4.3. */
@@ -50,10 +47,6 @@ export type SetBaselineResult = {
   readonly scheduleRunSeq: number;
   readonly leafCount: number;
 };
-
-function asBound(bound: SchedulingBound): Bound {
-  return bound as Bound;
-}
 
 /**
  * First Set Baseline for a Project. Authorises PROJECT_REACH, refuses incomplete / halted /
@@ -79,96 +72,21 @@ export async function setBaseline<Handle>(
         authorize(caller, { roles: PROJECT_REACH_ROLES, projectId: command.projectId }),
     },
     async (scope, stamp, command) => {
-      const bound = asBound(scope.bound);
-      const baseline = baselineRepositoryOn(bound);
-      const schedule = scheduleRepositoryOn(bound);
-
-      const loadGateInput = async () => {
-        const [projectStart, existingSeq, latestRun, successfulRun, leaves] = await Promise.all([
-          baseline.projectStart(command.projectId),
-          baseline.latestVersionSeq(command.projectId),
-          schedule.latestRun(command.projectId),
-          schedule.latestSuccessfulRun(command.projectId),
-          baseline.loadLeafProjections(command.projectId),
-        ]);
-        return { projectStart, existingSeq, latestRun, successfulRun, leaves };
-      };
-
-      // Long reads before the exclusive lock (AD-20) — early refuse without holding it.
-      const early = await loadGateInput();
-      const earlyGate = evaluateBaselineSetGates({
-        projectStart: early.projectStart,
-        existingBaselineSeq: early.existingSeq,
-        latestRun: early.latestRun,
-        successfulRun: early.successfulRun,
-        leaves: early.leaves,
-      });
-      if (!earlyGate.ok) {
-        refuse('invalid_input', earlyGate.details);
-      }
-
-      // AD-20: exclusive Project lock, then re-read + re-gate (closes concurrent first-Set TOCTOU).
-      await lockWatermark(bound, { kind: 'project', projectId: command.projectId });
-
-      const locked = await loadGateInput();
-      const gate = evaluateBaselineSetGates({
-        projectStart: locked.projectStart,
-        existingBaselineSeq: locked.existingSeq,
-        latestRun: locked.latestRun,
-        successfulRun: locked.successfulRun,
-        leaves: locked.leaves,
-      });
-      if (!gate.ok) {
-        refuse('invalid_input', gate.details);
-      }
-      const { scheduleRunSeq, leafDates } = gate;
-      const leaves = locked.leaves;
-
-      const versionId = deps.ids.next();
-      const wpRows = leaves.map((leaf) => {
-        const dates = leafDates.get(leaf.wpId);
-        if (dates === undefined) {
-          refuse('invalid_input', {
-            baseline: ['incomplete_plan'],
-            blockingWpIds: [leaf.wpId],
-          });
-        }
-        return {
-          id: deps.ids.next(),
-          wpId: leaf.wpId,
-          start: dates.start,
-          finish: dates.finish,
-          baselineMh: leaf.plannedMh,
-          isMilestone: leaf.isMilestone,
-          isCatchAll: leaf.isCatchAll,
-        };
-      });
-
-      const { seq } = await baseline.appendVersionWithWps(
-        {
-          projectId: command.projectId,
-          id: versionId,
-          scheduleRunSeq,
-          reason: FIRST_SET_REASON,
-          actor: stamp.actor,
-          at: stamp.at,
-        },
-        wpRows,
-      );
-
-      await audit.record(scope, stamp, 'baseline.set', command.projectId, {
-        baselineVersionSeq: seq,
-        baselineVersionId: versionId,
-        scheduleRunSeq,
-        leafCount: wpRows.length,
+      const landed = await appendBaselineVersionWithLeaves({
+        bound: scope.bound,
+        scope,
+        stamp,
+        ids: deps.ids,
+        projectId: command.projectId,
         reason: FIRST_SET_REASON,
+        auditAction: 'baseline.set',
+        evaluateGates: evaluateBaselineSetGates,
       });
-
       return {
-        baselineVersionSeq: seq,
-        baselineVersionId: versionId,
-        scheduleRunSeq,
-        leafCount: wpRows.length,
+        baselineVersionSeq: landed.baselineVersionSeq,
+        baselineVersionId: landed.baselineVersionId,
+        scheduleRunSeq: landed.scheduleRunSeq,
+        leafCount: landed.leafCount,
       };
     },
   );

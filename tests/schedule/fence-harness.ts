@@ -3,13 +3,18 @@
  * afterAll probe teardown, default PM request context, and the common schedulable-leaf prepare.
  *
  * Call order per suite: reachability (`connectFenceHarness`) → probe build →
- * `installFenceAfterAll` (lock when reachable + teardown). Test-only wiring (Epic 2 retro F6).
- * Suites keep their own PROBE slug/seq band and any specialized prepare. Do not import
- * `tests/write-harness.ts` from fence suites.
+ * `installFenceAfterAll` (lock when reachable + teardown). Test-only wiring (Epic 2 retro F6;
+ * Epic 4 retro F4 lifts Baseline schedulability helpers here). Suites keep their own PROBE
+ * slug/seq band and any specialized prepare. Do not import `tests/write-harness.ts` from
+ * fence suites.
  */
-import { afterAll } from 'vitest';
+import { afterAll, expect } from 'vitest';
 import { and, eq } from 'drizzle-orm';
-import type { Locale, Role } from '../../packages/app/src/authz/request-context';
+import type { Locale, RequestContext, Role } from '../../packages/app/src/authz/request-context';
+import {
+  applyPlanChange,
+  type ApplyPlanChangeDeps,
+} from '../../packages/app/src/schedule/apply-plan-change';
 import { closeAllPools, getDb, getPool, type Db } from '../../packages/db/src/client';
 import {
   createProbeTenant,
@@ -116,4 +121,84 @@ export async function prepareSchedulableLeaf(owner: Db, probe: ProbeTenant) {
       );
   });
   return leaf;
+}
+
+/**
+ * Make every non-milestone leaf durationDays: 3 ASAP and every milestone leaf duration 0.
+ * Epic 4 fences call this after `prepareSchedulableLeaf` so Set/Re-baseline see a complete plan.
+ */
+export async function makeAllLeavesSchedulable(owner: Db, probe: ProbeTenant): Promise<void> {
+  const leaves = probe.state.wps.filter((w) => w.isLeaf && !w.isMilestone);
+  await withTenant(owner, probe.tenantId, async (tx) => {
+    for (const leaf of leaves) {
+      await tx
+        .update(s.workPackage)
+        .set({ durationDays: 3, constraintType: 'asap', constraintDate: null })
+        .where(
+          and(
+            eq(s.workPackage.tenantId, probe.tenantId),
+            eq(s.workPackage.projectId, probe.projectId),
+            eq(s.workPackage.id, leaf.id),
+          ),
+        );
+    }
+    // Milestones stay duration 0.
+    for (const m of probe.state.wps.filter((w) => w.isLeaf && w.isMilestone)) {
+      await tx
+        .update(s.workPackage)
+        .set({ durationDays: 0, isMilestone: true })
+        .where(
+          and(
+            eq(s.workPackage.tenantId, probe.tenantId),
+            eq(s.workPackage.projectId, probe.projectId),
+            eq(s.workPackage.id, m.id),
+          ),
+        );
+    }
+  });
+}
+
+/**
+ * Patch one leaf duration through `applyPlanChange` and return the successful run seq.
+ * Default durationDays is 5 (Epic 4 fence convention).
+ */
+export async function scheduleLeaf(
+  deps: ApplyPlanChangeDeps<Db>,
+  ctx: RequestContext,
+  projectId: string,
+  leafId: string,
+  durationDays = 5,
+): Promise<number> {
+  const result = await applyPlanChange(deps, ctx, {
+    kind: 'patch_duration',
+    projectId,
+    wpId: leafId,
+    durationDays,
+  });
+  expect(result.ok).toBe(true);
+  if (!result.ok) {
+    expect.fail(`schedule failed: ${result.error.code} ${JSON.stringify(result.error.details)}`);
+  }
+  expect(result.value.kind).toBe('scheduled');
+  return result.value.seq!;
+}
+
+/**
+ * Walk a thrown error chain for append-only / RLS refuse codes used by Baseline fence proofs.
+ */
+export async function refusalPgCode(promise: Promise<unknown>): Promise<string | null> {
+  try {
+    await promise;
+    return null;
+  } catch (error) {
+    const walk = (value: unknown): string | null => {
+      if (typeof value !== 'object' || value === null) return null;
+      const record = value as { code?: unknown; cause?: unknown };
+      if (typeof record.code === 'string' && /^(42501|MOMO1)$/.test(record.code)) {
+        return record.code;
+      }
+      return walk(record.cause);
+    };
+    return walk(error);
+  }
 }

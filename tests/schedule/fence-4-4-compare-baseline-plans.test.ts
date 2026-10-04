@@ -5,7 +5,6 @@
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { and, eq, sql } from 'drizzle-orm';
-import { applyPlanChange } from '../../packages/app/src/schedule/apply-plan-change';
 import { applyPredecessorSet } from '../../packages/app/src/schedule/apply-predecessor-set';
 import { setBaseline } from '../../packages/app/src/baseline/set-baseline';
 import { reBaseline } from '../../packages/app/src/baseline/re-baseline';
@@ -21,8 +20,10 @@ import { withTenant } from '../../packages/db/src/with-tenant';
 import {
   connectFenceHarness,
   installFenceAfterAll,
+  makeAllLeavesSchedulable,
   pmCtx,
   prepareSchedulableLeaf,
+  scheduleLeaf,
 } from './fence-harness';
 
 const OWNER_DATABASE_URL = process.env.DATABASE_URL;
@@ -48,51 +49,6 @@ const deps = () => ({
   },
 });
 
-async function makeAllLeavesSchedulable(owner: ReturnType<typeof getDb>) {
-  const leaves = PROBE.state.wps.filter((w) => w.isLeaf && !w.isMilestone);
-  await withTenant(owner, PROBE.tenantId, async (tx) => {
-    for (const leaf of leaves) {
-      await tx
-        .update(s.workPackage)
-        .set({ durationDays: 3, constraintType: 'asap', constraintDate: null })
-        .where(
-          and(
-            eq(s.workPackage.tenantId, PROBE.tenantId),
-            eq(s.workPackage.projectId, PROBE.projectId),
-            eq(s.workPackage.id, leaf.id),
-          ),
-        );
-    }
-    for (const m of PROBE.state.wps.filter((w) => w.isLeaf && w.isMilestone)) {
-      await tx
-        .update(s.workPackage)
-        .set({ durationDays: 0, isMilestone: true })
-        .where(
-          and(
-            eq(s.workPackage.tenantId, PROBE.tenantId),
-            eq(s.workPackage.projectId, PROBE.projectId),
-            eq(s.workPackage.id, m.id),
-          ),
-        );
-    }
-  });
-}
-
-async function scheduleLeaf(leafId: string, durationDays = 5) {
-  const result = await applyPlanChange(deps(), ctx(), {
-    kind: 'patch_duration',
-    projectId: PROBE.projectId,
-    wpId: leafId,
-    durationDays,
-  });
-  expect(result.ok).toBe(true);
-  if (!result.ok) {
-    expect.fail(`schedule failed: ${result.error.code} ${JSON.stringify(result.error.details)}`);
-  }
-  expect(result.value.kind).toBe('scheduled');
-  return result.value.seq!;
-}
-
 function twoLeaves() {
   const leaves = PROBE.state.wps.filter((w) => w.isLeaf && !w.isMilestone);
   if (leaves.length < 2) throw new Error('fixture needs two non-milestone leaves');
@@ -102,10 +58,10 @@ function twoLeaves() {
 async function prepareWithEdgeBaseline() {
   const owner = getDb(OWNER_DATABASE_URL!);
   await prepareSchedulableLeaf(owner, PROBE);
-  await makeAllLeavesSchedulable(owner);
+  await makeAllLeavesSchedulable(owner, PROBE);
   const [pred, succ] = twoLeaves();
-  await scheduleLeaf(pred.id, 5);
-  await scheduleLeaf(succ.id, 3);
+  await scheduleLeaf(deps(), ctx(), PROBE.projectId, pred.id, 5);
+  await scheduleLeaf(deps(), ctx(), PROBE.projectId, succ.id, 3);
 
   const linked = await applyPredecessorSet(deps(), ctx(), {
     projectId: PROBE.projectId,
@@ -225,7 +181,7 @@ describe.skipIf(!reachable)('compareBaselineVersions fence (story 4.4)', () => {
         );
     });
     // Touch duration so a new successful run is written with the new wbs in inputs.
-    await scheduleLeaf(succ.id, 4);
+    await scheduleLeaf(deps(), ctx(), PROBE.projectId, succ.id, 4);
 
     const re = await reBaseline(deps(), ctx(), {
       projectId: PROBE.projectId,
@@ -252,7 +208,7 @@ describe.skipIf(!reachable)('compareBaselineVersions fence (story 4.4)', () => {
 
   it('refuses when a pinned run is halted / outputs-null', async () => {
     const { firstSeq, set, succ } = await prepareWithEdgeBaseline();
-    await scheduleLeaf(succ.id, 4);
+    await scheduleLeaf(deps(), ctx(), PROBE.projectId, succ.id, 4);
     const re = await reBaseline(deps(), ctx(), {
       projectId: PROBE.projectId,
       reason: 'Second pin before corrupting the first',
@@ -335,8 +291,8 @@ describe.skipIf(!reachable)('compareBaselineVersions fence (story 4.4)', () => {
   it('with a single Baseline version, history length < 2 (UI disables compare)', async () => {
     const owner = getDb(OWNER_DATABASE_URL!);
     const leaf = await prepareSchedulableLeaf(owner, PROBE);
-    await makeAllLeavesSchedulable(owner);
-    await scheduleLeaf(leaf.id);
+    await makeAllLeavesSchedulable(owner, PROBE);
+    await scheduleLeaf(deps(), ctx(), PROBE.projectId, leaf.id);
     const set = await setBaseline(deps(), ctx(), { projectId: PROBE.projectId });
     expect(set.ok).toBe(true);
 
