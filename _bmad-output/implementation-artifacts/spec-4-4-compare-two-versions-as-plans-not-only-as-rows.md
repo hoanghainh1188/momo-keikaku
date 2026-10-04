@@ -2,7 +2,7 @@
 title: 'Story 4.4 — Compare two versions as plans, not only as rows'
 type: 'feature'
 created: '2026-10-03'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '30074aeb7cb8dcc9d21f40922d720d2ce57fd79e'
@@ -104,7 +104,8 @@ context:
 - **DB:** `baseline.scheduleRunSeqForVersion(projectId, seq)` — read-only pin lookup; compare use-case loads pins then `schedule.runBySeq` ×2.
 - **App:** `compareBaselineVersions` — `PROJECT_REACH`, zod seqs, refuse same/missing/incomplete pins; roles + unaudited audit merged into F10 surface (read-only, no new audit action).
 - **Web:** `/baselines` GET picker (`from`/`to`) + project change list + WP date attribution table; Plan toolbar Baseline compare left alone (4.5).
-- **Fence:** `tests/schedule/fence-4-4-compare-baseline-plans.test.ts` — edge-removed + lag attribution, match-by-wp_id after WBS renumber, missing version, same-version refuse, viewer `not_found`, single-version UI contract.
+- **Fence:** `tests/schedule/fence-4-4-compare-baseline-plans.test.ts` — edge-removed + lag attribution, match-by-wp_id after WBS renumber, missing version, same-version refuse, viewer `not_found`, incomplete/halted pin, single-version UI contract.
+- **Review patches (iteration 0):** skip OOB edge indexes; CodecError → `undecodable`; UI refuse/same-version captions; pct before/after; `unattributed: true` unit; fence halted pin + AR-55 unconditional delta; `baseline-compare-ui` need-two/form/error unit.
 
 ## Spec Change Log
 

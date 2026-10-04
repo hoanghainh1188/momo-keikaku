@@ -1263,3 +1263,7 @@ above can see where it went.
 - source_spec: `_bmad-output/implementation-artifacts/spec-4-1-set-a-baseline-that-points-at-the-run-behind-it.md`
   summary: Japanese locale still ships English copy for Story 4.1 Set Baseline / Review empty-state strings (`baselines.*`, `review.no_baseline_yet*`).
   evidence: Build review 2026-10-03 (BH). Pre-existing ja.json pattern — many product strings remain English; not introduced as a new translation policy by 4.1.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-4-compare-two-versions-as-plans-not-only-as-rows.md`
+  summary: Compare assumes `outputs.wps` stays index-parallel to `inputs.wps`; a shorter outputs array could yield false null dates without a hard refuse.
+  evidence: Build review 2026-10-04 (EC, maybe-false). Codec-canonical encode keeps arrays parallel; settle with an explicit incomplete-pin guard if corrupt jsonb ever appears in production pins.
