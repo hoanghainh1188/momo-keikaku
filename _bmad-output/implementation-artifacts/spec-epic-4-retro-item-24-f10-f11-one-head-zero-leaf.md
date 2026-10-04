@@ -2,7 +2,7 @@
 title: 'Epic 4 retro item-24 slice — one-head Baseline grid loader (F10) + refuse zero-leaf (F11)'
 type: 'bugfix'
 created: '2026-10-04'
-status: 'in-progress'
+status: 'done'
 route: 'oneshot'
 review_loop_iteration: 0
 context: []
@@ -27,4 +27,16 @@ context: []
 - F11: `evaluatePinAndCompleteness` refuses `incomplete_plan` when `leaves.length === 0` (empty `blockingWpIds`); covers Set + Re-baseline shared path.
 - Proofs: unit mock for one-head loader path; gate units for zero-leaf Set/Re; fence-4-5 deterministic one-head after Re-baseline. Switched fence-4-5 `ids.next` to `randomUUID` so Set+Re appends do not collide on global `baseline_wp` PK.
 - Left `epic-4-retro-item-24-…` **open** (F5 UI extract still deferred). Did not touch items 19–23, F7 surface, retention, writeLanded, or shared writer.
+- Review patches: fail-closed unit discards non-empty wps when pin null; JSDoc/module comment clarity; Re/Set F11 details asserts. Deferred: blocked-copy for zero-leaf; append-boundary empty-wps guard.
+
+## Review Triage Log
+
+- UI blocked copy omits zero-leaf wording — medium; defer (i18n follow-up in deferred-work.md).
+- No writer/fence proof for empty `loadLeafProjections` — low reject; AC met by shared-gate units on Set + Re.
+- `appendVersionWithWps` still allows empty wps — medium; defer (defense in depth; gate is the product path).
+- Fail-closed unit used empty wps mock — low; patched (non-empty wps discarded when pin null).
+- Fence does not call `getPlanGridState` / cannot distinguish old path — false; unit mock proves by-seq path; fence proves post–Re-baseline head consistency.
+- `loadBaselineWpsForVersion` JSDoc overstated empty meaning — low; patched.
+- Re F11 unit missing details asserts — low; patched (Set + Re assert `details`).
+- `gates.ts` module comment omitted zero-leaf — low; patched.
 

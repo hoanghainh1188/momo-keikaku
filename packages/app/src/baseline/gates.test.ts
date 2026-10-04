@@ -151,6 +151,7 @@ describe('evaluateBaselineSetGates', () => {
     expect(result.reason).toBe('incomplete_plan');
     expect(result.blockingWpIds).toEqual([]);
     expect(result.details.baseline).toEqual(['incomplete_plan']);
+    expect(result.details.notSchedulableCount).toEqual(['0']);
   });
 });
 
@@ -212,6 +213,8 @@ describe('evaluateReBaselineGates', () => {
     if (result.ok) return;
     expect(result.reason).toBe('incomplete_plan');
     expect(result.blockingWpIds).toEqual([]);
+    expect(result.details.baseline).toEqual(['incomplete_plan']);
+    expect(result.details.notSchedulableCount).toEqual(['0']);
   });
 
   it('shares halted-head refuse with Set', () => {

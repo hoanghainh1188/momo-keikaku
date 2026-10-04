@@ -168,8 +168,8 @@ export function baselineRepositoryOn(bound: Bound) {
 
     /**
      * Story 4.5 / Epic 4 retro F10: leaf `baseline_wp` rows for one Baseline version seq.
-     * Display / Divergence projection only — never a schedule input. Empty when the seq is
-     * unknown (fail-closed for a vanished head).
+     * Display / Divergence projection only — never a schedule input. Empty when the seq has
+     * no wp rows (unknown seq or a version with zero leaves).
      */
     loadBaselineWpsForVersion,
 

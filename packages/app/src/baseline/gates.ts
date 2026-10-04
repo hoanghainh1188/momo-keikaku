@@ -4,7 +4,7 @@
  * disable and refuse cannot disagree.
  *
  * Set refuses when a Baseline already exists; Re-baseline refuses when none exists. Pin /
- * incomplete / halted checks are shared.
+ * incomplete / halted checks are shared. Zero leaves also refuse `incomplete_plan` (F11).
  */
 import { parseStoredInputs, parseStoredOutputs } from '@momo/domain';
 import type { BaselineLeafProjection } from '../../../db/src/repositories/baseline';

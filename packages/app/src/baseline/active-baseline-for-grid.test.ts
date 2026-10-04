@@ -69,7 +69,15 @@ describe('loadActiveBaselineForGrid (F10 one-head)', () => {
 
   it('fails closed to empty when the resolved seq has no pin row', async () => {
     latestVersionSeq.mockResolvedValue(3);
-    loadBaselineWpsForVersion.mockResolvedValue([]);
+    // Non-empty wps must still be discarded when the pin row for that seq is gone.
+    loadBaselineWpsForVersion.mockResolvedValue([
+      {
+        wpId: 'wp-a',
+        start: '2026-09-01',
+        finish: '2026-09-03',
+        baselineMh: 1_000n,
+      },
+    ]);
     scheduleRunSeqForVersion.mockResolvedValue(null);
 
     const head = await loadActiveBaselineForGrid(
