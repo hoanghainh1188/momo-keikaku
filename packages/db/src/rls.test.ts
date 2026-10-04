@@ -234,8 +234,8 @@ beforeAll(async () => {
     );
     await client.query(
       `INSERT INTO tracker_snapshot (id, tenant_id, connector_id, observed_at, measurement_basis,
-         ticket_count)
-       VALUES ($1, $2, $3, now(), 'hours', 1)`,
+         ticket_count, adapter_kind)
+       VALUES ($1, $2, $3, now(), 'hours', 1, 'fixture')`,
       [SNAPSHOT_B, TENANT_B, CONNECTOR_B],
     );
     // Money. `deltaMh` is what AC is summed from, so a policy that leaked this table would

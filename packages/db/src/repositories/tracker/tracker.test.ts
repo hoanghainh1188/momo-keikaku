@@ -15,6 +15,21 @@ const REQUIRE_DB = process.env.REQUIRE_DB === '1';
 const OWNER_DATABASE_URL = process.env.DATABASE_URL;
 const APP_DATABASE_URL = process.env.APP_DATABASE_URL;
 
+/**
+ * The SQLSTATE of a rejected query, through Drizzle.
+ *
+ * Drizzle wraps the driver error on `cause`, so asserting top-level `{ code }` alone
+ * never matches the real Postgres SQLSTATE.
+ */
+function sqlstateOf(error: unknown): string | undefined {
+  const candidates = [error, (error as { cause?: unknown } | undefined)?.cause];
+  for (const candidate of candidates) {
+    const code = (candidate as { code?: unknown } | undefined)?.code;
+    if (typeof code === 'string') return code;
+  }
+  return undefined;
+}
+
 async function reachable(url: string | undefined): Promise<boolean> {
   if (!url) return false;
   const client = new pg.Client({ connectionString: url, application_name: 'momo-tracker-test' });
@@ -117,8 +132,8 @@ describe.skipIf(!live)('tracker identity + fixture cursor (story 5.1)', () => {
         projectId: PROJECT,
         key: 'K-1',
       });
-      await expect(
-        tx.execute(sql`
+      try {
+        await tx.execute(sql`
           INSERT INTO ticket (
             id, tenant_id, tracker_kind, tracker_site, tracker_issue_id,
             owner_connector_id, project_id, key
@@ -126,8 +141,11 @@ describe.skipIf(!live)('tracker identity + fixture cursor (story 5.1)', () => {
             'tkt-1-dup', ${TENANT}, 'fixture', 'fixture.site', 'issue-1',
             ${CONNECTOR}, ${PROJECT}, 'K-1-dup'
           )
-        `),
-      ).rejects.toMatchObject({ code: '23505' });
+        `);
+        expect.fail('expected UNIQUE violation');
+      } catch (error) {
+        expect(sqlstateOf(error)).toBe('23505');
+      }
     });
   });
 
