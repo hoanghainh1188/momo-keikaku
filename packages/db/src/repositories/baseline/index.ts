@@ -59,19 +59,42 @@ export function baselineRepositoryOn(bound: Bound) {
       return row?.seq ?? null;
     },
 
-    /** Every `schedule_run_seq` a Baseline version still pins (AR-11 retention). */
+    /**
+     * Every `schedule_run_seq` a Baseline version still pins, plus each pin's immediate
+     * `prev_run_seq` when present (AR-11 retention / Epic 4 retro F8).
+     *
+     * Story 4.2 `reDerivePinnedBaseline` loads prev inputs for `recalculateAt`; the pin's
+     * prev is typically older than the oldest Baseline pin, so it must be in the pin set or
+     * `scheduleRunRetention` would mark those inputs droppable. Immediate prev only — not a
+     * full cause/history walk.
+     */
     async pinnedScheduleRunSeqs(projectId: string): Promise<readonly number[]> {
       const rows = await tx
-        .select({ scheduleRunSeq: s.baselineVersion.scheduleRunSeq })
+        .select({
+          scheduleRunSeq: s.baselineVersion.scheduleRunSeq,
+          prevRunSeq: s.scheduleRun.prevRunSeq,
+        })
         .from(s.baselineVersion)
+        .innerJoin(
+          s.scheduleRun,
+          and(
+            eq(s.scheduleRun.tenantId, s.baselineVersion.tenantId),
+            eq(s.scheduleRun.projectId, s.baselineVersion.projectId),
+            eq(s.scheduleRun.seq, s.baselineVersion.scheduleRunSeq),
+          ),
+        )
         .where(
           and(
             eq(s.baselineVersion.tenantId, tenantId),
             eq(s.baselineVersion.projectId, projectId),
           ),
-        )
-        .orderBy(asc(s.baselineVersion.seq));
-      return rows.map((r) => r.scheduleRunSeq);
+        );
+      const seqs = new Set<number>();
+      for (const row of rows) {
+        seqs.add(row.scheduleRunSeq);
+        if (row.prevRunSeq !== null) seqs.add(row.prevRunSeq);
+      }
+      return [...seqs].sort((a, b) => a - b);
     },
 
     /**

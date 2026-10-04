@@ -31,4 +31,24 @@ describe('AD-5 schedule_run retention by reference', () => {
       [3, true, true],
     ]);
   });
+
+  it('keeps inputs for a pin prev older than the oldest pin when the collector expands pins', () => {
+    // Baseline pins seq 5; its prev_run_seq is 4 (typical pin−1), older than the oldest pin.
+    // Without expanding the pin set, retainInputs at 4 is false — re-derive would lose prev.
+    const runs = Array.from({ length: 7 }, (_, i) => ({
+      seq: i + 1,
+      hasInputs: true,
+      hasOutputs: true,
+    }));
+    const pinOnly = scheduleRunRetention(runs, [5]);
+    expect(pinOnly.find((d) => d.seq === 4)?.retainInputs).toBe(false);
+    expect(pinOnly.find((d) => d.seq === 5)?.retainInputs).toBe(true);
+
+    // Collector includes immediate prev (F8 / item-19) — not a full cause chain.
+    const withPrev = scheduleRunRetention(runs, [4, 5]);
+    expect(withPrev.find((d) => d.seq === 4)?.retainInputs).toBe(true);
+    expect(withPrev.find((d) => d.seq === 5)?.retainInputs).toBe(true);
+    // Still droppable: runs older than the expanded oldest pin.
+    expect(withPrev.find((d) => d.seq === 3)?.retainInputs).toBe(false);
+  });
 });

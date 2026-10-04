@@ -5,9 +5,10 @@
  * the oldest run its Project still references and is not the latest. `outputs` may be dropped
  * earlier whenever the run is neither pinned nor latest — they are a pure function of inputs.
  *
- * Pins come from Baselines, Published Snapshots, open Reviews and unexpired exports. Story 2.9
- * proves the rule with two Review-like pins: the intervening runs survive (the set FR-28 walks
- * and a last-N rule would have deleted).
+ * Pins come from Baselines, Published Snapshots, open Reviews and unexpired exports. Baseline
+ * collectors also include each pin's immediate `prev_run_seq` so Story 4.2 re-derive can still
+ * load prev inputs (Epic 4 retro F8). Story 2.9 proves the intervening-run rule with two
+ * Review-like pins: those runs survive (the set FR-28 walks and a last-N rule would have deleted).
  */
 export interface ScheduleRunRetentionRow {
   readonly seq: number;
@@ -26,7 +27,9 @@ export interface ScheduleRunRetentionDecision {
 /**
  * For each run, whether inputs and outputs must be retained given the Project's pin set and
  * the latest seq. `pinnedSeqs` is every `schedule_run_seq` a Baseline / Review / export still
- * references.
+ * references, plus any collector-expanded immediate `prev_run_seq` values (Baseline F8) that
+ * must keep inputs for re-derive — those seqs are treated as pinned here, so outputs are also
+ * retained (conservative; re-derive only needs the inputs).
  */
 export function scheduleRunRetention(
   runs: readonly ScheduleRunRetentionRow[],

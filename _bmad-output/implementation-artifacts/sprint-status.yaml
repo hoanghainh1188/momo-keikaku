@@ -273,7 +273,7 @@ action_items:
       chain keeps inputs required by re-derive; add fence assert alongside fence-4-1
       retention proof (retro F8)"
     owner: "dev"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-4-retro-2026-10-04.md"
   - id: "epic-4-retro-item-20-surface-set-re-baseline-writelanded-fail"
     epic: 4
