@@ -118,12 +118,20 @@ function edgeKey(edge: BaselineEdgeIdentity): string {
 }
 
 function resolveEdges(inputs: StoredScheduleInputs): ResolvedEdge[] {
-  return inputs.edges.map((e) => ({
-    predecessorWpId: inputs.wps[e.predecessorId]!.id,
-    successorWpId: inputs.wps[e.successorId]!.id,
-    type: 'FS' as const,
-    lagDays: e.lagDays,
-  }));
+  const resolved: ResolvedEdge[] = [];
+  for (const e of inputs.edges) {
+    const pred = inputs.wps[e.predecessorId];
+    const succ = inputs.wps[e.successorId];
+    // Corrupt pins may carry out-of-bounds indexes — skip rather than throw.
+    if (pred === undefined || succ === undefined) continue;
+    resolved.push({
+      predecessorWpId: pred.id,
+      successorWpId: succ.id,
+      type: 'FS',
+      lagDays: e.lagDays,
+    });
+  }
+  return resolved;
 }
 
 function samePct(

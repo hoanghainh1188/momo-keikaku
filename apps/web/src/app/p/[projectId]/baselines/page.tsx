@@ -45,18 +45,26 @@ export default async function BaselinesPage({
   const toVersionSeq = parseVersionSeq(query.to);
 
   let compareResult = null;
-  if (
-    fromVersionSeq !== null &&
-    toVersionSeq !== null &&
-    fromVersionSeq !== toVersionSeq &&
-    versionSeqs.includes(fromVersionSeq) &&
-    versionSeqs.includes(toVersionSeq)
-  ) {
-    const compared = await compareProjectBaselineVersions(
-      { projectId, fromVersionSeq, toVersionSeq },
-      ctx,
-    );
-    if (compared.ok) compareResult = compared.value.compare;
+  let compareError: string | null = null;
+  if (fromVersionSeq !== null && toVersionSeq !== null) {
+    if (fromVersionSeq === toVersionSeq) {
+      compareError = t('baselines.compare_same_version');
+    } else if (
+      !versionSeqs.includes(fromVersionSeq) ||
+      !versionSeqs.includes(toVersionSeq)
+    ) {
+      compareError = t('baselines.compare_refused');
+    } else {
+      const compared = await compareProjectBaselineVersions(
+        { projectId, fromVersionSeq, toVersionSeq },
+        ctx,
+      );
+      if (compared.ok) {
+        compareResult = compared.value.compare;
+      } else {
+        compareError = t('baselines.compare_refused');
+      }
+    }
   }
 
   return (
@@ -142,6 +150,7 @@ export default async function BaselinesPage({
         fromVersionSeq={fromVersionSeq}
         toVersionSeq={toVersionSeq}
         compare={compareResult}
+        error={compareError}
         labels={{
           title: t('baselines.compare_title'),
           versionA: t('baselines.compare_version_a'),

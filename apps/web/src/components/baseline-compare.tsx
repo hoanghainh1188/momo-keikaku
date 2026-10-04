@@ -1,3 +1,5 @@
+import { baselineComparePanelView } from '@/lib/baseline-compare-ui';
+
 /** Local view shapes — AD-1: web must not import `@momo/domain` compute modules. */
 
 type EdgeIdentity = {
@@ -5,6 +7,8 @@ type EdgeIdentity = {
   readonly successorWpId: string;
   readonly type: string;
 };
+
+type Pct = { readonly num: bigint; readonly den: bigint };
 
 type InputChange =
   | { readonly kind: 'edge_added'; readonly edge: EdgeIdentity }
@@ -40,6 +44,8 @@ type InputChange =
   | {
       readonly kind: 'recorded_pct_changed';
       readonly wpId: string;
+      readonly fromPct: Pct | null;
+      readonly toPct: Pct | null;
     }
   | {
       readonly kind: 'milestone_changed';
@@ -82,6 +88,11 @@ export type BaselineCompareView = {
   }[];
 };
 
+function formatPct(pct: Pct | null): string {
+  if (pct === null) return '—';
+  return `${pct.num}/${pct.den}`;
+}
+
 function formatChange(change: InputChange): string {
   switch (change.kind) {
     case 'edge_added':
@@ -97,7 +108,7 @@ function formatChange(change: InputChange): string {
     case 'actual_dates_changed':
       return `Actual dates: ${change.wpId} (${change.fromStart ?? '—'}…${change.fromFinish ?? '—'} → ${change.toStart ?? '—'}…${change.toFinish ?? '—'})`;
     case 'recorded_pct_changed':
-      return `Percent complete: ${change.wpId}`;
+      return `Percent complete: ${change.wpId} (${formatPct(change.fromPct)} → ${formatPct(change.toPct)})`;
     case 'milestone_changed':
       return `Milestone: ${change.wpId} (${change.from ? 'yes' : 'no'} → ${change.to ? 'yes' : 'no'})`;
     case 'calendar_version_changed':
@@ -138,59 +149,71 @@ export function BaselineComparePanel({
   fromVersionSeq,
   toVersionSeq,
   compare,
+  error,
   labels,
 }: {
   readonly versionSeqs: readonly number[];
   readonly fromVersionSeq: number | null;
   readonly toVersionSeq: number | null;
   readonly compare: BaselineCompareView | null;
+  readonly error: string | null;
   readonly labels: BaselineCompareLabels;
 }) {
-  const canCompare = versionSeqs.length >= 2;
+  const view = baselineComparePanelView({
+    versionCount: versionSeqs.length,
+    error,
+  });
 
   return (
     <section data-testid="baseline-compare" style={{ marginTop: 24 }}>
       <h2 className="report-title" style={{ fontSize: '1.1rem' }}>
         {labels.title}
       </h2>
-      {!canCompare ? (
+      {view.kind === 'need_two' ? (
         <p className="caption" data-testid="baseline-compare-need-two">
           {labels.needTwo}
         </p>
       ) : (
-        <form method="get" className="btn-row" style={{ gap: 12, flexWrap: 'wrap', marginTop: 8 }}>
-          <label className="caption">
-            {labels.versionA}{' '}
-            <select
-              name="from"
-              defaultValue={fromVersionSeq ?? versionSeqs[0]}
-              data-testid="baseline-compare-from"
-            >
-              {versionSeqs.map((seq) => (
-                <option key={`from-${seq}`} value={seq}>
-                  {seq}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="caption">
-            {labels.versionB}{' '}
-            <select
-              name="to"
-              defaultValue={toVersionSeq ?? versionSeqs[versionSeqs.length - 1]}
-              data-testid="baseline-compare-to"
-            >
-              {versionSeqs.map((seq) => (
-                <option key={`to-${seq}`} value={seq}>
-                  {seq}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button type="submit" className="btn" data-testid="baseline-compare-submit">
-            {labels.compare}
-          </button>
-        </form>
+        <>
+          <form method="get" className="btn-row" style={{ gap: 12, flexWrap: 'wrap', marginTop: 8 }}>
+            <label className="caption">
+              {labels.versionA}{' '}
+              <select
+                name="from"
+                defaultValue={fromVersionSeq ?? versionSeqs[0]}
+                data-testid="baseline-compare-from"
+              >
+                {versionSeqs.map((seq) => (
+                  <option key={`from-${seq}`} value={seq}>
+                    {seq}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="caption">
+              {labels.versionB}{' '}
+              <select
+                name="to"
+                defaultValue={toVersionSeq ?? versionSeqs[versionSeqs.length - 1]}
+                data-testid="baseline-compare-to"
+              >
+                {versionSeqs.map((seq) => (
+                  <option key={`to-${seq}`} value={seq}>
+                    {seq}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button type="submit" className="btn" data-testid="baseline-compare-submit">
+              {labels.compare}
+            </button>
+          </form>
+          {view.error !== null ? (
+            <p className="caption" data-testid="baseline-compare-error" style={{ marginTop: 8 }}>
+              {view.error}
+            </p>
+          ) : null}
+        </>
       )}
 
       {compare !== null ? (

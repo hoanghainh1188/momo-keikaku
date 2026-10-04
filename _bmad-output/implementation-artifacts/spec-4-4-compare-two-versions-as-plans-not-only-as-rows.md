@@ -2,7 +2,7 @@
 title: 'Story 4.4 — Compare two versions as plans, not only as rows'
 type: 'feature'
 created: '2026-10-03'
-status: 'review'
+status: 'in-review'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '30074aeb7cb8dcc9d21f40922d720d2ce57fd79e'
@@ -109,6 +109,33 @@ context:
 ## Spec Change Log
 
 ## Review Triage Log
+
+| Finding | Verdict | Evidence / route |
+|---------|---------|------------------|
+| `ja.json` compare keys are English copies of `en.json` | low | Same pre-existing ja locale pattern as stories 4.1/4.3. Reject — everyday Japanese UI already largely English; full locale pass is out of this story's harm bar. |
+| `formatChange` hardcodes English sentences instead of i18n | low | Confirmed `baseline-compare.tsx`. Localising every change template is more than a direct correction while ja baselines copy stays English. Reject. |
+| Web `recorded_pct_changed` drops `fromPct`/`toPct`; UI never shows before/after | medium | Domain carries both (`compare-baseline-plans.ts`); web union omits them and `formatChange` prints only WP id. Route: **patch** — pass through pct fields and format them. |
+| Failed compare (`!ok`) leaves blank UI with no refuse message | medium | Confirmed `baselines/page.tsx` keeps `compareResult = null` on failure. Route: **patch** — surface error/empty state from refuse. |
+| Same-version A/B submit silently filtered with no message | medium | Page requires `from !== to` then shows nothing. Route: **patch** — same-version refuse caption (group with silent fail). |
+| Version pickers show bare seq only (no author/time/reason) | low | History table already shows metadata one section above. Reject — unlikely everyday confusion requiring picker rewrite. |
+| Domain/fence never assert `unattributed: true` | medium | VG pre-verified: every assert expects `false`; hard-coding `false` still passes. Route: **patch** — domain unit with dates moved and empty attribution. |
+| Constraint unit only asserts inside `if (a !== undefined)` | low | Still lists `constraint_changed` in projectChanges unconditionally; weak date branch is optional. Reject. |
+| Fence misses calendar/settings / incomplete-halted / real UI disable | medium | Calendar/settings covered by domain units (matrix OK). Incomplete/halted + UI disable gaps are real (VG). Route: **patch** those two; calendar stays domain. |
+| Fence “single version” only asserts `same_version` / row count, not UI disable | medium | Same as VG UI gap. Route: **patch** — panel unit for `versionSeqs.length < 2`. |
+| WP present in only one pin invents field changes vs added/removed-WP signal | maybe-false | `wpFieldChanges` one-sided branch is intentional field enumeration; FR-16 list has no WP-add/remove kind. Would need intent change. Reject as not a demonstrated everyday defect. |
+| `resolveEdges` non-null asserts on out-of-bounds edge indexes | medium | Confirmed `compare-baseline-plans.ts:122-123`. Corrupt pin throws. Route: **patch** — skip invalid indexes. |
+| Spec Change Log / Triage empty while status review | false | Intermediate workflow state; triage filled this pass. |
+| Lag format omits type; duration `d` only on RHS | low | Cosmetic formatting. Reject. |
+| Duck-typed `BaselineCompareView` vs domain payload | low | AD-1 forbids web importing domain compute; local view shapes are intentional. Reject. |
+| Edge indexes OOB throw (edge-case hunter) | medium | Same as resolveEdges — **patch** (grouped). |
+| outputs.wps shorter than inputs indexes → false null dates | maybe-false | Codec keeps arrays parallel; would need corrupt jsonb. Defer — settle with a guard if pin decode already fails. |
+| `parseStoredInputs/Outputs` throw escapes use-case | medium | Confirmed no try/catch around parse in `compare-baseline-versions.ts`. Route: **patch** — `invalid_input` / undecodable. |
+| Page silent on `!ok` / same-version (edge-case) | medium | Grouped with silent fail — **patch**. |
+| Fence UI disable never observes panel (VG) | medium | Pre-verified. Route: **patch** — panel/helper unit. |
+| No executing consumer test for `/baselines` wiring (VG) | medium | Pre-verified. Route: **patch** — panel unit covering need-two + result/error props (page RSC left to composition). |
+| Incomplete/halted pin refuse untested (VG) | medium | Pre-verified; only source hit for `incomplete_or_halted`. Route: **patch** — fence case. |
+| `unattributed: true` never observed (VG) | medium | Grouped with BH unattributed — **patch**. |
+| AR-55 fence can pass without observing a match (VG) | medium | Pre-verified: match asserts inside `if (row !== undefined)`; `wpId !== oldWbs` vacuous. Route: **patch** — unconditional `expect(row).toBeDefined()`. |
 
 ## Design Notes
 

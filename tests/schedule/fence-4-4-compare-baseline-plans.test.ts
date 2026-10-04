@@ -4,7 +4,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { applyPlanChange } from '../../packages/app/src/schedule/apply-plan-change';
 import { applyPredecessorSet } from '../../packages/app/src/schedule/apply-predecessor-set';
 import { setBaseline } from '../../packages/app/src/baseline/set-baseline';
@@ -210,8 +210,7 @@ describe.skipIf(!reachable)('compareBaselineVersions fence (story 4.4)', () => {
 
   it('matches WPs by wp_id after wbs_code renumber (AR-55)', async () => {
     const { succ, firstSeq } = await prepareWithEdgeBaseline();
-    const oldWbs = succ.wbsCode;
-    const newWbs = `${oldWbs}.renumbered`;
+    const newWbs = `${succ.wbsCode}.renumbered`;
 
     await withTenant(getDb(OWNER_DATABASE_URL!), PROBE.tenantId, async (tx) => {
       await tx
@@ -245,16 +244,46 @@ describe.skipIf(!reachable)('compareBaselineVersions fence (story 4.4)', () => {
     }
 
     const row = compared.value.compare.wpDateDeltas.find((d) => d.wpId === succ.id);
-    // Duration change should move dates; match key must still be wp_id.
-    if (row !== undefined) {
-      expect(row.wpId).toBe(succ.id);
-      expect(row.wbsCode).toBe(newWbs);
-      expect(row.unattributed).toBe(false);
-    }
-    // Must not invent a second identity keyed only on the old WBS code.
-    expect(
-      compared.value.compare.wpDateDeltas.every((d) => d.wpId !== oldWbs),
-    ).toBe(true);
+    expect(row).toBeDefined();
+    expect(row!.wpId).toBe(succ.id);
+    expect(row!.wbsCode).toBe(newWbs);
+    expect(row!.unattributed).toBe(false);
+  });
+
+  it('refuses when a pinned run is halted / outputs-null', async () => {
+    const { firstSeq, set, succ } = await prepareWithEdgeBaseline();
+    await scheduleLeaf(succ.id, 4);
+    const re = await reBaseline(deps(), ctx(), {
+      projectId: PROBE.projectId,
+      reason: 'Second pin before corrupting the first',
+    });
+    expect(re.ok).toBe(true);
+    if (!re.ok) return;
+
+    // Append-only schedule_run: open the maintenance hatch to simulate a ruined pin.
+    await getDb(OWNER_DATABASE_URL!).transaction(async (tx) => {
+      await tx.execute(sql`select set_config('app.maintenance', 'on', true)`);
+      await tx
+        .update(s.scheduleRun)
+        .set({ haltedReason: 'calendar_range', outputs: null })
+        .where(
+          and(
+            eq(s.scheduleRun.tenantId, PROBE.tenantId),
+            eq(s.scheduleRun.projectId, PROBE.projectId),
+            eq(s.scheduleRun.seq, set.value.scheduleRunSeq),
+          ),
+        );
+    });
+
+    const compared = await compareBaselineVersions(deps(), ctx(), {
+      projectId: PROBE.projectId,
+      fromVersionSeq: firstSeq,
+      toVersionSeq: re.value.baselineVersionSeq,
+    });
+    expect(compared.ok).toBe(false);
+    if (compared.ok) return;
+    expect(compared.error.code).toBe('invalid_input');
+    expect(compared.error.details?.pin).toEqual(['incomplete_or_halted']);
   });
 
   it('refuses missing Baseline version seq', async () => {

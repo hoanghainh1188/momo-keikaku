@@ -6,6 +6,7 @@
  * Read-only — no audit action.
  */
 import {
+  CodecError,
   compareBaselinePlans,
   parseStoredInputs,
   parseStoredOutputs,
@@ -114,10 +115,21 @@ export async function compareBaselineVersions<Handle>(
         return fail('invalid_input', { pin: ['incomplete_or_halted'] });
       }
 
-      const fromInputs = parseStoredInputs(fromRun.inputs);
-      const toInputs = parseStoredInputs(toRun.inputs);
-      const fromOutputs = parseStoredOutputs(fromRun.outputs);
-      const toOutputs = parseStoredOutputs(toRun.outputs);
+      let fromInputs;
+      let toInputs;
+      let fromOutputs;
+      let toOutputs;
+      try {
+        fromInputs = parseStoredInputs(fromRun.inputs);
+        toInputs = parseStoredInputs(toRun.inputs);
+        fromOutputs = parseStoredOutputs(fromRun.outputs);
+        toOutputs = parseStoredOutputs(toRun.outputs);
+      } catch (error) {
+        if (error instanceof CodecError) {
+          return fail('invalid_input', { pin: ['undecodable'] });
+        }
+        throw error;
+      }
 
       const compare = compareBaselinePlans(
         { inputs: fromInputs, outputs: fromOutputs },

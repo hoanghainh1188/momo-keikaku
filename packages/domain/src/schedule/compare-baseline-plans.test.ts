@@ -281,6 +281,30 @@ describe('compareBaselinePlans (story 4.4)', () => {
       c!.accountedBy.some((ch) => ch.kind === 'duration_changed' && ch.wpId === 'A'),
     ).toBe(true);
   });
+
+  it('marks unattributed when early dates differ with no accounting input change', () => {
+    const plan = pinFrom(
+      inputs([wp('A', { durationDays: 5 })], [], { calendar: CAL_JP }),
+    );
+    // Same inputs; only stored early dates drift — FR-16 failure signal.
+    const drifted: PinnedBaselinePlan = {
+      inputs: plan.inputs,
+      outputs: {
+        ...plan.outputs,
+        wps: plan.outputs.wps.map((row, i) =>
+          i === 0
+            ? { ...row, earlyStart: '2099-01-01', earlyFinish: '2099-01-02' }
+            : row,
+        ),
+      },
+    };
+    const diff = compareBaselinePlans(plan, drifted);
+    expect(diff.projectChanges).toEqual([]);
+    const a = diff.wpDateDeltas.find((d) => d.wpId === 'A');
+    expect(a).toBeDefined();
+    expect(a!.accountedBy).toEqual([]);
+    expect(a!.unattributed).toBe(true);
+  });
 });
 
 describe('PublishedSnapshotBaselinePin (story 4.4 seam)', () => {
