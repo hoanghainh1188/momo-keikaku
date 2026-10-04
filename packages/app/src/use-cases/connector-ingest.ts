@@ -1,12 +1,17 @@
 /**
  * Ingest approval refuse + credential-failure notify (story 5.2 / FR-17), the incomplete-read
- * gate (story 5.3 / AR-13), and the pre-writer job body (story 5.4).
+ * gate (story 5.3 / AR-13), and the durable Actuals Ledger writer job (story 5.5 / AR-15).
  *
- * Full snapshot writer is 5.5. Approval refusals and incomplete reads append a failed attempt
- * only; credential auth failures also set the banner fields and send mail. On an admitted
- * complete read, 5.4 appends `read_complete_writer_pending` and stops — no snapshot/ledger rows.
+ * Full-scope read happens outside the transaction; after `admitScopeRead`, one locked writer
+ * transaction persists snapshot / observation / ledger. Failures keep existing attempt reasons;
+ * success writes no attempt row (pin uses the snapshot).
  */
-import { ApprovalRequiredError, requireConnectorApproval } from '@momo/domain';
+import {
+  AdapterKindMismatchError,
+  ApprovalRequiredError,
+  LedgerInvariantError,
+  requireConnectorApproval,
+} from '@momo/domain';
 import { PROJECT_REACH, PROJECT_REACH_ROLES, authorize, type RoleDeclaration } from '../authz/authorize';
 import type { RequestContext } from '../authz/request-context';
 import type { ConnectorWriteDeps } from '../ports/connector-write';
@@ -23,14 +28,13 @@ import { refuse } from './audited-write';
 import {
   RATE_LIMIT_PACED_MESSAGE,
   RATE_LIMIT_PACED_REASON,
-  READ_COMPLETE_WRITER_PENDING_MESSAGE,
-  READ_COMPLETE_WRITER_PENDING_REASON,
   rateLimitStartAfter,
 } from './connector-schedule';
 
 export const APPROVAL_REQUIRED_REASON = 'approval_required' as const;
 export const CREDENTIAL_AUTH_FAILED_REASON = 'credential_auth_failed' as const;
 export const READ_INCOMPLETE_REASON = 'read_incomplete' as const;
+export const OPERATOR_ALERT_REASON = 'operator_alert' as const;
 
 /** PM-visible copy for a read that stayed incomplete after its one retry (story 5.3 / AR-13). */
 export const READ_INCOMPLETE_MESSAGE =
@@ -83,9 +87,35 @@ function isCredentialAuthFailure(error: unknown): boolean {
   return e.status === 401 || e.status === 403;
 }
 
+function isOperatorAlert(error: unknown): error is Error & { kind: 'operator-alert'; code: string } {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    (error as { kind?: unknown }).kind === 'operator-alert' &&
+    error instanceof Error
+  );
+}
+
+/** Best-effort operator mail for AR-36 ledger / adapter-kind alerts. */
+async function notifyOperatorAlert<Handle>(
+  deps: ConnectorWriteDeps<Handle> & { readonly mailer: MailerPort },
+  projectId: string,
+  subject: string,
+  text: string,
+): Promise<void> {
+  try {
+    const recipients = deps.notifyRecipients ? await deps.notifyRecipients(projectId) : [];
+    for (const to of recipients) {
+      await deps.mailer.send({ to, subject, text });
+    }
+  } catch {
+    // best-effort
+  }
+}
+
 /**
  * App ingest gate: when approval is missing, append a failed attempt with a PM-visible
- * reason and answer `refused`. When present, answer `approved` (writer is 5.5).
+ * reason and answer `refused`. When present, answer `approved`.
  */
 export async function gateIngestApproval<Handle>(
   deps: ConnectorWriteDeps<Handle>,
@@ -269,13 +299,14 @@ export type IngestSnapshotJobOutcome =
   | 'credential_failed'
   | 'read_incomplete'
   | 'rate_limit_paced'
-  | 'writer_pending';
+  | 'snapshot_written'
+  | 'already_written'
+  | 'operator_alert';
 
 /**
- * Pre-writer ingest job body (story 5.4): gate approval → load creds → `readScope` →
- * `admitScopeRead`; on `admitted`, append `read_complete_writer_pending` and stop.
- * Failures keep existing attempt reasons. When `rateLimit` requires a wait, enqueue a
- * deferred follow-up and record a paced attempt.
+ * Ingest job body (story 5.5): gate approval → load creds → `readScope` → `admitScopeRead`
+ * → durable `writeIngestSnapshot`. Success leaves no attempt row; unique `(connector, observedAt)`
+ * replays as `already_written`. Operator-alert errors mail and return `operator_alert`.
  */
 export async function runIngestSnapshotJob<Handle>(
   deps: IngestSnapshotJobDeps<Handle>,
@@ -355,19 +386,43 @@ export async function runIngestSnapshotJob<Handle>(
   if (!admitted.ok) return admitted;
   if (admitted.value === 'incomplete') return ok('read_incomplete');
 
+  let writeKind: 'written' | 'already_written';
   try {
-    await deps.transaction(deps.handle, ctx.tenantId, async (scope) => {
+    const written = await deps.transaction(deps.handle, ctx.tenantId, async (scope) => {
       const connector = await scope.connectorWrite.findConnector(input.connectorId);
       if (!connector || connector.projectId !== input.projectId) refuse('not_found');
-      await scope.connectorWrite.appendSnapshotAttempt({
+      return scope.ingestWrite.writeIngestSnapshot({
+        projectId: input.projectId,
         connectorId: input.connectorId,
-        reasonCode: READ_COMPLETE_WRITER_PENDING_REASON,
-        message: READ_COMPLETE_WRITER_PENDING_MESSAGE,
-        attemptedAt: deps.clock.now(),
+        read,
+        snapshotId: deps.ids.next(),
+        nextId: () => deps.ids.next(),
+        actor: `user:${ctx.userId}`,
+        at: deps.clock.now(),
       });
     });
+    writeKind = written.kind;
   } catch (error) {
     if (isRefusal(error, 'not_found')) return fail('not_found');
+    if (
+      error instanceof AdapterKindMismatchError ||
+      error instanceof LedgerInvariantError ||
+      isOperatorAlert(error)
+    ) {
+      const code =
+        error instanceof AdapterKindMismatchError
+          ? error.code
+          : error instanceof LedgerInvariantError
+            ? error.code
+            : (error as { code: string }).code;
+      await notifyOperatorAlert(
+        { ...deps, mailer: deps.mailer },
+        input.projectId,
+        `momo-keikaku: operator alert (${code})`,
+        error.message,
+      );
+      return ok('operator_alert');
+    }
     throw error;
   }
 
@@ -398,7 +453,7 @@ export async function runIngestSnapshotJob<Handle>(
     return ok('rate_limit_paced');
   }
 
-  return ok('writer_pending');
+  return ok(writeKind === 'already_written' ? 'already_written' : 'snapshot_written');
 }
 
 export const CONNECTOR_INGEST_ROLES = {

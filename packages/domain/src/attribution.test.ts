@@ -162,6 +162,56 @@ describe('ingestSnapshot (FR-25, FR-42)', () => {
       approvalRecordedAt: '2026-09-01T00:00:00.000Z'}),
     ).not.toThrow();
   });
+
+  it('produces no entry for null hours and does not false-zero on value→null (AR-15)', () => {
+    const s1 = snap('2026-09-01T09:00:00.000Z', [obs('t1', 10), obs('t2', null)]);
+    const s2 = snap('2026-09-08T09:00:00.000Z', [obs('t1', null), obs('t2', null)]);
+    const r1 = ingestSnapshot({
+      prev: null,
+      next: s1,
+      activeBaselineVersionSeq: 1,
+      seqFrom: 1,
+      approvalRecordedAt: '2026-09-01T00:00:00.000Z',
+    });
+    expect(r1.entries.map((e) => e.ticketId)).toEqual(['t1']);
+    expect(r1.hoursCleared).toEqual([]);
+
+    const r2 = ingestSnapshot({
+      prev: s1,
+      next: s2,
+      activeBaselineVersionSeq: 1,
+      seqFrom: r1.nextSeq,
+      approvalRecordedAt: '2026-09-01T00:00:00.000Z',
+    });
+    expect(r2.entries).toEqual([]);
+    expect(r2.hoursCleared).toEqual([{ ticketId: 't1', key: 't1' }]);
+    // Cleared Ticket keeps prior ledger history; invariant skips null observed.
+    expect(checkLedgerInvariant([...r1.entries, ...r2.entries], s2).ok).toBe(true);
+  });
+
+  it('records null→numeric as a delta of the full amount, not an Opening Balance', () => {
+    const s1 = snap('2026-09-01T09:00:00.000Z', [obs('t1', null)]);
+    const s2 = snap('2026-09-08T09:00:00.000Z', [obs('t1', 6)]);
+    const r1 = ingestSnapshot({
+      prev: null,
+      next: s1,
+      activeBaselineVersionSeq: 1,
+      seqFrom: 1,
+      approvalRecordedAt: '2026-09-01T00:00:00.000Z',
+    });
+    expect(r1.entries).toEqual([]);
+    const r2 = ingestSnapshot({
+      prev: s1,
+      next: s2,
+      activeBaselineVersionSeq: 1,
+      seqFrom: r1.nextSeq,
+      approvalRecordedAt: '2026-09-01T00:00:00.000Z',
+    });
+    expect(r2.entries.map((e) => [e.ticketId, e.kind, e.deltaMh])).toEqual([
+      ['t1', 'delta', hoursToMh(6)],
+    ]);
+    expect(checkLedgerInvariant([...r1.entries, ...r2.entries], s2).ok).toBe(true);
+  });
 });
 
 describe('mapping rules (FR-22)', () => {

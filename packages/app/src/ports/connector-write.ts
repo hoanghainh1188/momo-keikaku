@@ -9,6 +9,7 @@ import type { CredentialsPlaintext, EncryptedCredentials } from './credentials-c
 import type { AuditedWriteDeps, WriteStamp } from './audited-write';
 import type { IdGenerator } from './ids';
 import type { Clock } from './clock';
+import type { IngestWriteRepository } from './ingest-write';
 import type { MailerPort } from './mailer';
 import type { SearchBudgetPort } from './tracker';
 
@@ -122,6 +123,8 @@ export interface ConnectorWriteRepository {
 
 export interface ConnectorWriteScope {
   readonly connectorWrite: ConnectorWriteRepository;
+  /** Story 5.5: the one Actuals Ledger / snapshot writer. */
+  readonly ingestWrite: IngestWriteRepository;
   readonly audit: AuditSink;
 }
 

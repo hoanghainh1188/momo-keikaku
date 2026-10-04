@@ -46,6 +46,20 @@ CREATE POLICY "maintenance_bypass" ON public."project"
   USING (true)
   WITH CHECK (true);
 
+-- project_setting_event (append-only): Project tz / teirei history (story 5.5 / FR-25). Period placement reads the head; editing history would move ledger entries across Reporting Periods.
+ALTER TABLE public."project_setting_event" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public."project_setting_event" FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "tenant_isolation" ON public."project_setting_event";
+CREATE POLICY "tenant_isolation" ON public."project_setting_event"
+  FOR ALL
+  USING ("tenant_id" = NULLIF(current_setting('app.tenant_id', true), ''))
+  WITH CHECK ("tenant_id" = NULLIF(current_setting('app.tenant_id', true), ''));
+DROP POLICY IF EXISTS "maintenance_bypass" ON public."project_setting_event";
+CREATE POLICY "maintenance_bypass" ON public."project_setting_event"
+  FOR ALL TO "momo_maintenance"
+  USING (true)
+  WITH CHECK (true);
+
 -- resource (mutable-audited): Resources are renamed and re-linked to Tracker Accounts. The dated Rates behind them are not (see rate_entry).
 ALTER TABLE public."resource" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public."resource" FORCE ROW LEVEL SECURITY;

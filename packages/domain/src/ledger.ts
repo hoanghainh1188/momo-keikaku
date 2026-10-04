@@ -23,6 +23,11 @@ export interface IngestResult {
   entries: LedgerEntry[];
   /** FR-42: Tickets that were in the previous snapshot and are no longer in scope. */
   leftScope: { ticketId: string; key: string }[];
+  /**
+   * AR-15: Tickets whose `actualMh` transitioned value→null. Writer sets `hours_cleared` on
+   * their observations; no ledger entry is produced.
+   */
+  hoursCleared: { ticketId: string; key: string }[];
   /** AD-8: basis detected from the data, never from a plan name. */
   measurementBasis: 'hours' | 'count';
   nextSeq: number;
@@ -79,6 +84,24 @@ export class AdapterKindMismatchError extends Error {
   }
 }
 
+/**
+ * AR-15 / AR-36: post-commit ledger invariant failed. Callers alert the operator and
+ * must not leave a partial write committed.
+ */
+export class LedgerInvariantError extends Error {
+  readonly kind = 'operator-alert' as const;
+  readonly code = 'ledger_invariant_broken' as const;
+  readonly violations: { ticketId: string; ledger: Mh; observed: Mh }[];
+
+  constructor(violations: { ticketId: string; ledger: Mh; observed: Mh }[]) {
+    super(
+      `ledger invariant broken for ${violations.length} ticket(s); Σ delta_mh ≠ last observed actualMh`,
+    );
+    this.name = 'LedgerInvariantError';
+    this.violations = violations;
+  }
+}
+
 export function ingestSnapshot(input: IngestInput): IngestResult {
   const { prev, next, activeBaselineVersionSeq } = input;
 
@@ -98,6 +121,7 @@ export function ingestSnapshot(input: IngestInput): IngestResult {
 
   let seq = input.seqFrom;
   const entries: LedgerEntry[] = [];
+  const hoursCleared: { ticketId: string; key: string }[] = [];
 
   const prevByTicket = new Map<string, TicketObservation>();
   if (prev) for (const t of prev.tickets) prevByTicket.set(t.trackerIssueId, t);
@@ -106,11 +130,11 @@ export function ingestSnapshot(input: IngestInput): IngestResult {
 
   for (const t of next.tickets) {
     const before = prevByTicket.get(t.trackerIssueId);
-    const prevMh = before?.actualMh ?? 0n;
-    const nowMh = t.actualMh ?? 0n;
+    const nowMh = t.actualMh;
 
     if (!before) {
-      // FR-42 first sighting.
+      // FR-42 first sighting — null hours never move the ledger (AR-15).
+      if (nowMh === null) continue;
       if (nowMh === 0n) continue;
       const kind = isFirstSnapshot ? 'opening_balance' : 'delta';
       entries.push({
@@ -126,7 +150,33 @@ export function ingestSnapshot(input: IngestInput): IngestResult {
       continue;
     }
 
-    const delta = nowMh - prevMh;
+    const prevMh = before.actualMh;
+
+    // AR-15: value→null clears hours on the observation; no negative zeroing entry.
+    if (prevMh !== null && nowMh === null) {
+      hoursCleared.push({ ticketId: t.trackerIssueId, key: t.key });
+      continue;
+    }
+
+    // Null→null: nothing to do. Null→numeric: hours newly appear as a delta of the full amount.
+    if (prevMh === null && nowMh === null) continue;
+    if (prevMh === null && nowMh !== null) {
+      if (nowMh === 0n) continue;
+      entries.push({
+        seq: seq++,
+        ticketId: t.trackerIssueId,
+        kind: 'delta',
+        deltaMh: nowMh,
+        windowStart: prev!.observedAt,
+        windowEnd: next.observedAt,
+        assigneeAccountId: t.assigneeAccountId,
+        activeBaselineVersionSeq,
+      });
+      continue;
+    }
+
+    // Numeric→numeric only from here.
+    const delta = nowMh! - prevMh!;
     if (delta === 0n) continue;
     // FR-25: negative deltas are recorded, never discarded.
     entries.push({
@@ -149,14 +199,16 @@ export function ingestSnapshot(input: IngestInput): IngestResult {
   return {
     entries,
     leftScope,
+    hoursCleared,
     measurementBasis: next.tickets.some((t) => t.actualMh !== null) ? 'hours' : 'count',
     nextSeq: seq,
   };
 }
 
 /**
- * FR-42 invariant: for every in-scope Ticket, the sum of its ledger entries equals
- * its last observed actual hours.
+ * FR-42 / AR-15 invariant: for every in-scope Ticket with a numeric last observation, the
+ * sum of its ledger entries equals that `actualMh`. Null observed is "no hours demand" —
+ * skipped so a cleared Ticket does not force a false zeroing.
  */
 export function checkLedgerInvariant(
   entries: LedgerEntry[],
@@ -166,8 +218,9 @@ export function checkLedgerInvariant(
   for (const e of entries) byTicket.set(e.ticketId, (byTicket.get(e.ticketId) ?? 0n) + e.deltaMh);
   const violations: { ticketId: string; ledger: Mh; observed: Mh }[] = [];
   for (const t of lastSnapshot.tickets) {
+    if (t.actualMh === null) continue;
     const ledger = byTicket.get(t.trackerIssueId) ?? 0n;
-    const observed = t.actualMh ?? 0n;
+    const observed = t.actualMh;
     if (ledger !== observed) violations.push({ ticketId: t.trackerIssueId, ledger, observed });
   }
   return { ok: violations.length === 0, violations };

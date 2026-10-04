@@ -122,6 +122,7 @@ function fakeDeps(world: World = WORLD, clockNow: Date = NOW) {
         resources,
         membership: {} as never,
         connectorWrite: {} as never,
+        ingestWrite: {} as never,
         bound: { tx: {}, tenantId: CTX.tenantId },
         audit: { append: async (entry) => void pendingAudits.push(entry) },
       });

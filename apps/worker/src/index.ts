@@ -1,14 +1,15 @@
 // `apps/worker` is an inbound adapter: it may call use cases and the i18n catalogs and
 // nothing else. Its job is to run the scheduler's queued work.
 //
-// Story 5.4: `ingest-snapshot` (stately) + hourly `snapshot-tick` (Asia/Tokyo, missed: skip).
-// The durable Actuals Ledger writer is 5.5 — this process stops at writer-pending attempts.
+// Story 5.4/5.5: `ingest-snapshot` (stately) + hourly `snapshot-tick` (Asia/Tokyo, missed: skip).
+// The durable Actuals Ledger writer runs inside `runIngestSnapshotJob` after admit.
 import {
   backlogHttpOn,
   credentialsAesOn,
   fixtureReplayOn,
   mailerConsoleOn,
   productClockOn,
+  uuidV7IdsOn,
 } from '@momo/adapters';
 import {
   INGEST_SNAPSHOT_QUEUE,
@@ -241,11 +242,7 @@ await boss.work<IngestSnapshotJobData>(INGEST_SNAPSHOT_QUEUE, async (jobs) => {
       {
         handle: db,
         clock: workerClock,
-        ids: {
-          next: () => {
-            throw new Error('worker ingest job does not mint ids');
-          },
-        },
+        ids: uuidV7IdsOn(workerClock),
         crypto,
         mailer,
         transaction: inTenantTransaction,

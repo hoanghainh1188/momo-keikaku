@@ -79,6 +79,7 @@ export const TRUNCATE_ORDER: readonly string[] = [
   'rate_entry',
   'project_default_rate_entry',
   'resource',
+  'project_setting_event',
   'project',
   'program',
   'department',
@@ -271,6 +272,16 @@ export async function writeTenantRows(
     calendarJp: f.project.calendar.jp,
     calendarVn: f.project.calendar.vn,
     demoAnchor: stamp,
+  });
+
+  // Story 5.5: seed project_setting_event head from project columns (Period placement).
+  await tx.insert(s.projectSettingEvent).values({
+    tenantId,
+    projectId: f.project.id,
+    tzOffsetMinutes: f.project.tzOffsetMinutes,
+    teireiWeekday: f.project.teireiWeekday,
+    actor: actorOf(own(DEMO_USERS.linh.id)),
+    at: stamp,
   });
 
   // Story 2.12: materialise a real resolved Holiday Calendar version (never synthetic-2.9).
@@ -523,6 +534,7 @@ export async function writeTenantRows(
           trackerProjectId: t.trackerProjectId,
           attributes: t.attributes,
           createdAt: new Date(t.createdAt),
+          hoursCleared: false,
         })),
       ),
     );
@@ -538,6 +550,11 @@ export async function writeTenantRows(
       );
     }
     return id;
+  };
+
+  const prevSnapshotOfEntry = (windowStart: string | null): string | null => {
+    if (windowStart === null) return null;
+    return state.snapshots.find((x) => x.observedAt === windowStart)?.snapshotId ?? null;
   };
 
   if (state.ledger.length > 0) {
@@ -557,6 +574,7 @@ export async function writeTenantRows(
           // No Baseline is written (decision 2-A), so none was active for any entry.
           activeBaselineVersionSeq: null,
           snapshotId: snapshotOfEntry(e.windowEnd),
+          prevSnapshotId: prevSnapshotOfEntry(e.windowStart),
         })),
       ),
     );

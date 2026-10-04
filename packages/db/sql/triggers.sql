@@ -44,6 +44,16 @@ CREATE TRIGGER "append_only_truncate_guard"
   BEFORE TRUNCATE ON public."identity_event"
   FOR EACH STATEMENT EXECUTE FUNCTION public."momo_append_only_truncate_guard"();
 
+-- project_setting_event: Project tz / teirei history (story 5.5 / FR-25). Period placement reads the head; editing history would move ledger entries across Reporting Periods.
+DROP TRIGGER IF EXISTS "append_only_guard" ON public."project_setting_event";
+CREATE TRIGGER "append_only_guard"
+  BEFORE UPDATE OR DELETE ON public."project_setting_event"
+  FOR EACH ROW EXECUTE FUNCTION public."momo_append_only_guard"();
+DROP TRIGGER IF EXISTS "append_only_truncate_guard" ON public."project_setting_event";
+CREATE TRIGGER "append_only_truncate_guard"
+  BEFORE TRUNCATE ON public."project_setting_event"
+  FOR EACH STATEMENT EXECUTE FUNCTION public."momo_append_only_truncate_guard"();
+
 -- rate_entry: Rates are bitemporal: a retroactive correction appends a row. Rewriting one would change an already-published figure.
 DROP TRIGGER IF EXISTS "append_only_guard" ON public."rate_entry";
 CREATE TRIGGER "append_only_guard"
