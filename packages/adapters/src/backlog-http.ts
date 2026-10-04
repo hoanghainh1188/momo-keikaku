@@ -150,6 +150,18 @@ function nullableNumber(value: unknown, path: string, field: string): number | n
   return value;
 }
 
+/** Hours must be exact to 1/1000 h (`hoursToMh`); anything else is a payload error, not a crash. */
+function nullableHours(value: unknown, path: string, field: string): number | null {
+  const hours = nullableNumber(value, path, field);
+  if (hours === null) return null;
+  try {
+    hoursToMh(hours);
+  } catch {
+    throw payloadError(path, field);
+  }
+  return hours;
+}
+
 function namedList(value: unknown, path: string, field: string): RawNamed[] {
   if (value === null || value === undefined) return [];
   if (!Array.isArray(value)) throw payloadError(path, field);
@@ -180,8 +192,8 @@ function rawIssueFrom(value: unknown, path: string): RawIssue {
     assignee: value.assignee === null || value.assignee === undefined
       ? null
       : named(value.assignee, path, 'assignee'),
-    estimatedHours: nullableNumber(value.estimatedHours, path, 'estimatedHours'),
-    actualHours: nullableNumber(value.actualHours, path, 'actualHours'),
+    estimatedHours: nullableHours(value.estimatedHours, path, 'estimatedHours'),
+    actualHours: nullableHours(value.actualHours, path, 'actualHours'),
     parentIssueId: nullableNumber(value.parentIssueId, path, 'parentIssueId'),
     milestone: namedList(value.milestone, path, 'milestone'),
     category: namedList(value.category, path, 'category'),
@@ -338,8 +350,11 @@ export function backlogHttpOn(options: BacklogHttpOptions): {
   ): Promise<{ count: number; headers: Headers }> {
     const path = '/issues/count';
     const { body, headers } = await get(site, path, [['projectId[]', String(projectId)]], apiKey);
-    if (!isRecord(body) || typeof body.count !== 'number') throw payloadError(path, 'count');
-    return { count: body.count, headers };
+    const count = isRecord(body) ? body.count : undefined;
+    if (typeof count !== 'number' || !Number.isInteger(count) || count < 0) {
+      throw payloadError(path, 'count');
+    }
+    return { count, headers };
   }
 
   async function listIssues(
@@ -415,11 +430,20 @@ export function backlogHttpOn(options: BacklogHttpOptions): {
           isRecord(body) && isRecord(body.rateLimit) && isRecord(body.rateLimit.search)
             ? body.rateLimit.search
             : null;
-        if (search === null || typeof search.limit !== 'number') {
+        const searchLimit = search?.limit;
+        if (typeof searchLimit !== 'number' || !Number.isInteger(searchLimit) || searchLimit <= 0) {
           throw payloadError(path, 'rateLimit.search.limit');
         }
-        const searchLimit = search.limit;
-        const projectId = await resolveProjectId(site, scope, apiKey);
+        let projectId: number;
+        try {
+          projectId = await resolveProjectId(site, scope, apiKey);
+        } catch (error) {
+          // Only the project lookup's 404 means "no such project"; any other 404 is unreachable.
+          if (error instanceof BacklogHttpError && error.kind === 'not_found') {
+            return { kind: 'refused', reason: 'project_not_found' };
+          }
+          throw error;
+        }
         const { count } = await countIssues(site, projectId, apiKey);
         const estimatedSearchCalls = estimateSearchCalls(count);
         return {
@@ -432,7 +456,6 @@ export function backlogHttpOn(options: BacklogHttpOptions): {
       } catch (error) {
         if (!(error instanceof BacklogHttpError)) throw error;
         if (error.kind === 'auth') return { kind: 'refused', reason: 'auth_failed' };
-        if (error.kind === 'not_found') return { kind: 'refused', reason: 'project_not_found' };
         return { kind: 'refused', reason: 'unreachable' };
       }
     },

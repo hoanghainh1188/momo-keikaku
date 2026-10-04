@@ -115,6 +115,42 @@ describe('addConnectorAction', () => {
     expect(revalidatePath).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ['apiKey', 'credential_rejected', 'Not connected: Backlog rejected the API key.'],
+    [
+      'projectKey',
+      'project_not_found',
+      'Not connected: Backlog has no project with that key for this API key.',
+    ],
+    [
+      'spaceUrl',
+      'backlog_unreachable',
+      'Not connected: the Backlog space could not be reached. Check the space URL and try again.',
+    ],
+  ])('names the %s %s refusal with its connectors.refused_* copy (story 5.3)', async (fieldName, code, copy) => {
+    addConnector.mockResolvedValueOnce({
+      ok: false,
+      error: {
+        code: 'invalid_input',
+        messageKey: 'errors.invalid_input',
+        details: { [fieldName]: [code] },
+      },
+    });
+    const outcome = await addConnectorAction(
+      INITIAL_CONNECTOR_ACTION,
+      form({
+        projectId: 'p1',
+        spaceUrl: 'https://example.backlog.jp/',
+        apiKey: 'k',
+        projectKey: 'EC2',
+        approvalName: 'A',
+        approvalRecordedAt: '2026-09-01T00:00',
+      }),
+    );
+    expect(outcome).toEqual({ error: copy, resetKey: 0 });
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
   it('wires fields as UTC ISO and revalidates on success', async () => {
     addConnector.mockResolvedValueOnce({ ok: true, value: { id: 'con-1' } });
     const outcome = await addConnectorAction(

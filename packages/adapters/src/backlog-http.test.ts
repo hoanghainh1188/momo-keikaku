@@ -1,10 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   assertBacklogGetOnly,
   backlogHttpOn,
+  BACKLOG_GET_TIMEOUT_MS,
   BACKLOG_HTTP_ALLOWED_METHODS,
   BacklogHttpError,
   estimateSearchCalls,
@@ -338,6 +339,46 @@ describe('backlog-http failures never leak the key (story 5.3 / NFR-S2)', () => 
     expect(String((error as Error).message)).not.toContain(KEY);
   });
 
+  it('wires AbortSignal.timeout with BACKLOG_GET_TIMEOUT_MS by default, or the override', async () => {
+    const timeout = vi.spyOn(AbortSignal, 'timeout');
+    try {
+      const backlog = fakeBacklog({ counts: [0] });
+      await backlogHttpOn({ clock: CLOCK, fetch: backlog.fetch }).readScope(CONFIG, { apiKey: KEY });
+      expect(timeout.mock.calls.length).toBe(backlog.calls.length);
+      expect(timeout.mock.calls.every(([ms]) => ms === BACKLOG_GET_TIMEOUT_MS)).toBe(true);
+      expect(BACKLOG_GET_TIMEOUT_MS).toBe(15_000);
+
+      timeout.mockClear();
+      await backlogHttpOn({ clock: CLOCK, fetch: backlog.fetch, timeoutMs: 250 }).readScope(CONFIG, {
+        apiKey: KEY,
+      });
+      expect(timeout.mock.calls.length).toBeGreaterThan(0);
+      expect(timeout.mock.calls.every(([ms]) => ms === 250)).toBe(true);
+    } finally {
+      timeout.mockRestore();
+    }
+  });
+
+  it.each([-1, 1.5])('throws a payload error for a Count Issues answer of %s', async (count) => {
+    const backlog = fakeBacklog({ counts: [count] });
+    await expect(
+      backlogHttpOn({ clock: CLOCK, fetch: backlog.fetch }).readScope(CONFIG, { apiKey: KEY }),
+    ).rejects.toMatchObject({ name: 'BacklogHttpError', kind: 'payload' });
+  });
+
+  it.each(['estimatedHours', 'actualHours'])(
+    'throws a payload error, not a RangeError, when %s is not exact to 1/1000 h',
+    async (field) => {
+      const backlog = fakeBacklog({ counts: [1], list: () => [issue(1, { [field]: 0.0001 })] });
+      const error = await backlogHttpOn({ clock: CLOCK, fetch: backlog.fetch })
+        .readScope(CONFIG, { apiKey: KEY })
+        .catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(BacklogHttpError);
+      expect(error).toMatchObject({ kind: 'payload' });
+      expect((error as Error).message).toContain(field);
+    },
+  );
+
   it('refuses an empty API key before any request', async () => {
     const backlog = fakeBacklog({ counts: [1] });
     await expect(
@@ -399,5 +440,30 @@ describe('backlog-http Search budget at set-up (story 5.3 / AR-13)', () => {
       { apiKey: KEY },
     );
     expect(assessment).toEqual({ kind: 'refused', reason });
+  });
+
+  it.each(['/rateLimit', '/issues/count'])(
+    'maps a 404 on %s to unreachable — only the project lookup means project_not_found',
+    async (missing) => {
+      const backlog = fakeBacklog({
+        counts: [1],
+        status: (path) => (path === missing ? 404 : undefined),
+      });
+      const assessment = await backlogHttpOn({
+        clock: CLOCK,
+        fetch: backlog.fetch,
+      }).assessSearchBudget(CONFIG, { apiKey: KEY });
+      expect(assessment).toEqual({ kind: 'refused', reason: 'unreachable' });
+    },
+  );
+
+  it.each([0, -5, 1.5])('refuses a Search limit of %s rather than assessing it', async (searchLimit) => {
+    const backlog = fakeBacklog({ counts: [1], searchLimit });
+    const assessment = await backlogHttpOn({ clock: CLOCK, fetch: backlog.fetch }).assessSearchBudget(
+      CONFIG,
+      { apiKey: KEY },
+    );
+    expect(assessment).toEqual({ kind: 'refused', reason: 'unreachable' });
+    expect(backlog.paths()).toEqual(['/rateLimit']);
   });
 });

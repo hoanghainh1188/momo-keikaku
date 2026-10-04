@@ -2,8 +2,9 @@
  * Ingest approval refuse + credential-failure notify (story 5.2 / FR-17), and the incomplete-read
  * gate (story 5.3 / AR-13).
  *
- * Full snapshot writer is 5.5; these record refusals, auth failures and incomplete reads as
- * failed attempts and fire the banner + mail path. Scheduled interval delivery lands with 5.4.
+ * Full snapshot writer is 5.5. Approval refusals and incomplete reads append a failed attempt
+ * only; credential auth failures also set the banner fields and send mail. Scheduled interval
+ * delivery lands with 5.4.
  */
 import { ApprovalRequiredError, requireConnectorApproval } from '@momo/domain';
 import { PROJECT_REACH, PROJECT_REACH_ROLES, authorize, type RoleDeclaration } from '../authz/authorize';
