@@ -122,12 +122,12 @@ async function prepareWithEdgeBaseline() {
   if (!set.ok) {
     expect.fail(`setBaseline failed: ${JSON.stringify(set.error)}`);
   }
-  return { owner, pred, succ, set };
+  return { owner, pred, succ, set, firstSeq: set.value.baselineVersionSeq };
 }
 
 describe.skipIf(!reachable)('compareBaselineVersions fence (story 4.4)', () => {
   it('happy: removed edge in project list accounts for successor date moves', async () => {
-    const { pred, succ } = await prepareWithEdgeBaseline();
+    const { pred, succ, firstSeq } = await prepareWithEdgeBaseline();
 
     const cleared = await applyPredecessorSet(deps(), ctx(), {
       projectId: PROBE.projectId,
@@ -145,10 +145,9 @@ describe.skipIf(!reachable)('compareBaselineVersions fence (story 4.4)', () => {
 
     const compared = await compareBaselineVersions(deps(), ctx(), {
       projectId: PROBE.projectId,
-      fromVersionSeq: 1,
+      fromVersionSeq: firstSeq,
       toVersionSeq: re.value.baselineVersionSeq,
     });
-    expect(compared.ok).toBe(true);
     if (!compared.ok) {
       expect.fail(`compare failed: ${JSON.stringify(compared.error)}`);
     }
@@ -169,7 +168,7 @@ describe.skipIf(!reachable)('compareBaselineVersions fence (story 4.4)', () => {
   });
 
   it('lag change is listed and attributes the successor', async () => {
-    const { pred, succ } = await prepareWithEdgeBaseline();
+    const { pred, succ, firstSeq } = await prepareWithEdgeBaseline();
 
     const relagged = await applyPredecessorSet(deps(), ctx(), {
       projectId: PROBE.projectId,
@@ -187,11 +186,12 @@ describe.skipIf(!reachable)('compareBaselineVersions fence (story 4.4)', () => {
 
     const compared = await compareBaselineVersions(deps(), ctx(), {
       projectId: PROBE.projectId,
-      fromVersionSeq: 1,
+      fromVersionSeq: firstSeq,
       toVersionSeq: re.value.baselineVersionSeq,
     });
-    expect(compared.ok).toBe(true);
-    if (!compared.ok) return;
+    if (!compared.ok) {
+      expect.fail(`compare failed: ${JSON.stringify(compared.error)}`);
+    }
 
     expect(
       compared.value.compare.projectChanges.some(
@@ -209,7 +209,7 @@ describe.skipIf(!reachable)('compareBaselineVersions fence (story 4.4)', () => {
   });
 
   it('matches WPs by wp_id after wbs_code renumber (AR-55)', async () => {
-    const { succ } = await prepareWithEdgeBaseline();
+    const { succ, firstSeq } = await prepareWithEdgeBaseline();
     const oldWbs = succ.wbsCode;
     const newWbs = `${oldWbs}.renumbered`;
 
@@ -237,11 +237,12 @@ describe.skipIf(!reachable)('compareBaselineVersions fence (story 4.4)', () => {
 
     const compared = await compareBaselineVersions(deps(), ctx(), {
       projectId: PROBE.projectId,
-      fromVersionSeq: 1,
+      fromVersionSeq: firstSeq,
       toVersionSeq: re.value.baselineVersionSeq,
     });
-    expect(compared.ok).toBe(true);
-    if (!compared.ok) return;
+    if (!compared.ok) {
+      expect.fail(`compare failed: ${JSON.stringify(compared.error)}`);
+    }
 
     const row = compared.value.compare.wpDateDeltas.find((d) => d.wpId === succ.id);
     // Duration change should move dates; match key must still be wp_id.
@@ -257,25 +258,27 @@ describe.skipIf(!reachable)('compareBaselineVersions fence (story 4.4)', () => {
   });
 
   it('refuses missing Baseline version seq', async () => {
-    await prepareWithEdgeBaseline();
+    const { firstSeq } = await prepareWithEdgeBaseline();
     const compared = await compareBaselineVersions(deps(), ctx(), {
       projectId: PROBE.projectId,
-      fromVersionSeq: 1,
-      toVersionSeq: 99,
+      fromVersionSeq: firstSeq,
+      toVersionSeq: firstSeq + 99_999,
     });
     expect(compared.ok).toBe(false);
     if (compared.ok) return;
     expect(compared.error.code).toBe('invalid_input');
-    expect(compared.error.details?.versions).toContain('missing_version_99');
+    expect(compared.error.details?.versions).toContain(
+      `missing_version_${firstSeq + 99_999}`,
+    );
   });
 
   it('refuses with a single Baseline version (need two)', async () => {
-    await prepareWithEdgeBaseline();
-    // Only one version exists — same_version / missing both refuse usable compare.
+    const { firstSeq } = await prepareWithEdgeBaseline();
+    // Only one version exists — same_version refuse for a usable compare.
     const same = await compareBaselineVersions(deps(), ctx(), {
       projectId: PROBE.projectId,
-      fromVersionSeq: 1,
-      toVersionSeq: 1,
+      fromVersionSeq: firstSeq,
+      toVersionSeq: firstSeq,
     });
     expect(same.ok).toBe(false);
     if (same.ok) return;
@@ -284,7 +287,7 @@ describe.skipIf(!reachable)('compareBaselineVersions fence (story 4.4)', () => {
   });
 
   it('viewer / no project reach → not_found', async () => {
-    await prepareWithEdgeBaseline();
+    const { firstSeq } = await prepareWithEdgeBaseline();
     const viewer = pmCtx(PROBE, {
       userId: 'viewer-s44',
       roles: ['client_viewer'],
@@ -292,8 +295,8 @@ describe.skipIf(!reachable)('compareBaselineVersions fence (story 4.4)', () => {
     });
     const compared = await compareBaselineVersions(deps(), viewer, {
       projectId: PROBE.projectId,
-      fromVersionSeq: 1,
-      toVersionSeq: 2,
+      fromVersionSeq: firstSeq,
+      toVersionSeq: firstSeq + 1,
     });
     expect(compared.ok).toBe(false);
     if (compared.ok) return;

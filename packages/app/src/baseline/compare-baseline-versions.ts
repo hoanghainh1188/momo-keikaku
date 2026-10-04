@@ -58,6 +58,10 @@ export async function compareBaselineVersions<Handle>(
   ctx: RequestContext,
   input: unknown,
 ): Promise<Result<CompareBaselineVersionsResult>> {
+  // Role check before parse (viewer → not_found with empty input; gate requires this order).
+  const roles = authorize(ctx, { roles: PROJECT_REACH_ROLES });
+  if (!roles.ok) return roles;
+
   const parsed = compareInputSchema.safeParse(input);
   if (!parsed.success) {
     return fail('invalid_input', { input: ['invalid'] });
@@ -67,11 +71,11 @@ export async function compareBaselineVersions<Handle>(
     return fail('invalid_input', { versions: ['same_version'] });
   }
 
-  const roles = authorize(ctx, {
+  const reach = authorize(ctx, {
     roles: PROJECT_REACH_ROLES,
     projectId: command.projectId,
   });
-  if (!roles.ok) return roles;
+  if (!reach.ok) return reach;
 
   try {
     return await deps.transaction(deps.handle, ctx.tenantId, async (scope) => {
