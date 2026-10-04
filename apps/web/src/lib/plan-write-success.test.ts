@@ -61,6 +61,7 @@ const sampleView: PlanGridViewModel = {
     notSchedulable: [],
   },
   leafCandidates: [],
+  hasBaseline: false,
   rows: [],
 };
 

@@ -44,7 +44,7 @@ export function recordedPctDisplay(
   return frac === 0 ? `${whole}%` : `${whole}.${frac}%`;
 }
 
-export type PlanPreset = 'schedule' | 'progress';
+export type PlanPreset = 'schedule' | 'progress' | 'baseline';
 
 export function presetStorageKey(userId: string, projectId: string): string {
   return `momo.plan.preset:${userId}:${projectId}`;
@@ -55,6 +55,7 @@ export function readStoredPreset(userId: string, projectId: string): PlanPreset 
   try {
     const raw = window.localStorage.getItem(presetStorageKey(userId, projectId));
     if (raw === 'progress') return 'progress';
+    if (raw === 'baseline') return 'baseline';
     return 'schedule';
   } catch {
     return 'schedule';
@@ -82,9 +83,13 @@ export function capturePresetFocusRestore(focusedWpId: string | null): string | 
   return focusedWpId;
 }
 
-/** Keys `1`/`2` map to Schedule/Progress; `3`/`4` are reserved (Q4→A). */
+/**
+ * Keys `1`/`2`/`3` → Schedule / Progress / Baseline compare; `4` stays reserved (*All*).
+ * Callers must no-op `baseline` when the Project has no Baseline (UX-DR23).
+ */
 export function presetFromDigitKey(key: string): PlanPreset | null {
   if (key === '1') return 'schedule';
   if (key === '2') return 'progress';
+  if (key === '3') return 'baseline';
   return null;
 }

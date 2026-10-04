@@ -47,6 +47,18 @@ export function hoursSigned(mh: Mh): string {
   return (tenths > 0n ? '+' : '') + fixed(tenths, 1);
 }
 
+/**
+ * Signed hours Δ for Baseline compare: `+` / real minus `−` / `0.0` / em dash when N/A.
+ * Sign follows the rounded tenths (same half-even rule as `hoursSigned`).
+ */
+export function hoursDeltaSigned(mh: Mh | null | undefined): string {
+  if (mh === null || mh === undefined) return '—';
+  const tenths = divRoundHalfEven(mh, 100n);
+  if (tenths === 0n) return '0.0';
+  if (tenths > 0n) return `+${fixed(tenths, 1)}`;
+  return `\u2212${fixed(-tenths, 1)}`;
+}
+
 /** Yen, grouped: `¥1,234,000`. Money is already integral (AD-4's `costOf`). */
 export function yen(jpy: Jpy, locale = 'en-US'): string {
   return `¥${jpy.toLocaleString(locale)}`;
@@ -122,5 +134,6 @@ export {
   formatMinFloat,
   inkTone,
   formatFloatDisplay,
+  daysSigned,
 } from './plan-display';
 

@@ -13,8 +13,8 @@ import { toPlanGridViewModel } from '@/lib/plan-grid-view';
 export const dynamic = 'force-dynamic';
 
 /**
- * FR-5, FR-7: Plan ARIA treegrid with Schedule / Progress presets (story 2.13).
- * Strip + What-moved (story 2.15). Exceptions rail (2.16). Set Baseline (4.1).
+ * FR-5, FR-7: Plan ARIA treegrid with Schedule / Progress / Baseline compare presets
+ * (stories 2.13 + 4.5). Strip + What-moved (2.15). Exceptions rail (2.16). Set Baseline (4.1).
  */
 export default async function PlanPage({
   params,

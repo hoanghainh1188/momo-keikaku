@@ -11,6 +11,7 @@ import {
   compareWp,
   parseStoredInputs,
   parseStoredOutputs,
+  planBaselineCompare,
   remainingDuration,
   WP_MOVE_CAUSES,
   type ScheduleAnchor,
@@ -30,6 +31,7 @@ import { projectNotFound } from '../../../db/src/project-not-found';
 import { planInputRepositoryOn } from '../../../db/src/repositories/plan-input';
 import { scheduleRepositoryOn } from '../../../db/src/repositories/schedule';
 import * as s from '../../../db/src/schema';
+import { loadActiveBaselineForGrid } from '../baseline/active-baseline-for-grid';
 import { authorize, PROJECT_REACH_ROLES } from '../authz/authorize';
 import type { RequestContext } from '../authz/request-context';
 import type { SchedulingBound } from '../ports/schedule-write';
@@ -107,6 +109,19 @@ export interface PlanGridRow {
   /** Recomputed for Progress — never stored (2.9 Q1→B). */
   readonly remainingDays: number | null;
   readonly exception: PlanGridException | null;
+  /**
+   * Story 4.5 — Baseline compare preset fields (active `baseline_wp` vs Current Plan).
+   * Null Baseline-side values mean N/A (summary / no Baseline / missing leaf).
+   */
+  readonly plannedMh: bigint | null;
+  readonly baselineStart: string | null;
+  readonly baselineFinish: string | null;
+  readonly baselineDurationDays: number | null;
+  readonly baselineMh: bigint | null;
+  readonly startDeltaDays: number | null;
+  readonly finishDeltaDays: number | null;
+  readonly durationDeltaDays: number | null;
+  readonly effortDeltaMh: bigint | null;
 }
 
 /** One moved WP under an FR-28 cause (story 2.15). */
@@ -233,6 +248,8 @@ export interface PlanGridState {
   readonly exceptions: PlanExceptionsRail;
   /** Leaf-only autocomplete candidates for predecessor cells (story 2.14). */
   readonly leafCandidates: readonly PlanGridLeafCandidate[];
+  /** Story 4.5 — true when an active Baseline version exists (max seq). */
+  readonly hasBaseline: boolean;
   readonly rows: readonly PlanGridRow[];
 }
 
@@ -732,12 +749,13 @@ export async function getPlanGridState<Handle>(
     const planInput = planInputRepositoryOn(bound);
     const schedule = scheduleRepositoryOn(bound);
 
-    const [wps, edges, wpSchedules, latest, planRows] = await Promise.all([
+    const [wps, edges, wpSchedules, latest, planRows, activeBaseline] = await Promise.all([
       planInput.listLiveWorkPackages(input.projectId),
       planInput.listLiveDependencies(input.projectId),
       schedule.loadWpSchedule(input.projectId),
       schedule.latestRun(input.projectId),
       schedule.loadPlanRows(input.projectId),
+      loadActiveBaselineForGrid(bound, input.projectId),
     ]);
 
     const previous =
@@ -1014,6 +1032,30 @@ export async function getPlanGridState<Handle>(
       .filter((w) => w.isLeaf)
       .map((w) => ({ wpId: w.id, wbsCode: w.wbsCode, name: w.name }));
 
+    // Current Plan effort: leaf plannedMh from plan-input load; summaries roll up descendants.
+    const plannedMhByWp = new Map(planRows.wps.map((w) => [w.id, w.plannedMh] as const));
+    const rolledPlannedMh = (wpId: string, isLeaf: boolean): bigint => {
+      if (isLeaf) return plannedMhByWp.get(wpId) ?? 0n;
+      let sum = 0n;
+      const stack = [...(childrenOf.get(wpId) ?? [])];
+      while (stack.length > 0) {
+        const child = stack.pop()!;
+        if (child.isLeaf) sum += plannedMhByWp.get(child.id) ?? 0n;
+        else stack.push(...(childrenOf.get(child.id) ?? []));
+      }
+      return sum;
+    };
+
+    // Prefer Current Plan calendar for working-day Δ; fall back to pin calendar.
+    const planCalendar =
+      planRows.calendar !== null
+        ? {
+            nonWorkingDays: planRows.calendar.nonWorkingDays,
+            rangeStart: planRows.calendar.rangeStart,
+            rangeEnd: planRows.calendar.rangeEnd,
+          }
+        : activeBaseline.pinCalendar;
+
     const rows: PlanGridRow[] = ordered.map((wp) => {
       const sched = scheduleByWp.get(wp.id);
       const notSchedulable = sched?.notSchedulableReason === 'no_duration';
@@ -1037,6 +1079,20 @@ export async function getPlanGridState<Handle>(
       const predecessorEdges: PlanGridPredecessorEdge[] = edges
         .filter((e) => e.successorWpId === wp.id)
         .map((e) => ({ predecessorWpId: e.predecessorWpId, lagDays: e.lagDays }));
+      const earlyStart = blankDerived ? null : (sched?.earlyStart ?? null);
+      const earlyFinish = blankDerived ? null : (sched?.earlyFinish ?? null);
+      const plannedMh = rolledPlannedMh(wp.id, wp.isLeaf);
+      const compare = planBaselineCompare({
+        wpId: wp.id,
+        isLeaf: wp.isLeaf,
+        baseline: activeBaseline.baselineByWp.get(wp.id) ?? null,
+        baselineDurationDays: activeBaseline.baselineDurationByWp.get(wp.id) ?? null,
+        derivedStart: earlyStart,
+        derivedFinish: earlyFinish,
+        durationDays: wp.durationDays,
+        plannedMh,
+        calendar: planCalendar,
+      });
       return {
         wpId: wp.id,
         wbsCode: wp.wbsCode,
@@ -1055,8 +1111,8 @@ export async function getPlanGridState<Handle>(
         constraintLabel: formatConstraintLabel(wp.constraintType, wp.constraintDate),
         predecessorsText: formatPredecessorsText(wp.id, edges, wbsById),
         predecessorEdges,
-        earlyStart: blankDerived ? null : (sched?.earlyStart ?? null),
-        earlyFinish: blankDerived ? null : (sched?.earlyFinish ?? null),
+        earlyStart,
+        earlyFinish,
         floatDays: blankDerived ? null : (sched?.floatDays ?? null),
         isCritical: blankDerived ? false : (sched?.isCritical ?? false),
         state: sched?.state ?? null,
@@ -1073,6 +1129,15 @@ export async function getPlanGridState<Handle>(
           violationsByWp,
           oosWpIds,
         }),
+        plannedMh: compare.plannedMh,
+        baselineStart: compare.baselineStart,
+        baselineFinish: compare.baselineFinish,
+        baselineDurationDays: compare.baselineDurationDays,
+        baselineMh: compare.baselineMh,
+        startDeltaDays: compare.startDeltaDays,
+        finishDeltaDays: compare.finishDeltaDays,
+        durationDeltaDays: compare.durationDeltaDays,
+        effortDeltaMh: compare.effortDeltaMh,
       };
     });
 
@@ -1101,6 +1166,7 @@ export async function getPlanGridState<Handle>(
       whatMoved,
       exceptions,
       leafCandidates,
+      hasBaseline: activeBaseline.versionSeq !== null,
       rows,
     } satisfies PlanGridState;
   });
