@@ -5,6 +5,8 @@
 // its own schema on `start()` by default; here both switches are false, so the worker's
 // role never attempts DDL — and would be refused if it did, because the migrator step
 // (`scripts/pgboss-migrate.ts`) grants it USAGE and DML and no CREATE.
+//
+// Story 5.4 enables `schedule: true` so the Asia/Tokyo hourly `snapshot-tick` can fire.
 import { PgBoss } from 'pg-boss';
 
 /**
@@ -42,10 +44,8 @@ export function createBoss(connectionString: string, schema: string = PGBOSS_SCH
     // retries and retention are DML, which the app role does hold.
     reindex: false,
 
-    // No schedules exist in this slice (Epic 5's Connector brings the first), and the
-    // timekeeper would create its own internal queue and poll for cron work that can
-    // never arrive.
-    schedule: false,
+    // Story 5.4: hourly `snapshot-tick` (Asia/Tokyo, missed: skip) needs the timekeeper.
+    schedule: true,
 
     // The third DDL-bearing option: with stats persistence on, the supervisor CREATEs and
     // DROPs daily `queue_stats` partitions, which the app role may not do. Off is pg-boss's

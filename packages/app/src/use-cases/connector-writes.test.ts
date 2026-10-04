@@ -71,9 +71,11 @@ function fakeDeps(overrides?: {
             lastErrorMessage: null,
             lastErrorAt: null,
             hasCredentials: true,
+            searchLimit: 150,
           }
         : null,
     findConnectorForProject: async () => null,
+    listConnectors: async () => [],
     insertConnector: async (input: unknown) => {
       inserts.push(input);
     },
@@ -87,6 +89,10 @@ function fakeDeps(overrides?: {
     },
     latestScopeSeq: async () => 7,
     appendSnapshotAttempt: async () => {},
+    listSnapshotAttempts: async () => [],
+    latestAttemptAt: async () => null,
+    latestSnapshot: async () => null,
+    latestSnapshotForProject: async () => null,
     setLastError: async () => {},
     countMappingEventsForProject: async (projectId: string) => {
       mappingCountCalls.push(projectId);

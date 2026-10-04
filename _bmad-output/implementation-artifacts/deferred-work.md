@@ -1313,3 +1313,11 @@ above can see where it went.
   summary: Re-run Search-budget assessment (and refresh `search_limit`) when `changeConnectorScope` points the Connector at a larger Backlog project.
   evidence: Story 5.3 review — set-up gate covers addConnector only; a later scope change can bypass the 25% Search refuse until schedule/budget ownership lands with 5.4.
 
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-4-snapshots-run-on-a-schedule-the-pm-can-see.md`
+  summary: Compaction / retention ACs from Story 5.4 — snapshots older than 90 days compacted to one per day, Actuals Ledger never compacted, deletes only `ticket_observation` (never snapshot headers), retain observation sets referenced by Published Snapshot / ledger / open Review / unexpired export / Period first snapshot / Connector latest (FR-19, AR-10).
+  evidence: Story 5.4 intentionally owns schedule, queue, pin/Refresh and budget slowdown only; compaction stays with 5.5 / maintenance path.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-4-snapshots-run-on-a-schedule-the-pm-can-see.md`
+  summary: Durable snapshot / Actuals Ledger write ACs from Story 5.4 — `ingestSnapshot` writer for `tracker_snapshot` / `ticket_observation` / ledger rows, FR-19 whitelist persist on write, lossless next-success diff after failure, and NFR-P1 full 2,000-Ticket read+write within 5 minutes.
+  evidence: Story 5.4 pre-writer job body stops at `read_complete_writer_pending` after `admitScopeRead`; durable write and NFR-P1 write proof belong to 5.5.

@@ -527,7 +527,15 @@
     "ageMinutes": "{minutes} min ago",
     "ageHours": "{hours} h ago",
     "ageDays": "{days} d ago",
-    "nav_aria_project_surfaces": "Project surfaces"
+    "nav_aria_project_surfaces": "Project surfaces",
+    "snapshotTime": "Snapshot time",
+    "connectors": "Connectors",
+    "nextScheduled": "Next scheduled",
+    "refreshNow": "Refresh now",
+    "refreshQueued": "Refresh queued.",
+    "newerSnapshotAvailable": "Newer snapshot available — Re-pin",
+    "repin": "Re-pin",
+    "scheduleSlowdown": "Snapshot schedule slowed: one full Search would use more than 25% of the Search budget, so cadence is at least every 6 hours."
   },
   "ui": {
     "internal": "Internal"

@@ -2,6 +2,7 @@ import { getTranslations } from 'next-intl/server';
 import type { ReactNode } from 'react';
 import { currentUserIdentity, getProjectHeader, requestContext } from '@/server/composition';
 import { valueOrNotFound } from '@/server/result';
+import { ReviewPinProvider } from '@/components/review-pin-context';
 import { Shell } from '@/components/shell';
 import { formatRoleLabels } from '@/lib/role-labels';
 import { userLabelFromIdentity } from '@/lib/user-chip';
@@ -26,18 +27,20 @@ export default async function ProjectLayout({
   const userLabel = userLabelFromIdentity(identity);
 
   return (
-    <Shell
-      projectId={projectId}
-      projectName={bundle.project.name}
-      clientName={bundle.meta.clientName}
-      snapshotLabel={formatJst(observed)}
-      snapshotAgeMinutes={bundle.meta.snapshotAgeMinutes}
-      roleLabel={formatRoleLabels(ctx.roles, t)}
-      userLabel={userLabel}
-      showAuditLog={ctx.roles.includes('tenant_admin')}
-    >
-      {children}
-    </Shell>
+    <ReviewPinProvider>
+      <Shell
+        projectId={projectId}
+        projectName={bundle.project.name}
+        clientName={bundle.meta.clientName}
+        snapshotLabel={formatJst(observed)}
+        snapshotAgeMinutes={bundle.meta.snapshotAgeMinutes}
+        roleLabel={formatRoleLabels(ctx.roles, t)}
+        userLabel={userLabel}
+        showAuditLog={ctx.roles.includes('tenant_admin')}
+      >
+        {children}
+      </Shell>
+    </ReviewPinProvider>
   );
 }
 

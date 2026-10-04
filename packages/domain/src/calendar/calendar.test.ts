@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   addDays,
+  buildCalendar,
   ceilPosition,
   floorPosition,
+  isSnapshotBusinessWindow,
   isWeekend,
   rollForward,
   shiftWorkingDays,
@@ -104,5 +106,47 @@ describe('the bounded calendar (story 2.5, Q1 → A)', () => {
     expect(() =>
       workingDayIndex({ nonWorkingDays: ['2026-11-01'], rangeStart: '2026-10-01', rangeEnd: '2026-10-31' }),
     ).toThrow(/outside its range/);
+  });
+});
+
+describe('isSnapshotBusinessWindow (story 5.4 / AR-28)', () => {
+  const cal = buildCalendar('snapshot', { jp: true, vn: true });
+
+  /** JST wall time → UTC instant (Tokyo is fixed +09:00). */
+  function jst(isoLocal: string): Date {
+    return new Date(`${isoLocal}+09:00`);
+  }
+
+  it('is inside on a JP/VN weekday at 10:00 JST', () => {
+    // 2026-10-05 is a Monday, not a national holiday.
+    expect(isSnapshotBusinessWindow(jst('2026-10-05T10:00:00'), cal)).toBe(true);
+  });
+
+  it('includes 09:00 JST and excludes 19:00 JST on the same working day', () => {
+    expect(isSnapshotBusinessWindow(jst('2026-10-05T09:00:00'), cal)).toBe(true);
+    expect(isSnapshotBusinessWindow(jst('2026-10-05T18:59:59'), cal)).toBe(true);
+    expect(isSnapshotBusinessWindow(jst('2026-10-05T19:00:00'), cal)).toBe(false);
+  });
+
+  it('is outside late at night even on a working day', () => {
+    expect(isSnapshotBusinessWindow(jst('2026-10-05T22:00:00'), cal)).toBe(false);
+  });
+
+  it('is outside on a weekend', () => {
+    // 2026-10-10 is a Saturday.
+    expect(isSnapshotBusinessWindow(jst('2026-10-10T10:00:00'), cal)).toBe(false);
+  });
+
+  it('stays inside on a JP-only holiday when VN still works', () => {
+    // 2026-10-12 is スポーツの日 (JP); not a VN holiday in the national set.
+    expect(isSnapshotBusinessWindow(jst('2026-10-12T10:00:00'), cal)).toBe(true);
+  });
+
+  it('is outside when both JP and VN mark the day a holiday', () => {
+    const both: typeof cal = {
+      id: 'both',
+      holidays: { '2026-10-05': ['jp', 'vn'] },
+    };
+    expect(isSnapshotBusinessWindow(jst('2026-10-05T10:00:00'), both)).toBe(false);
   });
 });

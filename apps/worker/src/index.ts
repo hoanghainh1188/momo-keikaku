@@ -1,38 +1,94 @@
 // `apps/worker` is an inbound adapter: it may call use cases and the i18n catalogs and
 // nothing else. Its job is to run the scheduler's queued work.
 //
-// This file is the worker's composition root, and that is all it is: read the parsed
-// configuration, build the runner, start it, and shut it down cleanly on a signal. It
-// registers no handlers — there is nothing to run yet. Job handlers, schedules and ingest
-// arrive with the Connector in Epic 5; this slice proves the runner works, not what it
-// runs.
-//
-// Story 1.8: first real `@momo/adapters` import — the product Clock (AD-15), selected the
-// same way as the web composition root. Identity stays off this Clock.
-//
-// Importing this module starts a worker, which is why `createBoss` lives in `./boss.ts`:
-// the test builds the same runner without any of the below.
-import { backlogHttpOn, fixtureReplayOn, productClockOn } from '@momo/adapters';
+// Story 5.4: `ingest-snapshot` (stately) + hourly `snapshot-tick` (Asia/Tokyo, missed: skip).
+// The durable Actuals Ledger writer is 5.5 — this process stops at writer-pending attempts.
 import {
+  backlogHttpOn,
+  credentialsAesOn,
+  fixtureReplayOn,
+  mailerConsoleOn,
+  productClockOn,
+} from '@momo/adapters';
+import {
+  INGEST_SNAPSHOT_QUEUE,
+  SNAPSHOT_TICK_QUEUE,
   config,
   createLogger,
+  dueWatermark,
+  runIngestSnapshotJob,
+  selectDueConnectors,
+  snapshotScheduleCalendar,
   type FixtureCursorPort,
+  type IngestSnapshotJobData,
+  type IngestSnapshotQueuePort,
+  type RequestContext,
   type TrackerConnectorConfig,
   type TrackerCredentials,
   type TrackerPort,
 } from '@momo/app';
+import {
+  fixtureCursorPortOn,
+  getDb,
+  inTenantTransaction,
+  listTenantIds,
+  withTenant,
+  type Db,
+} from '@momo/db';
 import { createBoss, PGBOSS_SCHEMA } from './boss';
 
-// Selected at boot so a misconfigured CLOCK_MODE / DEPLOYMENT fails before the runner starts.
-// Same factory as the web composition root — do not re-inline the −2h offset here.
 const workerClock = productClockOn({
   mode: config.CLOCK_MODE,
   fixtureTimeAnchor: config.FIXTURE_TIME_ANCHOR,
 });
 
+const log = createLogger({ name: 'worker', syncStdout: true });
+const boss = createBoss(config.APP_DATABASE_URL);
+const db: Db = getDb(config.APP_DATABASE_URL);
+const crypto = (() => {
+  if (config.CREDENTIALS_CRYPTO !== 'local') {
+    throw new Error(
+      'CREDENTIALS_CRYPTO=kms is not implemented yet — credentials-kms lands in Epic 8. ' +
+        'Set CREDENTIALS_CRYPTO=local for local/dev workers.',
+    );
+  }
+  const key = config.CREDENTIALS_KEY;
+  const keyId = config.CREDENTIALS_KEY_ID;
+  if (key === undefined || keyId === undefined) {
+    throw new Error(
+      'Invalid configuration: CREDENTIALS_KEY and CREDENTIALS_KEY_ID are required when ' +
+        'CREDENTIALS_CRYPTO=local',
+    );
+  }
+  return credentialsAesOn({ keyBase64: key, keyId });
+})();
+const mailer = mailerConsoleOn((line) => log.info(line));
+
+/** Service context so PROJECT_REACH gates reuse without a human session (story 5.4). */
+function serviceContext(tenantId: string): RequestContext {
+  return {
+    tenantId,
+    userId: 'service:snapshot-worker',
+    roles: ['tenant_admin'],
+    projectIds: [],
+    locale: 'en',
+  };
+}
+
+function dbFixtureCursor(tenantId: string): FixtureCursorPort {
+  return {
+    get: (connectorId) =>
+      withTenant(db, tenantId, (tx) => fixtureCursorPortOn({ tx, tenantId }).get(connectorId)),
+    set: (connectorId, nextPageIndex) =>
+      withTenant(db, tenantId, (tx) =>
+        fixtureCursorPortOn({ tx, tenantId }).set(connectorId, nextPageIndex),
+      ),
+  };
+}
+
 /**
  * AD-6 TrackerPort selection (story 5.1) — same rules as the web composition root.
- * Ingest handlers (5.4–5.5) will pass a db-backed `FixtureCursorPort`.
+ * Ingest handlers pass a db-backed `FixtureCursorPort` when the fixture override is on.
  */
 export function trackerPortOn(deps: {
   readonly cursor: FixtureCursorPort;
@@ -66,16 +122,29 @@ export function trackerPortOn(deps: {
   } satisfies TrackerPort;
 }
 
-// Touch the override at boot so a non-local `TRACKER_ADAPTER_OVERRIDE=fixture` fails early.
 void config.TRACKER_ADAPTER_OVERRIDE;
 
-// Sync stdout so lifecycle lines survive process exit (SIGTERM round-trip + operators).
-const log = createLogger({ name: 'worker', syncStdout: true });
-const boss = createBoss(config.APP_DATABASE_URL);
+const ingestQueue: IngestSnapshotQueuePort = {
+  async enqueue(input) {
+    await boss.send(
+      INGEST_SNAPSHOT_QUEUE,
+      {
+        tenantId: input.tenantId,
+        projectId: input.projectId,
+        connectorId: input.connectorId,
+      } satisfies IngestSnapshotJobData,
+      {
+        singletonKey: input.connectorId,
+        retryLimit: 3,
+        retryDelay: 60,
+        retryBackoff: true,
+        retryDelayMax: 15 * 60,
+        ...(input.startAfter ? { startAfter: input.startAfter } : {}),
+      },
+    );
+  },
+};
 
-// pg-boss reports background failures through events rather than a rejected promise, so an
-// unhandled 'error' would otherwise take the process down with no context. Story 1.7 lands
-// the shared pino logger (AD-16 redaction); a LoggerPort can wait until more call sites exist.
 boss.on('error', (error) => {
   log.error({ err: error }, 'pg-boss error');
 });
@@ -83,14 +152,6 @@ boss.on('warning', (warning) => {
   log.warn({ warning }, 'pg-boss warning');
 });
 
-/**
- * Stops the runner on the first signal; a second one forces the process down.
- *
- * `graceful` lets jobs in flight finish before the pool closes; `close` drains the pool, so
- * the process can exit on its own rather than being killed with connections open. A drain
- * can take as long as the longest job, so the second signal has to be an escape hatch
- * rather than a no-op — an operator who sends it twice is saying they will not wait.
- */
 let stopping = false;
 async function shutdown(signal: NodeJS.Signals): Promise<void> {
   if (stopping) {
@@ -112,15 +173,117 @@ process.on('SIGINT', (signal) => void shutdown(signal));
 process.on('SIGTERM', (signal) => void shutdown(signal));
 
 await boss.start();
-// `stop()` waits for an in-flight `start()`, so a signal that arrived during startup leaves
-// this resolving *after* shutdown began. Claiming a start then would be a lie in the log.
+
+await boss.createQueue(INGEST_SNAPSHOT_QUEUE, {
+  policy: 'stately',
+  retryLimit: 3,
+  retryDelay: 60,
+  retryBackoff: true,
+  retryDelayMax: 15 * 60,
+});
+await boss.createQueue(SNAPSHOT_TICK_QUEUE);
+
+await boss.schedule(SNAPSHOT_TICK_QUEUE, '0 * * * *', null, {
+  tz: 'Asia/Tokyo',
+  missed: 'skip',
+});
+
+await boss.work(SNAPSHOT_TICK_QUEUE, async () => {
+  const now = workerClock.now();
+  const cal = snapshotScheduleCalendar();
+  const tenantIds = await listTenantIds(db);
+  let enqueued = 0;
+  for (const tenantId of tenantIds) {
+    const dueRows = await inTenantTransaction(db, tenantId, async (scope) => {
+      const connectors = await scope.connectorWrite.listConnectors();
+      const rows = [];
+      for (const connector of connectors) {
+        const snap = await scope.connectorWrite.latestSnapshot(connector.id);
+        const attemptAt = await scope.connectorWrite.latestAttemptAt(connector.id);
+        rows.push({
+          connector,
+          lastActivityAt: dueWatermark(snap?.observedAt ?? null, attemptAt),
+          latestTicketCount: snap?.ticketCount ?? 0,
+        });
+      }
+      return rows;
+    });
+    const due = selectDueConnectors(dueRows, { now, calendar: cal });
+    for (const item of due) {
+      await ingestQueue.enqueue({
+        tenantId,
+        projectId: item.connector.projectId,
+        connectorId: item.connector.id,
+        startAfter: item.startAfter ?? undefined,
+      });
+      enqueued += 1;
+      if (item.searchBudgetSlowdown) {
+        log.info(
+          { connectorId: item.connector.id, tenantId },
+          'snapshot schedule slowed for Search budget',
+        );
+      }
+    }
+  }
+  log.info({ enqueued, at: now.toISOString() }, 'snapshot-tick complete');
+});
+
+await boss.work<IngestSnapshotJobData>(INGEST_SNAPSHOT_QUEUE, async (jobs) => {
+  for (const job of jobs) {
+    const data = job.data;
+    const ctx = serviceContext(data.tenantId);
+    const cursor = dbFixtureCursor(data.tenantId);
+    const tracker = trackerPortOn({
+      cursor,
+      timeAnchorIso: workerClock.now().toISOString(),
+    });
+    const result = await runIngestSnapshotJob(
+      {
+        handle: db,
+        clock: workerClock,
+        ids: {
+          next: () => {
+            throw new Error('worker ingest job does not mint ids');
+          },
+        },
+        crypto,
+        mailer,
+        transaction: inTenantTransaction,
+        queue: ingestQueue,
+        tracker,
+        loadCredentials: async (connectorId) => {
+          const stored = await inTenantTransaction(db, data.tenantId, (scope) =>
+            scope.connectorWrite.loadEncryptedCredentials(connectorId),
+          );
+          if (!stored) return null;
+          return crypto.decrypt(stored);
+        },
+      },
+      ctx,
+      { projectId: data.projectId, connectorId: data.connectorId },
+    );
+    if (!result.ok) {
+      throw new Error(`ingest-snapshot refused: ${result.error.messageKey}`);
+    }
+    log.info(
+      {
+        connectorId: data.connectorId,
+        tenantId: data.tenantId,
+        outcome: result.value,
+      },
+      'ingest-snapshot job finished',
+    );
+  }
+});
+
 if (!stopping) {
   log.info(
     {
       schema: PGBOSS_SCHEMA,
       clockMode: config.CLOCK_MODE,
       clockNow: workerClock.now().toISOString(),
+      queues: [INGEST_SNAPSHOT_QUEUE, SNAPSHOT_TICK_QUEUE],
     },
-    'started with migration disabled',
+    'started with schedule enabled',
   );
 }

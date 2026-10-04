@@ -11,3 +11,4 @@ export * from './mailer-console';
 export * from './fixture-replay';
 export * from './backlog-http';
 export * from './credentials-aes';
+export * from './pg-boss';

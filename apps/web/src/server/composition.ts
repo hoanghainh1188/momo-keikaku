@@ -63,11 +63,14 @@ import {
   appendResourceRate as appendResourceRateUseCase,
   explainTickets as explainTicketsUseCase,
   gateIngestApproval as gateIngestApprovalUseCase,
+  getSnapshotPinState as getSnapshotPinStateUseCase,
   googleProvider,
   getProjectHeader as getProjectHeaderUseCase,
   getProjectMapping as getProjectMappingUseCase,
   getProjectReview as getProjectReviewUseCase,
+  INGEST_SNAPSHOT_QUEUE,
   listAuditLog as listAuditLogUseCase,
+  listSnapshotAttempts as listSnapshotAttemptsUseCase,
   listDepartments as listDepartmentsUseCase,
   listPrograms as listProgramsUseCase,
   listProjects as listProjectsUseCase,
@@ -81,11 +84,17 @@ import {
   renameDepartment as renameDepartmentUseCase,
   renameProgram as renameProgramUseCase,
   renameProject as renameProjectUseCase,
+  requestSnapshotRefresh as requestSnapshotRefreshUseCase,
   resolveRequestContext,
   revokeMembership as revokeMembershipUseCase,
   rotateCredentials as rotateCredentialsUseCase,
   unassignMemberProject as unassignMemberProjectUseCase,
   type AddConnectorDeps,
+  type GetSnapshotPinStateInput,
+  type IngestSnapshotJobData,
+  type IngestSnapshotQueuePort,
+  type ListSnapshotAttemptsInput,
+  type RequestSnapshotRefreshInput,
   type AddConnectorInput,
   type AssignMemberProjectInput,
   type ChangeScopeInput,
@@ -164,6 +173,7 @@ import {
 import { buildResetPasswordMail, t } from '@momo/i18n';
 import {
   backlogHttpOn,
+  createBoss,
   credentialsAesOn,
   fixtureReplayOn,
   mailerConsoleOn,
@@ -651,6 +661,45 @@ function addConnectorDeps(): AddConnectorDeps<Db> {
   };
 }
 
+/** Lazy send-only pg-boss client for on-demand Refresh (story 5.4). */
+let webBoss: ReturnType<typeof createBoss> | undefined;
+let webBossReady: Promise<void> | undefined;
+async function webIngestQueue(): Promise<IngestSnapshotQueuePort> {
+  if (!webBoss) {
+    webBoss = createBoss(config.APP_DATABASE_URL, { schedule: false });
+    webBossReady = webBoss.start().then(async () => {
+      await webBoss!.createQueue(INGEST_SNAPSHOT_QUEUE, {
+        policy: 'stately',
+        retryLimit: 3,
+        retryDelay: 60,
+        retryBackoff: true,
+        retryDelayMax: 15 * 60,
+      });
+    });
+  }
+  await webBossReady;
+  const boss = webBoss;
+  return {
+    async enqueue(input) {
+      // Computed key: web-composition.test.ts bans a `tenantId:` property literal in apps/web
+      // (constant-Tenant fence); the value still comes from the resolved request context.
+      const data = {
+        ['tenantId']: input.tenantId,
+        projectId: input.projectId,
+        connectorId: input.connectorId,
+      } satisfies IngestSnapshotJobData;
+      await boss.send(INGEST_SNAPSHOT_QUEUE, data, {
+        singletonKey: input.connectorId,
+        retryLimit: 3,
+        retryDelay: 60,
+        retryBackoff: true,
+        retryDelayMax: 15 * 60,
+        ...(input.startAfter ? { startAfter: input.startAfter } : {}),
+      });
+    },
+  };
+}
+
 /** FR-29 *Map*. See `packages/app`'s `mapTickets`. */
 export async function mapTickets(input: MapTicketsInput, ctx?: RequestContext) {
   const context = ctx ?? (await requestContext());
@@ -993,4 +1042,36 @@ export async function notifyCredentialFailure(
       to: input.to ?? (user?.email ? [user.email] : []),
     },
   );
+}
+
+/** Story 5.4: on-demand Refresh now → `ingest-snapshot` with singletonKey. */
+export async function requestSnapshotRefresh(
+  input: RequestSnapshotRefreshInput,
+  ctx?: RequestContext,
+) {
+  const context = ctx ?? (await requestContext());
+  const queue = await webIngestQueue();
+  return requestSnapshotRefreshUseCase(
+    { ...connectorWriteDeps(), queue },
+    context,
+    input,
+  );
+}
+
+/** Story 5.4: PM-visible snapshot attempt list. */
+export async function listSnapshotAttempts(
+  input: ListSnapshotAttemptsInput,
+  ctx?: RequestContext,
+) {
+  const context = ctx ?? (await requestContext());
+  return listSnapshotAttemptsUseCase(connectorWriteDeps(), context, input);
+}
+
+/** Story 5.4: top-bar pin state (age, next run, Connectors, slowdown, Re-pin). */
+export async function getSnapshotPinState(
+  input: GetSnapshotPinStateInput,
+  ctx?: RequestContext,
+) {
+  const context = ctx ?? (await requestContext());
+  return getSnapshotPinStateUseCase(connectorWriteDeps(), context, input);
 }

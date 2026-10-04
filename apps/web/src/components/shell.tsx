@@ -6,6 +6,8 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState, type ReactNode } from 'react';
 import { formatUserChip } from '@/lib/user-chip';
+import { useReviewPin } from './review-pin-context';
+import { SnapshotPin } from './snapshot-pin';
 import { UserChip } from './user-chip-menu';
 
 export { UserChip } from './user-chip-menu';
@@ -51,8 +53,8 @@ export function Shell({
   const t = useTranslations();
   const [collapsed, setCollapsed] = useState(false);
   const pathname = usePathname();
-  const stale = snapshotAgeMinutes > 24 * 60;
   const chipText = formatUserChip(userLabel, roleLabel);
+  const { reviewPinnedSnapshotId } = useReviewPin();
 
   return (
     <div className="app">
@@ -64,14 +66,12 @@ export function Shell({
           <strong>{projectName}</strong>
           <span style={{ color: 'var(--ink-faint)' }}>{clientName}</span>
         </div>
-        <div
-          className={`snapshot-pin${stale ? ' stale' : ''}`}
-          data-testid="snapshot-pin"
-          title={t('shell.snapshotPinTitle')}
-        >
-          <span aria-hidden>{stale ? '▲' : '◉'}</span>
-          <span>{t('shell.snapshotLabel', { label: snapshotLabel, age: formatAge(snapshotAgeMinutes, t) })}</span>
-        </div>
+        <SnapshotPin
+          projectId={projectId}
+          initialLabel={snapshotLabel}
+          initialAgeMinutes={snapshotAgeMinutes}
+          reviewPinnedSnapshotId={reviewPinnedSnapshotId}
+        />
         <UserChip label={chipText} showAuditLog={showAuditLog} />
       </header>
 
@@ -108,11 +108,4 @@ export function Shell({
       <main className="main">{children}</main>
     </div>
   );
-}
-
-function formatAge(minutes: number, t: ReturnType<typeof useTranslations>): string {
-  if (minutes < 60) return t('shell.ageMinutes', { minutes });
-  const h = Math.round(minutes / 60);
-  if (h < 48) return t('shell.ageHours', { hours: h });
-  return t('shell.ageDays', { days: Math.round(h / 24) });
 }

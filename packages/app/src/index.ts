@@ -166,12 +166,23 @@ export type {
   ConnectorWriteDeps,
   ConnectorWriteRepository,
   ConnectorWriteScope,
+  LatestSnapshotRow,
+  SnapshotAttemptRow,
 } from './ports/connector-write';
 export type {
   CredentialsCryptoPort,
   CredentialsPlaintext,
   EncryptedCredentials,
 } from './ports/credentials-crypto';
+export type {
+  EnqueueIngestSnapshotInput,
+  IngestSnapshotJobData,
+  IngestSnapshotQueuePort,
+} from './ports/ingest-snapshot-queue';
+export {
+  INGEST_SNAPSHOT_QUEUE,
+  SNAPSHOT_TICK_QUEUE,
+} from './ports/ingest-snapshot-queue';
 export {
   APPROVAL_REQUIRED_MESSAGE,
   APPROVAL_REQUIRED_REASON,
@@ -183,11 +194,41 @@ export {
   gateIngestApproval,
   notifyCredentialFailure,
   recordIncompleteRead,
+  runIngestSnapshotJob,
   type AdmitScopeReadInput,
   type GateIngestApprovalInput,
+  type IngestSnapshotJobDeps,
+  type IngestSnapshotJobOutcome,
   type NotifyCredentialFailureInput,
   type RecordIncompleteReadInput,
+  type RunIngestSnapshotJobInput,
 } from './use-cases/connector-ingest';
+export {
+  HOURLY_INTERVAL_MS,
+  OFF_WINDOW_INTERVAL_MS,
+  RATE_LIMIT_PACED_MESSAGE,
+  RATE_LIMIT_PACED_REASON,
+  READ_COMPLETE_WRITER_PENDING_MESSAGE,
+  READ_COMPLETE_WRITER_PENDING_REASON,
+  SEARCH_BUDGET_SLOWDOWN_MESSAGE,
+  dueWatermark,
+  estimateSearchCalls,
+  exceedsSearchBudget,
+  getSnapshotPinState,
+  isConnectorDue,
+  listSnapshotAttempts,
+  nextScheduledAt,
+  rateLimitStartAfter,
+  requestSnapshotRefresh,
+  selectDueConnectors,
+  snapshotScheduleCalendar,
+  type DueConnector,
+  type GetSnapshotPinStateInput,
+  type ListSnapshotAttemptsInput,
+  type RequestSnapshotRefreshInput,
+  type SnapshotPinStateResult,
+  type SnapshotScheduleDeps,
+} from './use-cases/connector-schedule';
 
 // Story 2.10 fence surface — outside the use-cases barrel (role/audit gates enumerate it via a
 // second module list — Epic 2 retro F10 / Q1→B).

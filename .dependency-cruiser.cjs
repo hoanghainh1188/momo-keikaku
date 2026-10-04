@@ -156,10 +156,26 @@ module.exports = {
       name: 'other-apps-not-to-db',
       severity: 'error',
       comment:
-        'AD-1: an app other than apps/web has no composition root and no packages/db/auth ' +
-        'carve-out (the spine names one per app before it may have one), so it imports ' +
-        'nothing from packages/db at all.',
-      from: { path: '^apps/', pathNot: '^apps/web/' },
+        'AD-1: apps other than the named composition roots import nothing from packages/db. ' +
+        'Story 5.4 names apps/worker/src/index.ts as the worker composition root (same carve-out ' +
+        'pattern as apps/web/src/server/composition.ts) so it can wire connector/fixture ports.',
+      from: {
+        path: '^apps/',
+        pathNot:
+          '^apps/web/|^apps/worker/src/index[.]ts$',
+      },
+      to: { path: '^packages/db/' },
+    },
+    {
+      name: 'worker-db-only-from-composition-root',
+      severity: 'error',
+      comment:
+        'AD-1 (story 5.4): in apps/worker only the composition root imports packages/db. Job ' +
+        'handlers call use cases; the root wires getDb / inTenantTransaction / fixture cursors.',
+      from: {
+        path: '^apps/worker/',
+        pathNot: '^apps/worker/src/index[.]ts$',
+      },
       to: { path: '^packages/db/' },
     },
     {
