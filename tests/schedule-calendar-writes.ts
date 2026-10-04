@@ -1,16 +1,20 @@
 /**
  * Second enumerated surface for Epic 1's role and audit gates (Epic 2 retro F10 / Q1→B).
  *
- * Schedule fence, calendar publish, and Baseline writers live on `@momo/app`'s package barrel
- * but stay outside `use-cases/index.ts`. The gates enumerate THIS module list mechanically —
- * the same spirit as `readSurfaceFunctionNames()` — so a new write export without a `*_ROLES` /
- * `*_AUDIT` merge fails CI, named. Thin `plan-edit` / `apply-predecessor-set` wrappers are
- * deliberately not listed: they call `applyPlanChange` and inherit its declarations.
+ * Schedule fence, calendar publish, Baseline writers, and Baseline reads that share that
+ * barrel (`compareBaselineVersions`, `reDerivePinnedBaseline`) live on `@momo/app` but stay
+ * outside `use-cases/index.ts`. The gates enumerate THIS module list mechanically — the same
+ * spirit as `readSurfaceFunctionNames()` — so a new surface export without a `*_ROLES` /
+ * `*_AUDIT` merge fails CI, named. Thin `plan-edit` / `apply-predecessor-set` wrappers and
+ * eligibility helpers (`getBaselineSetState` / `getReBaselineState`) are deliberately not
+ * listed: wrappers inherit via `applyPlanChange`; eligibility stays off-surface like
+ * `getPlanGridState`.
  */
 import type { RequestContext } from '../packages/app/src/authz/request-context';
 import type { Result } from '../packages/app/src/result';
 import * as compareBaselineVersionsRead from '../packages/app/src/baseline/compare-baseline-versions';
 import * as reBaselineWrite from '../packages/app/src/baseline/re-baseline';
+import * as reDerivePinnedBaselineRead from '../packages/app/src/baseline/re-derive-pinned';
 import * as setBaselineWrite from '../packages/app/src/baseline/set-baseline';
 import * as calendarWrites from '../packages/app/src/calendar/publish-calendar-version';
 import * as scheduleFence from '../packages/app/src/schedule/apply-plan-change';
@@ -30,6 +34,10 @@ const SCHEDULE_CALENDAR_WRITE_SURFACE = [
   {
     path: 'packages/app/src/baseline/compare-baseline-versions.ts',
     ns: compareBaselineVersionsRead,
+  },
+  {
+    path: 'packages/app/src/baseline/re-derive-pinned.ts',
+    ns: reDerivePinnedBaselineRead,
   },
 ] as const;
 

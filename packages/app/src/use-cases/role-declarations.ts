@@ -28,6 +28,7 @@
 import type { RoleDeclaration } from '../authz/authorize';
 import { COMPARE_BASELINE_VERSIONS_ROLES } from '../baseline/compare-baseline-versions';
 import { RE_BASELINE_ROLES } from '../baseline/re-baseline';
+import { RE_DERIVE_PINNED_BASELINE_ROLES } from '../baseline/re-derive-pinned';
 import { SET_BASELINE_ROLES } from '../baseline/set-baseline';
 import { CALENDAR_ROLES } from '../calendar/publish-calendar-version';
 import { SCHEDULE_ROLES } from '../schedule/apply-plan-change';
@@ -65,4 +66,5 @@ export const USE_CASE_ROLES: Readonly<Record<string, RoleDeclaration>> = {
   ...SET_BASELINE_ROLES,
   ...RE_BASELINE_ROLES,
   ...COMPARE_BASELINE_VERSIONS_ROLES,
+  ...RE_DERIVE_PINNED_BASELINE_ROLES,
 };
