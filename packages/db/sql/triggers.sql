@@ -134,6 +134,26 @@ CREATE TRIGGER "append_only_truncate_guard"
   BEFORE TRUNCATE ON public."baseline_wp"
   FOR EACH STATEMENT EXECUTE FUNCTION public."momo_append_only_truncate_guard"();
 
+-- connector_scope_event: Connector scope history (story 5.2 / AR-19). Snapshots record the scope_seq they read under; editing history would rewrite which scope a figure came from.
+DROP TRIGGER IF EXISTS "append_only_guard" ON public."connector_scope_event";
+CREATE TRIGGER "append_only_guard"
+  BEFORE UPDATE OR DELETE ON public."connector_scope_event"
+  FOR EACH ROW EXECUTE FUNCTION public."momo_append_only_guard"();
+DROP TRIGGER IF EXISTS "append_only_truncate_guard" ON public."connector_scope_event";
+CREATE TRIGGER "append_only_truncate_guard"
+  BEFORE TRUNCATE ON public."connector_scope_event"
+  FOR EACH STATEMENT EXECUTE FUNCTION public."momo_append_only_truncate_guard"();
+
+-- tracker_snapshot_attempt: Failed snapshot attempts (story 5.2 / AR-16). Approval refuse and credential auth failures; a correction is a later successful snapshot, never an edit of a failed attempt.
+DROP TRIGGER IF EXISTS "append_only_guard" ON public."tracker_snapshot_attempt";
+CREATE TRIGGER "append_only_guard"
+  BEFORE UPDATE OR DELETE ON public."tracker_snapshot_attempt"
+  FOR EACH ROW EXECUTE FUNCTION public."momo_append_only_guard"();
+DROP TRIGGER IF EXISTS "append_only_truncate_guard" ON public."tracker_snapshot_attempt";
+CREATE TRIGGER "append_only_truncate_guard"
+  BEFORE TRUNCATE ON public."tracker_snapshot_attempt"
+  FOR EACH STATEMENT EXECUTE FUNCTION public."momo_append_only_truncate_guard"();
+
 -- tracker_snapshot: An observation of the tracker at one instant. Editing it would rewrite what was observed.
 DROP TRIGGER IF EXISTS "append_only_guard" ON public."tracker_snapshot";
 CREATE TRIGGER "append_only_guard"

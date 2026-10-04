@@ -67,7 +67,8 @@ describe('ingestSnapshot (FR-25, FR-42)', () => {
     const s1 = snap('2026-09-01T09:00:00.000Z', [obs('t1', 10), obs('t2', 4)]);
     const s2 = snap('2026-09-08T09:00:00.000Z', [obs('t1', 14), obs('t2', 4), obs('t3', 6)]);
 
-    const r1 = ingestSnapshot({ prev: null, next: s1, activeBaselineVersionSeq: 1, seqFrom: 1 });
+    const r1 = ingestSnapshot({ prev: null, next: s1, activeBaselineVersionSeq: 1, seqFrom: 1,
+      approvalRecordedAt: '2026-09-01T00:00:00.000Z'});
     expect(r1.entries.map((e) => [e.ticketId, e.kind, e.deltaMh])).toEqual([
       ['t1', 'opening_balance', hoursToMh(10)],
       ['t2', 'opening_balance', hoursToMh(4)],
@@ -78,7 +79,7 @@ describe('ingestSnapshot (FR-25, FR-42)', () => {
       next: s2,
       activeBaselineVersionSeq: 1,
       seqFrom: r1.nextSeq,
-    });
+      approvalRecordedAt: '2026-09-01T00:00:00.000Z',});
     // t2 unchanged -> no entry. t3 first seen in a LATER snapshot -> a normal delta.
     expect(r2.entries.map((e) => [e.ticketId, e.kind, e.deltaMh])).toEqual([
       ['t1', 'delta', hoursToMh(4)],
@@ -89,8 +90,10 @@ describe('ingestSnapshot (FR-25, FR-42)', () => {
   it('records negative deltas rather than discarding them', () => {
     const s1 = snap('2026-09-01T09:00:00.000Z', [obs('t1', 10)]);
     const s2 = snap('2026-09-08T09:00:00.000Z', [obs('t1', 7)]);
-    const r1 = ingestSnapshot({ prev: null, next: s1, activeBaselineVersionSeq: 1, seqFrom: 1 });
-    const r2 = ingestSnapshot({ prev: s1, next: s2, activeBaselineVersionSeq: 1, seqFrom: r1.nextSeq });
+    const r1 = ingestSnapshot({ prev: null, next: s1, activeBaselineVersionSeq: 1, seqFrom: 1,
+      approvalRecordedAt: '2026-09-01T00:00:00.000Z'});
+    const r2 = ingestSnapshot({ prev: s1, next: s2, activeBaselineVersionSeq: 1, seqFrom: r1.nextSeq,
+      approvalRecordedAt: '2026-09-01T00:00:00.000Z'});
     expect(r2.entries[0]!.deltaMh).toBe(hoursToMh(-3));
     expect(
       checkLedgerInvariant([...r1.entries, ...r2.entries], s2).ok,
@@ -100,8 +103,10 @@ describe('ingestSnapshot (FR-25, FR-42)', () => {
   it('keeps the history of a Ticket that leaves scope and stops recording deltas', () => {
     const s1 = snap('2026-09-01T09:00:00.000Z', [obs('t1', 10), obs('t2', 5)]);
     const s2 = snap('2026-09-08T09:00:00.000Z', [obs('t1', 12)]);
-    const r1 = ingestSnapshot({ prev: null, next: s1, activeBaselineVersionSeq: 1, seqFrom: 1 });
-    const r2 = ingestSnapshot({ prev: s1, next: s2, activeBaselineVersionSeq: 1, seqFrom: r1.nextSeq });
+    const r1 = ingestSnapshot({ prev: null, next: s1, activeBaselineVersionSeq: 1, seqFrom: 1,
+      approvalRecordedAt: '2026-09-01T00:00:00.000Z'});
+    const r2 = ingestSnapshot({ prev: s1, next: s2, activeBaselineVersionSeq: 1, seqFrom: r1.nextSeq,
+      approvalRecordedAt: '2026-09-01T00:00:00.000Z'});
     expect(r2.leftScope).toEqual([{ ticketId: 't2', key: 't2' }]);
     expect(r2.entries.some((e) => e.ticketId === 't2')).toBe(false);
   });
@@ -109,7 +114,8 @@ describe('ingestSnapshot (FR-25, FR-42)', () => {
   it('detects the measurement basis from the data (AD-8)', () => {
     const noHours = snap('2026-09-01T09:00:00.000Z', [obs('t1', null), obs('t2', null)]);
     expect(
-      ingestSnapshot({ prev: null, next: noHours, activeBaselineVersionSeq: 1, seqFrom: 1 })
+      ingestSnapshot({ prev: null, next: noHours, activeBaselineVersionSeq: 1, seqFrom: 1,
+      approvalRecordedAt: '2026-09-01T00:00:00.000Z'})
         .measurementBasis,
     ).toBe('count');
   });
@@ -119,7 +125,8 @@ describe('ingestSnapshot (FR-25, FR-42)', () => {
     // Baseline's created_at, which under a timestamp comparison would leave every
     // entry with no active Baseline and make 100% of the hours Unplanned.
     const s1 = snap('2026-08-01T09:00:00.000Z', [obs('t1', 10)]);
-    const r = ingestSnapshot({ prev: null, next: s1, activeBaselineVersionSeq: 7, seqFrom: 1 });
+    const r = ingestSnapshot({ prev: null, next: s1, activeBaselineVersionSeq: 7, seqFrom: 1,
+      approvalRecordedAt: '2026-09-01T00:00:00.000Z'});
     expect(r.entries[0]!.activeBaselineVersionSeq).toBe(7);
   });
 
@@ -130,10 +137,12 @@ describe('ingestSnapshot (FR-25, FR-42)', () => {
       adapterKind: 'backlog' as const,
     };
     expect(() =>
-      ingestSnapshot({ prev: s1, next: s2, activeBaselineVersionSeq: 1, seqFrom: 1 }),
+      ingestSnapshot({ prev: s1, next: s2, activeBaselineVersionSeq: 1, seqFrom: 1,
+      approvalRecordedAt: '2026-09-01T00:00:00.000Z'}),
     ).toThrow(AdapterKindMismatchError);
     try {
-      ingestSnapshot({ prev: s1, next: s2, activeBaselineVersionSeq: 1, seqFrom: 1 });
+      ingestSnapshot({ prev: s1, next: s2, activeBaselineVersionSeq: 1, seqFrom: 1,
+      approvalRecordedAt: '2026-09-01T00:00:00.000Z'});
     } catch (e) {
       expect(e).toMatchObject({
         kind: 'operator-alert',
@@ -149,7 +158,8 @@ describe('ingestSnapshot (FR-25, FR-42)', () => {
     delete (s1 as { adapterKind?: string }).adapterKind;
     const s2 = snap('2026-09-08T09:00:00.000Z', [obs('t1', 12)]);
     expect(() =>
-      ingestSnapshot({ prev: s1, next: s2, activeBaselineVersionSeq: 1, seqFrom: 1 }),
+      ingestSnapshot({ prev: s1, next: s2, activeBaselineVersionSeq: 1, seqFrom: 1,
+      approvalRecordedAt: '2026-09-01T00:00:00.000Z'}),
     ).not.toThrow();
   });
 });

@@ -49,7 +49,9 @@ import { cache } from 'react';
 import { headers as nextHeaders } from 'next/headers';
 import { redirect } from 'next/navigation';
 import {
+  addConnector as addConnectorUseCase,
   assignMemberProject as assignMemberProjectUseCase,
+  changeConnectorScope as changeConnectorScopeUseCase,
   changeMemberRole as changeMemberRoleUseCase,
   changeTenantCurrency as changeTenantCurrencyUseCase,
   config,
@@ -60,6 +62,7 @@ import {
   appendProjectDefaultRate as appendProjectDefaultRateUseCase,
   appendResourceRate as appendResourceRateUseCase,
   explainTickets as explainTicketsUseCase,
+  gateIngestApproval as gateIngestApprovalUseCase,
   googleProvider,
   getProjectHeader as getProjectHeaderUseCase,
   getProjectMapping as getProjectMappingUseCase,
@@ -71,6 +74,7 @@ import {
   mapTicket as mapTicketUseCase,
   mapTickets as mapTicketsUseCase,
   markChangeRequestCandidates as markChangeRequestCandidatesUseCase,
+  notifyCredentialFailure as notifyCredentialFailureUseCase,
   planTicketsAsWorkPackage as planTicketsAsWorkPackageUseCase,
   reassignProjectDepartment as reassignProjectDepartmentUseCase,
   reassignProjectProgram as reassignProjectProgramUseCase,
@@ -79,19 +83,25 @@ import {
   renameProject as renameProjectUseCase,
   resolveRequestContext,
   revokeMembership as revokeMembershipUseCase,
+  rotateCredentials as rotateCredentialsUseCase,
   unassignMemberProject as unassignMemberProjectUseCase,
+  type AddConnectorInput,
   type AssignMemberProjectInput,
+  type ChangeScopeInput,
   type ChangeTenantCurrencyInput,
   type TenantCurrencyDeps,
   type AppendProjectDefaultRateInput,
   type AppendResourceRateInput,
   type ChangeMemberRoleInput,
   type ChangeRequestCandidatesInput,
+  type ConnectorWriteDeps,
   type CreateDepartmentInput,
   type CreateProgramInput,
   type CreateProjectInput,
   type CreateResourceInput,
+  type CredentialsCryptoPort,
   type ExplainTicketsInput,
+  type GateIngestApprovalInput,
   type IdentityPort,
   type IdentityUser,
   type ListAuditLogInput,
@@ -103,6 +113,7 @@ import {
   type TrackerPort,
   type MapTicketsInput,
   type MembershipReader,
+  type NotifyCredentialFailureInput,
   type OrgReadDeps,
   type PlanTicketsInput,
   type AuditLogReadDeps,
@@ -117,6 +128,7 @@ import {
   type RequestContextResolution,
   type ResolveRequestContextDeps,
   type RevokeMembershipInput,
+  type RotateCredentialsInput,
   type UnassignMemberProjectInput,
   type WriteDeps,
   applyPlanChange,
@@ -147,9 +159,10 @@ import {
   getReBaselineState,
   compareBaselineVersions,
 } from '@momo/app';
-import { buildResetPasswordMail } from '@momo/i18n';
+import { buildResetPasswordMail, t } from '@momo/i18n';
 import {
   backlogHttpOn,
+  credentialsAesOn,
   fixtureReplayOn,
   mailerConsoleOn,
   productClockOn,
@@ -279,6 +292,39 @@ function webMailer(): MailerPort {
       );
   }
   return mailerInstance;
+}
+
+/**
+ * Credentials crypto (story 5.2 / AR-29). `local` is AES-256-GCM from `CREDENTIALS_KEY`;
+ * `kms` fails naming the missing Epic 8 adapter — same pattern as `MAILER=ses`. Built on
+ * first use so importing this file still reads no configuration.
+ */
+let credentialsCryptoInstance: CredentialsCryptoPort | undefined;
+function webCredentialsCrypto(): CredentialsCryptoPort {
+  if (credentialsCryptoInstance) return credentialsCryptoInstance;
+  switch (config.CREDENTIALS_CRYPTO) {
+    case 'local': {
+      const key = config.CREDENTIALS_KEY;
+      const keyId = config.CREDENTIALS_KEY_ID;
+      if (key === undefined || keyId === undefined) {
+        throw new Error(
+          'Invalid configuration: CREDENTIALS_KEY and CREDENTIALS_KEY_ID are required when ' +
+            'CREDENTIALS_CRYPTO=local',
+        );
+      }
+      credentialsCryptoInstance = credentialsAesOn({
+        keyBase64: key,
+        keyId,
+      }) satisfies CredentialsCryptoPort;
+      break;
+    }
+    case 'kms':
+      throw new Error(
+        'CREDENTIALS_CRYPTO=kms is not implemented yet — credentials-kms lands in Epic 8, when ' +
+          'the KMS key and IAM role exist to test it against. Set CREDENTIALS_CRYPTO=local for local dev.',
+      );
+  }
+  return credentialsCryptoInstance;
 }
 
 /**
@@ -586,6 +632,15 @@ function writeDeps() {
   } satisfies WriteDeps<Db>;
 }
 
+/** Connector writes need the crypto port on top of the shared write deps (story 5.2). */
+function connectorWriteDeps(): ConnectorWriteDeps<Db> {
+  return {
+    ...writeDeps(),
+    crypto: webCredentialsCrypto(),
+    mailer: webMailer(),
+  };
+}
+
 /** FR-29 *Map*. See `packages/app`'s `mapTickets`. */
 export async function mapTickets(input: MapTicketsInput, ctx?: RequestContext) {
   const context = ctx ?? (await requestContext());
@@ -872,4 +927,60 @@ export async function assignMemberProject(input: AssignMemberProjectInput, ctx?:
 export async function unassignMemberProject(input: UnassignMemberProjectInput, ctx?: RequestContext) {
   const context = ctx ?? (await requestContext());
   return unassignMemberProjectUseCase(writeDeps(), context, input);
+}
+
+// --- Connector set-up / rotation / scope / ingest notify (story 5.2 / FR-17).
+
+/** FR-17: add a Backlog Connector with encrypted credentials and client approval. */
+export async function addConnector(input: AddConnectorInput, ctx?: RequestContext) {
+  const context = ctx ?? (await requestContext());
+  return addConnectorUseCase(connectorWriteDeps(), context, input);
+}
+
+/** FR-17: rotate API key — ciphertext only; Mapping history unchanged. */
+export async function rotateCredentials(input: RotateCredentialsInput, ctx?: RequestContext) {
+  const context = ctx ?? (await requestContext());
+  return rotateCredentialsUseCase(connectorWriteDeps(), context, input);
+}
+
+/** FR-17 / AR-19: change Connector scope and append connector_scope_event. */
+export async function changeConnectorScope(input: ChangeScopeInput, ctx?: RequestContext) {
+  const context = ctx ?? (await requestContext());
+  return changeConnectorScopeUseCase(connectorWriteDeps(), context, input);
+}
+
+/** FR-17: refuse ingest when client approval is missing; record a failed attempt. */
+export async function gateIngestApproval(input: GateIngestApprovalInput, ctx?: RequestContext) {
+  const context = ctx ?? (await requestContext());
+  return gateIngestApprovalUseCase(connectorWriteDeps(), context, input);
+}
+
+/**
+ * FR-17: credential auth failure — attempt row + last_error banner fields + best-effort mail
+ * to the acting user (full PM fan-out waits on a project-memberships reader).
+ */
+export async function notifyCredentialFailure(
+  input: NotifyCredentialFailureInput,
+  ctx?: RequestContext,
+) {
+  const context = ctx ?? (await requestContext());
+  const deps = connectorWriteDeps();
+  const user = await lookupUserOn(webDb(), context.userId);
+  const mailSubject =
+    input.mailSubject ?? t(context.locale, 'mail.connectorCredentialError.subject');
+  const mailBody =
+    input.mailBody ??
+    t(context.locale, 'mail.connectorCredentialError.body', {
+      lastGoodLabel: input.lastGoodLabel,
+    });
+  return notifyCredentialFailureUseCase(
+    { ...deps, mailer: webMailer() },
+    context,
+    {
+      ...input,
+      mailSubject,
+      mailBody,
+      to: input.to ?? (user?.email ? [user.email] : []),
+    },
+  );
 }

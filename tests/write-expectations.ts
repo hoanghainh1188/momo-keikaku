@@ -43,6 +43,10 @@ export interface ExpectedRows {
   readonly memberships: readonly Record<string, unknown>[];
   /** Bridge rows gone — a revocation. */
   readonly membershipsRemoved: readonly Record<string, unknown>[];
+  /** Connector rows new or changed (story 5.2). */
+  readonly connectors: readonly Record<string, unknown>[];
+  /** New connector_scope_event rows (story 5.2). */
+  readonly connectorScopeEvents: readonly Record<string, unknown>[];
 }
 
 export type Expect = (ctx: ExpectContext) => ExpectedRows;
@@ -60,6 +64,8 @@ export const NO_ROWS: ExpectedRows = {
   projectDefaultRates: [],
   memberships: [],
   membershipsRemoved: [],
+  connectors: [],
+  connectorScopeEvents: [],
 };
 
 function dispositionMappings({ target, at, actor }: ExpectContext, wpId: string) {
@@ -148,6 +154,11 @@ export function manualMapping(
 /** One organisation audit row, stamped with the Clock. */
 function orgAudit({ target, now, actor }: ExpectContext, action: string, on: string, payload: unknown) {
   return [{ tenantId: target.tenantId, actor, action, target: on, payload, at: now }];
+}
+
+/** Project-anchor-stamped audit (connector writes use the Project's demoAnchor). */
+function projectAudit({ target, at, actor }: ExpectContext, action: string, on: string, payload: unknown) {
+  return [{ tenantId: target.tenantId, actor, action, target: on, payload, at }];
 }
 
 /** The member's bridge row as it was before the write, in the target's Tenant. */
@@ -436,4 +447,43 @@ export const EXPECTED: Readonly<Record<string, Expect>> = {
     };
   },
   changeTenantCurrency: () => NO_ROWS,
+  addConnector: () => NO_ROWS,
+  rotateCredentials: (ctx) => {
+    const was = rowBefore(ctx.before.connectors, ctx.target.connectorId, 'connector');
+    return {
+      ...NO_ROWS,
+      connectors: [
+        {
+          ...was,
+          credentialsKeyId: 'harness-local',
+          hasCredentials: true,
+        },
+      ],
+      audits: projectAudit(ctx, 'connector.rotate_credentials', ctx.target.connectorId, {
+        projectId: ctx.target.projectId,
+      }),
+    };
+  },
+  changeConnectorScope: (ctx) => {
+    const was = rowBefore(ctx.before.connectors, ctx.target.connectorId, 'connector');
+    return {
+      ...NO_ROWS,
+      connectors: [{ ...was, scope: 'EC2-NEW' }],
+      connectorScopeEvents: [
+        {
+          tenantId: ctx.target.tenantId,
+          connectorId: ctx.target.connectorId,
+          projectId: ctx.target.projectId,
+          scope: 'EC2-NEW',
+          actor: ctx.actor,
+          at: ctx.at,
+        },
+      ],
+      audits: projectAudit(ctx, 'connector.change_scope', ctx.target.connectorId, {
+        projectId: ctx.target.projectId,
+        before: was.scope,
+        after: 'EC2-NEW',
+      }),
+    };
+  },
 };

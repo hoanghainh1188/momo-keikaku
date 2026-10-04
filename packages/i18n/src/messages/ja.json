@@ -11,6 +11,10 @@
         "linkLine": "Reset it here: {link}",
         "expiry": "This link expires in {hours, plural, one {# hour} other {# hours}} and can be used once. If you did not request this, you can ignore this email — your password will not change."
       }
+    },
+    "connectorCredentialError": {
+      "subject": "momo-keikaku: Backlog Connector の認証エラー",
+      "body": "Backlog が API キーを拒否しました（失効？）。数値は直近の正常なスナップショット時点（{lastGoodLabel}）で凍結されています。"
     }
   },
   "admin": {
@@ -183,20 +187,42 @@
   },
   "connectors": {
     "backlog_connector": "Backlog Connector",
+    "add_backlog_connector": "Backlog スペースを接続",
     "connectors": "Connectors",
     "connectors_are_read_only_the_offshore_team_keeps": "Connectors are read-only. The offshore team keeps working in Backlog; nothing is asked of them and nothing is ever written back.",
     "adapter": "Adapter",
     "fixtures_backlog_ec_phase2": "fixtures/backlog/ec-phase2/",
     "space": "Space",
+    "site": "サイト",
     "scope": "Scope",
+    "approval": "クライアント承認",
+    "approval_row": "{name} · {when}",
+    "approval_missing": "未記録 — 承認が記録されるまで取り込みは拒否されます。",
+    "credentials": "認証情報",
+    "credentials_stored_write_only": "保存済み（書き込み専用 — 再表示しません）",
+    "credentials_none": "未登録（fixture 再生にライブキーは不要）",
     "hours_detection": "Hours detection",
     "detected_from_the_data_never_from_the_plan_name_": "Detected from the data, never from the plan name: measurement basis",
     "pinned_snapshot": "Pinned snapshot",
     "opening_balance": "Opening Balance",
-    "not_in_this_demo_credential_entry_and_rotation_t": "Not in this demo: credential entry and rotation, the scheduled snapshot job (pg-boss), on-demand refresh, and Tracker Account → Resource linking as a UI. The seed replays all six snapshots in one pass.",
+    "not_in_this_demo_credential_entry_and_rotation_t": "Not in this demo: the scheduled snapshot job (pg-boss), on-demand refresh, and Tracker Account → Resource linking as a UI. The seed replays all six snapshots in one pass.",
+    "fixture_no_live_key": "この fixture Connector にはライブ API キーがありません。キーのない Project に Backlog Connector を追加するか、認証情報がある場合にローテーションしてください。",
+    "scheduled_job_later": "まだ未実装: 毎時スナップショットジョブ（story 5.4）、オンデマンド更新、Tracker Account → Resource の UI 連携。",
     "adapter_replays": " — replays recorded Backlog pages from ",
     "snapshot_row": "{snapshotId} · {ticketCount} Tickets · {ageMinutes} min old",
-    "opening_balance_row": "{hours}h — hours the Tickets already carried before momo-keikaku could observe them"
+    "opening_balance_row": "{hours}h — hours the Tickets already carried before momo-keikaku could observe them",
+    "bot_user_recommendation": "API キーには専用の読み取り専用 Backlog ボットユーザーを使ってください。個人アカウントの再利用は避けてください。",
+    "space_url": "スペース URL",
+    "api_key": "API キー",
+    "project_key": "プロジェクトキー",
+    "approval_name": "クライアント承認者名",
+    "approval_when": "承認日時",
+    "add_connector": "スペースを接続",
+    "rotate_credentials": "API キーをローテーション",
+    "new_api_key": "新しい API キー",
+    "rotate_keeps_mappings": "ローテーションは保存済みキーのみ置き換えます。Mapping 履歴は変わりません。",
+    "saving": "保存中…",
+    "credential_error_title": "Connector 認証エラー"
   },
   "mapping": {
     "coverage": "Coverage",

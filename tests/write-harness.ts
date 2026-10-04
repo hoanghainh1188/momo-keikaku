@@ -169,6 +169,7 @@ export function targetOf(probe: ProbeTenant, tenantId: string): WriteTarget {
   if (tickets.length < 2 || !leaf) {
     throw new Error(`${probe.token}'s fixture has too few Tickets or no leaf Work Package`);
   }
+  const connectorId = `${probe.writeOptions.idPrefix}con-fixture-ec2`;
   return {
     tenantId,
     projectId: probe.projectId,
@@ -181,6 +182,7 @@ export function targetOf(probe: ProbeTenant, tenantId: string): WriteTarget {
     staleProjectId: staleProjectIdOf(probe),
     // The probe's seeded Tenant Admin; the harness user (`stageProbeMembers`) is the other one.
     secondAdminUserId: `${probe.writeOptions.idPrefix}${DEMO_USERS.hoang.id}`,
+    connectorId,
   };
 }
 
@@ -337,6 +339,24 @@ export async function landedRows(tenantId: string) {
       .select()
       .from(tenantMembership)
       .where(eq(tenantMembership.tenantId, tenantId)),
+    connectors: (
+      await tx.select().from(schema.connector).where(eq(schema.connector.tenantId, tenantId))
+    ).map((row) => ({
+      id: row.id,
+      tenantId: row.tenantId,
+      projectId: row.projectId,
+      adapter: row.adapter,
+      site: row.site,
+      scope: row.scope,
+      spaceLabel: row.spaceLabel,
+      approvalName: row.approvalName,
+      credentialsKeyId: row.credentialsKeyId,
+      hasCredentials: row.credentialsCiphertext != null,
+    })),
+    connectorScopeEvents: await tx
+      .select()
+      .from(schema.connectorScopeEvent)
+      .where(eq(schema.connectorScopeEvent.tenantId, tenantId)),
   }));
 }
 
@@ -355,6 +375,8 @@ export const LANDED_TABLE: Readonly<Record<keyof Landed, string>> = {
   rateEntries: 'rate_entry',
   projectDefaultRates: 'project_default_rate_entry',
   memberships: 'tenant_membership',
+  connectors: 'connector',
+  connectorScopeEvents: 'connector_scope_event',
 };
 
 /** The table `newSince`'s removed memberships come from — the same as `memberships`'. */
@@ -396,6 +418,7 @@ export function newSince(before: Landed, after: Landed) {
   const auditSeqs = seqs(before.audits);
   const rateSeqs = seqs(before.rateEntries);
   const defaultRateSeqs = seqs(before.projectDefaultRates);
+  const scopeSeqs = seqs(before.connectorScopeEvents);
   const wpIds = new Set(before.workPackages.map((row) => row.id));
   const resourceIds = new Set(before.resources.map((row) => row.id));
   return {
@@ -411,6 +434,8 @@ export function newSince(before: Landed, after: Landed) {
     resources: after.resources.filter((row) => !resourceIds.has(row.id)),
     rateEntries: after.rateEntries.filter((row) => !rateSeqs.has(row.seq)),
     projectDefaultRates: after.projectDefaultRates.filter((row) => !defaultRateSeqs.has(row.seq)),
+    connectors: changedSince(before.connectors, after.connectors),
+    connectorScopeEvents: after.connectorScopeEvents.filter((row) => !scopeSeqs.has(row.seq)),
     ...membershipsSince(before.memberships, after.memberships),
   };
 }

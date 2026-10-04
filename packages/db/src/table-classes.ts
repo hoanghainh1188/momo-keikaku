@@ -98,17 +98,18 @@ export interface TableEntry {
  * `app_user` and added the four Better Auth tables and `tenant_membership`; slice 4 added
  * `identity_event`; story 1.6 `project_default_rate_entry`; story 2.1 the five scheduling tables;
  * story 2.10 `pct_override_event` + Custom Field definition/value; story 2.12
- * `calendar_day_event`; story 5.1 `ticket`, `tracker_account`, `fixture_cursor`),
+ * `calendar_day_event`; story 5.1 `ticket`, `tracker_account`, `fixture_cursor`; story 5.2
+ * `connector_scope_event`, `tracker_snapshot_attempt`),
  * in DEPENDENCY ORDER: every table comes after each table its foreign keys reference, so this order
  * is an insert order and its reverse is a delete order (`probe-tenants.ts` deletes by it). Story
  * 2.1's composite foreign keys made that load-bearing: `schedule_run` before `baseline_version`,
  * `mapping_rule` before `mapping_event`.
  *
- * Fifteen are insert-only and are classed `append-only` accordingly:
+ * Seventeen are insert-only and are classed `append-only` accordingly:
  * rate_entry, project_default_rate_entry, wp_status_event, pct_override_event,
  * calendar_day_event, holiday_calendar_version, schedule_run, baseline_version, baseline_wp,
- * tracker_snapshot, ticket_observation, actuals_ledger_entry, mapping_event, disposition_event,
- * audit_log.
+ * connector_scope_event, tracker_snapshot_attempt, tracker_snapshot, ticket_observation,
+ * actuals_ledger_entry, mapping_event, disposition_event, audit_log.
  */
 export const TABLE_REGISTRY: readonly TableEntry[] = [
   {
@@ -277,6 +278,22 @@ export const TABLE_REGISTRY: readonly TableEntry[] = [
     class: 'mutable-audited',
     tenantColumn: 'tenant_id',
     why: 'Scope and credentials are re-pointed by a PM. The Snapshots it produced are not (see tracker_snapshot).',
+  },
+  {
+    table: 'connector_scope_event',
+    class: 'append-only',
+    tenantColumn: 'tenant_id',
+    why:
+      'Connector scope history (story 5.2 / AR-19). Snapshots record the scope_seq they read under; ' +
+      'editing history would rewrite which scope a figure came from.',
+  },
+  {
+    table: 'tracker_snapshot_attempt',
+    class: 'append-only',
+    tenantColumn: 'tenant_id',
+    why:
+      'Failed snapshot attempts (story 5.2 / AR-16). Approval refuse and credential auth failures; ' +
+      'a correction is a later successful snapshot, never an edit of a failed attempt.',
   },
   {
     table: 'ticket',

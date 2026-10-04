@@ -58,6 +58,8 @@ export const TRUNCATE_ORDER: readonly string[] = [
   'actuals_ledger_entry',
   'ticket_observation',
   'tracker_snapshot',
+  'tracker_snapshot_attempt',
+  'connector_scope_event',
   'fixture_cursor',
   'ticket',
   'tracker_account',
@@ -361,22 +363,42 @@ export async function writeTenantRows(
   }
 
   const connectorId = own(projectOnly ? `con-fixture-${f.project.id}` : 'con-fixture-ec2');
+  const connectorScope = own(
+    projectOnly
+      ? `project key ${f.project.id} (all issue types)`
+      : 'project key EC2 (all issue types)',
+  );
+  const connectorSite = projectOnly ? 'ec-phase2' : 'ec-phase2';
+  const connectorSpaceLabel = own(
+    projectOnly
+      ? `${f.project.id}.backlog.jp (fixture replay)`
+      : 'osaka-retail.backlog.jp (fixture replay)',
+  );
+  // Story 5.2: fixture Connectors are pre-approved so Review/Mapping demos keep loading.
+  // No live apiKey — credentials stay null for fixture-replay.
   await tx.insert(s.connector).values({
     id: connectorId,
     tenantId,
     projectId: f.project.id,
     adapter: 'fixture',
-    scope: own(
-      projectOnly
-        ? `project key ${f.project.id} (all issue types)`
-        : 'project key EC2 (all issue types)',
-    ),
-    spaceLabel: own(
-      projectOnly
-        ? `${f.project.id}.backlog.jp (fixture replay)`
-        : 'osaka-retail.backlog.jp (fixture replay)',
-    ),
+    site: connectorSite,
+    scope: connectorScope,
+    spaceLabel: connectorSpaceLabel,
+    approvalRecordedAt: stamp,
+    approvalName: 'fixture',
   });
+  const [scopeEvent] = await tx
+    .insert(s.connectorScopeEvent)
+    .values({
+      tenantId,
+      connectorId,
+      projectId: f.project.id,
+      scope: connectorScope,
+      actor: 'system:seed',
+      at: stamp,
+    })
+    .returning({ seq: s.connectorScopeEvent.seq });
+  const fixtureScopeSeq = scopeEvent!.seq;
 
   if (f.mappingRules.length > 0) {
     await tx.insert(s.mappingRule).values(
@@ -408,6 +430,7 @@ export async function writeTenantRows(
         measurementBasis: snap.hoursFieldPresent ? 'hours' : 'count',
         ticketCount: snap.tickets.length,
         adapterKind: snap.adapterKind ?? 'fixture',
+        scopeSeq: fixtureScopeSeq,
       });
   }
 

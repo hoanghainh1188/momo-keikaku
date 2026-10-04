@@ -111,9 +111,9 @@ describe.skipIf(!live)('tracker identity + fixture cursor (story 5.1)', () => {
         [PROJECT, TENANT],
       );
       await client.query(
-        `INSERT INTO connector (id, tenant_id, project_id, adapter, scope, space_label)
-         VALUES ($1, $2, $3, 'fixture', 'EC2', 'fixture.site'),
-                ($4, $2, $3, 'fixture', 'EC2', 'fixture.site.b')`,
+        `INSERT INTO connector (id, tenant_id, project_id, adapter, site, scope, space_label)
+         VALUES ($1, $2, $3, 'fixture', 'fixture.site', 'EC2', 'fixture.site'),
+                ($4, $2, $3, 'fixture', 'fixture.site.b', 'EC2', 'fixture.site.b')`,
         [CONNECTOR, TENANT, PROJECT, CONNECTOR_B],
       );
     });

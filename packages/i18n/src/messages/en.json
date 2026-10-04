@@ -11,6 +11,10 @@
         "linkLine": "Reset it here: {link}",
         "expiry": "This link expires in {hours, plural, one {# hour} other {# hours}} and can be used once. If you did not request this, you can ignore this email — your password will not change."
       }
+    },
+    "connectorCredentialError": {
+      "subject": "momo-keikaku: Backlog Connector credential error",
+      "body": "Backlog rejected the API key (revoked?). Figures are frozen at the last good snapshot, {lastGoodLabel}."
     }
   },
   "admin": {
@@ -183,20 +187,42 @@
   },
   "connectors": {
     "backlog_connector": "Backlog Connector",
+    "add_backlog_connector": "Connect a Backlog space",
     "connectors": "Connectors",
     "connectors_are_read_only_the_offshore_team_keeps": "Connectors are read-only. The offshore team keeps working in Backlog; nothing is asked of them and nothing is ever written back.",
     "adapter": "Adapter",
     "fixtures_backlog_ec_phase2": "fixtures/backlog/ec-phase2/",
     "space": "Space",
+    "site": "Site",
     "scope": "Scope",
+    "approval": "Client approval",
+    "approval_row": "{name} · {when}",
+    "approval_missing": "Missing — ingest will refuse until approval is recorded.",
+    "credentials": "Credentials",
+    "credentials_stored_write_only": "Stored (write-only — never shown again)",
+    "credentials_none": "None on file (fixture replay needs no live key)",
     "hours_detection": "Hours detection",
     "detected_from_the_data_never_from_the_plan_name_": "Detected from the data, never from the plan name: measurement basis",
     "pinned_snapshot": "Pinned snapshot",
     "opening_balance": "Opening Balance",
-    "not_in_this_demo_credential_entry_and_rotation_t": "Not in this demo: credential entry and rotation, the scheduled snapshot job (pg-boss), on-demand refresh, and Tracker Account → Resource linking as a UI. The seed replays all six snapshots in one pass.",
+    "not_in_this_demo_credential_entry_and_rotation_t": "Not in this demo: the scheduled snapshot job (pg-boss), on-demand refresh, and Tracker Account → Resource linking as a UI. The seed replays all six snapshots in one pass.",
+    "fixture_no_live_key": "This fixture Connector has no live API key. Add a Backlog Connector on a Project without one, or rotate when credentials are present.",
+    "scheduled_job_later": "Not in this release yet: the hourly snapshot job (story 5.4), on-demand refresh, and Tracker Account → Resource linking.",
     "adapter_replays": " — replays recorded Backlog pages from ",
     "snapshot_row": "{snapshotId} · {ticketCount} Tickets · {ageMinutes} min old",
-    "opening_balance_row": "{hours}h — hours the Tickets already carried before momo-keikaku could observe them"
+    "opening_balance_row": "{hours}h — hours the Tickets already carried before momo-keikaku could observe them",
+    "bot_user_recommendation": "Use a dedicated read-only Backlog bot user for the API key. Do not reuse a personal account.",
+    "space_url": "Space URL",
+    "api_key": "API key",
+    "project_key": "Project key",
+    "approval_name": "Client approver name",
+    "approval_when": "Approval date and time",
+    "add_connector": "Connect space",
+    "rotate_credentials": "Rotate API key",
+    "new_api_key": "New API key",
+    "rotate_keeps_mappings": "Rotation replaces the stored key only. Mapping history is unchanged.",
+    "saving": "Saving…",
+    "credential_error_title": "Connector credential error"
   },
   "mapping": {
     "coverage": "Coverage",

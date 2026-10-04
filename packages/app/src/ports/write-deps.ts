@@ -1,5 +1,6 @@
 import type { AuditedWriteDeps } from './audited-write';
 import type { Clock } from './clock';
+import type { ConnectorWriteScope } from './connector-write';
 import type { IdGenerator } from './ids';
 import type { MembershipWriteScope } from './membership-write';
 import type { OrgWriteScope } from './org-write';
@@ -26,6 +27,7 @@ export type WriteScope = ProjectWriteScope &
   OrgWriteScope &
   MembershipWriteScope &
   ResourceWriteScope &
+  ConnectorWriteScope &
   SchedulingScope;
 
 export type WriteDeps<Handle> = AuditedWriteDeps<Handle, WriteScope> & {

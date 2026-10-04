@@ -42,6 +42,7 @@ import { ORG_WRITE_ROLES } from './org-writes';
 import { PROJECT_WRITE_ROLES } from './project-writes';
 import { RESOURCE_WRITE_ROLES } from './resource-writes';
 import { TENANT_CURRENCY_ROLES } from './tenant-currency';
+import { CONNECTOR_WRITE_ROLES } from './connector-writes';
 
 export type { RoleDeclaration };
 
@@ -67,4 +68,5 @@ export const USE_CASE_ROLES: Readonly<Record<string, RoleDeclaration>> = {
   ...RE_BASELINE_ROLES,
   ...COMPARE_BASELINE_VERSIONS_ROLES,
   ...RE_DERIVE_PINNED_BASELINE_ROLES,
+  ...CONNECTOR_WRITE_ROLES,
 };

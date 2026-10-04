@@ -23,6 +23,8 @@ export const REQUIRED_KEYS = [
   'SEED_DEMO_PASSWORD',
   'BETTER_AUTH_SECRET',
   'BETTER_AUTH_URL',
+  'CREDENTIALS_KEY',
+  'CREDENTIALS_KEY_ID',
 ] as const;
 
 export const COMPOSE_DATABASE_URL = 'postgres://momo:momo@localhost:55433/momo_keikaku';
@@ -36,6 +38,8 @@ export const DEMO_EMAILS = ['linh@momo-digital.example', 'hoang@momo-digital.exa
 const SECRET_BYTES = 36;
 /** 12 bytes → 16 base64url characters: above the seed's 8-character floor. */
 const PASSWORD_BYTES = 12;
+/** 32 bytes → AES-256 key for local credentials crypto (story 5.2 / AR-29). */
+const CREDENTIALS_KEY_BYTES = 32;
 
 export type Env = Readonly<Record<string, string | undefined>>;
 export type RandomBytes = (size: number) => Uint8Array;
@@ -82,6 +86,9 @@ export function generateEnvFile(randomBytes: RandomBytes, port: number): string 
     `BETTER_AUTH_SECRET=${base64url(randomBytes(SECRET_BYTES))}`,
     `SEED_DEMO_PASSWORD=${base64url(randomBytes(PASSWORD_BYTES))}`,
     `BETTER_AUTH_URL=http://localhost:${port}`,
+    `CREDENTIALS_CRYPTO=local`,
+    `CREDENTIALS_KEY=${Buffer.from(randomBytes(CREDENTIALS_KEY_BYTES)).toString('base64')}`,
+    `CREDENTIALS_KEY_ID=local-1`,
     '',
   ].join('\n');
 }

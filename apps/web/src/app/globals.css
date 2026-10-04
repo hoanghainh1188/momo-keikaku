@@ -277,6 +277,22 @@ a {
   font-size: 13px;
   margin: 8px 0;
 }
+.connector-error-banner {
+  margin: 12px 0 20px;
+  padding: 12px 14px;
+  border-left: 3px solid var(--health-red, #b00020);
+  background: color-mix(in srgb, var(--health-red, #b00020) 8%, var(--sheet));
+  color: var(--ink);
+}
+.connector-error-banner strong {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 13px;
+}
+.connector-error-banner p {
+  margin: 0;
+  font-size: 13px;
+}
 
 /* Project settings forms — same density as audit filters / Mapping actions */
 .settings-fields {

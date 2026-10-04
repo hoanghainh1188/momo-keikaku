@@ -71,7 +71,7 @@ describe('the table-class registry is the single source', () => {
     expect(new Set(TRUNCATE_ORDER).size, 'a table is truncated twice').toBe(TRUNCATE_ORDER.length);
   });
 
-  it('holds the 36 tables of this release, 29 of them tenant-owned', () => {
+  it('holds the 38 tables of this release, 31 of them tenant-owned', () => {
     // Pinned as numbers as well as names: a future change that removes a table and adds
     // another keeps the name lists agreeing with `schema.ts` while silently changing what
     // this story was reasoned about. Story 1.4 slice 1: `app_user` out; the four Better Auth
@@ -80,8 +80,9 @@ describe('the table-class registry is the single source', () => {
     // Story 2.1 (AD-30) adds the five scheduling tables, all tenant-owned. Story 2.10 adds
     // `pct_override_event` and Custom Field definition/value. Story 2.12 adds `calendar_day_event`.
     // Story 5.1 adds `ticket`, `tracker_account`, `fixture_cursor` (all tenant-owned).
-    expect(TABLE_REGISTRY).toHaveLength(36);
-    expect(TENANT_OWNED).toHaveLength(29);
+    // Story 5.2 adds `connector_scope_event`, `tracker_snapshot_attempt` (tenant-owned, append-only).
+    expect(TABLE_REGISTRY).toHaveLength(38);
+    expect(TENANT_OWNED).toHaveLength(31);
     expect(TABLE_REGISTRY.filter((e) => e.tenantColumn === null).map((e) => e.table)).toEqual([
       'tenant',
       'auth_user',
@@ -104,7 +105,7 @@ describe('the table-class registry is the single source', () => {
     expect(TENANT_BRIDGES[0]!.tenantColumn).toBeNull();
   });
 
-  it('classes the fifteen insert-only tables append-only', () => {
+  it('classes the seventeen insert-only tables append-only', () => {
     expect(APPEND_ONLY.map((e) => e.table).sort()).toEqual(
       [
         'actuals_ledger_entry',
@@ -112,6 +113,7 @@ describe('the table-class registry is the single source', () => {
         'baseline_version',
         'baseline_wp',
         'calendar_day_event',
+        'connector_scope_event',
         'disposition_event',
         'holiday_calendar_version',
         'mapping_event',
@@ -121,6 +123,7 @@ describe('the table-class registry is the single source', () => {
         'schedule_run',
         'ticket_observation',
         'tracker_snapshot',
+        'tracker_snapshot_attempt',
         'wp_status_event',
       ].sort(),
     );

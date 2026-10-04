@@ -20,6 +20,7 @@ import { ORG_WRITE_AUDIT } from './org-writes';
 import { PROJECT_WRITE_AUDIT } from './project-writes';
 import { RESOURCE_WRITE_AUDIT } from './resource-writes';
 import { TENANT_CURRENCY_AUDIT } from './tenant-currency';
+import { CONNECTOR_WRITE_AUDIT } from './connector-writes';
 
 /**
  * Every write's audit declaration — Epic 1 use-cases plus the schedule/calendar second module
@@ -37,4 +38,5 @@ export const USE_CASE_AUDIT: Readonly<Record<string, AuditDeclaration>> = {
   ...RE_BASELINE_AUDIT,
   ...COMPARE_BASELINE_VERSIONS_AUDIT,
   ...RE_DERIVE_PINNED_BASELINE_AUDIT,
+  ...CONNECTOR_WRITE_AUDIT,
 };
