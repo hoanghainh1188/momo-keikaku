@@ -212,10 +212,11 @@ export function ingestWriteRepositoryOn(bound: Bound) {
     }));
   }
 
-  async function loadPriorLedger(
-    connectorId: string,
-    ticketIds: readonly string[],
-  ): Promise<LedgerEntry[]> {
+  /**
+   * Ticket-wide prior Σ (every Connector). After PM Transfer the ledger stays on the Ticket —
+   * filtering by the new owner Connector would rebook retained hours as a fresh delta.
+   */
+  async function loadPriorLedger(ticketIds: readonly string[]): Promise<LedgerEntry[]> {
     if (ticketIds.length === 0) return [];
     const out: LedgerEntry[] = [];
     await chunked([...ticketIds], 500, async (batch) => {
@@ -234,7 +235,6 @@ export function ingestWriteRepositoryOn(bound: Bound) {
         .where(
           and(
             eq(s.actualsLedgerEntry.tenantId, tenantId),
-            eq(s.actualsLedgerEntry.connectorId, connectorId),
             inArray(s.actualsLedgerEntry.ticketId, batch),
           ),
         );
@@ -525,7 +525,7 @@ export function ingestWriteRepositoryOn(bound: Bound) {
       };
 
       const ownedIds = ownedTickets.map((t) => t.trackerIssueId);
-      const priorLedger = await loadPriorLedger(input.connectorId, ownedIds);
+      const priorLedger = await loadPriorLedger(ownedIds);
       const priorLedgerMhByTicket = new Map<string, bigint>();
       for (const e of priorLedger) {
         priorLedgerMhByTicket.set(

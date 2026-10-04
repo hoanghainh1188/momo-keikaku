@@ -417,6 +417,20 @@ describe('ingestSnapshot (FR-25, FR-42)', () => {
     expect(
       checkLedgerInvariant([...r1.entries, ...r2.entries, ...r3.entries, ...r4.entries], s4).ok,
     ).toBe(true);
+
+    // Common return path: no scope change — still delta from prior Σ, never OB.
+    const r4b = ingestSnapshot({
+      prev: s3,
+      next: s4,
+      activeBaselineVersionSeq: 1,
+      seqFrom: r3.nextSeq,
+      approvalRecordedAt: approval,
+      priorLedgerMhByTicket: prior,
+      scopeChangedSincePrev: false,
+    });
+    expect(r4b.entries.map((e) => [e.ticketId, e.kind, e.deltaMh])).toEqual([
+      ['t2', 'delta', hoursToMh(2)],
+    ]);
   });
 });
 

@@ -2,7 +2,7 @@
 title: 'Story 5.6 — The ledger stays correct as Tickets appear, move and vanish'
 type: 'feature'
 created: '2026-10-04'
-status: 'review'
+status: 'in-review'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '994a3bda160f09edf7484dba33c06e98f18307c0'

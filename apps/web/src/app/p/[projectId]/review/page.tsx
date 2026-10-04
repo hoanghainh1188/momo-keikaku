@@ -10,7 +10,7 @@ import { ReviewPinRegistrar } from '@/components/review-pin-context';
 import { SetBaselineButton } from '@/components/set-baseline-button';
 import { UnmappedGroupRows } from '@/components/unmapped-group-rows';
 import { REPORT_LOCALE } from '@/lib/report-locale';
-import { confirmOwnershipAction } from '../connectors/actions';
+import { OverlapResolveForm } from '../connectors/overlap-resolve-form';
 
 export const dynamic = 'force-dynamic';
 
@@ -99,24 +99,16 @@ export default async function ReviewPage({
             <p>{t('review.overlap_intro')}</p>
             <ul>
               {overlaps.map((o) => (
-                <li key={o.id}>
-                  {t('review.overlap_row', {
-                    key: o.ticketKey,
-                    owner: o.ownerConnectorId,
-                    claimer: o.claimerConnectorId,
-                  })}
-                  <form action={confirmOwnershipAction} style={{ display: 'inline', marginLeft: 8 }}>
-                    <input type="hidden" name="projectId" value={projectId} />
-                    <input type="hidden" name="trackerIssueId" value={o.trackerIssueId} />
-                    <input type="hidden" name="toConnectorId" value={o.claimerConnectorId} />
-                    <button type="submit" name="resolution" value="keep">
-                      {t('review.overlap_keep')}
-                    </button>{' '}
-                    <button type="submit" name="resolution" value="transfer">
-                      {t('review.overlap_transfer')}
-                    </button>
-                  </form>
-                </li>
+                <OverlapResolveForm
+                  key={o.id}
+                  projectId={projectId}
+                  trackerIssueId={o.trackerIssueId}
+                  claimerConnectorId={o.claimerConnectorId}
+                  ticketKey={o.ticketKey}
+                  ownerLabel={o.ownerConnectorId}
+                  claimerLabel={o.claimerConnectorId}
+                  copyNamespace="review"
+                />
               ))}
             </ul>
           </div>

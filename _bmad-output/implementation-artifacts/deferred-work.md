@@ -1356,3 +1356,15 @@ above can see where it went.
 - source_spec: `_bmad-output/implementation-artifacts/spec-5-6-the-ledger-stays-correct-as-tickets-appear-move-and-vanish.md`
   summary: REQUIRE_DB writer matrix / batch identity upsert / notifyRecipients wire-up from 5.5 remain open (untouched by 5.6).
   evidence: Story 5.6 Intent — re-note only; do not implement in 5.6.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-6-the-ledger-stays-correct-as-tickets-appear-move-and-vanish.md`
+  summary: REQUIRE_DB writeIngestSnapshot matrix for two-absence durable left_scope, overlap ledger-skip + connector_overlap upsert/clear, and scope_seq mid-flight OB.
+  evidence: Story 5.6 review verification-gap — domain helpers cover logic; live writer persistence of streak/left_scope/overlap/OB kind needs Postgres CI.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-6-the-ledger-stays-correct-as-tickets-appear-move-and-vanish.md`
+  summary: REQUIRE_DB confirmOwnership / loadProjectBundle meta assertions for ownership event, owner move, overlap delete, and overlaps/leftScopeTickets bundle fields.
+  evidence: Story 5.6 review verification-gap — use-case and UI wire-up covered by mocks/unit; repository + bundle boundary need Postgres CI.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-6-the-ledger-stays-correct-as-tickets-appear-move-and-vanish.md`
+  summary: Add confirmOwnershipAction cases to connectors/actions.test.ts (invalid resolution, refuse skips revalidate, success revalidates connectors+review).
+  evidence: Story 5.6 review verification-gap — action now returns form state; sibling suite still only covers add/rotate.

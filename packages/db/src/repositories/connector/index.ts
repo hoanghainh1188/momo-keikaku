@@ -430,17 +430,35 @@ export function connectorWriteRepositoryOn(bound: Bound) {
 
     /**
      * Story 5.6: PM Keep / Transfer under the Project lock. Appends `connector_ownership_event`,
-     * moves `owner_connector_id` only on Transfer, clears open overlaps for the Ticket.
+     * moves `owner_connector_id` only on Transfer, clears this claimer's open overlap row.
      */
     async confirmOwnership(input: {
       readonly projectId: string;
       readonly trackerIssueId: string;
+      readonly claimerConnectorId: string;
       readonly resolution: 'keep' | 'transfer';
-      readonly toConnectorId: string;
       readonly actor: string;
       readonly at: Date;
     }): Promise<void> {
       await lockWatermark(bound, { kind: 'project', projectId: input.projectId });
+
+      const [open] = await tx
+        .select()
+        .from(s.connectorOverlap)
+        .where(
+          and(
+            eq(s.connectorOverlap.tenantId, tenantId),
+            eq(s.connectorOverlap.projectId, input.projectId),
+            eq(s.connectorOverlap.trackerIssueId, input.trackerIssueId),
+            eq(s.connectorOverlap.claimerConnectorId, input.claimerConnectorId),
+          ),
+        )
+        .limit(1);
+      if (!open) {
+        throw new Error(
+          `overlap ${input.trackerIssueId}/${input.claimerConnectorId} not found on project ${input.projectId}`,
+        );
+      }
 
       const [ticketRow] = await tx
         .select()
@@ -459,7 +477,7 @@ export function connectorWriteRepositoryOn(bound: Bound) {
 
       const fromConnectorId = ticketRow.ownerConnectorId;
       const toConnectorId =
-        input.resolution === 'keep' ? fromConnectorId : input.toConnectorId;
+        input.resolution === 'keep' ? fromConnectorId : input.claimerConnectorId;
 
       if (input.resolution === 'transfer') {
         const [dest] = await tx
@@ -497,6 +515,7 @@ export function connectorWriteRepositoryOn(bound: Bound) {
             eq(s.connectorOverlap.tenantId, tenantId),
             eq(s.connectorOverlap.projectId, input.projectId),
             eq(s.connectorOverlap.trackerIssueId, input.trackerIssueId),
+            eq(s.connectorOverlap.claimerConnectorId, input.claimerConnectorId),
           ),
         );
     },

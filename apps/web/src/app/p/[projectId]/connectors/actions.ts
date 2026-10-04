@@ -5,7 +5,7 @@
  * composition bindings — no write logic here.
  */
 import { revalidatePath } from 'next/cache';
-import { ADD_CONNECTOR_REFUSALS, type AppError } from '@momo/app';
+import { ADD_CONNECTOR_REFUSALS, type AppError, type AppErrorMessageKey } from '@momo/app';
 import { t } from '@momo/i18n';
 import {
   addConnector,
@@ -23,10 +23,7 @@ export type ConnectorActionState = {
 
 export const INITIAL_CONNECTOR_ACTION: ConnectorActionState = { error: null, resetKey: 0 };
 
-function refuse(
-  prev: ConnectorActionState,
-  messageKey: 'errors.not_found' | 'errors.invalid_input',
-): ConnectorActionState {
+function refuse(prev: ConnectorActionState, messageKey: AppErrorMessageKey): ConnectorActionState {
   return { error: messageFromKey(messageKey), resetKey: prev.resetKey };
 }
 
@@ -99,21 +96,27 @@ export async function rotateCredentialsAction(
 }
 
 /** Story 5.6: Keep / Transfer ownership for an overlap claim. */
-export async function confirmOwnershipAction(formData: FormData): Promise<void> {
+export async function confirmOwnershipAction(
+  prev: ConnectorActionState,
+  formData: FormData,
+): Promise<ConnectorActionState> {
   const ctx = await requestContext();
   const projectId = field(formData, 'projectId');
   const resolution = field(formData, 'resolution');
-  if (resolution !== 'keep' && resolution !== 'transfer') return;
+  if (resolution !== 'keep' && resolution !== 'transfer') {
+    return refuse(prev, 'errors.invalid_input');
+  }
   const result = await confirmConnectorOwnership(
     {
       projectId,
       trackerIssueId: field(formData, 'trackerIssueId'),
+      claimerConnectorId: field(formData, 'claimerConnectorId'),
       resolution,
-      toConnectorId: field(formData, 'toConnectorId') || undefined,
     },
     ctx,
   );
-  if (!result.ok) return;
+  if (!result.ok) return refuse(prev, result.error.messageKey);
   revalidatePath(`/p/${projectId}/connectors`);
   revalidatePath(`/p/${projectId}/review`);
+  return ok(prev);
 }

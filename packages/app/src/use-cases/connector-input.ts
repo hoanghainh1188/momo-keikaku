@@ -93,8 +93,8 @@ export const confirmOwnershipInputSchema = z.object({
   projectId: id,
   trackerIssueId: id,
   resolution: z.enum(['keep', 'transfer']),
-  /** Optional; Transfer always uses the overlap claimer. Kept for form wire-up. */
-  toConnectorId: id.optional(),
+  /** Claimer Connector on the open overlap row being resolved. */
+  claimerConnectorId: id,
 });
 
 /** Caller-facing input (pre-transform). The schema adds `site` / `spaceLabel` internally. */

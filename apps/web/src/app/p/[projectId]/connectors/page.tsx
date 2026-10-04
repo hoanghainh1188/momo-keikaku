@@ -4,7 +4,7 @@ import { valueOrNotFound } from '@/server/result';
 import { hours } from '@momo/domain/present';
 import { Section } from '@/components/ui';
 import { AddConnectorForm, RotateCredentialsForm } from './connector-forms';
-import { confirmOwnershipAction } from './actions';
+import { OverlapResolveForm } from './overlap-resolve-form';
 
 export const dynamic = 'force-dynamic';
 
@@ -41,24 +41,16 @@ export default async function ConnectorsPage({
           <p>{t('connectors.overlap_intro')}</p>
           <ul>
             {overlaps.map((o) => (
-              <li key={o.id}>
-                {t('connectors.overlap_row', {
-                  key: o.ticketKey,
-                  owner: o.ownerConnectorId,
-                  claimer: o.claimerConnectorId,
-                })}
-                <form action={confirmOwnershipAction} style={{ display: 'inline', marginLeft: 8 }}>
-                  <input type="hidden" name="projectId" value={projectId} />
-                  <input type="hidden" name="trackerIssueId" value={o.trackerIssueId} />
-                  <input type="hidden" name="toConnectorId" value={o.claimerConnectorId} />
-                  <button type="submit" name="resolution" value="keep">
-                    {t('connectors.overlap_keep')}
-                  </button>{' '}
-                  <button type="submit" name="resolution" value="transfer">
-                    {t('connectors.overlap_transfer')}
-                  </button>
-                </form>
-              </li>
+              <OverlapResolveForm
+                key={o.id}
+                projectId={projectId}
+                trackerIssueId={o.trackerIssueId}
+                claimerConnectorId={o.claimerConnectorId}
+                ticketKey={o.ticketKey}
+                ownerLabel={o.ownerConnectorId}
+                claimerLabel={o.claimerConnectorId}
+                copyNamespace="connectors"
+              />
             ))}
           </ul>
         </div>

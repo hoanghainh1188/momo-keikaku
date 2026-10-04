@@ -12,15 +12,10 @@ const CTX: RequestContext = {
   locale: 'en',
 };
 
-function fakeDeps(openOverlaps: readonly {
-  readonly id: string;
-  readonly projectId: string;
-  readonly trackerIssueId: string;
-  readonly ticketKey: string;
-  readonly ownerConnectorId: string;
-  readonly claimerConnectorId: string;
-  readonly observedAt: Date;
-}[]) {
+function fakeDeps(options?: {
+  readonly confirmError?: Error;
+  readonly roles?: RequestContext['roles'];
+}) {
   const confirms: unknown[] = [];
   const audits: unknown[] = [];
 
@@ -42,9 +37,10 @@ function fakeDeps(openOverlaps: readonly {
     setLastError: async () => {},
     countMappingEventsForProject: async () => 0,
     loadEncryptedCredentials: async () => null,
-    listOpenOverlaps: async () => openOverlaps,
+    listOpenOverlaps: async () => [],
     listLeftScopeTickets: async () => [],
     confirmOwnership: async (input: unknown) => {
+      if (options?.confirmError) throw options.confirmError;
       confirms.push(input);
     },
   };
@@ -75,27 +71,21 @@ function fakeDeps(openOverlaps: readonly {
     },
   };
 
-  return { deps, confirms, audits };
+  const ctx: RequestContext = {
+    ...CTX,
+    roles: options?.roles ?? CTX.roles,
+  };
+
+  return { deps, confirms, audits, ctx };
 }
 
 describe('confirmConnectorOwnership (story 5.6)', () => {
-  const open = [
-    {
-      id: 'ov-1',
+  it('Keep affirms the current owner via confirmOwnership under lock', async () => {
+    const { deps, confirms, audits, ctx } = fakeDeps();
+    const result = await confirmConnectorOwnership(deps, ctx, {
       projectId: 'prj-1',
       trackerIssueId: 'issue-1',
-      ticketKey: 'K-1',
-      ownerConnectorId: 'con-owner',
       claimerConnectorId: 'con-claimer',
-      observedAt: AT,
-    },
-  ] as const;
-
-  it('Keep affirms the current owner and clears via confirmOwnership', async () => {
-    const { deps, confirms, audits } = fakeDeps(open);
-    const result = await confirmConnectorOwnership(deps, CTX, {
-      projectId: 'prj-1',
-      trackerIssueId: 'issue-1',
       resolution: 'keep',
     });
     expect(result).toEqual({ ok: true, value: undefined });
@@ -103,8 +93,8 @@ describe('confirmConnectorOwnership (story 5.6)', () => {
       {
         projectId: 'prj-1',
         trackerIssueId: 'issue-1',
+        claimerConnectorId: 'con-claimer',
         resolution: 'keep',
-        toConnectorId: 'con-owner',
         actor: 'user:usr-pm',
         at: AT,
       },
@@ -116,10 +106,11 @@ describe('confirmConnectorOwnership (story 5.6)', () => {
   });
 
   it('Transfer moves ownership only to the claimer (no auto-transfer without PM confirm)', async () => {
-    const { deps, confirms } = fakeDeps(open);
-    const result = await confirmConnectorOwnership(deps, CTX, {
+    const { deps, confirms, ctx } = fakeDeps();
+    const result = await confirmConnectorOwnership(deps, ctx, {
       projectId: 'prj-1',
       trackerIssueId: 'issue-1',
+      claimerConnectorId: 'con-claimer',
       resolution: 'transfer',
     });
     expect(result).toEqual({ ok: true, value: undefined });
@@ -127,20 +118,35 @@ describe('confirmConnectorOwnership (story 5.6)', () => {
       {
         projectId: 'prj-1',
         trackerIssueId: 'issue-1',
+        claimerConnectorId: 'con-claimer',
         resolution: 'transfer',
-        toConnectorId: 'con-claimer',
         actor: 'user:usr-pm',
         at: AT,
       },
     ]);
   });
 
-  it('refuses when there is no open overlap for the Ticket', async () => {
-    const { deps, confirms } = fakeDeps([]);
-    const result = await confirmConnectorOwnership(deps, CTX, {
+  it('refuses when the open overlap is gone under the lock', async () => {
+    const { deps, confirms, ctx } = fakeDeps({
+      confirmError: new Error('overlap issue-1/con-claimer not found on project prj-1'),
+    });
+    const result = await confirmConnectorOwnership(deps, ctx, {
       projectId: 'prj-1',
-      trackerIssueId: 'issue-missing',
+      trackerIssueId: 'issue-1',
+      claimerConnectorId: 'con-claimer',
       resolution: 'keep',
+    });
+    expect(result).toMatchObject({ ok: false, error: { code: 'not_found' } });
+    expect(confirms).toHaveLength(0);
+  });
+
+  it('refuses a caller without project reach', async () => {
+    const { deps, confirms, ctx } = fakeDeps({ roles: [] });
+    const result = await confirmConnectorOwnership(deps, ctx, {
+      projectId: 'prj-1',
+      trackerIssueId: 'issue-1',
+      claimerConnectorId: 'con-claimer',
+      resolution: 'transfer',
     });
     expect(result).toMatchObject({ ok: false, error: { code: 'not_found' } });
     expect(confirms).toHaveLength(0);

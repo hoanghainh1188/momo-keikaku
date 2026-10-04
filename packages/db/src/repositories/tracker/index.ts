@@ -58,9 +58,10 @@ export function trackerRepositoryOn(bound: Bound) {
             s.ticket.trackerSite,
             s.ticket.trackerIssueId,
           ],
+          // Story 5.6: never move ownership or Project via upsert — ownership is
+          // `connector_ownership_event` only; Project is fixed at first insert.
           set: {
             key: input.key,
-            projectId: input.projectId,
           },
         });
     },

@@ -506,9 +506,8 @@ export async function writeTenantRows(
             s.ticket.trackerIssueId,
           ],
           set: {
+            // Story 5.6: ownership / Project move only via connector_ownership_event / first insert.
             key: sql`excluded.key`,
-            ownerConnectorId: sql`excluded.owner_connector_id`,
-            projectId: sql`excluded.project_id`,
           },
         }),
     );

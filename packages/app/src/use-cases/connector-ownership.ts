@@ -33,27 +33,27 @@ export async function confirmConnectorOwnership<Handle>(
         authorize(caller, { roles: PROJECT_REACH_ROLES, projectId: command.projectId }),
     },
     async (scope: ConnectorWriteScope, stamp, command) => {
-      const overlaps = await scope.connectorWrite.listOpenOverlaps(command.projectId);
-      const open = overlaps.find((o) => o.trackerIssueId === command.trackerIssueId);
-      if (!open) refuse('not_found');
-
-      // Keep affirms the current owner; Transfer always hands ownership to the claimer.
-      const toConnectorId =
-        command.resolution === 'keep' ? open.ownerConnectorId : open.claimerConnectorId;
-
-      await scope.connectorWrite.confirmOwnership({
-        projectId: command.projectId,
-        trackerIssueId: command.trackerIssueId,
-        resolution: command.resolution,
-        toConnectorId,
-        actor: stamp.actor,
-        at: stamp.at,
-      });
+      // Repo re-checks the open claim under the Project lock (Keep/Transfer race).
+      try {
+        await scope.connectorWrite.confirmOwnership({
+          projectId: command.projectId,
+          trackerIssueId: command.trackerIssueId,
+          claimerConnectorId: command.claimerConnectorId,
+          resolution: command.resolution,
+          actor: stamp.actor,
+          at: stamp.at,
+        });
+      } catch (error) {
+        if (error instanceof Error && error.message.includes('overlap')) {
+          refuse('not_found');
+        }
+        throw error;
+      }
       await audit.record(scope, stamp, 'connector.confirm_ownership', command.trackerIssueId, {
         projectId: command.projectId,
         trackerIssueId: command.trackerIssueId,
+        claimerConnectorId: command.claimerConnectorId,
         resolution: command.resolution,
-        toConnectorId,
       });
     },
   );

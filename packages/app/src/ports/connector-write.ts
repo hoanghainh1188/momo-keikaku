@@ -144,8 +144,8 @@ export interface ConnectorWriteRepository {
   readonly confirmOwnership: (input: {
     readonly projectId: string;
     readonly trackerIssueId: string;
+    readonly claimerConnectorId: string;
     readonly resolution: 'keep' | 'transfer';
-    readonly toConnectorId: string;
     readonly actor: string;
     readonly at: Date;
   }) => Promise<void>;
