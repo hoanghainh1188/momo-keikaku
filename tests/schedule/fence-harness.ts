@@ -178,7 +178,8 @@ export async function scheduleLeaf(
   });
   expect(result.ok).toBe(true);
   if (!result.ok) {
-    expect.fail(`schedule failed: ${result.error.code} ${stringify(result.error.details)}`);
+    // AD-4: non-*.test.ts harnesses stay under the stringify fence; use the domain codec.
+    expect.fail(`schedule failed: ${result.error.code} ${stringify(result.error.details ?? null)}`);
   }
   expect(result.value.kind).toBe('scheduled');
   return result.value.seq!;

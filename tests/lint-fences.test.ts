@@ -45,9 +45,12 @@ describe('the AD-4 rounding fence', () => {
 });
 
 describe('the AD-4 JSON.stringify fence', () => {
-  it('flags JSON.stringify in non-test application source', async () => {
-    expect(await restricted(STRINGIFY, 'packages/db/src/repo-writes.ts')).toEqual(["'JSON.stringify'"]);
-  });
+  it.each(['packages/db/src/repo-writes.ts', 'tests/schedule/fence-harness.ts'])(
+    'flags JSON.stringify in non-test application source (%s)',
+    async (path) => {
+      expect(await restricted(STRINGIFY, path)).toEqual(["'JSON.stringify'"]);
+    },
+  );
 
   it.each([
     'packages/domain/src/present/codec.ts',
