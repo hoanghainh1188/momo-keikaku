@@ -3,14 +3,18 @@
  *
  * Loads Baseline pin → `runBySeq` → optional prev by `prev_run_seq` → domain `reDeriveStoredRun`.
  * Never calls `resolveScheduleInputs` / Current Plan builders / `latestRun` for gate inputs.
+ * Read-only — no audit action (F10 surface, Epic 4 retro F7 / item-21).
  */
 import { reDeriveStoredRun, type ReDeriveResult } from '@momo/domain';
 import type { Bound } from '../../../db/src/bound';
 import { baselineRepositoryOn } from '../../../db/src/repositories/baseline';
 import { scheduleRepositoryOn } from '../../../db/src/repositories/schedule';
+import type { AuditDeclaration } from '../audit';
 import {
   authorize,
+  PROJECT_REACH,
   PROJECT_REACH_ROLES,
+  type RoleDeclaration,
 } from '../authz/authorize';
 import type { RequestContext } from '../authz/request-context';
 import { isProjectNotFound } from '../ports/project-read';
@@ -99,3 +103,15 @@ export async function reDerivePinnedBaseline<Handle>(
     throw error;
   }
 }
+
+/** Role declaration for the pin re-derive reader (colocated — see `use-cases/role-declarations.ts`). */
+export const RE_DERIVE_PINNED_BASELINE_ROLES = {
+  reDerivePinnedBaseline: PROJECT_REACH,
+} as const satisfies Readonly<Record<string, RoleDeclaration>>;
+
+/** Read-only — no NFR-A1 write action (see `UNAUDITED_BY_DECISION` in the audit gate). */
+export const RE_DERIVE_PINNED_BASELINE_AUDIT = {
+  reDerivePinnedBaseline: {
+    unaudited: 'read-only pin re-derive; no rows written',
+  },
+} as const satisfies Readonly<Record<string, AuditDeclaration>>;

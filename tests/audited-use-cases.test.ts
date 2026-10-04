@@ -278,6 +278,8 @@ const UNAUDITED_BY_DECISION: Readonly<Record<string, string>> = {
     'moves every money figure in the Tenant and is squarely on NFR-A1\'s list.',
   compareBaselineVersions:
     'Story 4.4 read-only Baseline plan compare — loads two pins and diffs; no INSERT/UPDATE/DELETE.',
+  reDerivePinnedBaseline:
+    'Story 4.2 read-only pin re-derive — loads pinned run (+ prev inputs) and codec-compares; no rows written.',
 };
 
 const DECLARED: readonly (readonly [string, AuditDeclaration])[] = Object.entries(USE_CASE_AUDIT);

@@ -288,7 +288,7 @@ action_items:
       (roles/audit or explicit named carve-out), matching Compare treatment (retro
       F7)"
     owner: "dev"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-4-retro-2026-10-04.md"
   - id: "epic-4-retro-item-22-extract-shared-set-re-baseline-writer-an"
     epic: 4

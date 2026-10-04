@@ -11,6 +11,7 @@
 import type { AuditDeclaration } from '../audit';
 import { COMPARE_BASELINE_VERSIONS_AUDIT } from '../baseline/compare-baseline-versions';
 import { RE_BASELINE_AUDIT } from '../baseline/re-baseline';
+import { RE_DERIVE_PINNED_BASELINE_AUDIT } from '../baseline/re-derive-pinned';
 import { SET_BASELINE_AUDIT } from '../baseline/set-baseline';
 import { CALENDAR_AUDIT } from '../calendar/publish-calendar-version';
 import { SCHEDULE_AUDIT } from '../schedule/apply-plan-change';
@@ -35,4 +36,5 @@ export const USE_CASE_AUDIT: Readonly<Record<string, AuditDeclaration>> = {
   ...SET_BASELINE_AUDIT,
   ...RE_BASELINE_AUDIT,
   ...COMPARE_BASELINE_VERSIONS_AUDIT,
+  ...RE_DERIVE_PINNED_BASELINE_AUDIT,
 };

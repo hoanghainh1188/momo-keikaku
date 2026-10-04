@@ -105,6 +105,7 @@ const WELL_FORMED_INPUT: Readonly<Record<string, unknown>> = {
     fromVersionSeq: 1,
     toVersionSeq: 2,
   },
+  reDerivePinnedBaseline: { projectId: UNREACHED_PROJECT },
 };
 
 type UseCaseFn = (
@@ -347,6 +348,13 @@ describe('every use case declares its roles', () => {
           ],
         },
         "reBaseline": {
+          "projectScoped": true,
+          "roles": [
+            "tenant_admin",
+            "pm",
+          ],
+        },
+        "reDerivePinnedBaseline": {
           "projectScoped": true,
           "roles": [
             "tenant_admin",
