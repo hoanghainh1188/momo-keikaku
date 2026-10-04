@@ -32,7 +32,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 09-20-2026 16:55
-last_updated: 10-04-2026 05:00
+last_updated: 10-04-2026 13:32
 project: momo-keikaku
 project_key: NOKEY
 tracking_system: file-system
@@ -87,7 +87,7 @@ development_status:
   4-3-re-baseline-with-a-reason-and-a-history: done
   4-4-compare-two-versions-as-plans-not-only-as-rows: done
   4-5-baseline-comparison-as-columns-on-the-plan-grid: done
-  epic-4-retrospective: optional
+  epic-4-retrospective: done
 
   epic-5: backlog
   5-1-one-port-to-every-tracker-and-a-fixture-that-replays-like-on: backlog
@@ -267,3 +267,49 @@ action_items:
     owner: "founder"
     status: done
     ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-09-27.md"
+  - id: "epic-4-retro-item-19-expand-baseline-retention-pins-or-retent"
+    epic: 4
+    action: "Expand Baseline retention pins (or retention rule) so each pin prev_run_seq
+      chain keeps inputs required by re-derive; add fence assert alongside fence-4-1
+      retention proof (retro F8)"
+    owner: "dev"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-4-retro-2026-10-04.md"
+  - id: "epic-4-retro-item-20-surface-set-re-baseline-writelanded-fail"
+    epic: 4
+    action: "Surface Set / Re-baseline writeLanded failures to the PM (ActionResult
+      / inline error) on Review, Plan, and Baselines — no silent no-op (retro F9)"
+    owner: "dev"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-4-retro-2026-10-04.md"
+  - id: "epic-4-retro-item-21-register-rederivepinnedbaseline-on-the-f"
+    epic: 4
+    action: "Register reDerivePinnedBaseline on the F10 schedule/calendar surface
+      (roles/audit or explicit named carve-out), matching Compare treatment (retro
+      F7)"
+    owner: "dev"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-4-retro-2026-10-04.md"
+  - id: "epic-4-retro-item-22-extract-shared-set-re-baseline-writer-an"
+    epic: 4
+    action: "Extract shared Set/Re-baseline writer and lift Epic 4 fence schedulability
+      helpers into fence-harness before Epic 5 fence growth (retro F3/F4)"
+    owner: "dev"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-4-retro-2026-10-04.md"
+  - id: "epic-4-retro-item-23-reconcile-epics-md-epic-4-prose-with-fou"
+    epic: 4
+    action: "Reconcile epics.md Epic 4 prose with founder deferrals (M-2 column list;
+      CR link to Epic 6; Published Snapshot typed seam) so later retros stop re-flagging
+      (retro F1)"
+    owner: "founder"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-4-retro-2026-10-04.md"
+  - id: "epic-4-retro-item-24-deferred-track-split-baseline-compare-ce"
+    epic: 4
+    action: "Deferred track: split Baseline compare cells out of plan-tree-grid.tsx;
+      tighten loadActiveBaselineForGrid to one consistent head; refuse zero-leaf Baseline
+      (retro F5/F10/F11)"
+    owner: "dev"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-4-retro-2026-10-04.md"
