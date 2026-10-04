@@ -4,7 +4,7 @@
  * Off the use-cases barrel (like ingest gates): composition + unit tests import it; the
  * cross-tenant write harness does not drive it.
  */
-import { PROJECT_REACH_ROLES, authorize, type RoleDeclaration } from '../authz/authorize';
+import { PROJECT_REACH, PROJECT_REACH_ROLES, authorize, type RoleDeclaration } from '../authz/authorize';
 import { audit, type AuditDeclaration } from '../audit';
 import type { RequestContext } from '../authz/request-context';
 import { isProjectNotFound } from '../ports/project-read';
@@ -64,5 +64,5 @@ export const CONNECTOR_OWNERSHIP_AUDIT = {
 } as const satisfies Readonly<Record<string, AuditDeclaration>>;
 
 export const CONNECTOR_OWNERSHIP_ROLES = {
-  confirmConnectorOwnership: { roles: PROJECT_REACH_ROLES },
+  confirmConnectorOwnership: PROJECT_REACH,
 } as const satisfies Readonly<Record<string, RoleDeclaration>>;
