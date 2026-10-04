@@ -50,26 +50,6 @@ export type WriteIngestSnapshotResult =
   | { readonly kind: 'written'; readonly snapshotId: string }
   | { readonly kind: 'already_written'; readonly snapshotId: string };
 
-function sqlstateOf(error: unknown): string | undefined {
-  let cur: unknown = error;
-  for (let i = 0; i < 6 && cur && typeof cur === 'object'; i++) {
-    const code = (cur as { code?: unknown }).code;
-    if (typeof code === 'string' && /^[0-9A-Z]{5}$/.test(code)) return code;
-    cur = (cur as { cause?: unknown }).cause;
-  }
-  return undefined;
-}
-
-function constraintOf(error: unknown): string | undefined {
-  let cur: unknown = error;
-  for (let i = 0; i < 6 && cur && typeof cur === 'object'; i++) {
-    const name = (cur as { constraint?: unknown }).constraint;
-    if (typeof name === 'string' && name.length > 0) return name;
-    cur = (cur as { cause?: unknown }).cause;
-  }
-  return undefined;
-}
-
 async function chunked<T>(rows: readonly T[], size: number, fn: (batch: T[]) => Promise<unknown>) {
   for (let i = 0; i < rows.length; i += size) {
     await fn(rows.slice(i, i + size) as T[]);
@@ -284,10 +264,28 @@ export function ingestWriteRepositoryOn(bound: Bound) {
 
       const prev = await loadPrevSnapshot(input.connectorId);
       const activeBaselineVersionSeq = await latestBaselineVersionSeq(input.projectId);
-      await ensureProjectSettingHead(input.projectId, input.actor, input.at);
 
       // AR-15: Baseline-by-seq is chosen before the lock; then one Project lock for the write.
       await lockWatermark(bound, { kind: 'project', projectId: input.projectId });
+      await ensureProjectSettingHead(input.projectId, input.actor, input.at);
+
+      // Idempotent on (connector_id, observedAt): check under the lock — never catch 23505
+      // mid-transaction (Postgres aborts the tx and later statements fail).
+      const observedAt = new Date(input.read.observedAt);
+      const [existingAt] = await tx
+        .select({ id: s.trackerSnapshot.id })
+        .from(s.trackerSnapshot)
+        .where(
+          and(
+            eq(s.trackerSnapshot.tenantId, tenantId),
+            eq(s.trackerSnapshot.connectorId, input.connectorId),
+            eq(s.trackerSnapshot.observedAt, observedAt),
+          ),
+        )
+        .limit(1);
+      if (existingAt) {
+        return { kind: 'already_written', snapshotId: existingAt.id };
+      }
 
       const scopeSeq = await (async () => {
         const [row] = await tx
@@ -315,48 +313,24 @@ export function ingestWriteRepositoryOn(bound: Bound) {
       };
 
       // Derive before INSERT so AdapterKindMismatchError refuses without a snapshot row.
-      let derived;
-      try {
-        derived = ingestSnapshot({
-          prev: prev?.read ?? null,
-          next: nextRead,
-          activeBaselineVersionSeq,
-          seqFrom: 1,
-          approvalRecordedAt: connector.approvalRecordedAt,
-        });
-      } catch (error) {
-        if (error instanceof AdapterKindMismatchError) throw error;
-        throw error;
-      }
+      const derived = ingestSnapshot({
+        prev: prev?.read ?? null,
+        next: nextRead,
+        activeBaselineVersionSeq,
+        seqFrom: 1,
+        approvalRecordedAt: connector.approvalRecordedAt,
+      });
 
-      try {
-        await tx.insert(s.trackerSnapshot).values({
-          id: input.snapshotId,
-          tenantId,
-          connectorId: input.connectorId,
-          observedAt: new Date(input.read.observedAt),
-          measurementBasis: derived.measurementBasis,
-          ticketCount: input.read.tickets.length,
-          adapterKind: input.read.adapterKind,
-          scopeSeq,
-        });
-      } catch (error) {
-        // Idempotent on (connector_id, observedAt); also treat same snapshot id as already written.
-        if (sqlstateOf(error) === '23505') {
-          const name = constraintOf(error) ?? '';
-          if (
-            name.includes('tracker_snapshot_connector_observed_at') ||
-            name.includes('tracker_snapshot_tenant_id')
-          ) {
-            const existing = await loadPrevSnapshot(input.connectorId);
-            return {
-              kind: 'already_written',
-              snapshotId: existing?.header.id ?? input.snapshotId,
-            };
-          }
-        }
-        throw error;
-      }
+      await tx.insert(s.trackerSnapshot).values({
+        id: input.snapshotId,
+        tenantId,
+        connectorId: input.connectorId,
+        observedAt,
+        measurementBasis: derived.measurementBasis,
+        ticketCount: input.read.tickets.length,
+        adapterKind: input.read.adapterKind,
+        scopeSeq,
+      });
 
       const trackerKind = (connector.adapter === 'fixture' ? 'fixture' : 'backlog') as
         | 'fixture'

@@ -110,6 +110,7 @@ context:
 - NFR-P1: always-on domain derive timing (`ledger-nfr.test.ts`); durable write timing REQUIRE_DB-only (`ingest-nfr.test.ts`).
 - Deferred-work: durable-write row resolved; compaction re-deferred (AC did not place). Sprint `5-5` → `review`.
 - Worker mints snapshot/row ids via `uuidV7IdsOn`.
+- Idempotency: pre-check `(connector_id, observedAt)` under the Project lock instead of catching `23505` mid-transaction (Postgres aborts the tx). `ensureProjectSettingHead` also runs under that lock.
 
 ## Spec Change Log
 
