@@ -2,7 +2,7 @@
 title: 'Story 5.6 — The ledger stays correct as Tickets appear, move and vanish'
 type: 'feature'
 created: '2026-10-04'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '994a3bda160f09edf7484dba33c06e98f18307c0'
@@ -116,19 +116,44 @@ context:
 - Ingest writer: scope-change signal from `scope_seq`; skip ledger for non-owner overlaps; persist two-read left_scope; upsert/clear `connector_overlap`.
 - UI: Connectors + Review overlap conflict banner with Keep/Transfer; collapsed left-scope list; en/ja UX-DR23 copy.
 - Fixture `leave-and-return` extended to four pages (two absences then return).
-- `confirmConnectorOwnership` Keep/Transfer unit-tested (`connector-ownership.test.ts`).
-- Deferred: REQUIRE_DB writer matrix, batch identity upsert, `notifyRecipients`, compaction, Review Re-pin (still open / out of 5.6).
+- `confirmConnectorOwnership` Keep/Transfer unit-tested (`connector-ownership.test.ts`); reach refuse + missing-overlap under lock covered.
+- Review patches: ticket-wide prior ledger; claimer-scoped overlap clear; upsert/seed never move owner/project; OverlapResolveForm surfaces refuse.
+- Deferred: REQUIRE_DB writer/ownership/bundle matrix, actions.test.ts ownership cases, batch identity upsert, `notifyRecipients`, compaction, Review Re-pin.
 
 ## Spec Change Log
 
 ## Review Triage Log
 
+| Finding | Verdict | Evidence / route |
+|---------|---------|------------------|
+| loadPriorLedger connector-scoped rebooks hours after Transfer | high | **patch** — ticket-wide prior Σ (drop connector filter) |
+| confirmOwnership deletes all claimer rows for a Ticket | medium | **patch** — delete only `(ticket, claimer)` pair; require claimerConnectorId |
+| Keep/Transfer race without re-check under lock | medium | **patch** — re-select open overlap under Project lock; missing → not_found |
+| upsertTicket still overwrites projectId on conflict | medium | **patch** — conflict updates `key` only |
+| seed writeTenantRows overwrites owner_connector_id | medium | **patch** — conflict set key only (match tracker repo) |
+| confirmOwnershipAction silent fail (void / bare return) | medium | **patch** — form state + OverlapResolveForm refuse alert |
+| off-barrel ownership missing USE_CASE_AUDIT/ROLES | false | Intentional like ingest gates; barrel export would force cross-tenant harness |
+| REQUIRE_DB writer left_scope / overlap / scope OB | medium | **defer** — appended deferred-work REQUIRE_DB matrix |
+| REQUIRE_DB confirmOwnership + bundle meta | medium | **defer** — appended deferred-work |
+| confirmOwnershipAction missing actions.test.ts cases | medium | **defer** — appended deferred-work |
+| incomplete-read left_scope wiring test | false | Incomplete never reaches writer (admit gate); streak helper unit-tested |
+| raw connector ids in overlap copy | low | Reject — labels need Connector join; ids remain actionable |
+| duplicate Connectors/Review overlap markup | low | Reject — shared OverlapResolveForm now; remaining list chrome is fine |
+| empty Spec Change / Triage mid-review | false | Filled by this review pass |
+| resolution unconstrained text + plain Error throws | low | Reject — app schema enums keep/transfer; typed refuse via overlap message |
+| ja Review footnotes mixed EN/JA | low | Reject — pre-existing metric footnote locale debt |
+| createdAt unparseable → delta not OB | low | Reject — adapters supply ISO createdAt; refuse would halt whole ingest |
+| return-without-scope-change path untested | low | **patch** — added leave-and-return case with scopeChangedSincePrev false |
+| ownership reach refuse untested | medium | **patch** — empty-roles case in connector-ownership.test.ts |
+| Transfer claim / invariant project double-count | high | Same root as ticket-wide prior — patched |
+
 ## Design Notes
 
 - **Scope-change signal:** writer compares current Connector head `connector_scope_event.seq` to `prev.scope_seq`; if greater, this snapshot is the first after a recorded scope change → pass `scopeChangedSincePrev` into domain.
 - **Return-as-delta:** treat left_scope Ticket reappearance like null→numeric after clear — delta = nowMh − prior Σ (retained history), never restart from 0 as OB.
+- **Prior Σ is Ticket-wide:** `loadPriorLedger` sums every Connector's entries for the Ticket so Transfer cannot rebook retained hours under the new owner.
 - **Overlap:** owner is `ticket.owner_connector_id` set on first insert only; claimer writes/refreshes `connector_overlap` and skips ledger for that Ticket id on this Connector's ingest.
-- **Ownership Resolve:** Keep = append event affirming current owner (clears overlap); Transfer = append event with new owner + update `owner_connector_id` + clear overlap.
+- **Ownership Resolve:** Keep/Transfer re-checks the open `(ticket, claimer)` row under the Project lock; clears only that claimer row; Transfer moves `owner_connector_id` only.
 
 ## Verification
 
