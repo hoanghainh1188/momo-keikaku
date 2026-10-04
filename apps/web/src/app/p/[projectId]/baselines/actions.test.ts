@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const revalidatePath = vi.hoisted(() => vi.fn());
 const requestContext = vi.hoisted(() =>
-  vi.fn(async () => ({ userId: 'u1', role: 'pm', tenantId: 't1' })),
+  vi.fn(async () => ({ userId: 'u1', role: 'pm' })),
 );
 const setProjectBaseline = vi.hoisted(() => vi.fn());
 const reProjectBaseline = vi.hoisted(() => vi.fn());
