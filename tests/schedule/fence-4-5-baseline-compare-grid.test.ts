@@ -128,7 +128,20 @@ describe.skipIf(!reachable)('Baseline compare Plan grid (story 4.5)', () => {
       expect.fail(`setBaseline failed: ${set.error.code} ${JSON.stringify(set.error.details)}`);
     }
 
-    // Move Current Plan duration so derived dates / duration diverge from Baseline.
+    // Pin Baseline effort, then move Current Plan effort + duration so Δs are non-zero.
+    const before = await getPlanGridState(deps(), ctx(), { projectId: PROBE.projectId });
+    expect(before.ok).toBe(true);
+    if (!before.ok) return;
+    const baselineMhAtSet = before.value.rows.find((r) => r.wpId === leaf.id)?.baselineMh;
+    expect(baselineMhAtSet).not.toBeNull();
+    const nextPlannedMh = (baselineMhAtSet ?? 0n) + 8_000n;
+    const effort = await applyPlanChange(deps(), ctx(), {
+      kind: 'patch_effort',
+      projectId: PROBE.projectId,
+      wpId: leaf.id,
+      plannedMh: nextPlannedMh,
+    });
+    expect(effort.ok).toBe(true);
     await scheduleLeaf(leaf.id, 8);
 
     const grid = await getPlanGridState(deps(), ctx(), { projectId: PROBE.projectId });
@@ -144,11 +157,13 @@ describe.skipIf(!reachable)('Baseline compare Plan grid (story 4.5)', () => {
     expect(leafRow!.baselineDurationDays).toBe(5);
     expect(leafRow!.durationDays).toBe(8);
     expect(leafRow!.durationDeltaDays).toBe(3);
-    // At least one date or effort Δ should reflect the move (duration already non-zero).
+    // Effort pinned independently of duration Δ.
+    expect(leafRow!.baselineMh).toBe(baselineMhAtSet);
+    expect(leafRow!.plannedMh).toBe(nextPlannedMh);
+    expect(leafRow!.effortDeltaMh).toBe(8_000n);
+    // Date Δ independent of durationDeltaDays assertion (finish moves with longer duration).
     expect(
-      leafRow!.durationDeltaDays !== 0 ||
-        leafRow!.startDeltaDays !== 0 ||
-        leafRow!.finishDeltaDays !== 0,
+      leafRow!.startDeltaDays !== 0 || leafRow!.finishDeltaDays !== 0,
     ).toBe(true);
 
     const summary = grid.value.rows.find((r) => !r.isLeaf);

@@ -154,7 +154,6 @@
     "set_disabled_title": "Set Baseline is unavailable until every leaf is schedulable and the latest schedule run succeeded.",
     "set_blocked": "Fix Project start or incomplete leaf durations before setting a Baseline.",
     "not_schedulable_link": "{count} not schedulable yet — open exceptions rail",
-    "no_baseline_yet_preset": "No Baseline yet",
     "initial_reason": "Initial Baseline",
     "author": "Author",
     "re_baseline": "Re-baseline",

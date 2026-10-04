@@ -78,9 +78,14 @@ import {
   writeStoredPreset,
   type PlanPreset,
 } from '@/lib/plan-grid-format';
-import { baselineComparePresetControl } from '@/lib/baseline-compare-preset-ui';
+import {
+  baselineComparePresetControl,
+  resolvePlanPreset,
+} from '@/lib/baseline-compare-preset-ui';
 import {
   BASELINE_COMPARE_COLUMNS,
+  BASELINE_COMPARE_DELTA_ARIA,
+  BASELINE_COMPARE_WIDTHS,
   PLAN_GRID_SLOTS,
   PROGRESS_COLUMNS,
   SCHEDULE_COLUMNS,
@@ -832,8 +837,8 @@ export function PlanTreeGrid({
   useEffect(() => {
     const stored = readStoredPreset(model.userId, model.projectId);
     // UX-DR23: stored Baseline compare falls back when the Project has no Baseline.
-    if (stored === 'baseline' && !hasBaseline) setPreset('schedule');
-    else setPreset(stored);
+    const resolved = resolvePlanPreset(stored, hasBaseline, 'restore');
+    if (resolved !== null) setPreset(resolved);
   }, [model.userId, model.projectId, hasBaseline]);
 
   useEffect(() => {
@@ -955,10 +960,11 @@ export function PlanTreeGrid({
 
   const setPresetKeepFocus = useCallback(
     (next: PlanPreset) => {
-      if (next === 'baseline' && !hasBaseline) return;
+      const resolved = resolvePlanPreset(next, hasBaseline, 'activate');
+      if (resolved === null) return;
       focusRestore.current = capturePresetFocusRestore(focusedWpId);
-      setPreset(next);
-      writeStoredPreset(model.userId, model.projectId, next);
+      setPreset(resolved);
+      writeStoredPreset(model.userId, model.projectId, resolved);
     },
     [focusedWpId, hasBaseline, model.userId, model.projectId],
   );
@@ -1427,32 +1433,10 @@ export function PlanTreeGrid({
     return (
       <>
         <td>{dateCell(baselineStart, !row.isLeaf)}</td>
-        <td>
-          <DateCell
-            date={row.earlyStart}
-            dataDate={stripOverrides?.dataDate ?? model.dataDate}
-            notSchedulable={row.notSchedulable}
-            isSummary={!row.isLeaf}
-            inFlight={recalcPending}
-            highlighted={highlightedWpIds.has(row.wpId)}
-            stale={row.stale}
-            onRefuseDerived={() => undefined}
-          />
-        </td>
+        <td>{dateCell(row.earlyStart, !row.isLeaf)}</td>
         <td className="num">{deltaDay(row.startDeltaDays)}</td>
         <td>{dateCell(baselineFinish, !row.isLeaf)}</td>
-        <td>
-          <DateCell
-            date={row.earlyFinish}
-            dataDate={stripOverrides?.dataDate ?? model.dataDate}
-            notSchedulable={row.notSchedulable}
-            isSummary={!row.isLeaf}
-            inFlight={recalcPending}
-            highlighted={highlightedWpIds.has(row.wpId)}
-            stale={row.stale}
-            onRefuseDerived={() => undefined}
-          />
-        </td>
+        <td>{dateCell(row.earlyFinish, !row.isLeaf)}</td>
         <td className="num">{deltaDay(row.finishDeltaDays)}</td>
         <td className="num">{dayCell(baselineDur, !row.isLeaf)}</td>
         <td className="num">
@@ -1632,19 +1616,9 @@ export function PlanTreeGrid({
                 </>
               ) : preset === 'baseline' ? (
                 <>
-                  {/* Sized budget ~899px scrolling (UX-DR4): compact Δ, tighter dates/effort. */}
-                  <col style={{ width: 88 }} />
-                  <col style={{ width: 88 }} />
-                  <col style={{ width: 44 }} />
-                  <col style={{ width: 88 }} />
-                  <col style={{ width: 88 }} />
-                  <col style={{ width: 44 }} />
-                  <col style={{ width: 64 }} />
-                  <col style={{ width: 48 }} />
-                  <col style={{ width: 44 }} />
-                  <col style={{ width: 72 }} />
-                  <col style={{ width: 64 }} />
-                  <col style={{ width: 48 }} />
+                  {BASELINE_COMPARE_WIDTHS.map((width, i) => (
+                    <col key={i} style={{ width }} />
+                  ))}
                 </>
               ) : (
                 <>
@@ -1688,9 +1662,17 @@ export function PlanTreeGrid({
                           label === 'Baseline duration' ||
                           label === 'Baseline effort' ||
                           label === 'Effort';
-                        // Duplicate "Δ" headers need a stable key.
+                        const deltaAria =
+                          label === 'Δ'
+                            ? BASELINE_COMPARE_DELTA_ARIA[(i - 2) / 3]
+                            : undefined;
+                        // Duplicate "Δ" headers need a stable key + distinguishing name.
                         return (
-                          <th key={`${label}-${i}`} className={num ? 'num' : undefined}>
+                          <th
+                            key={`${label}-${i}`}
+                            className={num ? 'num' : undefined}
+                            aria-label={deltaAria}
+                          >
                             {label}
                             {label === 'Start' || label === 'Finish' ? (
                               <span className="plan-anch">derived</span>

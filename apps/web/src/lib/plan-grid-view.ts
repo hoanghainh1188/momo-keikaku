@@ -208,3 +208,19 @@ export const BASELINE_COMPARE_COLUMNS = [
   'Effort',
   'Δ',
 ] as const;
+
+/**
+ * Scrolling col widths for the Baseline compare sized preset (UX-DR4).
+ * Shared by the Plan treegrid colgroup and the width-budget unit test.
+ */
+export const BASELINE_COMPARE_WIDTHS = [
+  88, 88, 44, 88, 88, 44, 64, 48, 44, 72, 64, 48,
+] as const;
+
+/** Distinguishing aria-labels for the four duplicate "Δ" headers (start/finish/dur/effort). */
+export const BASELINE_COMPARE_DELTA_ARIA = [
+  'Start Δ',
+  'Finish Δ',
+  'Duration Δ',
+  'Effort Δ',
+] as const;
