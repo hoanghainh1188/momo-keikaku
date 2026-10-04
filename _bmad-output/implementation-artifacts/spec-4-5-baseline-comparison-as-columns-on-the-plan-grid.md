@@ -2,7 +2,7 @@
 title: 'Story 4.5 — Baseline comparison as columns on the Plan grid'
 type: 'feature'
 created: '2026-10-04'
-status: 'review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: 'b2c1c77532d71ed5fd0748181a4bae156a4bdf08'
@@ -111,6 +111,31 @@ context:
 ## Spec Change Log
 
 ## Review Triage Log
+
+| Finding | Verdict | Evidence / route |
+|---------|---------|------------------|
+| i18n `no_baseline_yet_preset` unused; toolbar hardcodes English | low | Confirmed `baseline-compare-preset-ui.ts` hardcodes title; Schedule headers are also inline English. Route: **patch** — delete unused i18n keys (or wire title; deletion is smallest). |
+| `ja.json` English copy of the new key | low | Same pre-existing ja locale pattern as 4.1/4.3/4.4. Reject — everyday Japanese UI already largely English. |
+| `digitKeyActive` returned but unused; key `3` gated only in `setPresetKeepFocus` | medium | Confirmed PlanTreeGrid never reads `digitKeyActive`; VG demo: delete early return and key `3` activates with no Baseline while helper tests stay green. Route: **patch** — shared resolve/activate helper used by restore + `setPresetKeepFocus` + digit path, unit-tested. |
+| Spec Code Map suggested `workingDaysBetween`; code uses `floorPosition` | false | `signedDateDeltaDays` implements working-day Δ via index positions; Implementation Notes document the approach. Not a defect. |
+| `divergenceFromPinned` has no app/web production caller | false | Spec Design Notes: Plan columns use Current Plan Δ; AR-22 Divergence is a separate domain helper locked by units + fence. Intentional split. |
+| Baseline compare widths duplicated in grid vs test | medium | VG pre-verified: test hardcodes `[88,88,44,…]` and never observes colgroup. Route: **patch** — shared `BASELINE_COMPARE_WIDTHS`. |
+| Fence never calls `reBaseline` | low | Active Baseline = max seq; same `loadActiveBaselineForGrid` path after Set. Reject — unlikely everyday gap requiring a second fence fixture. |
+| No test that key `3` is a no-op when `!hasBaseline` | medium | Grouped with `digitKeyActive` / activate helper — **patch**. |
+| Four header labels `"Δ"` lack distinguishing aria-label | low | Confirmed thead uses bare `Δ` ×4. AT users cannot tell which measure. Route: **patch** — aria-label per Δ column (start/finish/duration/effort). |
+| `latestVersionSeq` then `loadActiveBaselineWps` re-queries max seq | low | Redundant read; consistency window theoretical under append-only. Reject — not everyday harm. |
+| Happy-path fence OR is tautological; never asserts effort | medium | VG pre-verified: `durationDeltaDays === 3` makes the OR vacuous; no `effortDeltaMh` assert. Route: **patch** — tighten fence. |
+| Pin halted/undecodable drops duration even if inputs present | false | Baseline pins refuse halted at Set; append-only pin cannot become halted. Undecodable fail-closed is documented in Implementation Notes. |
+| Spec Change Log / Triage empty while status review | false | Intermediate workflow state; triage filled this pass. |
+| `hasBaseline = model \|\| setBaseline` can disagree with row fields | low | After Set, page revalidation loads both; brief mismatch not everyday. Reject. |
+| `BigInt(row.baselineMh)` throws on non-integer strings | false | View model strings come from bigint serialization in plan-grid/view; corrupt strings are not a reachable writer path. |
+| Derived DateCell under Baseline compare has `onRefuseDerived={() => undefined}` | medium | Confirmed `plan-tree-grid.tsx` — clickable DateCell silently no-ops. Route: **patch** — non-interactive date display (same as Baseline side). |
+| `divergenceFromPinned` index-aligns inputs/outputs without length check | maybe-false | Codec keeps arrays parallel; would need corrupt jsonb. Defer — settle with a guard if pin decode already fails. |
+| `calendarDayDelta` throws on non-ISO strings | maybe-false | Callers pass typed IsoDate from schema/codec. Reject as low-unverified. |
+| `loadActiveBaselineForGrid` skips duration when `outputs === null` | false | Grouped with halted/undecodable — unreachable for valid Baseline pins / documented fail-closed. |
+| `rolledPlannedMh` leaf missing → `0n` | false | `ordered` WPs come from the same `planRows.wps` map; missing leaf id is not a reachable assembly state. |
+| Stored `'baseline'` restore fallback untested | medium | Code at `plan-tree-grid.tsx:832-837` implements fallback; no unit observes it. Grouped with activate/resolve helper — **patch**. |
+| Width budget / key-3 / stored-baseline / fence effort gaps (VG Other: dead i18n + digitKeyActive) | medium | Pre-verified gap findings — **patch** (grouped with shared widths, activate helper, fence tighten, delete unused i18n). |
 
 ## Design Notes
 
