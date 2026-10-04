@@ -43,8 +43,17 @@ describe('buildBaselineWpRows', () => {
   });
 
   it('refuses incomplete_plan when a leaf has no dates', () => {
-    expect(() =>
-      buildBaselineWpRows([leaf('wp-missing')], new Map(), () => 'id-1'),
-    ).toThrow(/refused: invalid_input/);
+    try {
+      buildBaselineWpRows([leaf('wp-missing')], new Map(), () => 'id-1');
+      expect.fail('expected refuse');
+    } catch (error) {
+      expect(error).toMatchObject({
+        code: 'invalid_input',
+        details: {
+          baseline: ['incomplete_plan'],
+          blockingWpIds: ['wp-missing'],
+        },
+      });
+    }
   });
 });

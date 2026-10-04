@@ -1271,3 +1271,7 @@ above can see where it went.
 - source_spec: `_bmad-output/implementation-artifacts/spec-4-5-baseline-comparison-as-columns-on-the-plan-grid.md`
   summary: `divergenceFromPinned` index-aligns pin inputs/outputs without a length check; a shorter outputs array could bind wrong dates.
   evidence: Build review 2026-10-04 (EC, maybe-false). Codec-canonical encode keeps arrays parallel; settle with an explicit incomplete-pin guard if corrupt jsonb ever appears in production pins.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-epic-4-retro-item-22-extract-shared-set-re-baseline-writer-an.md`
+  summary: Share `loadBaselineGateInput` between writer core and `set-baseline-state` eligibility reads so the Promise.all gate-row load cannot drift.
+  evidence: Item-22 Blind Hunter review 2026-10-04. Writer extract intentionally left eligibility helpers alone (F7 carve-out); settle if a third Baseline write surface lands.
