@@ -6,9 +6,13 @@ import {
   APPROVAL_REQUIRED_MESSAGE,
   APPROVAL_REQUIRED_REASON,
   CREDENTIAL_AUTH_FAILED_REASON,
+  READ_INCOMPLETE_MESSAGE,
+  READ_INCOMPLETE_REASON,
+  admitScopeRead,
   credentialFailureMessage,
   gateIngestApproval,
   notifyCredentialFailure,
+  recordIncompleteRead,
 } from './connector-ingest';
 
 const AT = new Date('2026-09-01T00:00:00Z');
@@ -85,7 +89,16 @@ function depsWith(approvalRecordedAt: Date | null) {
     },
   };
 
-  return { deps, attempts, errors, mails };
+  let transactions = 0;
+  const countingDeps: typeof deps = {
+    ...deps,
+    transaction: async (handle, tenantId, work) => {
+      transactions += 1;
+      return deps.transaction(handle, tenantId, work);
+    },
+  };
+
+  return { deps: countingDeps, attempts, errors, mails, transactions: () => transactions };
 }
 
 describe('gateIngestApproval (story 5.2)', () => {
@@ -188,6 +201,73 @@ describe('ingestSnapshot domain approval gate', () => {
         approvalRecordedAt: '2026-09-01T00:00:00.000Z',
       }),
     ).not.toThrow();
+  });
+});
+
+describe('recordIncompleteRead / admitScopeRead (story 5.3)', () => {
+  it('records exactly one read_incomplete attempt and nothing else', async () => {
+    const { deps, attempts, errors, mails } = depsWith(AT);
+    const result = await recordIncompleteRead(deps, CTX, {
+      projectId: 'prj-1',
+      connectorId: 'con-1',
+    });
+    expect(result).toEqual({ ok: true, value: undefined });
+    expect(attempts).toEqual([
+      {
+        connectorId: 'con-1',
+        reasonCode: READ_INCOMPLETE_REASON,
+        message: READ_INCOMPLETE_MESSAGE,
+        attemptedAt: AT,
+      },
+    ]);
+    expect(errors).toEqual([]);
+    expect(mails).toEqual([]);
+  });
+
+  it('admits a complete read without opening a transaction', async () => {
+    const { deps, attempts, transactions } = depsWith(AT);
+    const result = await admitScopeRead(deps, CTX, {
+      projectId: 'prj-1',
+      connectorId: 'con-1',
+      read: { complete: true },
+    });
+    expect(result).toEqual({ ok: true, value: 'admitted' });
+    expect(attempts).toEqual([]);
+    expect(transactions()).toBe(0);
+  });
+
+  it('answers incomplete and records the failed attempt for an incomplete read', async () => {
+    const { deps, attempts } = depsWith(AT);
+    const result = await admitScopeRead(deps, CTX, {
+      projectId: 'prj-1',
+      connectorId: 'con-1',
+      read: { complete: false },
+    });
+    expect(result).toEqual({ ok: true, value: 'incomplete' });
+    expect(attempts).toEqual([expect.objectContaining({ reasonCode: READ_INCOMPLETE_REASON })]);
+  });
+
+  it('answers not_found for a Connector outside the Project, writing nothing', async () => {
+    const { deps, attempts } = depsWith(AT);
+    const result = await recordIncompleteRead(deps, { ...CTX, projectIds: ['prj-2'] }, {
+      projectId: 'prj-2',
+      connectorId: 'con-1',
+    });
+    expect(result).toEqual({ ok: false, error: expect.objectContaining({ code: 'not_found' }) });
+    expect(attempts).toEqual([]);
+  });
+
+  it('answers not_found for a viewer before opening work', async () => {
+    const { deps, attempts, transactions } = depsWith(AT);
+    const viewer: RequestContext = { ...CTX, roles: [], projectIds: [] };
+    const result = await admitScopeRead(deps, viewer, {
+      projectId: 'prj-1',
+      connectorId: 'con-1',
+      read: { complete: false },
+    });
+    expect(result).toEqual({ ok: false, error: expect.objectContaining({ code: 'not_found' }) });
+    expect(attempts).toEqual([]);
+    expect(transactions()).toBe(0);
   });
 });
 

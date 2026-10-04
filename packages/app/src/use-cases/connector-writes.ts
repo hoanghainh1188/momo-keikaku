@@ -8,9 +8,14 @@ import { PROJECT_REACH, PROJECT_REACH_ROLES, authorize, type RoleDeclaration } f
 import { audit, type AuditDeclaration } from '../audit';
 import type { RequestContext } from '../authz/request-context';
 import { isProjectNotFound } from '../ports/project-read';
-import type { ConnectorWriteDeps, ConnectorWriteScope } from '../ports/connector-write';
-import type { Result } from '../result';
-import { runAuditedWrite, refuse } from './audited-write';
+import type {
+  AddConnectorDeps,
+  ConnectorWriteDeps,
+  ConnectorWriteScope,
+} from '../ports/connector-write';
+import type { SearchBudgetAssessment } from '../ports/tracker';
+import { fail, type AppError, type Result } from '../result';
+import { invalidInputDetails, runAuditedWrite, refuse } from './audited-write';
 import {
   addConnectorInputSchema,
   changeScopeInputSchema,
@@ -46,12 +51,57 @@ async function runConnectorWrite<Handle, Command extends { readonly projectId: s
   }, work);
 }
 
-/** FR-17: add a Backlog Connector with encrypted credentials and client approval. */
+/** `invalid_input` rule codes `addConnector` answers after asking Backlog (story 5.3 / AR-13). */
+export const ADD_CONNECTOR_REFUSALS = {
+  searchBudget: 'search_budget',
+  credentialRejected: 'credential_rejected',
+  projectNotFound: 'project_not_found',
+  unreachable: 'backlog_unreachable',
+} as const;
+
+function budgetRefusal(assessment: SearchBudgetAssessment): NonNullable<AppError['details']> {
+  if (assessment.kind === 'assessed') return { projectKey: [ADD_CONNECTOR_REFUSALS.searchBudget] };
+  switch (assessment.reason) {
+    case 'auth_failed':
+      return { apiKey: [ADD_CONNECTOR_REFUSALS.credentialRejected] };
+    case 'project_not_found':
+      return { projectKey: [ADD_CONNECTOR_REFUSALS.projectNotFound] };
+    case 'unreachable':
+      return { spaceUrl: [ADD_CONNECTOR_REFUSALS.unreachable] };
+  }
+}
+
+/**
+ * FR-17: add a Backlog Connector with encrypted credentials and client approval.
+ *
+ * Story 5.3: before the insert, Get Rate Limit + Count Issues decide whether one full read fits
+ * in 25% of the Search bucket; over budget (or Backlog refusing the key / project) refuses
+ * `invalid_input` and writes nothing. The Search limit is stored on the Connector. The check runs
+ * OUTSIDE the transaction so no database transaction waits on Backlog.
+ */
 export async function addConnector<Handle>(
-  deps: ConnectorWriteDeps<Handle>,
+  deps: AddConnectorDeps<Handle>,
   ctx: RequestContext,
   input: AddConnectorInput,
 ): Promise<Result<CreatedConnector>> {
+  // Gate and parse before any call leaves for Backlog: an outsider still answers `not_found`
+  // and a malformed command `invalid_input`, exactly as `runAuditedWrite` would.
+  const roles = authorize(ctx, { roles: PROJECT_REACH_ROLES });
+  if (!roles.ok) return roles;
+  const parsed = addConnectorInputSchema.safeParse(input);
+  if (!parsed.success) return fail('invalid_input', invalidInputDetails(parsed.error));
+  const reach = authorize(ctx, { roles: PROJECT_REACH_ROLES, projectId: parsed.data.projectId });
+  if (!reach.ok) return reach;
+
+  const assessment = await deps.searchBudget.assessSearchBudget(
+    { site: parsed.data.site, scope: parsed.data.projectKey },
+    { apiKey: parsed.data.apiKey },
+  );
+  if (assessment.kind !== 'assessed' || !assessment.withinBudget) {
+    return fail('invalid_input', budgetRefusal(assessment));
+  }
+  const { searchLimit } = assessment;
+
   return runConnectorWrite(
     addConnectorInputSchema,
     deps,
@@ -73,6 +123,7 @@ export async function addConnector<Handle>(
         approvalRecordedAt: command.approvalRecordedAt,
         approvalName: command.approvalName,
         credentials,
+        searchLimit,
       });
       const scopeSeq = await scope.connectorWrite.appendScopeEvent({
         connectorId: id,

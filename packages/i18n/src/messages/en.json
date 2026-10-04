@@ -222,7 +222,11 @@
     "new_api_key": "New API key",
     "rotate_keeps_mappings": "Rotation replaces the stored key only. Mapping history is unchanged.",
     "saving": "Saving…",
-    "credential_error_title": "Connector credential error"
+    "credential_error_title": "Connector credential error",
+    "refused_search_budget": "Not connected: one full read of this Backlog project would use more than 25% of the API user's Search rate limit per minute. Narrow the scope or use an API user on a higher Backlog plan.",
+    "refused_credential_rejected": "Not connected: Backlog rejected the API key.",
+    "refused_project_not_found": "Not connected: Backlog has no project with that key for this API key.",
+    "refused_backlog_unreachable": "Not connected: the Backlog space could not be reached. Check the space URL and try again."
   },
   "mapping": {
     "coverage": "Coverage",

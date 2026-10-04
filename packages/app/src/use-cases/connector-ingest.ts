@@ -1,19 +1,27 @@
 /**
- * Ingest approval refuse + credential-failure notify (story 5.2 / FR-17).
+ * Ingest approval refuse + credential-failure notify (story 5.2 / FR-17), and the incomplete-read
+ * gate (story 5.3 / AR-13).
  *
- * Full snapshot writer is 5.5; this story records refusals/auth failures and fires the
- * banner + mail path. Scheduled interval delivery lands with 5.4.
+ * Full snapshot writer is 5.5; these record refusals, auth failures and incomplete reads as
+ * failed attempts and fire the banner + mail path. Scheduled interval delivery lands with 5.4.
  */
 import { ApprovalRequiredError, requireConnectorApproval } from '@momo/domain';
 import { PROJECT_REACH, PROJECT_REACH_ROLES, authorize, type RoleDeclaration } from '../authz/authorize';
 import type { RequestContext } from '../authz/request-context';
 import type { ConnectorWriteDeps } from '../ports/connector-write';
 import type { MailerPort } from '../ports/mailer';
+import type { ScopeRead } from '../ports/tracker';
 import { fail, ok, type Result } from '../result';
 import { refuse } from './audited-write';
 
 export const APPROVAL_REQUIRED_REASON = 'approval_required' as const;
 export const CREDENTIAL_AUTH_FAILED_REASON = 'credential_auth_failed' as const;
+export const READ_INCOMPLETE_REASON = 'read_incomplete' as const;
+
+/** PM-visible copy for a read that stayed incomplete after its one retry (story 5.3 / AR-13). */
+export const READ_INCOMPLETE_MESSAGE =
+  'The Backlog read was incomplete: Tickets changed while it was paging, and one retry did not ' +
+  'settle it. Nothing was written; figures stay at the last good snapshot.';
 
 /** PM-visible copy for a missing client approval (FR-17). */
 export const APPROVAL_REQUIRED_MESSAGE =
@@ -153,7 +161,68 @@ export async function notifyCredentialFailure<Handle>(
   return ok(undefined);
 }
 
+export interface RecordIncompleteReadInput {
+  readonly projectId: string;
+  readonly connectorId: string;
+}
+
+export interface AdmitScopeReadInput extends RecordIncompleteReadInput {
+  readonly read: Pick<ScopeRead, 'complete'>;
+}
+
+/**
+ * Record an incomplete read (story 5.3 / AR-13): one `tracker_snapshot_attempt` row with reason
+ * `read_incomplete`, and nothing else — no snapshot, observation or ledger row. The adapter has
+ * already retried once; this is the "then writes nothing" half.
+ */
+export async function recordIncompleteRead<Handle>(
+  deps: ConnectorWriteDeps<Handle>,
+  ctx: RequestContext,
+  input: RecordIncompleteReadInput,
+): Promise<Result<void>> {
+  const roles = authorize(ctx, { roles: PROJECT_REACH_ROLES, projectId: input.projectId });
+  if (!roles.ok) return roles;
+
+  try {
+    await deps.transaction(deps.handle, ctx.tenantId, async (scope) => {
+      const connector = await scope.connectorWrite.findConnector(input.connectorId);
+      if (!connector || connector.projectId !== input.projectId) refuse('not_found');
+      await scope.connectorWrite.appendSnapshotAttempt({
+        connectorId: input.connectorId,
+        reasonCode: READ_INCOMPLETE_REASON,
+        message: READ_INCOMPLETE_MESSAGE,
+        attemptedAt: deps.clock.now(),
+      });
+    });
+  } catch (error) {
+    if (isRefusal(error, 'not_found')) return fail('not_found');
+    throw error;
+  }
+  return ok(undefined);
+}
+
+/**
+ * The gate between `TrackerPort.readScope` and any writer (story 5.3). A complete read is
+ * `admitted` without touching the database; an incomplete one is recorded through
+ * `recordIncompleteRead` and answered `incomplete`, and the caller must write nothing else.
+ */
+export async function admitScopeRead<Handle>(
+  deps: ConnectorWriteDeps<Handle>,
+  ctx: RequestContext,
+  input: AdmitScopeReadInput,
+): Promise<Result<'admitted' | 'incomplete'>> {
+  const roles = authorize(ctx, { roles: PROJECT_REACH_ROLES, projectId: input.projectId });
+  if (!roles.ok) return roles;
+  if (input.read.complete) return ok('admitted');
+
+  const recorded = await recordIncompleteRead(deps, ctx, input);
+  if (!recorded.ok) return recorded;
+  return ok('incomplete');
+}
+
 export const CONNECTOR_INGEST_ROLES = {
   gateIngestApproval: PROJECT_REACH,
   notifyCredentialFailure: PROJECT_REACH,
+  recordIncompleteRead: PROJECT_REACH,
+  admitScopeRead: PROJECT_REACH,
 } as const satisfies Readonly<Record<string, RoleDeclaration>>;

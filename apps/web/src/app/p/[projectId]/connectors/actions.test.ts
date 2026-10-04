@@ -91,6 +91,30 @@ describe('addConnectorAction', () => {
     expect(revalidatePath).not.toHaveBeenCalled();
   });
 
+  it('names the Search-budget reason when set-up is refused over budget (story 5.3)', async () => {
+    addConnector.mockResolvedValueOnce({
+      ok: false,
+      error: {
+        code: 'invalid_input',
+        messageKey: 'errors.invalid_input',
+        details: { projectKey: ['search_budget'] },
+      },
+    });
+    const outcome = await addConnectorAction(
+      INITIAL_CONNECTOR_ACTION,
+      form({
+        projectId: 'p1',
+        spaceUrl: 'https://example.backlog.jp/',
+        apiKey: 'k',
+        projectKey: 'EC2',
+        approvalName: 'A',
+        approvalRecordedAt: '2026-09-01T00:00',
+      }),
+    );
+    expect(outcome.error).toMatch(/25% of the API user's Search rate limit/);
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
   it('wires fields as UTC ISO and revalidates on success', async () => {
     addConnector.mockResolvedValueOnce({ ok: true, value: { id: 'con-1' } });
     const outcome = await addConnectorAction(

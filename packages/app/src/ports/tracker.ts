@@ -51,13 +51,39 @@ export interface ScopeRead {
 
 /**
  * The only outbound path to a tracker (AD-6). Implementations: `fixture-replay`,
- * `backlog-http` (scaffold), `jira-cloud` later.
+ * `backlog-http`, `jira-cloud` later. A `complete: false` read must never reach a writer
+ * (story 5.3): the caller records it through `recordIncompleteRead` and writes nothing.
  */
 export interface TrackerPort {
   readScope(
     connectorConfig: TrackerConnectorConfig,
     credentials: TrackerCredentials,
   ): Promise<ScopeRead>;
+}
+
+/**
+ * Set-up Search-budget check (story 5.3 / AR-13): Get Rate Limit's Search bucket, the scope's
+ * Count Issues, and whether one full read stays within 25% of that bucket. `refused` carries a
+ * reason only — never a status body or the key.
+ */
+export type SearchBudgetAssessment =
+  | {
+      readonly kind: 'assessed';
+      readonly searchLimit: number;
+      readonly ticketCount: number;
+      readonly estimatedSearchCalls: number;
+      readonly withinBudget: boolean;
+    }
+  | {
+      readonly kind: 'refused';
+      readonly reason: 'auth_failed' | 'project_not_found' | 'unreachable';
+    };
+
+export interface SearchBudgetPort {
+  assessSearchBudget(
+    connectorConfig: { readonly site: string; readonly scope: string },
+    credentials: { readonly apiKey: string },
+  ): Promise<SearchBudgetAssessment>;
 }
 
 /**

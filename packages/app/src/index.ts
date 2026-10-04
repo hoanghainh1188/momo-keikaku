@@ -46,6 +46,8 @@ export type { MailerPort, MailMessage } from './ports/mailer';
 export type {
   FixtureCursorPort,
   ScopeRead,
+  SearchBudgetAssessment,
+  SearchBudgetPort,
   TrackerAdapterKind,
   TrackerConnectorConfig,
   TrackerCredentials,
@@ -157,8 +159,9 @@ export type {
   ChangeScopeInput,
   RotateCredentialsInput,
 } from './use-cases/connector-input';
-export type { CreatedConnector } from './use-cases/connector-writes';
+export { ADD_CONNECTOR_REFUSALS, type CreatedConnector } from './use-cases/connector-writes';
 export type {
+  AddConnectorDeps,
   ConnectorPublicRow,
   ConnectorWriteDeps,
   ConnectorWriteRepository,
@@ -173,11 +176,17 @@ export {
   APPROVAL_REQUIRED_MESSAGE,
   APPROVAL_REQUIRED_REASON,
   CREDENTIAL_AUTH_FAILED_REASON,
+  READ_INCOMPLETE_MESSAGE,
+  READ_INCOMPLETE_REASON,
+  admitScopeRead,
   credentialFailureMessage,
   gateIngestApproval,
   notifyCredentialFailure,
+  recordIncompleteRead,
+  type AdmitScopeReadInput,
   type GateIngestApprovalInput,
   type NotifyCredentialFailureInput,
+  type RecordIncompleteReadInput,
 } from './use-cases/connector-ingest';
 
 // Story 2.10 fence surface — outside the use-cases barrel (role/audit gates enumerate it via a

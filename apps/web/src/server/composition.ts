@@ -85,6 +85,7 @@ import {
   revokeMembership as revokeMembershipUseCase,
   rotateCredentials as rotateCredentialsUseCase,
   unassignMemberProject as unassignMemberProjectUseCase,
+  type AddConnectorDeps,
   type AddConnectorInput,
   type AssignMemberProjectInput,
   type ChangeScopeInput,
@@ -129,6 +130,7 @@ import {
   type ResolveRequestContextDeps,
   type RevokeMembershipInput,
   type RotateCredentialsInput,
+  type SearchBudgetPort,
   type UnassignMemberProjectInput,
   type WriteDeps,
   applyPlanChange,
@@ -223,14 +225,14 @@ function webClock() {
  * AD-6 TrackerPort selection (story 5.1). Honours `TRACKER_ADAPTER_OVERRIDE=fixture`
  * (already refused outside `DEPLOYMENT=local` in config) and otherwise the Connector's
  * declared adapter. Fixture-replay needs a `FixtureCursorPort` + time anchor; backlog-http
- * is the GET-only scaffold until 5.3.
+ * runs story 5.3's completeness loop and stamps `observedAt` from the product Clock.
  */
 export function trackerPortOn(deps: {
   readonly cursor: FixtureCursorPort;
   readonly timeAnchorIso: string;
 }): TrackerPort {
   const fixture = fixtureReplayOn({ cursor: deps.cursor });
-  const backlog = backlogHttpOn({});
+  const backlog = backlogHttpOn({ clock: webClock() });
   return {
     async readScope(connectorConfig: TrackerConnectorConfig, credentials: TrackerCredentials) {
       const kind = config.TRACKER_ADAPTER_OVERRIDE ?? connectorConfig.adapter;
@@ -641,6 +643,14 @@ function connectorWriteDeps(): ConnectorWriteDeps<Db> {
   };
 }
 
+/** Set-up also asks live Backlog for the Search budget before inserting (story 5.3). */
+function addConnectorDeps(): AddConnectorDeps<Db> {
+  return {
+    ...connectorWriteDeps(),
+    searchBudget: backlogHttpOn({ clock: webClock() }) satisfies SearchBudgetPort,
+  };
+}
+
 /** FR-29 *Map*. See `packages/app`'s `mapTickets`. */
 export async function mapTickets(input: MapTicketsInput, ctx?: RequestContext) {
   const context = ctx ?? (await requestContext());
@@ -934,7 +944,7 @@ export async function unassignMemberProject(input: UnassignMemberProjectInput, c
 /** FR-17: add a Backlog Connector with encrypted credentials and client approval. */
 export async function addConnector(input: AddConnectorInput, ctx?: RequestContext) {
   const context = ctx ?? (await requestContext());
-  return addConnectorUseCase(connectorWriteDeps(), context, input);
+  return addConnectorUseCase(addConnectorDeps(), context, input);
 }
 
 /** FR-17: rotate API key — ciphertext only; Mapping history unchanged. */

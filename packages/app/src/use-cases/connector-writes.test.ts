@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { RequestContext } from '../authz/request-context';
-import type { ConnectorWriteDeps, ConnectorWriteScope } from '../ports/connector-write';
-import { addConnector, changeConnectorScope, rotateCredentials } from './connector-writes';
+import type { AddConnectorDeps, ConnectorWriteScope } from '../ports/connector-write';
+import type { SearchBudgetAssessment } from '../ports/tracker';
+import {
+  ADD_CONNECTOR_REFUSALS,
+  addConnector,
+  changeConnectorScope,
+  rotateCredentials,
+} from './connector-writes';
 
 const AT = new Date('2026-09-01T00:00:00Z');
 const CTX: RequestContext = {
@@ -23,17 +29,28 @@ function cryptoStub() {
   };
 }
 
+const WITHIN_BUDGET: SearchBudgetAssessment = {
+  kind: 'assessed',
+  searchLimit: 150,
+  ticketCount: 1_900,
+  estimatedSearchCalls: 21,
+  withinBudget: true,
+};
+
 function fakeDeps(overrides?: {
   readonly approvalRecordedAt?: Date | null;
   readonly mappingCount?: number;
   /** When set, successive countMappingEventsForProject calls return these values in order. */
   readonly mappingCountSequence?: readonly number[];
+  readonly assessment?: SearchBudgetAssessment;
 }) {
   const inserts: unknown[] = [];
   const scopeEvents: unknown[] = [];
   const rotates: unknown[] = [];
   const audits: unknown[] = [];
   const mappingCountCalls: string[] = [];
+  const budgetCalls: unknown[] = [];
+  let transactions = 0;
   let mappingCount = overrides?.mappingCount ?? 3;
   let mappingSeqIndex = 0;
 
@@ -83,12 +100,19 @@ function fakeDeps(overrides?: {
     loadEncryptedCredentials: async () => null,
   };
 
-  const deps: ConnectorWriteDeps<{ marker: string }> = {
+  const deps: AddConnectorDeps<{ marker: string }> = {
     handle: { marker: 'h' },
     clock: { now: () => AT },
     ids: { next: () => 'con-new' },
     crypto: cryptoStub(),
+    searchBudget: {
+      assessSearchBudget: async (connectorConfig, credentials) => {
+        budgetCalls.push({ connectorConfig, credentials });
+        return overrides?.assessment ?? WITHIN_BUDGET;
+      },
+    },
     transaction: async (_h, _t, work) => {
+      transactions += 1;
       const scope: ConnectorWriteScope = {
         connectorWrite,
         audit: {
@@ -108,6 +132,8 @@ function fakeDeps(overrides?: {
     rotates,
     audits,
     mappingCountCalls,
+    budgetCalls,
+    transactions: () => transactions,
     setMappingCount: (n: number) => {
       mappingCount = n;
     },
@@ -156,6 +182,87 @@ describe('addConnector (story 5.2)', () => {
     });
     expect(result).toEqual({ ok: false, error: expect.objectContaining({ code: 'not_found' }) });
     expect(inserts).toEqual([]);
+  });
+});
+
+describe('addConnector Search-budget gate (story 5.3)', () => {
+  const INPUT = {
+    projectId: 'prj-1',
+    spaceUrl: 'https://example.backlog.jp/projects/EC2',
+    apiKey: 'secret-key',
+    projectKey: 'EC2',
+    approvalName: 'Client Approver',
+    approvalRecordedAt: '2026-09-01T00:00:00.000Z',
+  } as const;
+
+  it('asks Backlog with the parsed site/key and stores the Search limit on insert', async () => {
+    const { deps, inserts, budgetCalls } = fakeDeps();
+    const result = await addConnector(deps, CTX, INPUT);
+    expect(result).toEqual({ ok: true, value: { id: 'con-new' } });
+    expect(budgetCalls).toEqual([
+      {
+        connectorConfig: { site: 'example.backlog.jp', scope: 'EC2' },
+        credentials: { apiKey: 'secret-key' },
+      },
+    ]);
+    expect(inserts[0]).toMatchObject({ searchLimit: 150 });
+  });
+
+  it('refuses invalid_input search_budget when one full read exceeds 25% of the Search limit', async () => {
+    const { deps, inserts, scopeEvents, audits, transactions } = fakeDeps({
+      assessment: {
+        kind: 'assessed',
+        searchLimit: 30,
+        ticketCount: 1_900,
+        estimatedSearchCalls: 21,
+        withinBudget: false,
+      },
+    });
+    const result = await addConnector(deps, CTX, INPUT);
+    expect(result).toEqual({
+      ok: false,
+      error: expect.objectContaining({
+        code: 'invalid_input',
+        details: { projectKey: [ADD_CONNECTOR_REFUSALS.searchBudget] },
+      }),
+    });
+    expect(inserts).toEqual([]);
+    expect(scopeEvents).toEqual([]);
+    expect(audits).toEqual([]);
+    expect(transactions()).toBe(0);
+  });
+
+  it.each([
+    ['auth_failed', { apiKey: [ADD_CONNECTOR_REFUSALS.credentialRejected] }],
+    ['project_not_found', { projectKey: [ADD_CONNECTOR_REFUSALS.projectNotFound] }],
+    ['unreachable', { spaceUrl: [ADD_CONNECTOR_REFUSALS.unreachable] }],
+  ] as const)('refuses set-up when Backlog answers %s, writing nothing', async (reason, details) => {
+    const { deps, inserts, transactions } = fakeDeps({ assessment: { kind: 'refused', reason } });
+    const result = await addConnector(deps, CTX, INPUT);
+    expect(result).toEqual({
+      ok: false,
+      error: expect.objectContaining({ code: 'invalid_input', details }),
+    });
+    expect(inserts).toEqual([]);
+    expect(transactions()).toBe(0);
+  });
+
+  it('never calls Backlog for an outsider or a malformed command', async () => {
+    const outsider = fakeDeps();
+    const foreign: RequestContext = { ...CTX, projectIds: ['prj-other'] };
+    expect(await addConnector(outsider.deps, foreign, INPUT)).toEqual({
+      ok: false,
+      error: expect.objectContaining({ code: 'not_found' }),
+    });
+    expect(outsider.budgetCalls).toEqual([]);
+
+    const malformed = fakeDeps();
+    const result = await addConnector(malformed.deps, CTX, { ...INPUT, spaceUrl: 'not a url' });
+    expect(result).toEqual({
+      ok: false,
+      error: expect.objectContaining({ code: 'invalid_input', details: { spaceUrl: ['custom'] } }),
+    });
+    expect(malformed.budgetCalls).toEqual([]);
   });
 });
 

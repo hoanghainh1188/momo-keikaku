@@ -222,7 +222,11 @@
     "new_api_key": "新しい API キー",
     "rotate_keeps_mappings": "ローテーションは保存済みキーのみ置き換えます。Mapping 履歴は変わりません。",
     "saving": "保存中…",
-    "credential_error_title": "Connector 認証エラー"
+    "credential_error_title": "Connector 認証エラー",
+    "refused_search_budget": "接続しませんでした: この Backlog プロジェクトを 1 回フル読み取りすると、API ユーザーの検索レート制限（1 分あたり）の 25% を超えます。スコープを絞るか、上位プランの API ユーザーを使ってください。",
+    "refused_credential_rejected": "接続しませんでした: Backlog が API キーを拒否しました。",
+    "refused_project_not_found": "接続しませんでした: この API キーで参照できる、そのキーのプロジェクトが Backlog にありません。",
+    "refused_backlog_unreachable": "接続しませんでした: Backlog スペースに接続できませんでした。スペース URL を確認して再度お試しください。"
   },
   "mapping": {
     "coverage": "Coverage",

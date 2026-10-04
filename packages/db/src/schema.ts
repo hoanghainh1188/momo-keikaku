@@ -848,6 +848,8 @@ export const connector = pgTable(
     lastErrorCode: text('last_error_code'),
     lastErrorMessage: text('last_error_message'),
     lastErrorAt: timestamp('last_error_at', { withTimezone: true }),
+    /** Backlog Get Rate Limit Search-bucket limit at set-up (story 5.3); null for fixtures. */
+    searchLimit: integer('search_limit'),
   },
   (t) => ({
     tenantKey: unique('connector_tenant_id_key').on(t.tenantId, t.id),

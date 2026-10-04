@@ -5,6 +5,8 @@
  * composition bindings — no write logic here.
  */
 import { revalidatePath } from 'next/cache';
+import { ADD_CONNECTOR_REFUSALS, type AppError } from '@momo/app';
+import { t } from '@momo/i18n';
 import {
   addConnector,
   requestContext,
@@ -25,6 +27,22 @@ function refuse(
   messageKey: 'errors.not_found' | 'errors.invalid_input',
 ): ConnectorActionState {
   return { error: messageFromKey(messageKey), resetKey: prev.resetKey };
+}
+
+/** Story 5.3: set-up refusals that came from asking Backlog name their reason to the operator. */
+const ADD_CONNECTOR_REFUSAL_KEYS: readonly (readonly [string, string])[] = [
+  [ADD_CONNECTOR_REFUSALS.searchBudget, 'connectors.refused_search_budget'],
+  [ADD_CONNECTOR_REFUSALS.credentialRejected, 'connectors.refused_credential_rejected'],
+  [ADD_CONNECTOR_REFUSALS.projectNotFound, 'connectors.refused_project_not_found'],
+  [ADD_CONNECTOR_REFUSALS.unreachable, 'connectors.refused_backlog_unreachable'],
+];
+
+function addConnectorRefusalMessage(error: AppError): string {
+  const codes = Object.values(error.details ?? {}).flat();
+  const match = ADD_CONNECTOR_REFUSAL_KEYS.find(([code]) => codes.includes(code));
+  // R0 UI locale is always `en`, as in `messageFromKey`.
+  const locale = 'en';
+  return match ? t(locale, match[1]) : messageFromKey(error.messageKey);
 }
 
 function ok(prev: ConnectorActionState): ConnectorActionState {
@@ -55,7 +73,7 @@ export async function addConnectorAction(
     },
     ctx,
   );
-  if (!result.ok) return refuse(prev, result.error.messageKey);
+  if (!result.ok) return { error: addConnectorRefusalMessage(result.error), resetKey: prev.resetKey };
   revalidatePath(`/p/${projectId}/connectors`);
   return ok(prev);
 }

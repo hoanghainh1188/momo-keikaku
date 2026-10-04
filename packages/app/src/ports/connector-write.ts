@@ -10,6 +10,7 @@ import type { AuditedWriteDeps, WriteStamp } from './audited-write';
 import type { IdGenerator } from './ids';
 import type { Clock } from './clock';
 import type { MailerPort } from './mailer';
+import type { SearchBudgetPort } from './tracker';
 
 export type { WriteStamp } from './audited-write';
 
@@ -40,6 +41,8 @@ export interface InsertConnectorInput {
   readonly approvalRecordedAt: Date;
   readonly approvalName: string;
   readonly credentials: EncryptedCredentials;
+  /** Get Rate Limit's Search bucket limit at set-up (story 5.3); null for fixture Connectors. */
+  readonly searchLimit: number | null;
 }
 
 export interface AppendScopeEventInput {
@@ -100,4 +103,9 @@ export type ConnectorWriteDeps<Handle> = AuditedWriteDeps<Handle, ConnectorWrite
   readonly mailer?: MailerPort;
   /** Resolve PM notify addresses for a Project (best-effort mail). */
   readonly notifyRecipients?: (projectId: string) => Promise<readonly string[]>;
+};
+
+/** `addConnector` also checks the Search budget against live Backlog before it inserts (5.3). */
+export type AddConnectorDeps<Handle> = ConnectorWriteDeps<Handle> & {
+  readonly searchBudget: SearchBudgetPort;
 };
