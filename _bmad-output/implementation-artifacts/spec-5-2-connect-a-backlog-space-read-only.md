@@ -2,7 +2,7 @@
 title: 'Story 5.2 — Connect a Backlog space, read-only'
 type: 'feature'
 created: '2026-10-04'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '872e0572c05d71b2765c06ccc2726284583ef2fa'
@@ -107,16 +107,39 @@ context:
 
 - Migration `0005_connector_credentials_and_scope.sql` (+ snapshot): `connector` gains site/approval/credentials/last_error; new `connector_scope_event` + `tracker_snapshot_attempt`; `tracker_snapshot.scope_seq` FK MATCH SIMPLE. table-classes → regenerated RLS/grants/triggers.
 - `CredentialsCryptoPort` + `credentialsAesOn` (AES-256-GCM over codec `stringify({ apiKey })`); composition refuses `CREDENTIALS_CRYPTO=kms` naming Epic 8. Config/env generate `CREDENTIALS_KEY` (32-byte base64) + `CREDENTIALS_KEY_ID`.
-- Use-cases: `addConnector` / `rotateCredentials` / `changeConnectorScope` on the audited surface (PROJECT_REACH); `gateIngestApproval` / `notifyCredentialFailure` exported from `@momo/app` (off use-cases barrel) with unit coverage. Domain `ApprovalRequiredError` / `requireConnectorApproval` on `ingestSnapshot` when approval field supplied.
-- Connectors page: add form (URL/apiKey/project key/approval + bot recommendation), rotate form, credential-error banner from `last_error_*`; fixture path keeps data-based hours copy and no live key. i18n EN/JA for form/banner/mail subject keys.
+- Use-cases: `addConnector` / `rotateCredentials` / `changeConnectorScope` on the audited surface (PROJECT_REACH); `gateIngestApproval` / `notifyCredentialFailure` exported from `@momo/app` (off use-cases barrel) with unit coverage. Domain `ApprovalRequiredError` / `requireConnectorApproval` always gates `ingestSnapshot`.
+- Connectors page: add form (URL/apiKey/project key/approval + bot recommendation), rotate form, credential-error banner from `last_error_*`; greenfield Projects load without a snapshot; fixture path keeps data-based hours copy and no live key. i18n EN/JA for form/banner/mail subject keys.
 - Seed: fixture Connectors pre-approved (`approval_name='fixture'`), initial `connector_scope_event`, snapshots carry that `scope_seq`; no ciphertext for fixture-replay.
 - Audit note: `connector.change_scope` payload omits `scope_seq` (global identity seq is not predictable in the write harness); seq still lands on `connector_scope_event` / snapshot column.
-- Verified: `pnpm lint`, `typecheck`, `depcruise`, `test` exit 0 (1195 passed / 459 skipped). DB-backed harness skipped without Postgres as before.
-- Review fixes: always-on domain approval gate; AES key_id mismatch + empty plaintext refuse; Connectors page loads without snapshot; datetime-local as UTC; i18n mail subject/body; update rowCount checks; rotate mapping-count asserts; action unit tests.
+- Verified: `pnpm lint`, `typecheck`, `depcruise`, `test` exit 0 (1210 passed / 459 skipped). DB-backed harness skipped without Postgres as before.
+- Review fixes: always-on domain approval gate; AES key_id mismatch + empty plaintext refuse; Connectors page loads without snapshot; datetime-local as UTC; i18n mail subject/body; update rowCount checks; rotate mapping-count asserts; action unit tests; DB probe INSERTs include `site`.
 
 ## Spec Change Log
 
 ## Review Triage Log
+
+| Finding | Verdict | Evidence / route |
+|---------|---------|------------------|
+| Greenfield Connectors page needs snapshot | high | **patch** — `loadBundleInTenant` tolerates no snapshot; Add form renders |
+| Domain approval opt-in via `'approvalRecordedAt' in input` | high | **patch** — always `requireConnectorApproval`; field required nullable |
+| Empty/invalid approval instant accepted | medium | **patch** — empty string / NaN Date refuse |
+| AES decrypt ignores key_id | medium | **patch** — mismatch throws |
+| AES encrypt seals empty `{}` | medium | **patch** — refuse neither apiKey nor token |
+| datetime-local TZ skew | medium | **patch** — append `Z` when no offset; invalid → invalid_input |
+| Hardcoded EN mail; i18n keys dead | medium | **patch** — composition passes `mail.connectorCredentialError` |
+| rotate/updateScope/setLastError ignore rowCount | medium | **patch** — require rowCount === 1 |
+| rotate unit test never checks mapping count | medium | **patch** — assert count + throw on change |
+| Ingest roles untested for viewers | medium | **patch** — viewer not_found cases |
+| No connector actions.test.ts | medium | **patch** — added |
+| sprint last_updated moved backwards | low | **patch** — set 21:55 |
+| Probe INSERTs omit NOT NULL `site` | high | **patch** — tracker/rls tests include site |
+| changeConnectorScope has no UI | low | Rejected — set-up appends first scope_event; change use-case audited; UI change deferred as non-everyday |
+| Live ingest never calls gate/notify | false | Composition exports + unit path are 5.2 deliverable; scheduler/writer are 5.4/5.5 |
+| Mail only acting user / no PM fan-out | medium | **defer** — notifyRecipients port exists; membership fan-out reader not landed |
+| Concurrent addConnector race | medium | **defer** — R0 app check; multi-connector overlap is intentional later (FR-42) |
+| Bundle meta / attempt persistence untested on Postgres | medium | **defer** — unit + harness mocks; REQUIRE_DB skipped here |
+| hasCredentials true with null key_id | low | Rejected — writers always set key_id with ciphertext; not everyday |
+| appendSnapshotAttempt returning no seq | low | Rejected — identity insert always returns; complexity > harm |
 
 ## Design Notes
 

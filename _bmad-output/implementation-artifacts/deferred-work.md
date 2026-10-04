@@ -1295,3 +1295,15 @@ above can see where it went.
 - source_spec: `_bmad-output/implementation-artifacts/spec-5-1-one-port-to-every-tracker-and-a-fixture-that-replays-like-on.md`
   summary: Add a migrate-from-pre-0004 DB check that category_ids/milestone_ids fold into attributes before drop.
   evidence: Story 5.1 review — fold SQL is in 0004; no REQUIRE_DB environment here to prove upgrade of legacy rows.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-2-connect-a-backlog-space-read-only.md`
+  summary: Wire `notifyRecipients` to Project PM emails for connector credential-error mail instead of only the acting user.
+  evidence: Story 5.2 review — composition uses acting-user email; full fan-out needs a project-memberships reader.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-2-connect-a-backlog-space-read-only.md`
+  summary: Add DB-backed assertions for connector bundle meta (last_error/hasCredentials/approval) and tracker_snapshot_attempt persistence under REQUIRE_DB.
+  evidence: Story 5.2 verification-gap review — unit mocks pass without Postgres; settle when CI has a live DB for these paths.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-2-connect-a-backlog-space-read-only.md`
+  summary: Harden concurrent addConnector with a DB unique or lock if R0 stays one-Connector-per-Project.
+  evidence: Story 5.2 review — application `connector_exists` races; UNIQUE may conflict with later multi-Connector overlap (FR-42).

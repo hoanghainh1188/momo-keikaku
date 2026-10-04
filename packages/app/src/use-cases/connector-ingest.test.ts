@@ -146,6 +146,33 @@ describe('ingestSnapshot domain approval gate', () => {
     ).toThrow(ApprovalRequiredError);
   });
 
+  it('throws ApprovalRequiredError when approvalRecordedAt is blank or an invalid Date', () => {
+    const next = {
+      observedAt: '2026-09-01T00:00:00.000Z',
+      tickets: [] as const,
+      hoursFieldPresent: false,
+      adapterKind: 'fixture' as const,
+    };
+    expect(() =>
+      ingestSnapshot({
+        prev: null,
+        next,
+        activeBaselineVersionSeq: null,
+        seqFrom: 1,
+        approvalRecordedAt: '   ',
+      }),
+    ).toThrow(ApprovalRequiredError);
+    expect(() =>
+      ingestSnapshot({
+        prev: null,
+        next,
+        activeBaselineVersionSeq: null,
+        seqFrom: 1,
+        approvalRecordedAt: new Date(Number.NaN),
+      }),
+    ).toThrow(ApprovalRequiredError);
+  });
+
   it('accepts a non-null approvalRecordedAt', () => {
     expect(() =>
       ingestSnapshot({

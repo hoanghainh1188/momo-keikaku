@@ -228,8 +228,8 @@ beforeAll(async () => {
       [PROJECT_B, TENANT_B, DEPARTMENT_B],
     );
     await client.query(
-      `INSERT INTO connector (id, tenant_id, project_id, adapter, scope, space_label)
-       VALUES ($1, $2, $3, 'fixture', 'probe', 'probe')`,
+      `INSERT INTO connector (id, tenant_id, project_id, adapter, site, scope, space_label)
+       VALUES ($1, $2, $3, 'fixture', 'probe', 'probe', 'probe')`,
       [CONNECTOR_B, TENANT_B, PROJECT_B],
     );
     await client.query(

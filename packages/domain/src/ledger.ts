@@ -51,6 +51,12 @@ export function requireConnectorApproval(
   if (approvalRecordedAt == null) {
     throw new ApprovalRequiredError();
   }
+  if (typeof approvalRecordedAt === 'string' && approvalRecordedAt.trim() === '') {
+    throw new ApprovalRequiredError();
+  }
+  if (approvalRecordedAt instanceof Date && Number.isNaN(approvalRecordedAt.getTime())) {
+    throw new ApprovalRequiredError();
+  }
 }
 
 /**
