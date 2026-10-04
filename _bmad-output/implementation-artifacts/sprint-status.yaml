@@ -303,7 +303,7 @@ action_items:
       CR link to Epic 6; Published Snapshot typed seam) so later retros stop re-flagging
       (retro F1)"
     owner: "founder"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-4-retro-2026-10-04.md"
   - id: "epic-4-retro-item-24-deferred-track-split-baseline-compare-ce"
     epic: 4
