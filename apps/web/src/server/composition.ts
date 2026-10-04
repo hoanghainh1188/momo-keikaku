@@ -159,7 +159,7 @@ import {
   getReBaselineState,
   compareBaselineVersions,
 } from '@momo/app';
-import { buildResetPasswordMail } from '@momo/i18n';
+import { buildResetPasswordMail, t } from '@momo/i18n';
 import {
   backlogHttpOn,
   credentialsAesOn,
@@ -966,11 +966,20 @@ export async function notifyCredentialFailure(
   const context = ctx ?? (await requestContext());
   const deps = connectorWriteDeps();
   const user = await lookupUserOn(webDb(), context.userId);
+  const mailSubject =
+    input.mailSubject ?? t(context.locale, 'mail.connectorCredentialError.subject');
+  const mailBody =
+    input.mailBody ??
+    t(context.locale, 'mail.connectorCredentialError.body', {
+      lastGoodLabel: input.lastGoodLabel,
+    });
   return notifyCredentialFailureUseCase(
     { ...deps, mailer: webMailer() },
     context,
     {
       ...input,
+      mailSubject,
+      mailBody,
       to: input.to ?? (user?.email ? [user.email] : []),
     },
   );

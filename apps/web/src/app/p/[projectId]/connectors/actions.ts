@@ -35,15 +35,27 @@ function field(formData: FormData, name: string): string {
   return typeof value === 'string' ? value : '';
 }
 
+/**
+ * `datetime-local` is wall time without a zone. Treat bare values as UTC by appending `Z`.
+ * Returns ISO instant, or null when empty/invalid.
+ */
+export function parseApprovalWhen(raw: string): string | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const withZone = /([zZ]|[+-]\d{2}:?\d{2})$/.test(trimmed) ? trimmed : `${trimmed}Z`;
+  const when = new Date(withZone);
+  if (Number.isNaN(when.getTime())) return null;
+  return when.toISOString();
+}
+
 export async function addConnectorAction(
   prev: ConnectorActionState,
   formData: FormData,
 ): Promise<ConnectorActionState> {
   const ctx = await requestContext();
   const projectId = field(formData, 'projectId');
-  const whenRaw = field(formData, 'approvalRecordedAt');
-  // `datetime-local` is wall-local without a zone; parse then re-emit ISO for the use case.
-  const when = whenRaw ? new Date(whenRaw) : null;
+  const approvalRecordedAt = parseApprovalWhen(field(formData, 'approvalRecordedAt'));
+  if (approvalRecordedAt === null) return refuse(prev, 'errors.invalid_input');
   const result = await addConnector(
     {
       projectId,
@@ -51,8 +63,7 @@ export async function addConnectorAction(
       apiKey: field(formData, 'apiKey'),
       projectKey: field(formData, 'projectKey'),
       approvalName: field(formData, 'approvalName'),
-      approvalRecordedAt:
-        when && !Number.isNaN(when.getTime()) ? when.toISOString() : whenRaw,
+      approvalRecordedAt,
     },
     ctx,
   );

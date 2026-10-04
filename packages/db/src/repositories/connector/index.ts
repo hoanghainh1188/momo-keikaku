@@ -47,6 +47,14 @@ function toPublic(row: typeof s.connector.$inferSelect): ConnectorPublicRow {
   };
 }
 
+function exactlyOne(what: string, connectorId: string, rowCount: number | null): void {
+  if (rowCount !== 1) {
+    throw new Error(
+      `connector ${connectorId}: expected to ${what} exactly one row, touched ${rowCount ?? 0}`,
+    );
+  }
+}
+
 export function connectorWriteRepositoryOn(bound: Bound) {
   const { tx, tenantId } = bound;
 
@@ -110,7 +118,7 @@ export function connectorWriteRepositoryOn(bound: Bound) {
       connectorId: string,
       credentials: EncryptedCredentialsRow,
     ): Promise<void> {
-      await tx
+      const res = await tx
         .update(s.connector)
         .set({
           credentialsCiphertext: credentials.ciphertext,
@@ -121,13 +129,15 @@ export function connectorWriteRepositoryOn(bound: Bound) {
           lastErrorAt: null,
         })
         .where(and(eq(s.connector.tenantId, tenantId), eq(s.connector.id, connectorId)));
+      exactlyOne('rotate credentials on', connectorId, res.rowCount);
     },
 
     async updateScope(connectorId: string, scope: string): Promise<void> {
-      await tx
+      const res = await tx
         .update(s.connector)
         .set({ scope })
         .where(and(eq(s.connector.tenantId, tenantId), eq(s.connector.id, connectorId)));
+      exactlyOne('update scope on', connectorId, res.rowCount);
     },
 
     async appendScopeEvent(input: {
@@ -185,7 +195,7 @@ export function connectorWriteRepositoryOn(bound: Bound) {
       connectorId: string,
       error: { code: string; message: string; at: Date } | null,
     ): Promise<void> {
-      await tx
+      const res = await tx
         .update(s.connector)
         .set(
           error === null
@@ -197,6 +207,7 @@ export function connectorWriteRepositoryOn(bound: Bound) {
               },
         )
         .where(and(eq(s.connector.tenantId, tenantId), eq(s.connector.id, connectorId)));
+      exactlyOne('set last error on', connectorId, res.rowCount);
     },
 
     async countMappingEventsForProject(projectId: string): Promise<number> {

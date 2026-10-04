@@ -41,6 +41,8 @@ export interface NotifyCredentialFailureInput {
   readonly to?: readonly string[];
   /** Optional i18n mail subject; defaults to the English product copy. */
   readonly mailSubject?: string;
+  /** Optional i18n mail body; defaults to `credentialFailureMessage(lastGoodLabel)`. */
+  readonly mailBody?: string;
 }
 
 function isRefusal(error: unknown, code: string): boolean {
@@ -105,7 +107,7 @@ export async function notifyCredentialFailure<Handle>(
   const roles = authorize(ctx, { roles: PROJECT_REACH_ROLES, projectId: input.projectId });
   if (!roles.ok) return roles;
 
-  const message = credentialFailureMessage(input.lastGoodLabel);
+  const message = input.mailBody ?? credentialFailureMessage(input.lastGoodLabel);
   const at = deps.clock.now();
 
   try {

@@ -281,6 +281,7 @@ export function buildDemoState(anchorIso?: string): DemoState {
       next: snap,
       activeBaselineVersionSeq: activeBaselineSeq,
       seqFrom: ledgerSeq,
+      approvalRecordedAt: '2026-09-01T00:00:00.000Z',
     });
     ledger.push(...res.entries);
     leftScope.push(...res.leftScope);

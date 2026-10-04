@@ -115,6 +115,17 @@ describe('gateIngestApproval (story 5.2)', () => {
     expect(result).toEqual({ ok: true, value: 'approved' });
     expect(attempts).toEqual([]);
   });
+
+  it('answers not_found for a viewer with empty roles before opening work', async () => {
+    const { deps, attempts } = depsWith(AT);
+    const viewer: RequestContext = { ...CTX, roles: [], projectIds: [] };
+    const result = await gateIngestApproval(deps, viewer, {
+      projectId: 'prj-1',
+      connectorId: 'con-1',
+    });
+    expect(result).toEqual({ ok: false, error: expect.objectContaining({ code: 'not_found' }) });
+    expect(attempts).toEqual([]);
+  });
 });
 
 describe('ingestSnapshot domain approval gate', () => {
@@ -133,6 +144,23 @@ describe('ingestSnapshot domain approval gate', () => {
         approvalRecordedAt: null,
       }),
     ).toThrow(ApprovalRequiredError);
+  });
+
+  it('accepts a non-null approvalRecordedAt', () => {
+    expect(() =>
+      ingestSnapshot({
+        prev: null,
+        next: {
+          observedAt: '2026-09-01T00:00:00.000Z',
+          tickets: [],
+          hoursFieldPresent: false,
+          adapterKind: 'fixture',
+        },
+        activeBaselineVersionSeq: null,
+        seqFrom: 1,
+        approvalRecordedAt: '2026-09-01T00:00:00.000Z',
+      }),
+    ).not.toThrow();
   });
 });
 
@@ -161,5 +189,19 @@ describe('notifyCredentialFailure (story 5.2)', () => {
         text: message,
       },
     ]);
+  });
+
+  it('answers not_found for a viewer with empty roles before opening work', async () => {
+    const { deps, attempts, mails } = depsWith(AT);
+    const viewer: RequestContext = { ...CTX, roles: [], projectIds: [] };
+    const result = await notifyCredentialFailure(deps, viewer, {
+      projectId: 'prj-1',
+      connectorId: 'con-1',
+      lastGoodLabel: 'never',
+      to: ['pm@example.com'],
+    });
+    expect(result).toEqual({ ok: false, error: expect.objectContaining({ code: 'not_found' }) });
+    expect(attempts).toEqual([]);
+    expect(mails).toEqual([]);
   });
 });

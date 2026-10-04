@@ -180,35 +180,49 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
     .from(s.trackerSnapshot)
     .orderBy(desc(s.trackerSnapshot.observedAt))
     .limit(1);
-  if (!latestSnap) throw new Error('no Tracker Snapshot — run the seed');
 
-  const obsRows = await tx
-    .select()
-    .from(s.ticketObservation)
-    .where(eq(s.ticketObservation.snapshotId, latestSnap.id));
+  // Story 5.2: greenfield Projects (no Connector / no snapshot yet) must still load so the
+  // Connectors page can show AddConnectorForm. Empty pinned snapshot until the first ingest.
+  const anchorIsoEarly = p.demoAnchor.toISOString();
+  let pinnedSnapshot: SnapshotRead & { snapshotId: string };
+  if (!latestSnap) {
+    pinnedSnapshot = {
+      snapshotId: '',
+      observedAt: anchorIsoEarly,
+      hoursFieldPresent: false,
+      complete: true,
+      rateLimit: null,
+      tickets: [],
+    };
+  } else {
+    const obsRows = await tx
+      .select()
+      .from(s.ticketObservation)
+      .where(eq(s.ticketObservation.snapshotId, latestSnap.id));
 
-  const pinnedSnapshot: SnapshotRead & { snapshotId: string } = {
-    snapshotId: latestSnap.id,
-    observedAt: latestSnap.observedAt.toISOString(),
-    hoursFieldPresent: latestSnap.measurementBasis === 'hours',
-    adapterKind: (latestSnap.adapterKind as SnapshotRead['adapterKind']) ?? 'fixture',
-    complete: true,
-    rateLimit: null,
-    tickets: obsRows.map((o) => ({
-      trackerIssueId: o.trackerIssueId,
-      key: o.key,
-      title: o.title,
-      statusId: o.statusId,
-      estimateMh: o.estimateMh,
-      actualMh: o.actualMh,
-      assigneeAccountId: o.assigneeAccountId,
-      issueTypeId: o.issueTypeId,
-      parentIssueId: o.parentIssueId,
-      trackerProjectId: o.trackerProjectId,
-      attributes: (o.attributes ?? []) as SnapshotRead['tickets'][number]['attributes'],
-      createdAt: o.createdAt.toISOString(),
-    })),
-  };
+    pinnedSnapshot = {
+      snapshotId: latestSnap.id,
+      observedAt: latestSnap.observedAt.toISOString(),
+      hoursFieldPresent: latestSnap.measurementBasis === 'hours',
+      adapterKind: (latestSnap.adapterKind as SnapshotRead['adapterKind']) ?? 'fixture',
+      complete: true,
+      rateLimit: null,
+      tickets: obsRows.map((o) => ({
+        trackerIssueId: o.trackerIssueId,
+        key: o.key,
+        title: o.title,
+        statusId: o.statusId,
+        estimateMh: o.estimateMh,
+        actualMh: o.actualMh,
+        assigneeAccountId: o.assigneeAccountId,
+        issueTypeId: o.issueTypeId,
+        parentIssueId: o.parentIssueId,
+        trackerProjectId: o.trackerProjectId,
+        attributes: (o.attributes ?? []) as SnapshotRead['tickets'][number]['attributes'],
+        createdAt: o.createdAt.toISOString(),
+      })),
+    };
+  }
 
   const ledgerRows = await tx
     .select()
@@ -282,7 +296,7 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
     thresholds: DEFAULT_THRESHOLDS,
   };
 
-  const anchor = p.demoAnchor.toISOString();
+  const anchor = anchorIsoEarly;
   const calendar = buildCalendar('jp-vn-2026', { jp: p.calendarJp, vn: p.calendarVn });
   const period = periodOf(anchor, p.tzOffsetMinutes, p.teireiWeekday);
 
@@ -322,9 +336,11 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
           con?.credentialsCiphertext != null && con?.credentialsNonce != null,
       },
       anchor,
-      snapshotAgeMinutes: Math.round(
-        (new Date(anchor).getTime() - latestSnap.observedAt.getTime()) / 60_000,
-      ),
+      snapshotAgeMinutes: latestSnap
+        ? Math.round(
+            (new Date(anchor).getTime() - latestSnap.observedAt.getTime()) / 60_000,
+          )
+        : 0,
       baselineReason: activeBaseline?.reason ?? '',
       baselineRecordedAt: activeBaseline?.recordedAt ?? '',
     },

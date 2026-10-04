@@ -18,6 +18,7 @@ export default async function ConnectorsPage({
   const { bundle, review } = valueOrNotFound(await getProjectReview({ projectId }));
   const c = bundle.meta.connector;
   const hasConnector = c.id.length > 0;
+  const hasSnapshot = review.snapshot.id.length > 0;
 
   return (
     <div className="sheet">
@@ -82,29 +83,35 @@ export default async function ConnectorsPage({
                     : t('connectors.credentials_none')}
                 </td>
               </tr>
-              <tr>
-                <td className="label">{t('connectors.hours_detection')}</td>
-                <td>
-                  {t('connectors.detected_from_the_data_never_from_the_plan_name_')}
-                  <strong>{review.measurementBasis}</strong>
-                </td>
-              </tr>
-              <tr>
-                <td className="label">{t('connectors.pinned_snapshot')}</td>
-                <td>
-                  {t('connectors.snapshot_row', {
-                    snapshotId: review.snapshot.id,
-                    ticketCount: review.snapshot.ticketCount,
-                    ageMinutes: bundle.meta.snapshotAgeMinutes,
-                  })}
-                </td>
-              </tr>
-              <tr>
-                <td className="label">{t('connectors.opening_balance')}</td>
-                <td>
-                  {t('connectors.opening_balance_row', { hours: hours(review.openingBalanceMh) })}
-                </td>
-              </tr>
+              {hasSnapshot ? (
+                <>
+                  <tr>
+                    <td className="label">{t('connectors.hours_detection')}</td>
+                    <td>
+                      {t('connectors.detected_from_the_data_never_from_the_plan_name_')}
+                      <strong>{review.measurementBasis}</strong>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="label">{t('connectors.pinned_snapshot')}</td>
+                    <td>
+                      {t('connectors.snapshot_row', {
+                        snapshotId: review.snapshot.id,
+                        ticketCount: review.snapshot.ticketCount,
+                        ageMinutes: bundle.meta.snapshotAgeMinutes,
+                      })}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="label">{t('connectors.opening_balance')}</td>
+                    <td>
+                      {t('connectors.opening_balance_row', {
+                        hours: hours(review.openingBalanceMh),
+                      })}
+                    </td>
+                  </tr>
+                </>
+              ) : null}
             </tbody>
           </table>
 

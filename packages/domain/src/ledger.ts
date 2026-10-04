@@ -14,11 +14,9 @@ export interface IngestInput {
   /** next free ledger seq */
   seqFrom: number;
   /**
-   * Client approval instant (story 5.2 / FR-17). When the caller supplies this field,
-   * `null` refuses ingest; omit it only in pure delta-math unit tests that do not model
-   * Connectors.
+   * Client approval instant (story 5.2 / FR-17). Required; `null` refuses ingest.
    */
-  approvalRecordedAt?: Date | string | null;
+  approvalRecordedAt: Date | string | null;
 }
 
 export interface IngestResult {
@@ -78,10 +76,8 @@ export class AdapterKindMismatchError extends Error {
 export function ingestSnapshot(input: IngestInput): IngestResult {
   const { prev, next, activeBaselineVersionSeq } = input;
 
-  // FR-17: when the caller supplies approvalRecordedAt, null refuses (story 5.2).
-  if ('approvalRecordedAt' in input) {
-    requireConnectorApproval(input.approvalRecordedAt);
-  }
+  // FR-17: missing client approval always refuses (story 5.2).
+  requireConnectorApproval(input.approvalRecordedAt ?? null);
 
   // AD-6: refuse a kind change against the previous snapshot (operator alert).
   // Skip when either side omits adapterKind (older in-memory shapes); both must be set.

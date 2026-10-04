@@ -63,9 +63,14 @@ export function credentialsAesOn(options: CredentialsAesOptions): CredentialsCry
   return {
     keyId,
     encrypt(plaintext: CredentialsPlaintext): EncryptedCredentials {
+      const apiKey = plaintext.apiKey?.trim() ?? '';
+      const token = plaintext.token?.trim() ?? '';
+      if (!apiKey && !token) {
+        throw new Error('credentials plaintext must include a non-empty apiKey or token');
+      }
       const body: Record<string, string> = {};
-      if (plaintext.apiKey !== undefined) body.apiKey = plaintext.apiKey;
-      if (plaintext.token !== undefined) body.token = plaintext.token;
+      if (apiKey) body.apiKey = apiKey;
+      if (token) body.token = token;
       const nonce = randomBytes(NONCE_BYTES);
       const cipher = createCipheriv(ALGO, key, nonce);
       const encrypted = Buffer.concat([
@@ -80,6 +85,11 @@ export function credentialsAesOn(options: CredentialsAesOptions): CredentialsCry
       };
     },
     decrypt(stored: EncryptedCredentials): CredentialsPlaintext {
+      if (stored.keyId !== keyId) {
+        throw new Error(
+          `credentials key_id mismatch: stored "${stored.keyId}", expected "${keyId}"`,
+        );
+      }
       if (stored.ciphertext.length < TAG_BYTES) {
         throw new Error('credentials ciphertext too short');
       }

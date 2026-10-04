@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import type { RequestContext } from '../authz/request-context';
 import type { ConnectorWriteDeps, ConnectorWriteScope } from '../ports/connector-write';
 import { addConnector, changeConnectorScope, rotateCredentials } from './connector-writes';
@@ -26,12 +26,16 @@ function cryptoStub() {
 function fakeDeps(overrides?: {
   readonly approvalRecordedAt?: Date | null;
   readonly mappingCount?: number;
+  /** When set, successive countMappingEventsForProject calls return these values in order. */
+  readonly mappingCountSequence?: readonly number[];
 }) {
   const inserts: unknown[] = [];
   const scopeEvents: unknown[] = [];
   const rotates: unknown[] = [];
   const audits: unknown[] = [];
+  const mappingCountCalls: string[] = [];
   let mappingCount = overrides?.mappingCount ?? 3;
+  let mappingSeqIndex = 0;
 
   const connectorWrite = {
     projectAnchor: async () => AT,
@@ -67,7 +71,15 @@ function fakeDeps(overrides?: {
     latestScopeSeq: async () => 7,
     appendSnapshotAttempt: async () => {},
     setLastError: async () => {},
-    countMappingEventsForProject: async () => mappingCount,
+    countMappingEventsForProject: async (projectId: string) => {
+      mappingCountCalls.push(projectId);
+      if (overrides?.mappingCountSequence) {
+        const n = overrides.mappingCountSequence[mappingSeqIndex] ?? mappingCount;
+        mappingSeqIndex += 1;
+        return n;
+      }
+      return mappingCount;
+    },
     loadEncryptedCredentials: async () => null,
   };
 
@@ -89,7 +101,17 @@ function fakeDeps(overrides?: {
     },
   };
 
-  return { deps, inserts, scopeEvents, rotates, audits, setMappingCount: (n: number) => { mappingCount = n; } };
+  return {
+    deps,
+    inserts,
+    scopeEvents,
+    rotates,
+    audits,
+    mappingCountCalls,
+    setMappingCount: (n: number) => {
+      mappingCount = n;
+    },
+  };
 }
 
 describe('addConnector (story 5.2)', () => {
@@ -139,9 +161,7 @@ describe('addConnector (story 5.2)', () => {
 
 describe('rotateCredentials (story 5.2)', () => {
   it('replaces ciphertext and leaves mapping count unchanged', async () => {
-    const { deps, rotates, audits } = fakeDeps({ mappingCount: 5 });
-    const count = vi.spyOn(deps as never, 'transaction');
-    void count;
+    const { deps, rotates, audits, mappingCountCalls } = fakeDeps({ mappingCount: 5 });
     const result = await rotateCredentials(deps, CTX, {
       projectId: 'prj-1',
       connectorId: 'con-1',
@@ -149,8 +169,20 @@ describe('rotateCredentials (story 5.2)', () => {
     });
     expect(result).toEqual({ ok: true, value: undefined });
     expect(rotates).toHaveLength(1);
+    expect(mappingCountCalls).toEqual(['prj-1', 'prj-1']);
     expect(audits[0]).toMatchObject({ action: 'connector.rotate_credentials' });
     expect(JSON.stringify(audits)).not.toContain('new-key');
+  });
+
+  it('throws when mapping_event count changes during rotate', async () => {
+    const { deps } = fakeDeps({ mappingCountSequence: [5, 6] });
+    await expect(
+      rotateCredentials(deps, CTX, {
+        projectId: 'prj-1',
+        connectorId: 'con-1',
+        apiKey: 'new-key',
+      }),
+    ).rejects.toThrow(/must not change mapping_event/);
   });
 });
 

@@ -24,4 +24,17 @@ describe('credentialsAesOn (story 5.2 / AR-29)', () => {
       credentialsAesOn({ keyBase64: Buffer.alloc(16).toString('base64'), keyId: 'k' }),
     ).toThrow(/CREDENTIALS_KEY must decode to 32 bytes/);
   });
+
+  it('refuses decrypt when stored key_id does not match', () => {
+    const a = credentialsAesOn({ keyBase64: KEY, keyId: 'local-a' });
+    const b = credentialsAesOn({ keyBase64: KEY, keyId: 'local-b' });
+    const sealed = a.encrypt({ apiKey: 'secret' });
+    expect(() => b.decrypt(sealed)).toThrow(/key_id mismatch/);
+  });
+
+  it('refuses encrypt when neither apiKey nor token is a non-empty string', () => {
+    const crypto = credentialsAesOn({ keyBase64: KEY, keyId: 'k' });
+    expect(() => crypto.encrypt({})).toThrow(/non-empty apiKey or token/);
+    expect(() => crypto.encrypt({ apiKey: '  ', token: '' })).toThrow(/non-empty apiKey or token/);
+  });
 });

@@ -2,7 +2,7 @@
 title: 'Story 5.2 — Connect a Backlog space, read-only'
 type: 'feature'
 created: '2026-10-04'
-status: 'review'
+status: 'in-review'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '872e0572c05d71b2765c06ccc2726284583ef2fa'
@@ -112,6 +112,7 @@ context:
 - Seed: fixture Connectors pre-approved (`approval_name='fixture'`), initial `connector_scope_event`, snapshots carry that `scope_seq`; no ciphertext for fixture-replay.
 - Audit note: `connector.change_scope` payload omits `scope_seq` (global identity seq is not predictable in the write harness); seq still lands on `connector_scope_event` / snapshot column.
 - Verified: `pnpm lint`, `typecheck`, `depcruise`, `test` exit 0 (1195 passed / 459 skipped). DB-backed harness skipped without Postgres as before.
+- Review fixes: always-on domain approval gate; AES key_id mismatch + empty plaintext refuse; Connectors page loads without snapshot; datetime-local as UTC; i18n mail subject/body; update rowCount checks; rotate mapping-count asserts; action unit tests.
 
 ## Spec Change Log
 
