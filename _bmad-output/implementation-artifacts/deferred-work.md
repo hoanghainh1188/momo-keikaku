@@ -1308,3 +1308,8 @@ above can see where it went.
 - source_spec: `_bmad-output/implementation-artifacts/spec-5-2-connect-a-backlog-space-read-only.md`
   summary: Harden concurrent addConnector with a DB unique or lock if R0 stays one-Connector-per-Project.
   evidence: Story 5.2 review — application `connector_exists` races; UNIQUE may conflict with later multi-Connector overlap (FR-42).
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-3-a-paginated-read-is-complete-or-it-is-not-a-read.md`
+  summary: Re-run Search-budget assessment (and refresh `search_limit`) when `changeConnectorScope` points the Connector at a larger Backlog project.
+  evidence: Story 5.3 review — set-up gate covers addConnector only; a later scope change can bypass the 25% Search refuse until schedule/budget ownership lands with 5.4.
+

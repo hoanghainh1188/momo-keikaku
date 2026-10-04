@@ -111,11 +111,30 @@ context:
 
 ## Review Triage Log
 
+| Finding | Verdict | Evidence / route |
+|---------|---------|------------------|
+| ingest header claims banner+mail for incomplete | medium | **patch** — header now says incomplete only appends attempt; banner/mail remain credential-only |
+| Design Notes say optional clock / `new Date` default | low | Rejected — finding's fix edits agent Design Notes; corrected below to match required `clock` |
+| rateLimit 404 → project_not_found | medium | **patch** — only project-resolve `not_found` maps to `project_not_found` |
+| Budget formula omits incompleteness retry | false | AC/AD budget is one full read (`ceil(N/100)+2`); retry is the incompleteness path, not the set-up estimate |
+| changeConnectorScope skips Search budget | medium | **defer** — set-up gate is the 5.3 AC; scope-change re-assess belongs with schedule/budget ownership later |
+| No production caller of admitScopeRead | false | Intentional: writer is 5.5; helpers + page-shift gate are the 5.3 deliverable (same pattern as 5.2 gates) |
+| addConnectorAction hardcodes locale=en | false | Matches R0 `messageFromKey` pattern; ja catalog strings exist for when locale lands |
+| Missing action tests for 3 refusal codes | medium | **patch** — `actions.test.ts` `it.each` covers all four refused_* messages |
+| Timeout test ignores 15s default | low | **patch** — spies `AbortSignal.timeout(BACKLOG_GET_TIMEOUT_MS)` |
+| search.limit accepts NaN/negative | medium | **patch** — require positive integer |
+| Migration 0006 unverified on live Postgres | false | Environment skip; REQUIRE_DB round-trip test added and skips without DB |
+| Empty Spec Change Log while in-review | false | Process noise; no bad_spec loopback this pass |
+| hoursToMh RangeError aborts read | medium | **patch** — `nullableHours` → payloadError before `hoursToMh` |
+| Count Issues negative/non-integer | medium | **patch** — require non-negative integer |
+| search_limit never observed at repo/DB | medium | **patch** — REQUIRE_DB-gated `connector.test.ts` insert/select round-trip |
+
 ## Design Notes
 
 - **Retry ownership:** adapter retries the HTTP completeness loop once; app records the failed attempt. Keeps AD-1 (no DB in adapters) while matching AD-6's "retry once then failed attempt".
-- **Budget formula:** Search calls ≈ `ceil(N/100) + 2`; threshold `0.25 * rateLimit.search.limit`. Fixture connectors leave `search_limit` null.
-- **ObservedAt:** live reads use response time / wall clock from injected clock optional — default `new Date().toISOString()` at end of successful loop (fixture keeps recorded offsets).
+- **Budget formula:** Search calls ≈ `ceil(N/100) + 2`; threshold `0.25 * rateLimit.search.limit`. Fixture connectors leave `search_limit` null. The incompleteness retry is outside the set-up estimate (one full read).
+- **ObservedAt:** live reads take `clock.now().toISOString()` after the completeness loop (`clock` is required on `backlogHttpOn`). Fixture keeps recorded offsets.
+
 
 ## Verification
 
