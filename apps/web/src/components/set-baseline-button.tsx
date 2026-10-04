@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
-import { setBaselineAction } from '@/app/p/[projectId]/baselines/actions';
+import { SetBaselineReadyForm } from '@/components/set-baseline-ready-form';
 import { setBaselineDisabledView } from '@/lib/set-baseline-ui';
 
 export type SetBaselineControlProps = {
@@ -17,6 +17,7 @@ export type SetBaselineControlProps = {
 /**
  * Story 4.1 — *Set Baseline* control. Disabled with count + Plan exceptions-rail link when
  * not schedulable (UX-DR23). Hidden once a Baseline already exists (Re-baseline is 4.3).
+ * Ready path uses a thin client form so writeLanded refuse is not swallowed (retro F9).
  */
 export async function SetBaselineButton({
   projectId,
@@ -61,11 +62,10 @@ export async function SetBaselineButton({
   }
 
   return (
-    <form action={setBaselineAction} className="btn-row" data-testid={testId}>
-      <input type="hidden" name="projectId" value={projectId} />
-      <button type="submit" className="btn primary">
-        {t('baselines.set_baseline')}
-      </button>
-    </form>
+    <SetBaselineReadyForm
+      projectId={projectId}
+      label={t('baselines.set_baseline')}
+      testId={testId}
+    />
   );
 }

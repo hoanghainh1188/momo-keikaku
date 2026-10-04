@@ -1,8 +1,12 @@
 'use client';
 
 import Link from 'next/link';
-import { useTransition } from 'react';
-import { setBaselineAction } from '@/app/p/[projectId]/baselines/actions';
+import { useState, useTransition } from 'react';
+import {
+  setBaselineAction,
+  type BaselineWriteOutcome,
+} from '@/app/p/[projectId]/baselines/actions';
+import { planWriteRefuseMessage } from '@/lib/plan-write-refuse';
 import { setBaselineDisabledView } from '@/lib/set-baseline-ui';
 
 export type SetBaselineControlModel = {
@@ -20,9 +24,14 @@ export type SetBaselineControlModel = {
   };
 };
 
+function refuseText(outcome: Extract<BaselineWriteOutcome, { ok: false }>): string {
+  return planWriteRefuseMessage(outcome);
+}
+
 /**
- * Client *Set Baseline* control for the Plan toolbar (story 4.1). Server pages use
- * `SetBaselineButton` instead.
+ * Client *Set Baseline* control for the Plan toolbar (story 4.1 + retro F9).
+ * Review / Baselines use `SetBaselineButton` → `SetBaselineReadyForm` instead.
+ * Awaits BaselineWriteOutcome and shows an inline refuse — no silent no-op.
  */
 export function SetBaselineControl({
   model,
@@ -32,6 +41,7 @@ export function SetBaselineControl({
   readonly testId?: string;
 }) {
   const [pending, start] = useTransition();
+  const [refuse, setRefuse] = useState<string | null>(null);
   const view = setBaselineDisabledView({
     hasBaseline: model.hasBaseline,
     canSet: model.canSet,
@@ -70,20 +80,28 @@ export function SetBaselineControl({
   }
 
   return (
-    <form
-      className="btn-row"
-      style={{ marginLeft: 8 }}
-      data-testid={testId}
-      action={(fd) => {
-        start(() => {
-          void setBaselineAction(fd);
-        });
-      }}
-    >
-      <input type="hidden" name="projectId" value={model.projectId} />
-      <button type="submit" className="btn primary" disabled={pending}>
-        {model.labels.setBaseline}
-      </button>
-    </form>
+    <div className="stack" style={{ marginLeft: 8, gap: 4 }}>
+      <form
+        className="btn-row"
+        data-testid={testId}
+        action={(fd) => {
+          start(async () => {
+            setRefuse(null);
+            const outcome = await setBaselineAction(fd);
+            if (!outcome.ok) setRefuse(refuseText(outcome));
+          });
+        }}
+      >
+        <input type="hidden" name="projectId" value={model.projectId} />
+        <button type="submit" className="btn primary" disabled={pending}>
+          {model.labels.setBaseline}
+        </button>
+      </form>
+      {refuse !== null ? (
+        <p className="caption" role="alert" data-testid={`${testId}-refuse`}>
+          {refuse}
+        </p>
+      ) : null}
+    </div>
   );
 }

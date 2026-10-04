@@ -22,4 +22,13 @@ describe('planWriteRefuseMessage', () => {
       'errors.invalid_input',
     );
   });
+
+  it('maps Baseline incomplete_plan details for Set/Re refuse alerts (retro F9)', () => {
+    expect(
+      planWriteRefuseMessage({
+        messageKey: 'errors.invalid_input',
+        details: { baseline: ['incomplete_plan'] },
+      }),
+    ).toBe('baseline: incomplete_plan');
+  });
 });
