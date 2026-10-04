@@ -110,11 +110,13 @@ context:
 ## Implementation Notes
 
 - Domain `ingestSnapshot`: mid-flight OB when `scopeChangedSincePrev` + `createdAt ≤ prev.observedAt` and no prior Σ; otherwise first sighting / return uses `nowMh − priorΣ` delta. Incomplete reads never reach the writer.
+- Pure helpers `advanceLeftScopeState` + `partitionOwnedTickets` drive writer durability/overlap skip; unit-tested in `attribution.test.ts`.
 - Migration `0008_ledger_appear_move_vanish`: `ticket.left_scope` + `absent_complete_streak`; `connector_ownership_event` (append-only); `connector_overlap` (derived). Registry 41 tables; `pnpm db:sql` regenerates RLS/grants/triggers.
 - Tracker `upsertTicket` refreshes key/project only — never `owner_connector_id`. Ownership moves via `confirmOwnership` + `connector_ownership_event`.
 - Ingest writer: scope-change signal from `scope_seq`; skip ledger for non-owner overlaps; persist two-read left_scope; upsert/clear `connector_overlap`.
 - UI: Connectors + Review overlap conflict banner with Keep/Transfer; collapsed left-scope list; en/ja UX-DR23 copy.
 - Fixture `leave-and-return` extended to four pages (two absences then return).
+- `confirmConnectorOwnership` Keep/Transfer unit-tested (`connector-ownership.test.ts`).
 - Deferred: REQUIRE_DB writer matrix, batch identity upsert, `notifyRecipients`, compaction, Review Re-pin (still open / out of 5.6).
 
 ## Spec Change Log
