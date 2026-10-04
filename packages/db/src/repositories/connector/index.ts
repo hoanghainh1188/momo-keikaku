@@ -97,6 +97,7 @@ export function connectorWriteRepositoryOn(bound: Bound) {
       readonly approvalRecordedAt: Date;
       readonly approvalName: string;
       readonly credentials: EncryptedCredentialsRow;
+      readonly searchLimit: number | null;
     }): Promise<void> {
       await tx.insert(s.connector).values({
         id: input.id,
@@ -111,6 +112,7 @@ export function connectorWriteRepositoryOn(bound: Bound) {
         credentialsCiphertext: input.credentials.ciphertext,
         credentialsNonce: input.credentials.nonce,
         credentialsKeyId: input.credentials.keyId,
+        searchLimit: input.searchLimit,
       });
     },
 

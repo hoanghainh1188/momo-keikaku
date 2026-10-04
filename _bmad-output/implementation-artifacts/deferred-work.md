@@ -1287,6 +1287,7 @@ above can see where it went.
 - source_spec: `_bmad-output/implementation-artifacts/spec-5-1-one-port-to-every-tracker-and-a-fixture-that-replays-like-on.md`
   summary: Wire backlog-http auth as Backlog apiKey query (not Bearer) and add AbortSignal timeout on GET.
   evidence: Story 5.1 review — scaffold only; live read completeness and auth shape land in 5.3.
+  resolved: YES, 2026-10-04 by `spec-5-3-a-paginated-read-is-complete-or-it-is-not-a-read.md`. `backlog-http` sends the key as the `apiKey` query parameter (no Authorization header), every GET carries `AbortSignal.timeout` (15 s default, `timeoutMs` override), and errors name the API path only; `backlog-http.test.ts` asserts all three.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-5-1-one-port-to-every-tracker-and-a-fixture-that-replays-like-on.md`
   summary: FixtureCursorPort compare-and-set under the per-Project lock so concurrent readScope cannot skip or duplicate pages.
@@ -1307,3 +1308,8 @@ above can see where it went.
 - source_spec: `_bmad-output/implementation-artifacts/spec-5-2-connect-a-backlog-space-read-only.md`
   summary: Harden concurrent addConnector with a DB unique or lock if R0 stays one-Connector-per-Project.
   evidence: Story 5.2 review — application `connector_exists` races; UNIQUE may conflict with later multi-Connector overlap (FR-42).
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-3-a-paginated-read-is-complete-or-it-is-not-a-read.md`
+  summary: Re-run Search-budget assessment (and refresh `search_limit`) when `changeConnectorScope` points the Connector at a larger Backlog project.
+  evidence: Story 5.3 review — set-up gate covers addConnector only; a later scope change can bypass the 25% Search refuse until schedule/budget ownership lands with 5.4.
+

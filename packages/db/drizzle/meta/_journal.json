@@ -43,6 +43,13 @@
       "when": 1791115200000,
       "tag": "0005_connector_credentials_and_scope",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791121050568,
+      "tag": "0006_connector_search_limit",
+      "breakpoints": true
     }
   ]
 }

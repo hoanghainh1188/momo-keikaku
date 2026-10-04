@@ -39,7 +39,7 @@ export function trackerPortOn(deps: {
   readonly timeAnchorIso: string;
 }): TrackerPort {
   const fixture = fixtureReplayOn({ cursor: deps.cursor });
-  const backlog = backlogHttpOn({});
+  const backlog = backlogHttpOn({ clock: workerClock });
   return {
     async readScope(connectorConfig: TrackerConnectorConfig, credentials: TrackerCredentials) {
       const kind = config.TRACKER_ADAPTER_OVERRIDE ?? connectorConfig.adapter;

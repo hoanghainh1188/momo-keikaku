@@ -755,6 +755,15 @@ export const READ_USE_CASES: readonly ReadUseCase[] = [
               keyId: 'harness-local',
             }),
           },
+          searchBudget: {
+            assessSearchBudget: async () => ({
+              kind: 'assessed',
+              searchLimit: 150,
+              ticketCount: 40,
+              estimatedSearchCalls: 3,
+              withinBudget: true,
+            }),
+          },
         },
         contextOf(target),
         {
