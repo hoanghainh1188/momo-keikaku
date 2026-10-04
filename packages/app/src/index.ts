@@ -170,6 +170,12 @@ export type {
   SnapshotAttemptRow,
 } from './ports/connector-write';
 export type {
+  IngestWriteRepository,
+  IngestWriteScope,
+  WriteIngestSnapshotInput,
+  WriteIngestSnapshotResult,
+} from './ports/ingest-write';
+export type {
   CredentialsCryptoPort,
   CredentialsPlaintext,
   EncryptedCredentials,

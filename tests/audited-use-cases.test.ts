@@ -233,6 +233,12 @@ const FAKE_FAMILIES: {
     countMappingEventsForProject: async () => 0,
     loadEncryptedCredentials: async () => null,
   }),
+  ingestWrite: (write) => ({
+    writeIngestSnapshot: write('ingestWrite.writeIngestSnapshot', {
+      kind: 'written' as const,
+      snapshotId: 'snap-gate',
+    }),
+  }),
 };
 
 /** Drives one invocation against a fresh fake transaction. */
@@ -262,6 +268,7 @@ async function drive(invoke: InvokeWrite, sabotage: Sabotage = {}): Promise<Run>
         membership: FAKE_FAMILIES.membership(write),
         resources: FAKE_FAMILIES.resources(write),
         connectorWrite: FAKE_FAMILIES.connectorWrite(write),
+        ingestWrite: FAKE_FAMILIES.ingestWrite(write),
         bound: { tx: { marker: 'fake-tx' }, tenantId: 'ten-gate' },
         audit: {
           append: async (auditEntry) => {

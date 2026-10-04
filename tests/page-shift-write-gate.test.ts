@@ -89,6 +89,7 @@ function recordingDeps() {
       transactions += 1;
       const scope: ConnectorWriteScope = {
         connectorWrite,
+        ingestWrite: { writeIngestSnapshot: async () => ({ kind: 'written', snapshotId: 'x' }) },
         audit: {
           append: async (entry) => {
             audits.push(entry);

@@ -50,6 +50,13 @@
       "when": 1791121050568,
       "tag": "0006_connector_search_limit",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1791129600000,
+      "tag": "0007_actuals_ledger_writer",
+      "breakpoints": true
     }
   ]
 }

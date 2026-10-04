@@ -5,6 +5,7 @@ import { membershipWriterOn } from './repo-membership-write';
 import { orgRepositoryOn } from './repo-org';
 import { resourceWriteRepositoryOn } from './repo-resource';
 import { connectorWriteRepositoryOn } from './repositories/connector';
+import { ingestWriteRepositoryOn } from './repositories/ingest';
 import { projectWriteRepositoryOn } from './repo-writes';
 import { withTenant } from './with-tenant';
 
@@ -45,6 +46,7 @@ function writeScopeOn(bound: Bound) {
     resources: resourceWriteRepositoryOn(bound),
     membership: membershipWriterOn(bound),
     connectorWrite: connectorWriteRepositoryOn(bound),
+    ingestWrite: ingestWriteRepositoryOn(bound),
     audit: auditSinkOn(bound),
     bound,
   };

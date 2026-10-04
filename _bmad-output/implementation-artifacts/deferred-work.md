@@ -1317,10 +1317,12 @@ above can see where it went.
 - source_spec: `_bmad-output/implementation-artifacts/spec-5-4-snapshots-run-on-a-schedule-the-pm-can-see.md`
   summary: Compaction / retention ACs from Story 5.4 — snapshots older than 90 days compacted to one per day, Actuals Ledger never compacted, deletes only `ticket_observation` (never snapshot headers), retain observation sets referenced by Published Snapshot / ledger / open Review / unexpired export / Period first snapshot / Connector latest (FR-19, AR-10).
   evidence: Story 5.4 intentionally owns schedule, queue, pin/Refresh and budget slowdown only; compaction stays with 5.5 / maintenance path.
+  note: Re-deferred by Story 5.5 (2026-10-04) — Story 5.5 ACs do not place compaction; keep with maintenance.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-5-4-snapshots-run-on-a-schedule-the-pm-can-see.md`
   summary: Durable snapshot / Actuals Ledger write ACs from Story 5.4 — `ingestSnapshot` writer for `tracker_snapshot` / `ticket_observation` / ledger rows, FR-19 whitelist persist on write, lossless next-success diff after failure, and NFR-P1 full 2,000-Ticket read+write within 5 minutes.
   evidence: Story 5.4 pre-writer job body stops at `read_complete_writer_pending` after `admitScopeRead`; durable write and NFR-P1 write proof belong to 5.5.
+  resolved: YES, 2026-10-04 in `spec-5-5-one-writer-builds-the-actuals-ledger.md`. `writeIngestSnapshot` under Project `lockWatermark` is the sole insert path for snapshot/observation/ledger; `runIngestSnapshotJob` calls it after admit; NFR-P1 derive always-on + REQUIRE_DB write harness.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-5-4-snapshots-run-on-a-schedule-the-pm-can-see.md`
   summary: Durable Review Re-pin that retargets the Review's pinned tracker snapshot (banner today only offers Re-pin + router.refresh).
@@ -1329,3 +1331,15 @@ above can see where it went.
 - source_spec: `_bmad-output/implementation-artifacts/spec-5-4-snapshots-run-on-a-schedule-the-pm-can-see.md`
   summary: REQUIRE_DB probes for worker createQueue/send/schedule options, repository searchLimit/listAttempts/latestSnapshot helpers, and paced-enqueue race if the Connector vanishes after enqueue.
   evidence: Story 5.4 review verification-gap — unit/mocks cover schedule logic; live pg-boss and repo boundary asserts need Postgres CI.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-5-one-writer-builds-the-actuals-ledger.md`
+  summary: REQUIRE_DB writer matrix for idempotent replay, hours_cleared persistence, prev_snapshot_id on second snapshot, and Mapping Rules re-eval append.
+  evidence: Story 5.5 review — domain/app unit coverage exists; live repo boundary cases need Postgres CI (NFR harness only covers first-write counts).
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-5-one-writer-builds-the-actuals-ledger.md`
+  summary: Batch ticket/tracker_account upserts inside writeIngestSnapshot to reduce NFR-P1 lock hold time on 2,000-Ticket ingest.
+  evidence: Story 5.5 review — observations/ledger are chunked at 500; identity upserts remain one-by-one awaits under the Project lock.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-5-one-writer-builds-the-actuals-ledger.md`
+  summary: Wire worker `notifyRecipients` (and credential/operator mail) to real Project ops emails instead of relying on the optional empty default.
+  evidence: Story 5.5 review — operator alerts now always write attempt rows; mail still needs recipients. Pre-existing for credential_failed on the worker path too.

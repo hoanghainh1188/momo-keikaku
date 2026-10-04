@@ -284,13 +284,25 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
     currentlyMapped: mappingEvents.filter((m) => m.source === 'rule' && m.wpId === r.wpId).length,
   }));
 
+  const [settingHead] = await tx
+    .select({
+      tzOffsetMinutes: s.projectSettingEvent.tzOffsetMinutes,
+      teireiWeekday: s.projectSettingEvent.teireiWeekday,
+    })
+    .from(s.projectSettingEvent)
+    .where(eq(s.projectSettingEvent.projectId, projectId))
+    .orderBy(desc(s.projectSettingEvent.seq))
+    .limit(1);
+  const tzOffsetMinutes = settingHead?.tzOffsetMinutes ?? p.tzOffsetMinutes;
+  const teireiWeekday = settingHead?.teireiWeekday ?? p.teireiWeekday;
+
   const project: ProjectConfig = {
     id: p.id,
     name: p.name,
     clientName: p.clientName,
     contractType: p.contractType as ProjectConfig['contractType'],
-    tzOffsetMinutes: p.tzOffsetMinutes,
-    teireiWeekday: p.teireiWeekday,
+    tzOffsetMinutes,
+    teireiWeekday,
     defaultRateYenPerHour: BigInt(p.defaultRateJpy),
     eacMethod: 'typical',
     thresholds: DEFAULT_THRESHOLDS,
@@ -298,7 +310,7 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
 
   const anchor = anchorIsoEarly;
   const calendar = buildCalendar('jp-vn-2026', { jp: p.calendarJp, vn: p.calendarVn });
-  const period = periodOf(anchor, p.tzOffsetMinutes, p.teireiWeekday);
+  const period = periodOf(anchor, tzOffsetMinutes, teireiWeekday);
 
   const input: ReviewInput = {
     project,
@@ -311,7 +323,7 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
     pinnedSnapshot,
     resources,
     period,
-    asOf: projectDate(anchor, p.tzOffsetMinutes),
+    asOf: projectDate(anchor, tzOffsetMinutes),
     dispositions,
   };
 

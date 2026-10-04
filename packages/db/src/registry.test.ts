@@ -71,7 +71,7 @@ describe('the table-class registry is the single source', () => {
     expect(new Set(TRUNCATE_ORDER).size, 'a table is truncated twice').toBe(TRUNCATE_ORDER.length);
   });
 
-  it('holds the 38 tables of this release, 31 of them tenant-owned', () => {
+  it('holds the 39 tables of this release, 32 of them tenant-owned', () => {
     // Pinned as numbers as well as names: a future change that removes a table and adds
     // another keeps the name lists agreeing with `schema.ts` while silently changing what
     // this story was reasoned about. Story 1.4 slice 1: `app_user` out; the four Better Auth
@@ -81,8 +81,9 @@ describe('the table-class registry is the single source', () => {
     // `pct_override_event` and Custom Field definition/value. Story 2.12 adds `calendar_day_event`.
     // Story 5.1 adds `ticket`, `tracker_account`, `fixture_cursor` (all tenant-owned).
     // Story 5.2 adds `connector_scope_event`, `tracker_snapshot_attempt` (tenant-owned, append-only).
-    expect(TABLE_REGISTRY).toHaveLength(38);
-    expect(TENANT_OWNED).toHaveLength(31);
+    // Story 5.5 adds `project_setting_event` (tenant-owned, append-only).
+    expect(TABLE_REGISTRY).toHaveLength(39);
+    expect(TENANT_OWNED).toHaveLength(32);
     expect(TABLE_REGISTRY.filter((e) => e.tenantColumn === null).map((e) => e.table)).toEqual([
       'tenant',
       'auth_user',
@@ -105,7 +106,7 @@ describe('the table-class registry is the single source', () => {
     expect(TENANT_BRIDGES[0]!.tenantColumn).toBeNull();
   });
 
-  it('classes the seventeen insert-only tables append-only', () => {
+  it('classes the eighteen insert-only tables append-only', () => {
     expect(APPEND_ONLY.map((e) => e.table).sort()).toEqual(
       [
         'actuals_ledger_entry',
@@ -119,6 +120,7 @@ describe('the table-class registry is the single source', () => {
         'mapping_event',
         'pct_override_event',
         'project_default_rate_entry',
+        'project_setting_event',
         'rate_entry',
         'schedule_run',
         'ticket_observation',

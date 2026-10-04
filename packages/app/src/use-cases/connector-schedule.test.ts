@@ -215,6 +215,7 @@ describe('requestSnapshotRefresh / pin / attempts (story 5.4)', () => {
       transaction: async (_h, _t, work) => {
         const scope: ConnectorWriteScope = {
           connectorWrite,
+          ingestWrite: { writeIngestSnapshot: async () => ({ kind: 'written', snapshotId: 'x' }) },
           audit: { append: async () => {} },
         };
         return work(scope);

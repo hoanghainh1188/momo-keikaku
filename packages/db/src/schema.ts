@@ -66,6 +66,7 @@ export const FK_MATCH_SIMPLE: readonly string[] = [
   'work_package_parent_fk',
   'schedule_run_prev_run_fk',
   'actuals_ledger_entry_baseline_version_fk',
+  'actuals_ledger_entry_prev_snapshot_fk',
   'mapping_event_work_package_fk',
   'mapping_event_mapping_rule_fk',
   'disposition_event_work_package_fk',
@@ -292,6 +293,32 @@ export const project = pgTable(
       name: 'project_program_fk',
       columns: [t.tenantId, t.programId],
       foreignColumns: [program.tenantId, program.id],
+    }),
+  }),
+);
+
+/**
+ * Story 5.5 / FR-25 / AR-18: tz and teirei weekday history for Reporting Period placement.
+ * Ingest seeds a head from `project` columns when missing; later settings stories append.
+ */
+export const projectSettingEvent = pgTable(
+  'project_setting_event',
+  {
+    seq: bigint('seq', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+    tenantId: text('tenant_id').notNull(),
+    projectId: text('project_id').notNull(),
+    tzOffsetMinutes: integer('tz_offset_minutes').notNull(),
+    teireiWeekday: integer('teirei_weekday').notNull(),
+    actor: text('actor').notNull(),
+    at: timestamp('at', { withTimezone: true }).notNull(),
+  },
+  (t) => ({
+    tenantKey: unique('project_setting_event_tenant_seq_key').on(t.tenantId, t.seq),
+    byProject: index('project_setting_event_project_idx').on(t.tenantId, t.projectId, t.seq),
+    project: foreignKey({
+      name: 'project_setting_event_project_fk',
+      columns: [t.tenantId, t.projectId],
+      foreignColumns: [project.tenantId, project.id],
     }),
   }),
 );
@@ -1025,6 +1052,12 @@ export const trackerSnapshot = pgTable(
   },
   (t) => ({
     tenantKey: unique('tracker_snapshot_tenant_id_key').on(t.tenantId, t.id),
+    /** AR-15: ingest is idempotent on (connector_id, observedAt). */
+    connectorObservedAt: unique('tracker_snapshot_connector_observed_at_key').on(
+      t.tenantId,
+      t.connectorId,
+      t.observedAt,
+    ),
     connector: foreignKey({
       name: 'tracker_snapshot_connector_fk',
       columns: [t.tenantId, t.connectorId],
@@ -1057,6 +1090,8 @@ export const ticketObservation = pgTable(
     /** AD-6 attributes whitelist: `{ kind, id, label? }[]`. */
     attributes: jsonb('attributes').notNull().default([]),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+    /** AR-15: value→null on actualMh; no negative ledger entry. */
+    hoursCleared: boolean('hours_cleared').notNull().default(false),
   },
   (t) => ({
     bySnapshot: index('obs_snapshot_idx').on(t.snapshotId),
@@ -1083,6 +1118,8 @@ export const actualsLedgerEntry = pgTable(
     assigneeAccountId: text('assignee_account_id'),
     activeBaselineVersionSeq: bigint('active_baseline_version_seq', { mode: 'number' }),
     snapshotId: text('snapshot_id').notNull(),
+    /** Earlier snapshot of the window; null on Opening Balance / first sighting. */
+    prevSnapshotId: text('prev_snapshot_id'),
   },
   (t) => ({
     byTicket: index('ledger_ticket_idx').on(t.ticketId),
@@ -1094,6 +1131,11 @@ export const actualsLedgerEntry = pgTable(
     snapshot: foreignKey({
       name: 'actuals_ledger_entry_tracker_snapshot_fk',
       columns: [t.tenantId, t.snapshotId],
+      foreignColumns: [trackerSnapshot.tenantId, trackerSnapshot.id],
+    }),
+    prevSnapshot: foreignKey({
+      name: 'actuals_ledger_entry_prev_snapshot_fk',
+      columns: [t.tenantId, t.prevSnapshotId],
       foreignColumns: [trackerSnapshot.tenantId, trackerSnapshot.id],
     }),
     baseline: foreignKey({
@@ -1213,6 +1255,7 @@ export const schemaTables = {
   verification,
   identityEvent,
   project,
+  projectSettingEvent,
   resource,
   rateEntry,
   projectDefaultRateEntry,

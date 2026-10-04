@@ -40,6 +40,10 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON public."program" TO "momo_app";
 -- project (mutable-audited)
 GRANT SELECT, INSERT, UPDATE, DELETE ON public."project" TO "momo_app";
 
+-- project_setting_event (append-only)
+GRANT SELECT, INSERT ON public."project_setting_event" TO "momo_app";
+GRANT SELECT, UPDATE, DELETE ON public."project_setting_event" TO "momo_maintenance";
+
 -- resource (mutable-audited)
 GRANT SELECT, INSERT, UPDATE, DELETE ON public."resource" TO "momo_app";
 
