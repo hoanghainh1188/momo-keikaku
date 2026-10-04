@@ -1287,6 +1287,7 @@ above can see where it went.
 - source_spec: `_bmad-output/implementation-artifacts/spec-5-1-one-port-to-every-tracker-and-a-fixture-that-replays-like-on.md`
   summary: Wire backlog-http auth as Backlog apiKey query (not Bearer) and add AbortSignal timeout on GET.
   evidence: Story 5.1 review — scaffold only; live read completeness and auth shape land in 5.3.
+  resolved: YES, 2026-10-04 by `spec-5-3-a-paginated-read-is-complete-or-it-is-not-a-read.md`. `backlog-http` sends the key as the `apiKey` query parameter (no Authorization header), every GET carries `AbortSignal.timeout` (15 s default, `timeoutMs` override), and errors name the API path only; `backlog-http.test.ts` asserts all three.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-5-1-one-port-to-every-tracker-and-a-fixture-that-replays-like-on.md`
   summary: FixtureCursorPort compare-and-set under the per-Project lock so concurrent readScope cannot skip or duplicate pages.
