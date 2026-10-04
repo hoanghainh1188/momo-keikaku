@@ -1,0 +1,54 @@
+{
+ "scenario": "leave-and-return",
+ "page": 3,
+ "observedAtOffsetHours": 0,
+ "recordedObservedAt": "2026-09-16T09:00:00.000Z",
+ "hoursFieldPresent": true,
+ "complete": true,
+ "tickets": [
+  {
+   "trackerIssueId": "bk-lr-keep",
+   "key": "LR-KEEP",
+   "title": "Synthetic scenario ticket",
+   "statusId": "Open",
+   "estimateMh": 8000,
+   "actualMh": 1300,
+   "assigneeAccountId": "bk-1001",
+   "createdAt": "2026-06-01T01:00:00.000Z",
+   "parentIssueId": null,
+   "issueTypeId": "Task",
+   "trackerProjectId": "SYN",
+   "attributes": [
+    {
+     "kind": "category",
+     "id": "Development"
+    }
+   ]
+  },
+  {
+   "trackerIssueId": "bk-lr-gone",
+   "key": "LR-GONE",
+   "title": "Returned ticket",
+   "statusId": "Open",
+   "estimateMh": 8000,
+   "actualMh": 2100,
+   "assigneeAccountId": "bk-1001",
+   "createdAt": "2026-06-01T01:00:00.000Z",
+   "parentIssueId": null,
+   "issueTypeId": "Task",
+   "trackerProjectId": "SYN",
+   "attributes": [
+    {
+     "kind": "category",
+     "id": "Development"
+    }
+   ]
+  }
+ ],
+ "accounts": [
+  {
+   "accountId": "bk-1001",
+   "displayName": "Nguyen Thi Linh"
+  }
+ ]
+}

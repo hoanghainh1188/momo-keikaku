@@ -71,7 +71,7 @@ describe('the table-class registry is the single source', () => {
     expect(new Set(TRUNCATE_ORDER).size, 'a table is truncated twice').toBe(TRUNCATE_ORDER.length);
   });
 
-  it('holds the 33 tables of this release, 26 of them tenant-owned', () => {
+  it('holds the 36 tables of this release, 29 of them tenant-owned', () => {
     // Pinned as numbers as well as names: a future change that removes a table and adds
     // another keeps the name lists agreeing with `schema.ts` while silently changing what
     // this story was reasoned about. Story 1.4 slice 1: `app_user` out; the four Better Auth
@@ -79,8 +79,9 @@ describe('the table-class registry is the single source', () => {
     // also `global`. Story 1.6 adds `project_default_rate_entry` (tenant-owned, append-only).
     // Story 2.1 (AD-30) adds the five scheduling tables, all tenant-owned. Story 2.10 adds
     // `pct_override_event` and Custom Field definition/value. Story 2.12 adds `calendar_day_event`.
-    expect(TABLE_REGISTRY).toHaveLength(33);
-    expect(TENANT_OWNED).toHaveLength(26);
+    // Story 5.1 adds `ticket`, `tracker_account`, `fixture_cursor` (all tenant-owned).
+    expect(TABLE_REGISTRY).toHaveLength(36);
+    expect(TENANT_OWNED).toHaveLength(29);
     expect(TABLE_REGISTRY.filter((e) => e.tenantColumn === null).map((e) => e.table)).toEqual([
       'tenant',
       'auth_user',

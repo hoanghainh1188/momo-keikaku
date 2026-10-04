@@ -1,0 +1,54 @@
+{
+ "scenario": "no-hours",
+ "page": 1,
+ "observedAtOffsetHours": -24,
+ "recordedObservedAt": "2026-09-15T09:00:00.000Z",
+ "hoursFieldPresent": false,
+ "complete": true,
+ "tickets": [
+  {
+   "trackerIssueId": "bk-nh-1",
+   "key": "NH-1",
+   "title": "Synthetic scenario ticket",
+   "statusId": "Open",
+   "estimateMh": null,
+   "actualMh": null,
+   "assigneeAccountId": "bk-1001",
+   "createdAt": "2026-06-01T01:00:00.000Z",
+   "parentIssueId": null,
+   "issueTypeId": "Task",
+   "trackerProjectId": "SYN",
+   "attributes": [
+    {
+     "kind": "category",
+     "id": "Development"
+    }
+   ]
+  },
+  {
+   "trackerIssueId": "bk-nh-2",
+   "key": "NH-2",
+   "title": "Synthetic scenario ticket",
+   "statusId": "Closed",
+   "estimateMh": null,
+   "actualMh": null,
+   "assigneeAccountId": "bk-1001",
+   "createdAt": "2026-06-01T01:00:00.000Z",
+   "parentIssueId": null,
+   "issueTypeId": "Task",
+   "trackerProjectId": "SYN",
+   "attributes": [
+    {
+     "kind": "category",
+     "id": "Development"
+    }
+   ]
+  }
+ ],
+ "accounts": [
+  {
+   "accountId": "bk-1001",
+   "displayName": "Nguyen Thi Linh"
+  }
+ ]
+}

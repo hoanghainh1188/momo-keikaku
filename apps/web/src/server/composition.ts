@@ -95,8 +95,12 @@ import {
   type IdentityPort,
   type IdentityUser,
   type ListAuditLogInput,
+  type FixtureCursorPort,
   type MailerPort,
   type MapTicketInput,
+  type TrackerConnectorConfig,
+  type TrackerCredentials,
+  type TrackerPort,
   type MapTicketsInput,
   type MembershipReader,
   type OrgReadDeps,
@@ -144,7 +148,14 @@ import {
   compareBaselineVersions,
 } from '@momo/app';
 import { buildResetPasswordMail } from '@momo/i18n';
-import { mailerConsoleOn, productClockOn, systemClock, uuidV7IdsOn } from '@momo/adapters';
+import {
+  backlogHttpOn,
+  fixtureReplayOn,
+  mailerConsoleOn,
+  productClockOn,
+  systemClock,
+  uuidV7IdsOn,
+} from '@momo/adapters';
 import {
   getDb,
   identityEventWriterOn,
@@ -193,6 +204,44 @@ function webClock() {
     mode: config.CLOCK_MODE,
     fixtureTimeAnchor: config.FIXTURE_TIME_ANCHOR,
   }));
+}
+
+/**
+ * AD-6 TrackerPort selection (story 5.1). Honours `TRACKER_ADAPTER_OVERRIDE=fixture`
+ * (already refused outside `DEPLOYMENT=local` in config) and otherwise the Connector's
+ * declared adapter. Fixture-replay needs a `FixtureCursorPort` + time anchor; backlog-http
+ * is the GET-only scaffold until 5.3.
+ */
+export function trackerPortOn(deps: {
+  readonly cursor: FixtureCursorPort;
+  readonly timeAnchorIso: string;
+}): TrackerPort {
+  const fixture = fixtureReplayOn({ cursor: deps.cursor });
+  const backlog = backlogHttpOn({});
+  return {
+    async readScope(connectorConfig: TrackerConnectorConfig, credentials: TrackerCredentials) {
+      const kind = config.TRACKER_ADAPTER_OVERRIDE ?? connectorConfig.adapter;
+      if (kind === 'fixture') {
+        return fixture.readScope(
+          {
+            connectorId: connectorConfig.connectorId,
+            site: connectorConfig.site,
+            scenario: connectorConfig.scenario ?? connectorConfig.site,
+            timeAnchorIso: deps.timeAnchorIso,
+          },
+          credentials,
+        );
+      }
+      return backlog.readScope(
+        {
+          connectorId: connectorConfig.connectorId,
+          site: connectorConfig.site,
+          scope: connectorConfig.scope,
+        },
+        { apiKey: credentials.apiKey ?? '' },
+      );
+    },
+  } satisfies TrackerPort;
 }
 
 // --- identity: the auth instance and the request context (story 1.4 slice 1) ----------------

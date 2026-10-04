@@ -97,6 +97,15 @@ GRANT SELECT, UPDATE, DELETE ON public."baseline_wp" TO "momo_maintenance";
 -- connector (mutable-audited)
 GRANT SELECT, INSERT, UPDATE, DELETE ON public."connector" TO "momo_app";
 
+-- ticket (derived)
+GRANT SELECT, INSERT, UPDATE, DELETE ON public."ticket" TO "momo_app";
+
+-- tracker_account (mutable-audited)
+GRANT SELECT, INSERT, UPDATE, DELETE ON public."tracker_account" TO "momo_app";
+
+-- fixture_cursor (operational)
+GRANT SELECT, INSERT, UPDATE, DELETE ON public."fixture_cursor" TO "momo_app";
+
 -- tracker_snapshot (append-only)
 GRANT SELECT, INSERT ON public."tracker_snapshot" TO "momo_app";
 GRANT SELECT, UPDATE, DELETE ON public."tracker_snapshot" TO "momo_maintenance";

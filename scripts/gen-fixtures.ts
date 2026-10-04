@@ -456,21 +456,40 @@ for (let i = 0; i < SNAPSHOT_COUNT; i += 1) {
       const spanMs = Math.max(day, d(t.workFinish) - d(t.workStart));
       const frac = Math.max(0, Math.min(1, (d(asOf) - d(t.workStart)) / spanMs));
       const actual = Math.round(t.finalActualMh * frac);
+      const attributes = [
+        ...t.categoryIds.map((id) => ({ kind: 'category' as const, id })),
+        ...t.milestoneIds.map((id) => ({ kind: 'milestone' as const, id })),
+      ];
       return {
         trackerIssueId: t.trackerIssueId,
         key: t.key,
         title: t.title,
         statusId: frac >= 1 ? 'Closed' : frac > 0.05 ? 'In Progress' : 'Open',
-        resolved: frac >= 1,
         estimateMh: t.estimateMh,
         actualMh: actual,
         assigneeAccountId: t.assigneeAccountId,
         issueTypeId: t.issueTypeId,
-        categoryIds: t.categoryIds,
-        milestoneIds: t.milestoneIds,
+        parentIssueId: null,
+        trackerProjectId: 'EC2',
+        attributes,
         createdAt: `${t.workStart}T01:00:00.000Z`,
       };
     });
+  const accounts = (() => {
+    const seen = new Map<string, { accountId: string; displayName: string }>();
+    for (const t of out) {
+      if (!t.assigneeAccountId || seen.has(t.assigneeAccountId)) continue;
+      const res = RESOURCES.find((r) => r.accountId === t.assigneeAccountId);
+      seen.set(t.assigneeAccountId, {
+        accountId: t.assigneeAccountId,
+        displayName: res?.name ?? t.assigneeAccountId,
+      });
+    }
+    if (!seen.has(UNLINKED_ACCOUNT)) {
+      // Keep the unlinked account discoverable when any ticket names it.
+    }
+    return [...seen.values()].sort((a, b) => a.accountId.localeCompare(b.accountId));
+  })();
   writeFileSync(
     join(ROOT, `fixtures/backlog/ec-phase2/000${i + 1}.json`),
     `${JSON.stringify(
@@ -480,7 +499,9 @@ for (let i = 0; i < SNAPSHOT_COUNT; i += 1) {
         observedAtOffsetHours: snapshotOffsets[i],
         recordedObservedAt: `${asOf}T09:00:00.000Z`,
         hoursFieldPresent: true,
+        complete: true,
         tickets: out,
+        accounts,
       },
       null,
       1,

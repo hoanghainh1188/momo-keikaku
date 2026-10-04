@@ -16,7 +16,8 @@
     "depcruise": "depcruise apps packages --config .dependency-cruiser.cjs",
     "db:migrate": "tsx --env-file-if-exists=.env.local scripts/db-migrate.ts",
     "db:policies": "tsx --env-file-if-exists=.env.local scripts/db-policies.ts",
-    "db:sql": "tsx scripts/db-policies.ts --write"
+    "db:sql": "tsx scripts/db-policies.ts --write",
+    "fixtures:check-whitelist": "tsx scripts/check-fixture-whitelist.ts"
   },
   "devDependencies": {
     "@types/node": "^24.13.6",

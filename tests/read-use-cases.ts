@@ -248,8 +248,7 @@ export function projectBundleLabels(state: DemoState): string[] {
         t.title,
         t.statusId,
         t.issueTypeId,
-        ...t.categoryIds,
-        ...t.milestoneIds,
+        ...t.attributes.map((a) => a.id),
         ...(t.assigneeAccountId === null ? [] : [t.assigneeAccountId]),
       ]),
       ...state.ledger.flatMap((e) => [

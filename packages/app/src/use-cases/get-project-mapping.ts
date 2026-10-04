@@ -85,7 +85,7 @@ export function toProjectMapping({ bundle, review }: ProjectReview): ProjectMapp
         trackerIssueId: t.trackerIssueId,
         key: t.key,
         title: t.title,
-        categoryIds: t.categoryIds,
+        categoryIds: t.attributes.filter((a) => a.kind === 'category').map((a) => a.id),
         statusId: t.statusId,
         mh: review.attribution.hoursByTicket.get(t.trackerIssueId) ?? 0n,
         wpId,

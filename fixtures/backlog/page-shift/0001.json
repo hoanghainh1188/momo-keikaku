@@ -1,0 +1,54 @@
+{
+ "scenario": "page-shift",
+ "page": 1,
+ "observedAtOffsetHours": -2,
+ "recordedObservedAt": "2026-09-16T07:00:00.000Z",
+ "hoursFieldPresent": true,
+ "complete": false,
+ "tickets": [
+  {
+   "trackerIssueId": "bk-ps-1",
+   "key": "PS-1",
+   "title": "Page-shift ticket v1",
+   "statusId": "Open",
+   "estimateMh": 8000,
+   "actualMh": 1000,
+   "assigneeAccountId": "bk-1001",
+   "createdAt": "2026-06-01T01:00:00.000Z",
+   "parentIssueId": null,
+   "issueTypeId": "Task",
+   "trackerProjectId": "SYN",
+   "attributes": [
+    {
+     "kind": "category",
+     "id": "Development"
+    }
+   ]
+  },
+  {
+   "trackerIssueId": "bk-ps-2",
+   "key": "PS-2",
+   "title": "Synthetic scenario ticket",
+   "statusId": "Open",
+   "estimateMh": 8000,
+   "actualMh": 2000,
+   "assigneeAccountId": "bk-1001",
+   "createdAt": "2026-06-01T01:00:00.000Z",
+   "parentIssueId": null,
+   "issueTypeId": "Task",
+   "trackerProjectId": "SYN",
+   "attributes": [
+    {
+     "kind": "category",
+     "id": "Development"
+    }
+   ]
+  }
+ ],
+ "accounts": [
+  {
+   "accountId": "bk-1001",
+   "displayName": "Nguyen Thi Linh"
+  }
+ ]
+}

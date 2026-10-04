@@ -836,6 +836,88 @@ export const connector = pgTable(
   }),
 );
 
+/**
+ * AD-6 Ticket identity (story 5.1). `UNIQUE (tenant_id, tracker_kind, tracker_site,
+ * tracker_issue_id)` and exactly one `owner_connector_id`. Derived — rebuilt from snapshots.
+ */
+export const ticket = pgTable(
+  'ticket',
+  {
+    id: text('id').primaryKey(),
+    tenantId: text('tenant_id').notNull(),
+    trackerKind: text('tracker_kind').notNull(), // fixture | backlog
+    trackerSite: text('tracker_site').notNull(),
+    trackerIssueId: text('tracker_issue_id').notNull(),
+    ownerConnectorId: text('owner_connector_id').notNull(),
+    projectId: text('project_id').notNull(),
+    key: text('key').notNull(),
+  },
+  (t) => ({
+    identity: unique('ticket_tracker_identity_key').on(
+      t.tenantId,
+      t.trackerKind,
+      t.trackerSite,
+      t.trackerIssueId,
+    ),
+    tenantKey: unique('ticket_tenant_id_key').on(t.tenantId, t.id),
+    owner: foreignKey({
+      name: 'ticket_owner_connector_fk',
+      columns: [t.tenantId, t.ownerConnectorId],
+      foreignColumns: [connector.tenantId, connector.id],
+    }),
+    project: foreignKey({
+      name: 'ticket_project_fk',
+      columns: [t.tenantId, t.projectId],
+      foreignColumns: [project.tenantId, project.id],
+    }),
+  }),
+);
+
+/**
+ * AD-6 Tracker Account identity (story 5.1). Upserted only from `TrackerAccountObservation`.
+ */
+export const trackerAccount = pgTable(
+  'tracker_account',
+  {
+    id: text('id').primaryKey(),
+    tenantId: text('tenant_id').notNull(),
+    trackerKind: text('tracker_kind').notNull(),
+    trackerSite: text('tracker_site').notNull(),
+    accountId: text('account_id').notNull(),
+    displayName: text('display_name').notNull(),
+    email: text('email'),
+  },
+  (t) => ({
+    identity: unique('tracker_account_identity_key').on(
+      t.tenantId,
+      t.trackerKind,
+      t.trackerSite,
+      t.accountId,
+    ),
+    tenantKey: unique('tracker_account_tenant_id_key').on(t.tenantId, t.id),
+  }),
+);
+
+/**
+ * AD-6 / AD-17 fixture-replay page cursor (story 5.1). Behind `FixtureCursorPort` only.
+ */
+export const fixtureCursor = pgTable(
+  'fixture_cursor',
+  {
+    tenantId: text('tenant_id').notNull(),
+    connectorId: text('connector_id').notNull(),
+    nextPageIndex: integer('next_page_index').notNull().default(0),
+  },
+  (t) => ({
+    pk: primaryKey({ name: 'fixture_cursor_pk', columns: [t.tenantId, t.connectorId] }),
+    connector: foreignKey({
+      name: 'fixture_cursor_connector_fk',
+      columns: [t.tenantId, t.connectorId],
+      foreignColumns: [connector.tenantId, connector.id],
+    }),
+  }),
+);
+
 export const trackerSnapshot = pgTable(
   'tracker_snapshot',
   {
@@ -846,6 +928,8 @@ export const trackerSnapshot = pgTable(
     observedAt: timestamp('observed_at', { withTimezone: true }).notNull(),
     measurementBasis: text('measurement_basis').notNull(),
     ticketCount: integer('ticket_count').notNull(),
+    /** AD-6: adapter kind in effect for this snapshot; ingest refuses a mismatch. */
+    adapterKind: text('adapter_kind').notNull().default('fixture'),
   },
   (t) => ({
     tenantKey: unique('tracker_snapshot_tenant_id_key').on(t.tenantId, t.id),
@@ -867,13 +951,14 @@ export const ticketObservation = pgTable(
     key: text('key').notNull(),
     title: text('title').notNull(),
     statusId: text('status_id').notNull(),
-    resolved: boolean('resolved').notNull(),
     estimateMh: bigint('estimate_mh', { mode: 'bigint' }),
     actualMh: bigint('actual_mh', { mode: 'bigint' }),
     assigneeAccountId: text('assignee_account_id'),
     issueTypeId: text('issue_type_id').notNull(),
-    categoryIds: text('category_ids').array().notNull(),
-    milestoneIds: text('milestone_ids').array().notNull(),
+    parentIssueId: text('parent_issue_id'),
+    trackerProjectId: text('tracker_project_id'),
+    /** AD-6 attributes whitelist: `{ kind, id, label? }[]`. */
+    attributes: jsonb('attributes').notNull().default([]),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
   },
   (t) => ({
@@ -1047,6 +1132,9 @@ export const schemaTables = {
   baselineVersion,
   baselineWp,
   connector,
+  ticket,
+  trackerAccount,
+  fixtureCursor,
   trackerSnapshot,
   ticketObservation,
   actualsLedgerEntry,

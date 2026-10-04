@@ -366,6 +366,11 @@ jobs:
         if: always()
         run: pnpm depcruise
 
+      # AD-24 / AR-41 (story 5.1): committed Backlog fixtures stay on the FR-19 whitelist.
+      - name: Fixture whitelist (FR-19)
+        if: always()
+        run: pnpm fixtures:check-whitelist
+
       # The round-trip tests need something to read. `db:migrate` applies the migrations in
       # packages/db/drizzle through `drizzle-kit migrate` (AD-19) — story 2.1's AD-30 migration
       # (0000) and the watermark slice's identity `seq` (0001). 0000's hand-written MATCH FULL /
