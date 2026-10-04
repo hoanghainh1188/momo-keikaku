@@ -2,13 +2,15 @@
  * Story 4.5 — Baseline compare Plan-grid columns: happy Δ after plan edit, no-Baseline
  * disable contract, Divergence pin sources, summary N/A, role reach unchanged.
  */
+import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { and, eq } from 'drizzle-orm';
 import {
   divergenceFromPinned,
   parseStoredInputs,
   parseStoredOutputs,
 } from '@momo/domain';
+import { loadActiveBaselineForGrid } from '../../packages/app/src/baseline/active-baseline-for-grid';
+import { reBaseline } from '../../packages/app/src/baseline/re-baseline';
 import { setBaseline } from '../../packages/app/src/baseline/set-baseline';
 import { getPlanGridState } from '../../packages/app/src/schedule/plan-grid';
 import { applyPlanChange } from '../../packages/app/src/schedule/apply-plan-change';
@@ -19,7 +21,6 @@ import {
 } from '../../packages/db/src/probe-tenants';
 import { baselineRepositoryOn } from '../../packages/db/src/repositories/baseline';
 import { scheduleRepositoryOn } from '../../packages/db/src/repositories/schedule';
-import * as s from '../../packages/db/src/schema';
 import { inTenantTransaction } from '../../packages/db/src/tenant-transaction';
 import { withTenant } from '../../packages/db/src/with-tenant';
 import {
@@ -45,14 +46,12 @@ assertProbeTenantsDisjoint([PROBE]);
 await installFenceAfterAll({ reachable, ownerUrl: OWNER_DATABASE_URL, probe: PROBE });
 
 const ctx = () => pmCtx(PROBE, { userId: 'user-s45' });
+/** Globally unique ids — `baseline_wp.id` is a global PK across Set + Re-baseline appends. */
 const deps = () => ({
   handle: getDb(APP_DATABASE_URL!),
   transaction: inTenantTransaction,
   ids: {
-    next: (() => {
-      let n = 0;
-      return () => `bl-s45-${++n}`;
-    })(),
+    next: () => `bl-s45-${randomUUID()}`,
   },
 });
 
@@ -181,5 +180,54 @@ describe.skipIf(!reachable)('Baseline compare Plan grid (story 4.5)', () => {
     expect(grid.ok).toBe(false);
     if (grid.ok) return;
     expect(grid.error.code).toBe('not_found');
+  });
+
+  /**
+   * Epic 4 retro F10 — one-head proof (deterministic).
+   * After Set → schedule → Re-baseline there are two versions. The grid loader must return
+   * versionSeq / pin / wps for one seq only (by-seq loads), so mixed-head tear from three
+   * independent max-seq reads is closed without holding the Project write lock.
+   */
+  it('F10: loadActiveBaselineForGrid returns one consistent head after Re-baseline', async () => {
+    const owner = getDb(OWNER_DATABASE_URL!);
+    const leaf = await prepareSchedulableLeaf(owner, PROBE);
+    await makeAllLeavesSchedulable(owner, PROBE);
+    await scheduleLeaf(deps(), ctx(), PROBE.projectId, leaf.id, 4);
+    const set = await setBaseline(deps(), ctx(), { projectId: PROBE.projectId });
+    expect(set.ok).toBe(true);
+
+    await scheduleLeaf(deps(), ctx(), PROBE.projectId, leaf.id, 7);
+    const re = await reBaseline(deps(), ctx(), {
+      projectId: PROBE.projectId,
+      reason: 'F10 one-head fence after second schedule',
+    });
+    expect(re.ok).toBe(true);
+    if (!re.ok) return;
+    expect(re.value.baselineVersionSeq).toBeGreaterThan(1);
+
+    await withTenant(getDb(APP_DATABASE_URL!), PROBE.tenantId, async (tx) => {
+      const bound = { tx, tenantId: PROBE.tenantId };
+      const baseline = baselineRepositoryOn(bound);
+      const head = await loadActiveBaselineForGrid(bound, PROBE.projectId);
+
+      expect(head.versionSeq).toBe(re.value.baselineVersionSeq);
+      expect(head.pinSeq).toBe(re.value.scheduleRunSeq);
+
+      const pinForHead = await baseline.scheduleRunSeqForVersion(
+        PROBE.projectId,
+        head.versionSeq!,
+      );
+      const wpsForHead = await baseline.loadBaselineWpsForVersion(
+        PROBE.projectId,
+        head.versionSeq!,
+      );
+      expect(pinForHead).toBe(head.pinSeq);
+      expect(wpsForHead.map((w) => w.wpId).sort()).toEqual(
+        [...head.baselineByWp.keys()].sort(),
+      );
+      // Active convenience loaders agree with the one-head result (same max seq).
+      expect(await baseline.latestVersionSeq(PROBE.projectId)).toBe(head.versionSeq);
+      expect(await baseline.latestPinnedScheduleRunSeq(PROBE.projectId)).toBe(head.pinSeq);
+    });
   });
 });

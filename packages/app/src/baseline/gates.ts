@@ -117,6 +117,15 @@ function evaluatePinAndCompleteness(input: BaselineGateInput): BaselinePinGateRe
     });
   }
 
+  // Epic 4 retro F11: empty leaf set must not pass completeness (no blockers ⇒ empty append).
+  if (input.leaves.length === 0) {
+    return refusePin('incomplete_plan', [], 0, {
+      baseline: ['incomplete_plan'],
+      blockingWpIds: [],
+      notSchedulableCount: ['0'],
+    });
+  }
+
   const missingDuration = leavesMissingDuration(input.leaves);
   let storedInputs;
   let storedOutputs;
