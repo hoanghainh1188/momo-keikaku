@@ -128,4 +128,45 @@ describe('fixture-replay (story 5.1)', () => {
     expect(b.hoursFieldPresent).toBe(false);
     expect(b.tickets[0]!.actualMh).toBeNull();
   });
+
+  it('replays committed page-shift / leave-and-return / scope-change scenarios', async () => {
+    const cursor = memoryCursor();
+    const adapter = fixtureReplayOn({ cursor });
+    const anchor = '2026-09-16T09:00:00.000Z';
+
+    const pageShift = await adapter.readScope(
+      { connectorId: 'ps', site: 'page-shift', timeAnchorIso: anchor },
+      {},
+    );
+    expect(pageShift.complete).toBe(false);
+    expect(pageShift.tickets.map((t) => t.trackerIssueId).sort()).toEqual(['bk-ps-1', 'bk-ps-2']);
+
+    const leave1 = await adapter.readScope(
+      { connectorId: 'lr', site: 'leave-and-return', timeAnchorIso: anchor },
+      {},
+    );
+    const leave2 = await adapter.readScope(
+      { connectorId: 'lr', site: 'leave-and-return', timeAnchorIso: anchor },
+      {},
+    );
+    const leave3 = await adapter.readScope(
+      { connectorId: 'lr', site: 'leave-and-return', timeAnchorIso: anchor },
+      {},
+    );
+    expect(leave1.tickets.map((t) => t.trackerIssueId).sort()).toEqual(['bk-lr-gone', 'bk-lr-keep']);
+    expect(leave2.tickets.map((t) => t.trackerIssueId)).toEqual(['bk-lr-keep']);
+    expect(leave3.tickets.map((t) => t.trackerIssueId).sort()).toEqual(['bk-lr-gone', 'bk-lr-keep']);
+
+    const scope1 = await adapter.readScope(
+      { connectorId: 'sc', site: 'scope-change', timeAnchorIso: anchor },
+      {},
+    );
+    const scope2 = await adapter.readScope(
+      { connectorId: 'sc', site: 'scope-change', timeAnchorIso: anchor },
+      {},
+    );
+    expect(scope1.tickets.map((t) => t.trackerIssueId).sort()).toEqual(['bk-sc-a', 'bk-sc-b']);
+    expect(scope2.tickets.map((t) => t.trackerIssueId)).toEqual(['bk-sc-c']);
+    expect(await cursor.get('sc')).toBe(2);
+  });
 });
