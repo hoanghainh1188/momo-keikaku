@@ -21,12 +21,9 @@ vi.mock('@/server/error-message', () => ({
   messageFromKey: (key: string) => `msg:${key}`,
 }));
 
-const {
-  addConnectorAction,
-  rotateCredentialsAction,
-  parseApprovalWhen,
-  INITIAL_CONNECTOR_ACTION,
-} = await import('./actions');
+const { addConnectorAction, rotateCredentialsAction, INITIAL_CONNECTOR_ACTION } =
+  await import('./actions');
+const { parseApprovalWhen } = await import('./parse-approval-when');
 
 function form(fields: Record<string, string>): FormData {
   const data = new FormData();

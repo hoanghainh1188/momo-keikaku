@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ApprovalRequiredError, ingestSnapshot } from '@momo/domain';
+import { ApprovalRequiredError, ingestSnapshot, type TicketObservation } from '@momo/domain';
 import type { RequestContext } from '../authz/request-context';
 import type { ConnectorWriteDeps, ConnectorWriteScope } from '../ports/connector-write';
 import {
@@ -149,7 +149,7 @@ describe('ingestSnapshot domain approval gate', () => {
   it('throws ApprovalRequiredError when approvalRecordedAt is blank or an invalid Date', () => {
     const next = {
       observedAt: '2026-09-01T00:00:00.000Z',
-      tickets: [] as const,
+      tickets: [] as TicketObservation[],
       hoursFieldPresent: false,
       adapterKind: 'fixture' as const,
     };
