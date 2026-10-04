@@ -2,7 +2,7 @@
 title: 'Story 5.3 — A paginated read is complete, or it is not a read'
 type: 'feature'
 created: '2026-10-04'
-status: 'in-progress'
+status: 'in-review'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: 'a57ad755ff32adf520c77194ee9e32cf4dd75949'
