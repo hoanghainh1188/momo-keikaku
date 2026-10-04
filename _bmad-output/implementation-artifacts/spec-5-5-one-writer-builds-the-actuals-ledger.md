@@ -2,7 +2,7 @@
 title: 'Story 5.5 — One writer builds the Actuals Ledger'
 type: 'feature'
 created: '2026-10-04'
-status: 'in-progress'
+status: 'in-review'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: 'ca1f9b2a006c10d8656ffb8f21336b0ac4dcd47c'
