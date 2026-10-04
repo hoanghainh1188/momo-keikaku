@@ -70,6 +70,9 @@ function depsWith(approvalRecordedAt: Date | null) {
     },
     countMappingEventsForProject: async () => 0,
     loadEncryptedCredentials: async () => null,
+    listOpenOverlaps: async () => [],
+    listLeftScopeTickets: async () => [],
+    confirmOwnership: async () => {},
   };
 
   const ingestWrite = {
@@ -458,6 +461,9 @@ describe('runIngestSnapshotJob (story 5.5 writer)', () => {
             setLastError: async () => {},
             countMappingEventsForProject: async () => 0,
             loadEncryptedCredentials: async () => null,
+            listOpenOverlaps: async () => [],
+            listLeftScopeTickets: async () => [],
+            confirmOwnership: async () => {},
           },
           ingestWrite: {
             writeIngestSnapshot: async () => ({
@@ -537,6 +543,9 @@ describe('runIngestSnapshotJob (story 5.5 writer)', () => {
             setLastError: async () => {},
             countMappingEventsForProject: async () => 0,
             loadEncryptedCredentials: async () => null,
+            listOpenOverlaps: async () => [],
+            listLeftScopeTickets: async () => [],
+            confirmOwnership: async () => {},
           },
           ingestWrite: {
             writeIngestSnapshot: async () => thrower(),

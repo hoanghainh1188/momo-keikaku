@@ -25,7 +25,7 @@ import {
 import type { Bound } from '../../bound';
 import * as s from '../../schema';
 import { lockWatermark } from '../../watermark-lock';
-import { trackerRepositoryOn } from '../tracker';
+import { trackerRepositoryOn, type TrackerKind } from '../tracker';
 
 export interface IngestScopeRead {
   readonly complete: boolean;
@@ -252,6 +252,162 @@ export function ingestWriteRepositoryOn(bound: Bound) {
     return out;
   }
 
+  async function loadTicketsByIssueIds(
+    trackerKind: TrackerKind,
+    trackerSite: string,
+    issueIds: readonly string[],
+  ): Promise<Map<string, typeof s.ticket.$inferSelect>> {
+    const out = new Map<string, typeof s.ticket.$inferSelect>();
+    if (issueIds.length === 0) return out;
+    await chunked([...issueIds], 500, async (batch) => {
+      const rows = await tx
+        .select()
+        .from(s.ticket)
+        .where(
+          and(
+            eq(s.ticket.tenantId, tenantId),
+            eq(s.ticket.trackerKind, trackerKind),
+            eq(s.ticket.trackerSite, trackerSite),
+            inArray(s.ticket.trackerIssueId, batch),
+          ),
+        );
+      for (const row of rows) out.set(row.trackerIssueId, row);
+    });
+    return out;
+  }
+
+  /**
+   * Story 5.6: durable left_scope after two consecutive complete absences on the owner
+   * Connector. Sightings clear streak/flag; incomplete reads never reach this writer.
+   */
+  async function persistLeftScopeState(input: {
+    readonly connectorId: string;
+    readonly trackerKind: TrackerKind;
+    readonly trackerSite: string;
+    readonly nextIssueIds: ReadonlySet<string>;
+  }): Promise<void> {
+    const seen = [...input.nextIssueIds];
+    if (seen.length > 0) {
+      await chunked(seen, 500, (batch) =>
+        tx
+          .update(s.ticket)
+          .set({ leftScope: false, absentCompleteStreak: 0 })
+          .where(
+            and(
+              eq(s.ticket.tenantId, tenantId),
+              eq(s.ticket.trackerKind, input.trackerKind),
+              eq(s.ticket.trackerSite, input.trackerSite),
+              eq(s.ticket.ownerConnectorId, input.connectorId),
+              inArray(s.ticket.trackerIssueId, batch),
+            ),
+          ),
+      );
+    }
+
+    const owned = await tx
+      .select({
+        trackerIssueId: s.ticket.trackerIssueId,
+        leftScope: s.ticket.leftScope,
+        absentCompleteStreak: s.ticket.absentCompleteStreak,
+      })
+      .from(s.ticket)
+      .where(
+        and(
+          eq(s.ticket.tenantId, tenantId),
+          eq(s.ticket.trackerKind, input.trackerKind),
+          eq(s.ticket.trackerSite, input.trackerSite),
+          eq(s.ticket.ownerConnectorId, input.connectorId),
+        ),
+      );
+
+    for (const row of owned) {
+      if (input.nextIssueIds.has(row.trackerIssueId)) continue;
+      if (row.leftScope) continue;
+      const streak = row.absentCompleteStreak + 1;
+      await tx
+        .update(s.ticket)
+        .set({
+          absentCompleteStreak: streak,
+          leftScope: streak >= 2,
+        })
+        .where(
+          and(
+            eq(s.ticket.tenantId, tenantId),
+            eq(s.ticket.trackerKind, input.trackerKind),
+            eq(s.ticket.trackerSite, input.trackerSite),
+            eq(s.ticket.trackerIssueId, row.trackerIssueId),
+          ),
+        );
+    }
+  }
+
+  async function persistOverlaps(input: {
+    readonly projectId: string;
+    readonly claimerConnectorId: string;
+    readonly snapshotId: string;
+    readonly observedAt: Date;
+    readonly nextId: () => string;
+    readonly overlaps: readonly {
+      readonly trackerIssueId: string;
+      readonly key: string;
+      readonly ownerConnectorId: string;
+    }[];
+    readonly nextIssueIds: ReadonlySet<string>;
+  }): Promise<void> {
+    for (const o of input.overlaps) {
+      await tx
+        .insert(s.connectorOverlap)
+        .values({
+          id: input.nextId(),
+          tenantId,
+          projectId: input.projectId,
+          trackerIssueId: o.trackerIssueId,
+          ticketKey: o.key,
+          ownerConnectorId: o.ownerConnectorId,
+          claimerConnectorId: input.claimerConnectorId,
+          observedAt: input.observedAt,
+          snapshotId: input.snapshotId,
+        })
+        .onConflictDoUpdate({
+          target: [
+            s.connectorOverlap.tenantId,
+            s.connectorOverlap.trackerIssueId,
+            s.connectorOverlap.claimerConnectorId,
+          ],
+          set: {
+            ticketKey: o.key,
+            ownerConnectorId: o.ownerConnectorId,
+            observedAt: input.observedAt,
+            snapshotId: input.snapshotId,
+          },
+        });
+    }
+
+    const stillClaimed = new Set(input.overlaps.map((o) => o.trackerIssueId));
+    const open = await tx
+      .select({
+        id: s.connectorOverlap.id,
+        trackerIssueId: s.connectorOverlap.trackerIssueId,
+      })
+      .from(s.connectorOverlap)
+      .where(
+        and(
+          eq(s.connectorOverlap.tenantId, tenantId),
+          eq(s.connectorOverlap.claimerConnectorId, input.claimerConnectorId),
+        ),
+      );
+    const staleIds = open
+      .filter((row) => !stillClaimed.has(row.trackerIssueId) || !input.nextIssueIds.has(row.trackerIssueId))
+      .map((row) => row.id);
+    if (staleIds.length > 0) {
+      await chunked(staleIds, 500, (batch) =>
+        tx
+          .delete(s.connectorOverlap)
+          .where(and(eq(s.connectorOverlap.tenantId, tenantId), inArray(s.connectorOverlap.id, batch))),
+      );
+    }
+  }
+
   return {
     async writeIngestSnapshot(input: WriteIngestSnapshotInput): Promise<WriteIngestSnapshotResult> {
       if (input.read.complete !== true) {
@@ -315,18 +471,56 @@ export function ingestWriteRepositoryOn(bound: Bound) {
         return row?.seq ?? null;
       })();
 
-      const nextRead: SnapshotRead = {
+      const trackerKind = (connector.adapter === 'fixture' ? 'fixture' : 'backlog') as TrackerKind;
+      const trackerSite = connector.site;
+      const ticketIds = input.read.tickets.map((t) => t.trackerIssueId);
+      const existingTickets = await loadTicketsByIssueIds(trackerKind, trackerSite, ticketIds);
+
+      const ownedTickets: TicketObservation[] = [];
+      const overlaps: {
+        trackerIssueId: string;
+        key: string;
+        ownerConnectorId: string;
+      }[] = [];
+      for (const ticket of input.read.tickets) {
+        const row = existingTickets.get(ticket.trackerIssueId);
+        if (row && row.ownerConnectorId !== input.connectorId) {
+          overlaps.push({
+            trackerIssueId: ticket.trackerIssueId,
+            key: ticket.key,
+            ownerConnectorId: row.ownerConnectorId,
+          });
+        } else {
+          ownedTickets.push(ticket);
+        }
+      }
+
+      // Prev may still list Tickets this Connector no longer owns — drop them from the
+      // derive baseline so absences/overlap skips stay honest.
+      const prevOwnedRead: SnapshotRead | null = prev
+        ? {
+            ...prev.read,
+            tickets: prev.read.tickets.filter((t) => {
+              const row = existingTickets.get(t.trackerIssueId);
+              // Not in existing → was only ever observed here (or purged); keep.
+              if (!row) return true;
+              return row.ownerConnectorId === input.connectorId;
+            }),
+          }
+        : null;
+
+      const nextOwnedRead: SnapshotRead = {
         observedAt: input.read.observedAt,
         hoursFieldPresent: input.read.hoursFieldPresent,
-        tickets: [...input.read.tickets],
+        tickets: ownedTickets,
         accounts: [...input.read.accounts],
         adapterKind: input.read.adapterKind,
         complete: true,
         rateLimit: null,
       };
 
-      const ticketIds = input.read.tickets.map((t) => t.trackerIssueId);
-      const priorLedger = await loadPriorLedger(input.connectorId, ticketIds);
+      const ownedIds = ownedTickets.map((t) => t.trackerIssueId);
+      const priorLedger = await loadPriorLedger(input.connectorId, ownedIds);
       const priorLedgerMhByTicket = new Map<string, bigint>();
       for (const e of priorLedger) {
         priorLedgerMhByTicket.set(
@@ -335,14 +529,21 @@ export function ingestWriteRepositoryOn(bound: Bound) {
         );
       }
 
+      const prevScopeSeq = prev?.header.scopeSeq ?? null;
+      const scopeChangedSincePrev =
+        prev !== null &&
+        scopeSeq !== null &&
+        (prevScopeSeq === null || scopeSeq > prevScopeSeq);
+
       // Derive before INSERT so AdapterKindMismatchError refuses without a snapshot row.
       const derived = ingestSnapshot({
-        prev: prev?.read ?? null,
-        next: nextRead,
+        prev: prevOwnedRead,
+        next: nextOwnedRead,
         activeBaselineVersionSeq,
         seqFrom: 1,
         approvalRecordedAt: connector.approvalRecordedAt,
         priorLedgerMhByTicket,
+        scopeChangedSincePrev,
       });
 
       await tx.insert(s.trackerSnapshot).values({
@@ -355,11 +556,6 @@ export function ingestWriteRepositoryOn(bound: Bound) {
         adapterKind: input.read.adapterKind,
         scopeSeq,
       });
-
-      const trackerKind = (connector.adapter === 'fixture' ? 'fixture' : 'backlog') as
-        | 'fixture'
-        | 'backlog';
-      const trackerSite = connector.site;
 
       for (const account of input.read.accounts) {
         await tracker.upsertTrackerAccount({
@@ -381,7 +577,7 @@ export function ingestWriteRepositoryOn(bound: Bound) {
         });
       }
 
-      const invariant = checkLedgerInvariant([...priorLedger, ...derived.entries], nextRead);
+      const invariant = checkLedgerInvariant([...priorLedger, ...derived.entries], nextOwnedRead);
       if (!invariant.ok) {
         throw new LedgerInvariantError(invariant.violations);
       }
@@ -431,6 +627,23 @@ export function ingestWriteRepositoryOn(bound: Bound) {
           ),
         );
       }
+
+      const nextIssueIds = new Set(ticketIds);
+      await persistLeftScopeState({
+        connectorId: input.connectorId,
+        trackerKind,
+        trackerSite,
+        nextIssueIds,
+      });
+      await persistOverlaps({
+        projectId: input.projectId,
+        claimerConnectorId: input.connectorId,
+        snapshotId: input.snapshotId,
+        observedAt,
+        nextId: input.nextId,
+        overlaps,
+        nextIssueIds,
+      });
 
       // FR-22: re-evaluate Mapping Rules; manual/disposition head wins.
       const rules = await loadMappingRules(input.projectId);

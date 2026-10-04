@@ -54,6 +54,22 @@ export interface ProjectBundle {
       lastErrorAt: string | null;
       hasCredentials: boolean;
     };
+    /** Story 5.6: open overlap claims (conflict banner). */
+    overlaps: readonly {
+      id: string;
+      trackerIssueId: string;
+      ticketKey: string;
+      ownerConnectorId: string;
+      claimerConnectorId: string;
+      observedAt: string;
+    }[];
+    /** Story 5.6: durable left-scope Tickets with retained hours. */
+    leftScopeTickets: readonly {
+      trackerIssueId: string;
+      key: string;
+      ownerConnectorId: string;
+      hoursMh: bigint;
+    }[];
     /** AD-15 / review G-5: the demo's fixed clock. */
     anchor: string;
     snapshotAgeMinutes: number;

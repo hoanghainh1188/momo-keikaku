@@ -119,6 +119,36 @@ export interface ConnectorWriteRepository {
   readonly loadEncryptedCredentials: (
     connectorId: string,
   ) => Promise<EncryptedCredentials | null>;
+  /** Story 5.6: open overlap claims for a Project. */
+  readonly listOpenOverlaps: (projectId: string) => Promise<
+    readonly {
+      readonly id: string;
+      readonly projectId: string;
+      readonly trackerIssueId: string;
+      readonly ticketKey: string;
+      readonly ownerConnectorId: string;
+      readonly claimerConnectorId: string;
+      readonly observedAt: Date;
+    }[]
+  >;
+  /** Story 5.6: durable left-scope Tickets with retained hours. */
+  readonly listLeftScopeTickets: (projectId: string) => Promise<
+    readonly {
+      readonly trackerIssueId: string;
+      readonly key: string;
+      readonly ownerConnectorId: string;
+      readonly hoursMh: bigint;
+    }[]
+  >;
+  /** Story 5.6: PM Keep / Transfer under the Project lock. */
+  readonly confirmOwnership: (input: {
+    readonly projectId: string;
+    readonly trackerIssueId: string;
+    readonly resolution: 'keep' | 'transfer';
+    readonly toConnectorId: string;
+    readonly actor: string;
+    readonly at: Date;
+  }) => Promise<void>;
 }
 
 export interface ConnectorWriteScope {

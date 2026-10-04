@@ -9,6 +9,7 @@ import { ADD_CONNECTOR_REFUSALS, type AppError } from '@momo/app';
 import { t } from '@momo/i18n';
 import {
   addConnector,
+  confirmConnectorOwnership,
   requestContext,
   rotateCredentials,
 } from '@/server/composition';
@@ -95,4 +96,24 @@ export async function rotateCredentialsAction(
   if (!result.ok) return refuse(prev, result.error.messageKey);
   revalidatePath(`/p/${projectId}/connectors`);
   return ok(prev);
+}
+
+/** Story 5.6: Keep / Transfer ownership for an overlap claim. */
+export async function confirmOwnershipAction(formData: FormData): Promise<void> {
+  const ctx = await requestContext();
+  const projectId = field(formData, 'projectId');
+  const resolution = field(formData, 'resolution');
+  if (resolution !== 'keep' && resolution !== 'transfer') return;
+  const result = await confirmConnectorOwnership(
+    {
+      projectId,
+      trackerIssueId: field(formData, 'trackerIssueId'),
+      resolution,
+      toConnectorId: field(formData, 'toConnectorId') || undefined,
+    },
+    ctx,
+  );
+  if (!result.ok) return;
+  revalidatePath(`/p/${projectId}/connectors`);
+  revalidatePath(`/p/${projectId}/review`);
 }

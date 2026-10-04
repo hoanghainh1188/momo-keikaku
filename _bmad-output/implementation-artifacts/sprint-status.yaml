@@ -94,8 +94,8 @@ development_status:
   5-2-connect-a-backlog-space-read-only: done
   5-3-a-paginated-read-is-complete-or-it-is-not-a-read: done
   5-4-snapshots-run-on-a-schedule-the-pm-can-see: done
-  5-5-one-writer-builds-the-actuals-ledger: review
-  5-6-the-ledger-stays-correct-as-tickets-appear-move-and-vanish: backlog
+  5-5-one-writer-builds-the-actuals-ledger: done
+  5-6-the-ledger-stays-correct-as-tickets-appear-move-and-vanish: review
   5-7-a-connector-with-no-hours-says-so-and-stays-saying-it: backlog
   5-8-tracker-accounts-become-people-retroactively: backlog
   5-9-map-a-ticket-to-a-work-package-and-never-move-the-plan: backlog

@@ -56,6 +56,8 @@ export const TRUNCATE_ORDER: readonly string[] = [
   'mapping_event',
   'mapping_rule',
   'actuals_ledger_entry',
+  'connector_overlap',
+  'connector_ownership_event',
   'ticket_observation',
   'tracker_snapshot',
   'tracker_snapshot_attempt',

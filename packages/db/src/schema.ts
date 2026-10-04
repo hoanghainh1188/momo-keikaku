@@ -956,6 +956,7 @@ export const trackerSnapshotAttempt = pgTable(
 /**
  * AD-6 Ticket identity (story 5.1). `UNIQUE (tenant_id, tracker_kind, tracker_site,
  * tracker_issue_id)` and exactly one `owner_connector_id`. Derived — rebuilt from snapshots.
+ * Story 5.6 adds durable left-scope state (two consecutive complete absences).
  */
 export const ticket = pgTable(
   'ticket',
@@ -968,6 +969,10 @@ export const ticket = pgTable(
     ownerConnectorId: text('owner_connector_id').notNull(),
     projectId: text('project_id').notNull(),
     key: text('key').notNull(),
+    /** Story 5.6 / AR-15: durable after two consecutive complete absences. */
+    leftScope: boolean('left_scope').notNull().default(false),
+    /** Consecutive complete reads this Ticket was absent from (owner Connector). */
+    absentCompleteStreak: integer('absent_complete_streak').notNull().default(0),
   },
   (t) => ({
     identity: unique('ticket_tracker_identity_key').on(
@@ -1097,6 +1102,99 @@ export const ticketObservation = pgTable(
     bySnapshot: index('obs_snapshot_idx').on(t.snapshotId),
     snapshot: foreignKey({
       name: 'ticket_observation_tracker_snapshot_fk',
+      columns: [t.tenantId, t.snapshotId],
+      foreignColumns: [trackerSnapshot.tenantId, trackerSnapshot.id],
+    }),
+  }),
+);
+
+/**
+ * Story 5.6 / FR-42: PM-confirmed ownership resolution (Keep / Transfer). Append-only —
+ * `owner_connector_id` on `ticket` moves only through this event.
+ */
+export const connectorOwnershipEvent = pgTable(
+  'connector_ownership_event',
+  {
+    seq: bigint('seq', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+    tenantId: text('tenant_id').notNull(),
+    projectId: text('project_id').notNull(),
+    /** Tracker issue id (same identity the ledger uses). */
+    trackerIssueId: text('tracker_issue_id').notNull(),
+    fromConnectorId: text('from_connector_id').notNull(),
+    toConnectorId: text('to_connector_id').notNull(),
+    /** `keep` | `transfer` */
+    resolution: text('resolution').notNull(),
+    actor: text('actor').notNull(),
+    at: timestamp('at', { withTimezone: true }).notNull(),
+  },
+  (t) => ({
+    tenantKey: unique('connector_ownership_event_tenant_seq_key').on(t.tenantId, t.seq),
+    byTicket: index('connector_ownership_event_ticket_idx').on(
+      t.tenantId,
+      t.trackerIssueId,
+      t.seq,
+    ),
+    project: foreignKey({
+      name: 'connector_ownership_event_project_fk',
+      columns: [t.tenantId, t.projectId],
+      foreignColumns: [project.tenantId, project.id],
+    }),
+    fromConnector: foreignKey({
+      name: 'connector_ownership_event_from_connector_fk',
+      columns: [t.tenantId, t.fromConnectorId],
+      foreignColumns: [connector.tenantId, connector.id],
+    }),
+    toConnector: foreignKey({
+      name: 'connector_ownership_event_to_connector_fk',
+      columns: [t.tenantId, t.toConnectorId],
+      foreignColumns: [connector.tenantId, connector.id],
+    }),
+  }),
+);
+
+/**
+ * Story 5.6 / FR-42: derived overlap — a non-owner Connector observed an owned Ticket.
+ * Owned by the ingest/overlap writer; cleared on Keep / Transfer or when the claimer
+ * no longer sees the Ticket.
+ */
+export const connectorOverlap = pgTable(
+  'connector_overlap',
+  {
+    id: text('id').primaryKey(),
+    tenantId: text('tenant_id').notNull(),
+    projectId: text('project_id').notNull(),
+    trackerIssueId: text('tracker_issue_id').notNull(),
+    ticketKey: text('ticket_key').notNull(),
+    ownerConnectorId: text('owner_connector_id').notNull(),
+    claimerConnectorId: text('claimer_connector_id').notNull(),
+    observedAt: timestamp('observed_at', { withTimezone: true }).notNull(),
+    snapshotId: text('snapshot_id').notNull(),
+  },
+  (t) => ({
+    tenantKey: unique('connector_overlap_tenant_id_key').on(t.tenantId, t.id),
+    openClaim: unique('connector_overlap_open_claim_key').on(
+      t.tenantId,
+      t.trackerIssueId,
+      t.claimerConnectorId,
+    ),
+    byProject: index('connector_overlap_project_idx').on(t.tenantId, t.projectId),
+    project: foreignKey({
+      name: 'connector_overlap_project_fk',
+      columns: [t.tenantId, t.projectId],
+      foreignColumns: [project.tenantId, project.id],
+    }),
+    owner: foreignKey({
+      name: 'connector_overlap_owner_connector_fk',
+      columns: [t.tenantId, t.ownerConnectorId],
+      foreignColumns: [connector.tenantId, connector.id],
+    }),
+    claimer: foreignKey({
+      name: 'connector_overlap_claimer_connector_fk',
+      columns: [t.tenantId, t.claimerConnectorId],
+      foreignColumns: [connector.tenantId, connector.id],
+    }),
+    snapshot: foreignKey({
+      name: 'connector_overlap_snapshot_fk',
       columns: [t.tenantId, t.snapshotId],
       foreignColumns: [trackerSnapshot.tenantId, trackerSnapshot.id],
     }),
@@ -1279,6 +1377,8 @@ export const schemaTables = {
   fixtureCursor,
   trackerSnapshot,
   ticketObservation,
+  connectorOwnershipEvent,
+  connectorOverlap,
   actualsLedgerEntry,
   mappingRule,
   mappingEvent,

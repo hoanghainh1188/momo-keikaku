@@ -382,6 +382,34 @@ CREATE POLICY "maintenance_bypass" ON public."ticket_observation"
   USING (true)
   WITH CHECK (true);
 
+-- connector_ownership_event (append-only): PM-confirmed ownership Keep/Transfer (story 5.6 / FR-42). owner_connector_id moves only through this event; editing history would rewrite who owned past hours.
+ALTER TABLE public."connector_ownership_event" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public."connector_ownership_event" FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "tenant_isolation" ON public."connector_ownership_event";
+CREATE POLICY "tenant_isolation" ON public."connector_ownership_event"
+  FOR ALL
+  USING ("tenant_id" = NULLIF(current_setting('app.tenant_id', true), ''))
+  WITH CHECK ("tenant_id" = NULLIF(current_setting('app.tenant_id', true), ''));
+DROP POLICY IF EXISTS "maintenance_bypass" ON public."connector_ownership_event";
+CREATE POLICY "maintenance_bypass" ON public."connector_ownership_event"
+  FOR ALL TO "momo_maintenance"
+  USING (true)
+  WITH CHECK (true);
+
+-- connector_overlap (derived): Non-owner Connector observed an owned Ticket (story 5.6 / FR-42). Derived by the ingest overlap writer; cleared on Keep/Transfer. Never a second ledger entry.
+ALTER TABLE public."connector_overlap" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public."connector_overlap" FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "tenant_isolation" ON public."connector_overlap";
+CREATE POLICY "tenant_isolation" ON public."connector_overlap"
+  FOR ALL
+  USING ("tenant_id" = NULLIF(current_setting('app.tenant_id', true), ''))
+  WITH CHECK ("tenant_id" = NULLIF(current_setting('app.tenant_id', true), ''));
+DROP POLICY IF EXISTS "maintenance_bypass" ON public."connector_overlap";
+CREATE POLICY "maintenance_bypass" ON public."connector_overlap"
+  FOR ALL TO "momo_maintenance"
+  USING (true)
+  WITH CHECK (true);
+
 -- actuals_ledger_entry (append-only): The Actuals Ledger. A correction is a compensating delta, never an edit — that is what makes AC reproducible.
 ALTER TABLE public."actuals_ledger_entry" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public."actuals_ledger_entry" FORCE ROW LEVEL SECURITY;

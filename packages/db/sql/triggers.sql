@@ -184,6 +184,16 @@ CREATE TRIGGER "append_only_truncate_guard"
   BEFORE TRUNCATE ON public."ticket_observation"
   FOR EACH STATEMENT EXECUTE FUNCTION public."momo_append_only_truncate_guard"();
 
+-- connector_ownership_event: PM-confirmed ownership Keep/Transfer (story 5.6 / FR-42). owner_connector_id moves only through this event; editing history would rewrite who owned past hours.
+DROP TRIGGER IF EXISTS "append_only_guard" ON public."connector_ownership_event";
+CREATE TRIGGER "append_only_guard"
+  BEFORE UPDATE OR DELETE ON public."connector_ownership_event"
+  FOR EACH ROW EXECUTE FUNCTION public."momo_append_only_guard"();
+DROP TRIGGER IF EXISTS "append_only_truncate_guard" ON public."connector_ownership_event";
+CREATE TRIGGER "append_only_truncate_guard"
+  BEFORE TRUNCATE ON public."connector_ownership_event"
+  FOR EACH STATEMENT EXECUTE FUNCTION public."momo_append_only_truncate_guard"();
+
 -- actuals_ledger_entry: The Actuals Ledger. A correction is a compensating delta, never an edit — that is what makes AC reproducible.
 DROP TRIGGER IF EXISTS "append_only_guard" ON public."actuals_ledger_entry";
 CREATE TRIGGER "append_only_guard"

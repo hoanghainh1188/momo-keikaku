@@ -232,6 +232,9 @@ const FAKE_FAMILIES: {
     setLastError: write('connectorWrite.setLastError', undefined),
     countMappingEventsForProject: async () => 0,
     loadEncryptedCredentials: async () => null,
+    listOpenOverlaps: async () => [],
+    listLeftScopeTickets: async () => [],
+    confirmOwnership: async () => {},
   }),
   ingestWrite: (write) => ({
     writeIngestSnapshot: write('ingestWrite.writeIngestSnapshot', {

@@ -35,7 +35,8 @@ export function trackerRepositoryOn(bound: Bound) {
   return {
     /**
      * Upsert Ticket identity on UNIQUE (tenant_id, tracker_kind, tracker_site, tracker_issue_id).
-     * On conflict, refresh key / owner / project — identity columns stay put.
+     * On conflict, refresh key / project only — `owner_connector_id` is set on first insert and
+     * moves only via `connector_ownership_event` (story 5.6 / FR-42).
      */
     async upsertTicket(input: UpsertTicketInput): Promise<void> {
       await tx
@@ -59,10 +60,34 @@ export function trackerRepositoryOn(bound: Bound) {
           ],
           set: {
             key: input.key,
-            ownerConnectorId: input.ownerConnectorId,
             projectId: input.projectId,
           },
         });
+    },
+
+    /** Story 5.6: move ownership after a PM-confirmed Transfer. */
+    async setOwnerConnectorId(
+      trackerKind: TrackerKind,
+      trackerSite: string,
+      trackerIssueId: string,
+      ownerConnectorId: string,
+    ): Promise<void> {
+      const res = await tx
+        .update(s.ticket)
+        .set({ ownerConnectorId })
+        .where(
+          and(
+            eq(s.ticket.tenantId, tenantId),
+            eq(s.ticket.trackerKind, trackerKind),
+            eq(s.ticket.trackerSite, trackerSite),
+            eq(s.ticket.trackerIssueId, trackerIssueId),
+          ),
+        );
+      if (res.rowCount !== 1) {
+        throw new Error(
+          `ticket ${trackerIssueId}: expected to set owner on exactly one row, touched ${res.rowCount ?? 0}`,
+        );
+      }
     },
 
     /**

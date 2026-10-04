@@ -244,6 +244,112 @@ describe('ingestSnapshot (FR-25, FR-42)', () => {
     expect(r3.entries.map((e) => [e.ticketId, e.deltaMh])).toEqual([['t1', hoursToMh(-4)]]);
     expect(checkLedgerInvariant([...r1.entries, ...r2.entries, ...r3.entries], s3).ok).toBe(true);
   });
+
+  it('books mid-flight Opening Balance after scope change when createdAt ≤ prev.observedAt (story 5.6)', () => {
+    const s1 = snap('2026-09-01T09:00:00.000Z', [obs('t1', 10)]);
+    const s2 = snap('2026-09-08T09:00:00.000Z', [
+      obs('t1', 10),
+      obs('t-old', 40, { createdAt: '2026-06-01T00:00:00.000Z' }),
+      obs('t-new', 6, { createdAt: '2026-09-07T12:00:00.000Z' }),
+    ]);
+    const r1 = ingestSnapshot({
+      prev: null,
+      next: s1,
+      activeBaselineVersionSeq: 1,
+      seqFrom: 1,
+      approvalRecordedAt: '2026-09-01T00:00:00.000Z',
+    });
+    const r2 = ingestSnapshot({
+      prev: s1,
+      next: s2,
+      activeBaselineVersionSeq: 1,
+      seqFrom: r1.nextSeq,
+      approvalRecordedAt: '2026-09-01T00:00:00.000Z',
+      scopeChangedSincePrev: true,
+    });
+    expect(r2.entries.map((e) => [e.ticketId, e.kind, e.deltaMh])).toEqual([
+      ['t-old', 'opening_balance', hoursToMh(40)],
+      ['t-new', 'delta', hoursToMh(6)],
+    ]);
+    expect(checkLedgerInvariant([...r1.entries, ...r2.entries], s2).ok).toBe(true);
+  });
+
+  it('does not Opening-Balance a first sighting without a recorded scope change', () => {
+    const s1 = snap('2026-09-01T09:00:00.000Z', [obs('t1', 10)]);
+    const s2 = snap('2026-09-08T09:00:00.000Z', [
+      obs('t1', 10),
+      obs('t-old', 40, { createdAt: '2026-06-01T00:00:00.000Z' }),
+    ]);
+    const r1 = ingestSnapshot({
+      prev: null,
+      next: s1,
+      activeBaselineVersionSeq: 1,
+      seqFrom: 1,
+      approvalRecordedAt: '2026-09-01T00:00:00.000Z',
+    });
+    const r2 = ingestSnapshot({
+      prev: s1,
+      next: s2,
+      activeBaselineVersionSeq: 1,
+      seqFrom: r1.nextSeq,
+      approvalRecordedAt: '2026-09-01T00:00:00.000Z',
+      scopeChangedSincePrev: false,
+    });
+    expect(r2.entries.map((e) => [e.ticketId, e.kind, e.deltaMh])).toEqual([
+      ['t-old', 'delta', hoursToMh(40)],
+    ]);
+  });
+
+  it('returns after leave as a delta from prior Σ, never OB (story 5.6 leave-and-return)', () => {
+    const s1 = snap('2026-09-01T09:00:00.000Z', [obs('t1', 10), obs('t2', 20)]);
+    const s2 = snap('2026-09-08T09:00:00.000Z', [obs('t1', 12)]);
+    const s3 = snap('2026-09-15T09:00:00.000Z', [obs('t1', 12)]);
+    const s4 = snap('2026-09-22T09:00:00.000Z', [obs('t1', 12), obs('t2', 22)]);
+    const approval = '2026-09-01T00:00:00.000Z';
+    const r1 = ingestSnapshot({
+      prev: null,
+      next: s1,
+      activeBaselineVersionSeq: 1,
+      seqFrom: 1,
+      approvalRecordedAt: approval,
+    });
+    const r2 = ingestSnapshot({
+      prev: s1,
+      next: s2,
+      activeBaselineVersionSeq: 1,
+      seqFrom: r1.nextSeq,
+      approvalRecordedAt: approval,
+    });
+    expect(r2.leftScope).toEqual([{ ticketId: 't2', key: 't2' }]);
+    const r3 = ingestSnapshot({
+      prev: s2,
+      next: s3,
+      activeBaselineVersionSeq: 1,
+      seqFrom: r2.nextSeq,
+      approvalRecordedAt: approval,
+    });
+    expect(r3.leftScope).toEqual([]);
+    const prior = new Map([
+      ['t1', hoursToMh(12)],
+      ['t2', hoursToMh(20)],
+    ]);
+    const r4 = ingestSnapshot({
+      prev: s3,
+      next: s4,
+      activeBaselineVersionSeq: 1,
+      seqFrom: r3.nextSeq,
+      approvalRecordedAt: approval,
+      priorLedgerMhByTicket: prior,
+      scopeChangedSincePrev: true,
+    });
+    // prior Σ keeps return off OB even when a scope change is recorded.
+    expect(r4.entries.map((e) => [e.ticketId, e.kind, e.deltaMh])).toEqual([
+      ['t2', 'delta', hoursToMh(2)],
+    ]);
+    expect(
+      checkLedgerInvariant([...r1.entries, ...r2.entries, ...r3.entries, ...r4.entries], s4).ok,
+    ).toBe(true);
+  });
 });
 
 describe('mapping rules (FR-22)', () => {

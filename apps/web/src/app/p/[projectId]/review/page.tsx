@@ -10,6 +10,7 @@ import { ReviewPinRegistrar } from '@/components/review-pin-context';
 import { SetBaselineButton } from '@/components/set-baseline-button';
 import { UnmappedGroupRows } from '@/components/unmapped-group-rows';
 import { REPORT_LOCALE } from '@/lib/report-locale';
+import { confirmOwnershipAction } from '../connectors/actions';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,6 +31,8 @@ export default async function ReviewPage({
   const p = bundle.project;
   const period = bundle.input.period;
   const leafWps = bundle.wps.filter((w) => w.isLeaf && !w.isMilestone);
+  const overlaps = bundle.meta.overlaps;
+  const leftScopeTickets = bundle.meta.leftScopeTickets;
 
   const overall = r.health.overall;
   // Story 2.2 (decision Q1-A): with no Baseline these are null, and each block that needs them
@@ -89,6 +92,55 @@ export default async function ReviewPage({
             <Link className="btn" href={`/p/${projectId}/plan`}>{t('review.plan')}</Link>
           </div>
         </header>
+
+        {overlaps.length > 0 ? (
+          <div className="connector-error-banner" role="alert" data-testid="review-overlap-banner">
+            <strong>{t('review.overlap_title')}</strong>
+            <p>{t('review.overlap_intro')}</p>
+            <ul>
+              {overlaps.map((o) => (
+                <li key={o.id}>
+                  {t('review.overlap_row', {
+                    key: o.ticketKey,
+                    owner: o.ownerConnectorId,
+                    claimer: o.claimerConnectorId,
+                  })}
+                  <form action={confirmOwnershipAction} style={{ display: 'inline', marginLeft: 8 }}>
+                    <input type="hidden" name="projectId" value={projectId} />
+                    <input type="hidden" name="trackerIssueId" value={o.trackerIssueId} />
+                    <input type="hidden" name="toConnectorId" value={o.claimerConnectorId} />
+                    <button type="submit" name="resolution" value="keep">
+                      {t('review.overlap_keep')}
+                    </button>{' '}
+                    <button type="submit" name="resolution" value="transfer">
+                      {t('review.overlap_transfer')}
+                    </button>
+                  </form>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
+        {leftScopeTickets.length > 0 ? (
+          <details data-testid="review-left-scope-list" style={{ marginBottom: 16 }}>
+            <summary>
+              <strong>{t('review.left_scope_title')}</strong>
+              {' — '}
+              {t('review.left_scope_intro')}
+            </summary>
+            <ul>
+              {leftScopeTickets.map((row) => (
+                <li key={row.trackerIssueId}>
+                  {t('review.left_scope_row', {
+                    key: row.key,
+                    hours: hours(row.hoursMh),
+                  })}
+                </li>
+              ))}
+            </ul>
+          </details>
+        ) : null}
 
         <Section
           title={t('clientView.status')}

@@ -226,7 +226,15 @@
     "refused_search_budget": "接続しませんでした: この Backlog プロジェクトを 1 回フル読み取りすると、API ユーザーの検索レート制限（1 分あたり）の 25% を超えます。スコープを絞るか、上位プランの API ユーザーを使ってください。",
     "refused_credential_rejected": "接続しませんでした: Backlog が API キーを拒否しました。",
     "refused_project_not_found": "接続しませんでした: この API キーで参照できる、そのキーのプロジェクトが Backlog にありません。",
-    "refused_backlog_unreachable": "接続しませんでした: Backlog スペースに接続できませんでした。スペース URL を確認して再度お試しください。"
+    "refused_backlog_unreachable": "接続しませんでした: Backlog スペースに接続できませんでした。スペース URL を確認して再度お試しください。",
+    "overlap_title": "スコープの重複",
+    "overlap_intro": "別の Connector が、この Project がすでに所有している Ticket を観測しました。時間は二重計上されません — 各クレームを解決してください。",
+    "overlap_row": "{key} — 所有者 {owner}、観測 Connector {claimer}",
+    "overlap_keep": "所有者を維持",
+    "overlap_transfer": "観測側へ移譲",
+    "left_scope_title": "スコープ外",
+    "left_scope_intro": "連続する 2 回の完全な読み取りで欠落した Ticket。台帳履歴は保持され、時間は取り消されません。",
+    "left_scope_row": "{key} — {hours}h を保持"
   },
   "mapping": {
     "coverage": "Coverage",
@@ -414,6 +422,14 @@
       "opening_balance_footnote": "Opening Balance {hours}h — hours the Tickets already carried before momo-keikaku could observe them. Counted in cumulative AC, excluded from period metrics, so a Project connected mid-flight shows no false spike.",
       "mapping_coverage": "Mapping coverage: {hourShare} of hours and {ticketShare} of Tickets are mapped (FR-23 reports the two separately)."
     },
+    "overlap_title": "スコープの重複",
+    "overlap_intro": "別の Connector が、この Project がすでに所有している Ticket を観測しました。時間は二重計上されません — 各クレームを解決してください。",
+    "overlap_row": "{key} — 所有者 {owner}、観測 Connector {claimer}",
+    "overlap_keep": "所有者を維持",
+    "overlap_transfer": "観測側へ移譲",
+    "left_scope_title": "スコープ外",
+    "left_scope_intro": "連続する 2 回の完全な読み取りで欠落した Ticket。台帳履歴は保持され、時間は取り消されません。",
+    "left_scope_row": "{key} — {hours}h を保持",
     "divergence": {
       "footnote": "{leafCount} leaf Work Packages in the Current Plan; {baselineCount} carry Baseline hours or are Milestones. Percent Complete is never derived from burned effort."
     },

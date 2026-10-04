@@ -126,6 +126,13 @@ GRANT SELECT, UPDATE, DELETE ON public."tracker_snapshot" TO "momo_maintenance";
 GRANT SELECT, INSERT ON public."ticket_observation" TO "momo_app";
 GRANT SELECT, UPDATE, DELETE ON public."ticket_observation" TO "momo_maintenance";
 
+-- connector_ownership_event (append-only)
+GRANT SELECT, INSERT ON public."connector_ownership_event" TO "momo_app";
+GRANT SELECT, UPDATE, DELETE ON public."connector_ownership_event" TO "momo_maintenance";
+
+-- connector_overlap (derived)
+GRANT SELECT, INSERT, UPDATE, DELETE ON public."connector_overlap" TO "momo_app";
+
 -- actuals_ledger_entry (append-only)
 GRANT SELECT, INSERT ON public."actuals_ledger_entry" TO "momo_app";
 GRANT SELECT, UPDATE, DELETE ON public."actuals_ledger_entry" TO "momo_maintenance";

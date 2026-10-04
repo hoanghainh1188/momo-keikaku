@@ -163,9 +163,15 @@ describe('fixture-replay (story 5.1)', () => {
       { connectorId: 'lr', site: 'leave-and-return', timeAnchorIso: anchor },
       {},
     );
+    const leave4 = await adapter.readScope(
+      { connectorId: 'lr', site: 'leave-and-return', timeAnchorIso: anchor },
+      {},
+    );
     expect(leave1.tickets.map((t) => t.trackerIssueId).sort()).toEqual(['bk-lr-gone', 'bk-lr-keep']);
     expect(leave2.tickets.map((t) => t.trackerIssueId)).toEqual(['bk-lr-keep']);
-    expect(leave3.tickets.map((t) => t.trackerIssueId).sort()).toEqual(['bk-lr-gone', 'bk-lr-keep']);
+    // Story 5.6: two consecutive complete absences before return (durable left_scope).
+    expect(leave3.tickets.map((t) => t.trackerIssueId)).toEqual(['bk-lr-keep']);
+    expect(leave4.tickets.map((t) => t.trackerIssueId).sort()).toEqual(['bk-lr-gone', 'bk-lr-keep']);
 
     const scope1 = await adapter.readScope(
       { connectorId: 'sc', site: 'scope-change', timeAnchorIso: anchor },
