@@ -9,6 +9,7 @@
  */
 import type { RequestContext } from '../packages/app/src/authz/request-context';
 import type { Result } from '../packages/app/src/result';
+import * as compareBaselineVersionsRead from '../packages/app/src/baseline/compare-baseline-versions';
 import * as reBaselineWrite from '../packages/app/src/baseline/re-baseline';
 import * as setBaselineWrite from '../packages/app/src/baseline/set-baseline';
 import * as calendarWrites from '../packages/app/src/calendar/publish-calendar-version';
@@ -26,6 +27,10 @@ const SCHEDULE_CALENDAR_WRITE_SURFACE = [
   { path: 'packages/app/src/calendar/publish-calendar-version.ts', ns: calendarWrites },
   { path: 'packages/app/src/baseline/set-baseline.ts', ns: setBaselineWrite },
   { path: 'packages/app/src/baseline/re-baseline.ts', ns: reBaselineWrite },
+  {
+    path: 'packages/app/src/baseline/compare-baseline-versions.ts',
+    ns: compareBaselineVersionsRead,
+  },
 ] as const;
 
 /** Named in failure messages — derived from SCHEDULE_CALENDAR_WRITE_SURFACE. */

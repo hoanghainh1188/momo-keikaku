@@ -100,6 +100,11 @@ const WELL_FORMED_INPUT: Readonly<Record<string, unknown>> = {
   removeProjectNonWorkingDay: { projectId: UNREACHED_PROJECT, day: '2026-01-01' },
   setBaseline: { projectId: UNREACHED_PROJECT },
   reBaseline: { projectId: UNREACHED_PROJECT, reason: 'scope change' },
+  compareBaselineVersions: {
+    projectId: UNREACHED_PROJECT,
+    fromVersionSeq: 1,
+    toVersionSeq: 2,
+  },
 };
 
 type UseCaseFn = (
@@ -206,6 +211,13 @@ describe('every use case declares its roles', () => {
           "projectScoped": false,
           "roles": [
             "tenant_admin",
+          ],
+        },
+        "compareBaselineVersions": {
+          "projectScoped": true,
+          "roles": [
+            "tenant_admin",
+            "pm",
           ],
         },
         "createDepartment": {

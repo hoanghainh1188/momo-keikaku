@@ -141,6 +141,7 @@ import {
   reBaseline,
   getBaselineSetState,
   getReBaselineState,
+  compareBaselineVersions,
 } from '@momo/app';
 import { buildResetPasswordMail } from '@momo/i18n';
 import { mailerConsoleOn, productClockOn, systemClock, uuidV7IdsOn } from '@momo/adapters';
@@ -663,6 +664,15 @@ export async function baselineSetState(projectId: string, ctx?: RequestContext) 
 export async function reBaselineState(projectId: string, ctx?: RequestContext) {
   const context = ctx ?? (await requestContext());
   return getReBaselineState(writeDeps(), context, { projectId });
+}
+
+/** Story 4.4 — compare two Baseline versions as plans (read-only). */
+export async function compareProjectBaselineVersions(
+  input: { projectId: string; fromVersionSeq: number; toVersionSeq: number },
+  ctx?: RequestContext,
+) {
+  const context = ctx ?? (await requestContext());
+  return compareBaselineVersions(writeDeps(), context, input);
 }
 
 /** First-observed activity evidence for the complete flow (read-only). */
