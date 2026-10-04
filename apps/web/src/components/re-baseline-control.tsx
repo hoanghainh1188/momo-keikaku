@@ -1,8 +1,12 @@
 'use client';
 
 import Link from 'next/link';
-import { useTransition } from 'react';
-import { reBaselineAction } from '@/app/p/[projectId]/baselines/actions';
+import { useState, useTransition } from 'react';
+import {
+  reBaselineAction,
+  type BaselineWriteOutcome,
+} from '@/app/p/[projectId]/baselines/actions';
+import { planWriteRefuseMessage } from '@/lib/plan-write-refuse';
 import { reBaselineDisabledView } from '@/lib/re-baseline-ui';
 
 export type ReBaselineControlModel = {
@@ -23,9 +27,13 @@ export type ReBaselineControlModel = {
   };
 };
 
+function refuseText(outcome: Extract<BaselineWriteOutcome, { ok: false }>): string {
+  return planWriteRefuseMessage(outcome);
+}
+
 /**
- * Client *Re-baseline* control with mandatory free-text reason (story 4.3, FR-16).
- * Primary surface: Baselines page.
+ * Client *Re-baseline* control with mandatory free-text reason (story 4.3, FR-16 + retro F9).
+ * Awaits BaselineWriteOutcome and shows an inline refuse — no silent no-op.
  */
 export function ReBaselineControl({
   model,
@@ -35,6 +43,7 @@ export function ReBaselineControl({
   readonly testId?: string;
 }) {
   const [pending, start] = useTransition();
+  const [refuse, setRefuse] = useState<string | null>(null);
   const view = reBaselineDisabledView({
     hasBaseline: model.hasBaseline,
     canReBaseline: model.canReBaseline,
@@ -89,8 +98,10 @@ export function ReBaselineControl({
         reason.setCustomValidity('');
       }}
       action={(fd) => {
-        start(() => {
-          void reBaselineAction(fd);
+        start(async () => {
+          setRefuse(null);
+          const outcome = await reBaselineAction(fd);
+          if (!outcome.ok) setRefuse(refuseText(outcome));
         });
       }}
     >
@@ -114,6 +125,11 @@ export function ReBaselineControl({
           {model.labels.reBaseline}
         </button>
       </div>
+      {refuse !== null ? (
+        <p className="caption" role="alert" data-testid={`${testId}-refuse`}>
+          {refuse}
+        </p>
+      ) : null}
     </form>
   );
 }

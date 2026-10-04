@@ -280,7 +280,7 @@ action_items:
     action: "Surface Set / Re-baseline writeLanded failures to the PM (ActionResult
       / inline error) on Review, Plan, and Baselines — no silent no-op (retro F9)"
     owner: "dev"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-4-retro-2026-10-04.md"
   - id: "epic-4-retro-item-21-register-rederivepinnedbaseline-on-the-f"
     epic: 4
