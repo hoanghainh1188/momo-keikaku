@@ -391,11 +391,11 @@ A PM can upload a real client .xlsx, choose the sheet and header row, map column
 
 ### Epic 4: A Baseline that can explain itself years later
 
-A PM can set a Baseline from the Current Plan and Re-baseline with a mandatory reason, linking Change Request candidates. Every version is kept with its author, time and reason, and any two versions compare **as plans, not only as rows** — dependencies added and removed, lags, constraints, durations, actual dates, progress, milestone flags, the calendar version and the three Project settings — so no WP can move between versions without a recorded input change that accounts for it. An automated test re-derives a Baseline's dates, Float, constraint violations and critical path from its pinned inputs alone, on any machine, at any later date.
+A PM can set a Baseline from the Current Plan and Re-baseline with a mandatory reason (Change Request candidate linking is Epic 6 / Disposition — not an Epic 4 surface). Every version is kept with its author, time and reason, and any two versions compare **as plans, not only as rows** — dependencies added and removed, lags, constraints, durations, actual dates, progress, milestone flags, the calendar version and the three Project settings — so no WP can move between versions without a recorded input change that accounts for it. An automated test re-derives a Baseline's dates, Float, constraint violations and critical path from its pinned inputs alone, on any machine, at any later date.
 
 **FRs covered:** FR-15, FR-16
 
-**Implementation notes.** The Baseline **points at a `schedule_run`; it does not re-copy the inputs** (AR-22), and `baseline_wp` keeps only the cost projection that PV, BAC and Divergence read. Retention-by-reference makes the pointer permanent (AR-11). The re-derivation test runs under each run's **own** recorded `engine_version`, so a later scheduler fix does not turn history red (AR-51), and compares through the codec's canonical form rather than column text (AR-8). A Baseline is refused while any leaf WP has no duration or the Project has no Project start.
+**Implementation notes.** The Baseline **points at a `schedule_run`; it does not re-copy the inputs** (AR-22), and `baseline_wp` keeps only the current-schema cost projection that PV, BAC and Divergence read (derived dates, `baseline_mh`, milestone and Catch-all flags — M-2 deferred assigned Resources and Rate-derived cost columns). Retention-by-reference makes the pointer permanent (AR-11). The re-derivation test runs under each run's **own** recorded `engine_version`, so a later scheduler fix does not turn history red (AR-51), and compares through the codec's canonical form rather than column text (AR-8). A Baseline is refused while any leaf WP has no duration or the Project has no Project start. Published Snapshot is a typed pin seam only in this epic (`baselineVersionSeq`); Epic 6 owns the publish table, UI and workflow.
 
 ### Epic 5: The work actually done arrives from Backlog and lands on the plan
 
@@ -1766,9 +1766,11 @@ So that "it imports Excel" is a number rather than a claim.
 
 ## Epic 4: A Baseline that can explain itself years later
 
-A PM can set a Baseline from the Current Plan and Re-baseline with a mandatory reason, linking Change Request candidates. Every version is kept with its author, time and reason, and any two versions compare **as plans, not only as rows**. An automated test re-derives a Baseline's dates, Float, constraint violations and critical path from its pinned inputs alone, on any machine and at any later date.
+A PM can set a Baseline from the Current Plan and Re-baseline with a mandatory reason (Change Request candidate linking is Epic 6 / Disposition — not an Epic 4 surface). Every version is kept with its author, time and reason, and any two versions compare **as plans, not only as rows**. An automated test re-derives a Baseline's dates, Float, constraint violations and critical path from its pinned inputs alone, on any machine and at any later date.
 
 *Five stories. FRs: FR-15, FR-16. This epic is where NFR-C1 stops being a sentence and becomes a test.*
+
+**What Epic 4 does NOT ship, corrected 2026-10-04 after the Epic 4 retrospective (F1) found these overclaims.** Three founder deferrals already accepted in frozen story specs 4.1–4.4: (1) **M-2** — `baseline_wp` is current-schema cost projection only (dates, `baseline_mh`, milestone + catch-all flags); assigned Resources and Rate-derived cost columns were not added. (2) **CR link → Epic 6** — Re-baseline requires a reason; Change Request candidate linking is Disposition / Epic 6 with zero CR surface here. (3) **Published Snapshot** — typed pin seam only (`PublishedSnapshotBaselinePin` requiring `baselineVersionSeq`); Epic 6 owns the publish table, UI, and workflow.
 
 ### Story 4.1: Set a Baseline that points at the run behind it
 
@@ -1784,7 +1786,7 @@ So that a plan I baselined last October can still explain itself next year.
 
 **Given** `baseline_wp`
 **When** it is written
-**Then** it keeps only the cost projection that PV, BAC and Divergence read — per leaf WP the derived dates, the planned effort, the assigned Resources, the milestone flag, the Catch-all flag and the Rate-derived cost — so the pinned input set has exactly one representation (AR-22, FR-15)
+**Then** it keeps only the current-schema cost projection that PV, BAC and Divergence read — per leaf WP the derived dates, the planned effort (`baseline_mh`), the milestone flag and the Catch-all flag — so the pinned input set has exactly one representation (AR-22, FR-15, M-2; assigned Resources and Rate-derived cost columns deferred)
 
 **Given** AD-5's retention rule
 **When** a Baseline references a run
@@ -1845,7 +1847,7 @@ So that the Baseline moves only when I decide it should, and the record says why
 
 **Given** a Re-baseline
 **When** it is recorded
-**Then** a reason is **mandatory**, and the PM can link Change Request candidates to it (FR-16)
+**Then** a reason is **mandatory** (FR-16). Change Request candidate linking is deferred to Epic 6 / Disposition — zero CR tables or stub fields in this epic
 
 **Given** every Baseline version
 **When** the history is read
@@ -1887,9 +1889,9 @@ So that a plan that shifted three weeks always has a recorded reason.
 **When** WPs are matched across them
 **Then** they are matched on `wp_id`, with `wbs_code` used only to sort, because a re-parent may renumber (AR-55)
 
-**Given** a Published Snapshot
-**When** it is recorded
-**Then** it records the Baseline version it used (FR-16)
+**Given** the Published Snapshot pin contract Epic 6 will store
+**When** the typed seam is inspected
+**Then** it requires `baselineVersionSeq` so a future Published Snapshot records the Baseline version it used — stub/link only; no publish table, UI, or workflow in this epic (FR-16, Epic 6)
 
 ### Story 4.5: Baseline comparison as columns on the Plan grid
 
