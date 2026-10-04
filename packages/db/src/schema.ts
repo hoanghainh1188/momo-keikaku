@@ -929,7 +929,7 @@ export const trackerSnapshot = pgTable(
     measurementBasis: text('measurement_basis').notNull(),
     ticketCount: integer('ticket_count').notNull(),
     /** AD-6: adapter kind in effect for this snapshot; ingest refuses a mismatch. */
-    adapterKind: text('adapter_kind').notNull().default('fixture'),
+    adapterKind: text('adapter_kind').notNull(),
   },
   (t) => ({
     tenantKey: unique('tracker_snapshot_tenant_id_key').on(t.tenantId, t.id),

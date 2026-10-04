@@ -48,7 +48,13 @@ export function ingestSnapshot(input: IngestInput): IngestResult {
   const { prev, next, activeBaselineVersionSeq } = input;
 
   // AD-6: refuse a kind change against the previous snapshot (operator alert).
-  if (prev !== null && prev.adapterKind !== next.adapterKind) {
+  // Skip when either side omits adapterKind (older in-memory shapes); both must be set.
+  if (
+    prev !== null &&
+    prev.adapterKind != null &&
+    next.adapterKind != null &&
+    prev.adapterKind !== next.adapterKind
+  ) {
     throw new AdapterKindMismatchError(prev.adapterKind, next.adapterKind);
   }
 

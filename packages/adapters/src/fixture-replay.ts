@@ -137,6 +137,10 @@ export function fixtureReplayOn(options: FixtureReplayOptions): {
   return {
     async readScope(connectorConfig, _credentials) {
       const scenario = connectorConfig.scenario ?? connectorConfig.site;
+      // Refuse path segments so a crafted site/scenario cannot escape fixtures/backlog.
+      if (scenario.split(/[\\/]/).some((part) => part === '..' || part === '')) {
+        throw new Error(`invalid fixture scenario name: ${scenario}`);
+      }
       const dir = join(root, 'fixtures', 'backlog', scenario);
       if (!existsSync(dir)) {
         throw new Error(`fixture scenario directory missing: fixtures/backlog/${scenario}`);
@@ -149,11 +153,15 @@ export function fixtureReplayOn(options: FixtureReplayOptions): {
       }
 
       const pageIndex = await options.cursor.get(connectorConfig.connectorId);
+      const anchorMs = Date.parse(connectorConfig.timeAnchorIso);
+      if (!Number.isFinite(anchorMs)) {
+        throw new Error(`invalid timeAnchorIso: ${connectorConfig.timeAnchorIso}`);
+      }
       if (pageIndex < 0 || pageIndex >= files.length) {
         // Past the end: return an empty complete read so callers can stop cleanly.
         return {
           complete: true,
-          observedAt: new Date(connectorConfig.timeAnchorIso).toISOString(),
+          observedAt: new Date(anchorMs).toISOString(),
           tickets: [],
           accounts: [],
           hoursFieldPresent: false,
@@ -164,20 +172,27 @@ export function fixtureReplayOn(options: FixtureReplayOptions): {
 
       const fileName = files[pageIndex]!;
       const raw: FixturePageFile = JSON.parse(readFileSync(join(dir, fileName), 'utf8'));
-      const anchorMs = new Date(connectorConfig.timeAnchorIso).getTime();
+      if (!Array.isArray(raw.tickets)) {
+        throw new Error(`fixture page ${scenario}/${fileName}: tickets must be an array`);
+      }
+      const tickets = raw.tickets.map(ticketFromRaw);
+      const accounts = accountsFromPage(raw);
       const observedAt = new Date(
         anchorMs + raw.observedAtOffsetHours * 3600_000,
       ).toISOString();
       const isLast = pageIndex >= files.length - 1;
+      // Time-series scenarios (ec-phase2, leave-and-return, …) set complete:true per file;
+      // pagination scenarios (page-shift) set complete:false until the last overlapping page.
       const complete = raw.complete ?? isLast;
 
+      // Advance only after a successful parse so a bad page can be retried.
       await options.cursor.set(connectorConfig.connectorId, pageIndex + 1);
 
       return {
         complete,
         observedAt,
-        tickets: raw.tickets.map(ticketFromRaw),
-        accounts: accountsFromPage(raw),
+        tickets,
+        accounts,
         hoursFieldPresent: raw.hoursFieldPresent,
         rateLimit: null,
         adapterKind: 'fixture',

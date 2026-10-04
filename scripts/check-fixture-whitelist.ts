@@ -43,6 +43,9 @@ const TICKET_KEYS = new Set([
 
 const ATTRIBUTE_KEYS = new Set(['kind', 'id', 'label']);
 
+/** Closed Backlog attribute kinds for R0 fixtures (AD-6). */
+const BACKLOG_ATTRIBUTE_KINDS = new Set(['milestone', 'category']);
+
 const ACCOUNT_KEYS = new Set(['accountId', 'displayName', 'email']);
 
 /** Explicitly banned names — fail even if somehow added to a future allow-list by mistake. */
@@ -116,7 +119,14 @@ function checkFile(path: string): void {
       if (a === null || typeof a !== 'object' || Array.isArray(a)) {
         fail(path, `tickets[${i}].attributes[${j}] must be an object`);
       }
-      checkObjectKeys(path, `tickets[${i}].attributes[${j}]`, a as Record<string, unknown>, ATTRIBUTE_KEYS);
+      const attr = a as Record<string, unknown>;
+      checkObjectKeys(path, `tickets[${i}].attributes[${j}]`, attr, ATTRIBUTE_KEYS);
+      if (typeof attr.kind !== 'string' || !BACKLOG_ATTRIBUTE_KINDS.has(attr.kind)) {
+        fail(
+          path,
+          `tickets[${i}].attributes[${j}].kind must be one of ${[...BACKLOG_ATTRIBUTE_KINDS].join('|')}`,
+        );
+      }
     }
   }
 

@@ -110,6 +110,9 @@ export function trackerRepositoryOn(bound: Bound) {
 
     /** FixtureCursorPort.set — persist the next page index. */
     async setFixtureCursor(connectorId: string, nextPageIndex: number): Promise<void> {
+      if (!Number.isInteger(nextPageIndex) || nextPageIndex < 0) {
+        throw new RangeError(`fixture cursor nextPageIndex must be a non-negative integer, got ${nextPageIndex}`);
+      }
       await tx
         .insert(s.fixtureCursor)
         .values({ tenantId, connectorId, nextPageIndex })

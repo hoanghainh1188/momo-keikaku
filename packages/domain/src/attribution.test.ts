@@ -143,6 +143,15 @@ describe('ingestSnapshot (FR-25, FR-42)', () => {
       });
     }
   });
+
+  it('does not refuse when prev omits adapterKind (older in-memory shapes)', () => {
+    const s1 = { ...snap('2026-09-01T09:00:00.000Z', [obs('t1', 10)]) };
+    delete (s1 as { adapterKind?: string }).adapterKind;
+    const s2 = snap('2026-09-08T09:00:00.000Z', [obs('t1', 12)]);
+    expect(() =>
+      ingestSnapshot({ prev: s1, next: s2, activeBaselineVersionSeq: 1, seqFrom: 1 }),
+    ).not.toThrow();
+  });
 });
 
 describe('mapping rules (FR-22)', () => {

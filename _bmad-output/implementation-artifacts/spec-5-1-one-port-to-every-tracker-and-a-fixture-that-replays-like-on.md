@@ -2,7 +2,7 @@
 title: 'Story 5.1 — One port to every tracker, and a fixture that replays like one'
 type: 'feature'
 created: '2026-10-04'
-status: 'in-progress'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: 'ef2b2b657b6b10eb4851d5d66af245cf124bf95e'
@@ -114,6 +114,35 @@ context:
 ## Spec Change Log
 
 ## Review Triage Log
+
+| Finding | Verdict | Evidence / route |
+|---------|---------|------------------|
+| Multi-page fixtures `complete:true` on non-final pages | false | Time-series scenarios (ec-phase2, leave-and-return, scope-change) are successive full snapshots; only page-shift uses pagination incompleteness. |
+| `loadFixtureSnapshots` defaults `complete ?? true` | false | Seed path treats each file as a full snapshot; intentional vs fixture-replay pagination. |
+| Duplicated `trackerPortOn` in web/worker | low | Rejected — extract shared helper is more than a direct fix; both roots match today. |
+| `trackerPortOn` has no call sites yet | false | Composition wiring is the 5.1 deliverable; caller jobs arrive in 5.4. |
+| `adapterKind` undefined vs set throws | high | **patch** — refuse only when both sides are non-null (`ledger.ts`). |
+| `loadBundleInTenant` omits accounts | false | Accounts live on `tracker_account` upserts, not SnapshotRead reconstruction. |
+| Seed `onConflictDoNothing` skips refreshes | medium | **patch** — seed uses `onConflictDoUpdate` for ticket/account identity. |
+| Whitelist ignores closed attribute kinds | medium | **patch** — checker requires `milestone\|category`. |
+| `gen-fixtures` empty UNLINKED_ACCOUNT branch | low | Rejected — cosmetic dead branch; fixtures already synthetic. |
+| backlog-http Bearer vs apiKey query | defer | Scaffold only; auth shape is 5.3. |
+| `adapter_kind DEFAULT 'fixture'` silent | medium | **patch** — expand with default then `DROP DEFAULT`; schema has no default. |
+| Past-end empty read reports no-hours | low | Rejected — callers stop on `complete`; not everyday path. |
+| Cursor advances before successful parse | high | **patch** — parse/map tickets before `cursor.set`. |
+| Page-shift page 2 under-tested | medium | **patch** — adapter test reads page 2 overlapping ids. |
+| sprint `last_updated` moved backward | false | Corrected to 19:12 (JST) before review. |
+| Path `..` in scenario name | medium | **patch** — refuse `..` / empty segments. |
+| Invalid `timeAnchorIso` | medium | **patch** — `Date.parse` guard. |
+| Non-array `tickets` | medium | **patch** — validate before mapping. |
+| Negative fixture cursor | medium | **patch** — `RangeError` in `setFixtureCursor`. |
+| Concurrent cursor races | defer | Needs compare-and-set under lock; worker writer is 5.5. |
+| Missing accounts synthesis test | medium | **patch** — assert synthesized accounts. |
+| Missing `observedAt` rebase assert | medium | **patch** — assert rebased instant. |
+| Migration fold untested | defer | Needs live DB pre-0004 row; folder SQL reviewed; no REQUIRE_DB here. |
+| New tables missing from UNREACHED list | high | **patch** — declared `ticket`, `tracker_account`, `fixture_cursor`. |
+| backlog-http hang without timeout | defer | GET scaffold; timeout belongs with 5.3 live reads. |
+| resolved=true non-Closed migration loss | maybe-false | Pre-prod demo data uses Closed; would need live DB probe to settle. |
 
 ## Design Notes
 

@@ -833,4 +833,23 @@ export const UNREACHED_TENANT_OWNED_TABLES: readonly UnreachedTable[] = [
       'Created by story 2.1 (AD-26); app/schedule rebuilds it (2.9) and the tree grid reads it ' +
       '(2.13). No READ use case yet — the first read of it removes this entry.',
   },
+  {
+    table: 'ticket',
+    why:
+      'Created by story 5.1 (AD-6/AD-7 identity). Seed and tracker upserts write it; no READ use ' +
+      'case yet — mapping/ledger readers in 5.5+ are the first. The first read removes this entry.',
+  },
+  {
+    table: 'tracker_account',
+    why:
+      'Created by story 5.1 from TrackerAccountObservation upserts. No READ use case yet — FR-13 ' +
+      'link suggestion (5.8) is the first reader. The first read removes this entry.',
+  },
+  {
+    table: 'fixture_cursor',
+    why:
+      'Created by story 5.1 as operational bookkeeping behind FixtureCursorPort. No product READ ' +
+      'use case — cursor is only read through the port inside fixture-replay. Keep declared until ' +
+      'a dedicated operator/read path exists.',
+  },
 ] as const;

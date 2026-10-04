@@ -30,7 +30,10 @@ CREATE TABLE "fixture_cursor" (
 	CONSTRAINT "fixture_cursor_pk" PRIMARY KEY("tenant_id","connector_id")
 );
 --> statement-breakpoint
+-- Temporary DEFAULT only for the expand step against existing rows; drop it so
+-- later inserts must name the adapter kind in effect (AD-6).
 ALTER TABLE "tracker_snapshot" ADD COLUMN "adapter_kind" text DEFAULT 'fixture' NOT NULL;--> statement-breakpoint
+ALTER TABLE "tracker_snapshot" ALTER COLUMN "adapter_kind" DROP DEFAULT;--> statement-breakpoint
 ALTER TABLE "ticket_observation" ADD COLUMN "parent_issue_id" text;--> statement-breakpoint
 ALTER TABLE "ticket_observation" ADD COLUMN "tracker_project_id" text;--> statement-breakpoint
 ALTER TABLE "ticket_observation" ADD COLUMN "attributes" jsonb DEFAULT '[]'::jsonb NOT NULL;--> statement-breakpoint

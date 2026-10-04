@@ -83,6 +83,7 @@ describe('fixture-replay (story 5.1)', () => {
     expect(first.adapterKind).toBe('fixture');
     expect(first.complete).toBe(false);
     expect(first.hoursFieldPresent).toBe(true);
+    expect(first.observedAt).toBe('2026-09-15T09:00:00.000Z');
     expect(first.tickets).toHaveLength(1);
     expect(first.tickets[0]!.attributes).toEqual([{ kind: 'milestone', id: 'Phase2-Sprint1' }]);
     expect(first.accounts[0]!.accountId).toBe('bk-1001');
@@ -127,6 +128,7 @@ describe('fixture-replay (story 5.1)', () => {
     );
     expect(b.hoursFieldPresent).toBe(false);
     expect(b.tickets[0]!.actualMh).toBeNull();
+    expect(b.accounts).toEqual([{ accountId: 'bk-1001', displayName: 'bk-1001' }]);
   });
 
   it('replays committed page-shift / leave-and-return / scope-change scenarios', async () => {
@@ -140,6 +142,14 @@ describe('fixture-replay (story 5.1)', () => {
     );
     expect(pageShift.complete).toBe(false);
     expect(pageShift.tickets.map((t) => t.trackerIssueId).sort()).toEqual(['bk-ps-1', 'bk-ps-2']);
+    const pageShift2 = await adapter.readScope(
+      { connectorId: 'ps', site: 'page-shift', timeAnchorIso: anchor },
+      {},
+    );
+    expect(pageShift2.tickets.map((t) => t.trackerIssueId).sort()).toEqual([
+      'bk-ps-1',
+      'bk-ps-3',
+    ]);
 
     const leave1 = await adapter.readScope(
       { connectorId: 'lr', site: 'leave-and-return', timeAnchorIso: anchor },

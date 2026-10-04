@@ -3003,8 +3003,7 @@
           "name": "adapter_kind",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
-          "default": "'fixture'"
+          "notNull": true
         }
       },
       "indexes": {},

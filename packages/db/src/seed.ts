@@ -433,7 +433,18 @@ export async function writeTenantRows(
               email: a.email ?? null,
             })),
           )
-          .onConflictDoNothing(),
+          .onConflictDoUpdate({
+            target: [
+              s.trackerAccount.tenantId,
+              s.trackerAccount.trackerKind,
+              s.trackerAccount.trackerSite,
+              s.trackerAccount.accountId,
+            ],
+            set: {
+              displayName: sql`excluded.display_name`,
+              email: sql`excluded.email`,
+            },
+          }),
       );
     }
     await chunked(latestForIdentity.tickets, 500, (batch) =>
@@ -451,7 +462,19 @@ export async function writeTenantRows(
             key: t.key,
           })),
         )
-        .onConflictDoNothing(),
+        .onConflictDoUpdate({
+          target: [
+            s.ticket.tenantId,
+            s.ticket.trackerKind,
+            s.ticket.trackerSite,
+            s.ticket.trackerIssueId,
+          ],
+          set: {
+            key: sql`excluded.key`,
+            ownerConnectorId: sql`excluded.owner_connector_id`,
+            projectId: sql`excluded.project_id`,
+          },
+        }),
     );
   }
 
