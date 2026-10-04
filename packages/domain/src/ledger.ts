@@ -1,4 +1,4 @@
-import type { LedgerEntry, SnapshotRead, TicketObservation } from './types';
+import type { AdapterKind, LedgerEntry, SnapshotRead, TicketObservation } from './types';
 import type { Mh } from './units';
 
 /**
@@ -24,8 +24,40 @@ export interface IngestResult {
   nextSeq: number;
 }
 
+/**
+ * AD-6 / AR-14: operator-alert shape when a Connector's adapter kind changes between snapshots.
+ * Callers surface this to the operator channel; it is not a PM-visible soft failure.
+ */
+export class AdapterKindMismatchError extends Error {
+  readonly kind = 'operator-alert' as const;
+  readonly code = 'adapter_kind_mismatch' as const;
+  readonly previousKind: AdapterKind | undefined;
+  readonly nextKind: AdapterKind | undefined;
+
+  constructor(previousKind: AdapterKind | undefined, nextKind: AdapterKind | undefined) {
+    super(
+      `adapter kind changed from ${previousKind ?? '(none)'} to ${nextKind ?? '(none)'}; ingest refused`,
+    );
+    this.name = 'AdapterKindMismatchError';
+    this.previousKind = previousKind;
+    this.nextKind = nextKind;
+  }
+}
+
 export function ingestSnapshot(input: IngestInput): IngestResult {
   const { prev, next, activeBaselineVersionSeq } = input;
+
+  // AD-6: refuse a kind change against the previous snapshot (operator alert).
+  // Skip when either side omits adapterKind (older in-memory shapes); both must be set.
+  if (
+    prev !== null &&
+    prev.adapterKind != null &&
+    next.adapterKind != null &&
+    prev.adapterKind !== next.adapterKind
+  ) {
+    throw new AdapterKindMismatchError(prev.adapterKind, next.adapterKind);
+  }
+
   let seq = input.seqFrom;
   const entries: LedgerEntry[] = [];
 

@@ -94,11 +94,11 @@ export interface TableEntry {
 }
 
 /**
- * The 33 tables of this release (story 1.3 slice 2 added `program`; story 1.4 slice 1 removed
+ * The 36 tables of this release (story 1.3 slice 2 added `program`; story 1.4 slice 1 removed
  * `app_user` and added the four Better Auth tables and `tenant_membership`; slice 4 added
  * `identity_event`; story 1.6 `project_default_rate_entry`; story 2.1 the five scheduling tables;
  * story 2.10 `pct_override_event` + Custom Field definition/value; story 2.12
- * `calendar_day_event`),
+ * `calendar_day_event`; story 5.1 `ticket`, `tracker_account`, `fixture_cursor`),
  * in DEPENDENCY ORDER: every table comes after each table its foreign keys reference, so this order
  * is an insert order and its reverse is a delete order (`probe-tenants.ts` deletes by it). Story
  * 2.1's composite foreign keys made that load-bearing: `schedule_run` before `baseline_version`,
@@ -277,6 +277,30 @@ export const TABLE_REGISTRY: readonly TableEntry[] = [
     class: 'mutable-audited',
     tenantColumn: 'tenant_id',
     why: 'Scope and credentials are re-pointed by a PM. The Snapshots it produced are not (see tracker_snapshot).',
+  },
+  {
+    table: 'ticket',
+    class: 'derived',
+    tenantColumn: 'tenant_id',
+    why:
+      'AD-6 Ticket identity (story 5.1). UNIQUE (tenant_id, tracker_kind, tracker_site, tracker_issue_id); ' +
+      'rebuilt from snapshot observations by the ingest writer.',
+  },
+  {
+    table: 'tracker_account',
+    class: 'mutable-audited',
+    tenantColumn: 'tenant_id',
+    why:
+      'AD-6 Tracker Account identity (story 5.1). Upserted only from TrackerAccountObservation; ' +
+      'display name and email are personal data (NFR-S6).',
+  },
+  {
+    table: 'fixture_cursor',
+    class: 'operational',
+    tenantColumn: 'tenant_id',
+    why:
+      'AD-6 / AD-17 fixture-replay page cursor (story 5.1). Operational bookkeeping behind FixtureCursorPort; ' +
+      'tenant-owned so withTenant isolates Connectors.',
   },
   {
     table: 'tracker_snapshot',

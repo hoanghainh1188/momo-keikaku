@@ -12,8 +12,15 @@
 //
 // Importing this module starts a worker, which is why `createBoss` lives in `./boss.ts`:
 // the test builds the same runner without any of the below.
-import { productClockOn } from '@momo/adapters';
-import { config, createLogger } from '@momo/app';
+import { backlogHttpOn, fixtureReplayOn, productClockOn } from '@momo/adapters';
+import {
+  config,
+  createLogger,
+  type FixtureCursorPort,
+  type TrackerConnectorConfig,
+  type TrackerCredentials,
+  type TrackerPort,
+} from '@momo/app';
 import { createBoss, PGBOSS_SCHEMA } from './boss';
 
 // Selected at boot so a misconfigured CLOCK_MODE / DEPLOYMENT fails before the runner starts.
@@ -22,6 +29,45 @@ const workerClock = productClockOn({
   mode: config.CLOCK_MODE,
   fixtureTimeAnchor: config.FIXTURE_TIME_ANCHOR,
 });
+
+/**
+ * AD-6 TrackerPort selection (story 5.1) — same rules as the web composition root.
+ * Ingest handlers (5.4–5.5) will pass a db-backed `FixtureCursorPort`.
+ */
+export function trackerPortOn(deps: {
+  readonly cursor: FixtureCursorPort;
+  readonly timeAnchorIso: string;
+}): TrackerPort {
+  const fixture = fixtureReplayOn({ cursor: deps.cursor });
+  const backlog = backlogHttpOn({});
+  return {
+    async readScope(connectorConfig: TrackerConnectorConfig, credentials: TrackerCredentials) {
+      const kind = config.TRACKER_ADAPTER_OVERRIDE ?? connectorConfig.adapter;
+      if (kind === 'fixture') {
+        return fixture.readScope(
+          {
+            connectorId: connectorConfig.connectorId,
+            site: connectorConfig.site,
+            scenario: connectorConfig.scenario ?? connectorConfig.site,
+            timeAnchorIso: deps.timeAnchorIso,
+          },
+          credentials,
+        );
+      }
+      return backlog.readScope(
+        {
+          connectorId: connectorConfig.connectorId,
+          site: connectorConfig.site,
+          scope: connectorConfig.scope,
+        },
+        { apiKey: credentials.apiKey ?? '' },
+      );
+    },
+  } satisfies TrackerPort;
+}
+
+// Touch the override at boot so a non-local `TRACKER_ADAPTER_OVERRIDE=fixture` fails early.
+void config.TRACKER_ADAPTER_OVERRIDE;
 
 // Sync stdout so lifecycle lines survive process exit (SIGTERM round-trip + operators).
 const log = createLogger({ name: 'worker', syncStdout: true });

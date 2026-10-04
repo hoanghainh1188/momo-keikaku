@@ -58,6 +58,9 @@ export const TRUNCATE_ORDER: readonly string[] = [
   'actuals_ledger_entry',
   'ticket_observation',
   'tracker_snapshot',
+  'fixture_cursor',
+  'ticket',
+  'tracker_account',
   'connector',
   'baseline_wp',
   'baseline_version',
@@ -404,8 +407,77 @@ export async function writeTenantRows(
         observedAt: new Date(snap.observedAt),
         measurementBasis: snap.hoursFieldPresent ? 'hours' : 'count',
         ticketCount: snap.tickets.length,
+        adapterKind: snap.adapterKind ?? 'fixture',
       });
   }
+
+  // AD-6: upsert Ticket + Tracker Account identity from the latest snapshot observations.
+  const latestForIdentity = state.snapshots.at(-1);
+  if (latestForIdentity) {
+    const site = own(
+      projectOnly ? `${f.project.id}.backlog.jp` : 'osaka-retail.backlog.jp',
+    );
+    const accounts = latestForIdentity.accounts ?? [];
+    if (accounts.length > 0) {
+      await chunked(accounts, 500, (batch) =>
+        tx
+          .insert(s.trackerAccount)
+          .values(
+            batch.map((a) => ({
+              id: own(`ta-${a.accountId}`),
+              tenantId,
+              trackerKind: 'fixture',
+              trackerSite: site,
+              accountId: a.accountId,
+              displayName: a.displayName,
+              email: a.email ?? null,
+            })),
+          )
+          .onConflictDoUpdate({
+            target: [
+              s.trackerAccount.tenantId,
+              s.trackerAccount.trackerKind,
+              s.trackerAccount.trackerSite,
+              s.trackerAccount.accountId,
+            ],
+            set: {
+              displayName: sql`excluded.display_name`,
+              email: sql`excluded.email`,
+            },
+          }),
+      );
+    }
+    await chunked(latestForIdentity.tickets, 500, (batch) =>
+      tx
+        .insert(s.ticket)
+        .values(
+          batch.map((t) => ({
+            id: own(`tkt-${t.trackerIssueId}`),
+            tenantId,
+            trackerKind: 'fixture',
+            trackerSite: site,
+            trackerIssueId: t.trackerIssueId,
+            ownerConnectorId: connectorId,
+            projectId: f.project.id,
+            key: t.key,
+          })),
+        )
+        .onConflictDoUpdate({
+          target: [
+            s.ticket.tenantId,
+            s.ticket.trackerKind,
+            s.ticket.trackerSite,
+            s.ticket.trackerIssueId,
+          ],
+          set: {
+            key: sql`excluded.key`,
+            ownerConnectorId: sql`excluded.owner_connector_id`,
+            projectId: sql`excluded.project_id`,
+          },
+        }),
+    );
+  }
+
   // FR-19: only the latest snapshot's observations are needed for the demo's
   // Percent Complete; older observations are stored for the two most recent
   // snapshots so period deltas can be inspected. (Retention/compaction: TODO.)
@@ -420,13 +492,13 @@ export async function writeTenantRows(
           key: t.key,
           title: t.title,
           statusId: t.statusId,
-          resolved: t.resolved,
           estimateMh: t.estimateMh,
           actualMh: t.actualMh,
           assigneeAccountId: t.assigneeAccountId,
           issueTypeId: t.issueTypeId,
-          categoryIds: t.categoryIds,
-          milestoneIds: t.milestoneIds,
+          parentIssueId: t.parentIssueId,
+          trackerProjectId: t.trackerProjectId,
+          attributes: t.attributes,
           createdAt: new Date(t.createdAt),
         })),
       ),

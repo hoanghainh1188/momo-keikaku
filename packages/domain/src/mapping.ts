@@ -23,16 +23,20 @@ export function mappingHead(
   return head;
 }
 
-/** FR-22: strict priority order, first match wins. Pure. */
+function attributeIds(obs: TicketObservation, kind: 'milestone' | 'category'): string[] {
+  return obs.attributes.filter((a) => a.kind === kind).map((a) => a.id);
+}
+
+/** FR-22: strict priority order, first match wins. Pure. Reads `attributes` (AD-6). */
 export function evaluateRules(rules: MappingRule[], obs: TicketObservation): string | null {
   const ordered = [...rules].sort((a, b) => a.priority - b.priority);
   for (const r of ordered) {
     switch (r.match.field) {
       case 'milestone':
-        if (obs.milestoneIds.includes(r.match.value)) return r.wpId;
+        if (attributeIds(obs, 'milestone').includes(r.match.value)) return r.wpId;
         break;
       case 'category':
-        if (obs.categoryIds.includes(r.match.value)) return r.wpId;
+        if (attributeIds(obs, 'category').includes(r.match.value)) return r.wpId;
         break;
       case 'issueType':
         if (obs.issueTypeId === r.match.value) return r.wpId;

@@ -1,6 +1,12 @@
 import { workingDaysBetween, type HolidayCalendar, type IsoDate } from './calendar';
 import { compareRatio } from './health';
-import type { BaselineVersion, TicketObservation, WorkPackage } from './types';
+import {
+  DEFAULT_RESOLVED_STATUS_IDS,
+  isResolvedStatus,
+  type BaselineVersion,
+  type TicketObservation,
+  type WorkPackage,
+} from './types';
 import {
   divRoundHalfEven,
   maxBigint,
@@ -58,6 +64,11 @@ export interface EvmInput {
   /** AC of the baselined WPs only, for CPI (planned scope) */
   plannedScopeAcMh: Mh;
   measurementBasis: 'hours' | 'count';
+  /**
+   * AD-6: Connector Resolved status ids, resolved at compute time. Defaults to
+   * `DEFAULT_RESOLVED_STATUS_IDS` (`Closed`) until `connector_setting_event` lands.
+   */
+  resolvedStatusIds?: ReadonlySet<string>;
 }
 
 export interface EvmResult {
@@ -103,21 +114,23 @@ export function percentComplete(
   tickets: TicketObservation[],
   baselineMh: Mh,
   completed: boolean,
+  resolvedStatusIds: ReadonlySet<string> = DEFAULT_RESOLVED_STATUS_IDS,
 ): { pct: Ratio; basis: PctBasis; lowEvidence: boolean } {
   if (tickets.length === 0) return { pct: ZERO, basis: 'no-evidence', lowEvidence: true };
   const lowEvidence = tickets.length < 3;
   const allEstimated = tickets.every((t) => t.estimateMh !== null && t.estimateMh > 0n);
+  const resolved = (t: TicketObservation) => isResolvedStatus(t.statusId, resolvedStatusIds);
   let pct: Ratio;
   let basis: PctBasis;
   if (allEstimated) {
     basis = 'estimate';
-    const resolvedEst = sum(tickets.filter((t) => t.resolved).map((t) => t.estimateMh ?? 0n));
+    const resolvedEst = sum(tickets.filter(resolved).map((t) => t.estimateMh ?? 0n));
     const totalEst = sum(tickets.map((t) => t.estimateMh ?? 0n));
     const denom = maxBigint(baselineMh, totalEst);
     pct = denom === 0n ? ZERO : ratio(resolvedEst, denom);
   } else {
     basis = 'count';
-    pct = ratio(BigInt(tickets.filter((t) => t.resolved).length), BigInt(tickets.length));
+    pct = ratio(BigInt(tickets.filter(resolved).length), BigInt(tickets.length));
   }
   // FR-30: capped at 99% until the PM marks the WP complete.
   if (!completed && compareRatio(pct, PCT_CAP) > 0) pct = PCT_CAP;
@@ -134,6 +147,7 @@ export const isMarkedComplete = (wp: WorkPackage): boolean =>
   !wp.isMilestone && wp.actualFinish !== null;
 
 export function computeEvm(input: EvmInput): EvmResult {
+  const resolvedStatusIds = input.resolvedStatusIds ?? DEFAULT_RESOLVED_STATUS_IDS;
   const wpById = new Map(input.wps.map((w) => [w.id, w]));
   const perWp: WpMeasure[] = [];
 
@@ -151,7 +165,7 @@ export function computeEvm(input: EvmInput): EvmResult {
             basis: 'loe' as const,
             lowEvidence: false,
           }
-        : percentComplete(tickets, b.baselineMh, isMarkedComplete(wp));
+        : percentComplete(tickets, b.baselineMh, isMarkedComplete(wp), resolvedStatusIds);
     perWp.push({
       wpId: b.wpId,
       wbsCode: wp.wbsCode,
@@ -164,7 +178,7 @@ export function computeEvm(input: EvmInput): EvmResult {
       evMh: divRoundHalfEven(b.baselineMh * pct.num, pct.den),
       acMh: input.acByWp.get(b.wpId) ?? 0n,
       mappedTickets: tickets.length,
-      resolvedTickets: tickets.filter((t) => t.resolved).length,
+      resolvedTickets: tickets.filter((t) => isResolvedStatus(t.statusId, resolvedStatusIds)).length,
     });
   }
 

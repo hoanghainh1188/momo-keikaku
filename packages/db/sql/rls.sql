@@ -270,6 +270,48 @@ CREATE POLICY "maintenance_bypass" ON public."connector"
   USING (true)
   WITH CHECK (true);
 
+-- ticket (derived): AD-6 Ticket identity (story 5.1). UNIQUE (tenant_id, tracker_kind, tracker_site, tracker_issue_id); rebuilt from snapshot observations by the ingest writer.
+ALTER TABLE public."ticket" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public."ticket" FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "tenant_isolation" ON public."ticket";
+CREATE POLICY "tenant_isolation" ON public."ticket"
+  FOR ALL
+  USING ("tenant_id" = NULLIF(current_setting('app.tenant_id', true), ''))
+  WITH CHECK ("tenant_id" = NULLIF(current_setting('app.tenant_id', true), ''));
+DROP POLICY IF EXISTS "maintenance_bypass" ON public."ticket";
+CREATE POLICY "maintenance_bypass" ON public."ticket"
+  FOR ALL TO "momo_maintenance"
+  USING (true)
+  WITH CHECK (true);
+
+-- tracker_account (mutable-audited): AD-6 Tracker Account identity (story 5.1). Upserted only from TrackerAccountObservation; display name and email are personal data (NFR-S6).
+ALTER TABLE public."tracker_account" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public."tracker_account" FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "tenant_isolation" ON public."tracker_account";
+CREATE POLICY "tenant_isolation" ON public."tracker_account"
+  FOR ALL
+  USING ("tenant_id" = NULLIF(current_setting('app.tenant_id', true), ''))
+  WITH CHECK ("tenant_id" = NULLIF(current_setting('app.tenant_id', true), ''));
+DROP POLICY IF EXISTS "maintenance_bypass" ON public."tracker_account";
+CREATE POLICY "maintenance_bypass" ON public."tracker_account"
+  FOR ALL TO "momo_maintenance"
+  USING (true)
+  WITH CHECK (true);
+
+-- fixture_cursor (operational): AD-6 / AD-17 fixture-replay page cursor (story 5.1). Operational bookkeeping behind FixtureCursorPort; tenant-owned so withTenant isolates Connectors.
+ALTER TABLE public."fixture_cursor" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public."fixture_cursor" FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "tenant_isolation" ON public."fixture_cursor";
+CREATE POLICY "tenant_isolation" ON public."fixture_cursor"
+  FOR ALL
+  USING ("tenant_id" = NULLIF(current_setting('app.tenant_id', true), ''))
+  WITH CHECK ("tenant_id" = NULLIF(current_setting('app.tenant_id', true), ''));
+DROP POLICY IF EXISTS "maintenance_bypass" ON public."fixture_cursor";
+CREATE POLICY "maintenance_bypass" ON public."fixture_cursor"
+  FOR ALL TO "momo_maintenance"
+  USING (true)
+  WITH CHECK (true);
+
 -- tracker_snapshot (append-only): An observation of the tracker at one instant. Editing it would rewrite what was observed.
 ALTER TABLE public."tracker_snapshot" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public."tracker_snapshot" FORCE ROW LEVEL SECURITY;

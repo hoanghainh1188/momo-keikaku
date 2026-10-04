@@ -44,6 +44,12 @@ type RawTicket = Omit<TicketObservation, 'estimateMh' | 'actualMh'> & {
   estimateMh: number | null;
   actualMh: number | null;
 };
+
+type RawAccount = {
+  accountId: string;
+  displayName: string;
+  email?: string;
+};
 type RawWorkPackage = Omit<WorkPackage, 'plannedMh'> & { plannedMh: number; baselineMh: number };
 type RawBaselineWp = Omit<BaselineWp, 'baselineMh'> & { baselineMh: number };
 
@@ -62,9 +68,18 @@ export const mhFromJson = (n: number): Mh => integerFromJson(n);
 const optionalMhFromJson = (n: number | null): Mh | null => (n === null ? null : mhFromJson(n));
 
 const ticketFromJson = (t: RawTicket): TicketObservation => ({
-  ...t,
+  trackerIssueId: t.trackerIssueId,
+  key: t.key,
+  title: t.title,
+  statusId: t.statusId,
   estimateMh: optionalMhFromJson(t.estimateMh),
   actualMh: optionalMhFromJson(t.actualMh),
+  assigneeAccountId: t.assigneeAccountId,
+  createdAt: t.createdAt,
+  parentIssueId: t.parentIssueId ?? null,
+  issueTypeId: t.issueTypeId,
+  trackerProjectId: t.trackerProjectId ?? null,
+  attributes: t.attributes ?? [],
 });
 
 export interface FixtureSnapshotFile {
@@ -73,7 +88,9 @@ export interface FixtureSnapshotFile {
   observedAtOffsetHours: number;
   recordedObservedAt: string;
   hoursFieldPresent: boolean;
+  complete?: boolean;
   tickets: RawTicket[];
+  accounts?: RawAccount[];
 }
 
 export interface FixtureProject {
@@ -128,6 +145,14 @@ export function loadFixtureSnapshots(anchorIso: string): (SnapshotRead & { snaps
       snapshotId: `snap-${raw.scenario}-${String(raw.page).padStart(4, '0')}`,
       observedAt: new Date(anchor + raw.observedAtOffsetHours * 3600_000).toISOString(),
       hoursFieldPresent: raw.hoursFieldPresent,
+      complete: raw.complete ?? true,
+      accounts: (raw.accounts ?? []).map((a) => ({
+        accountId: a.accountId,
+        displayName: a.displayName,
+        ...(a.email !== undefined ? { email: a.email } : {}),
+      })),
+      rateLimit: null,
+      adapterKind: 'fixture' as const,
       tickets: raw.tickets.map(ticketFromJson),
     };
   });

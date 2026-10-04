@@ -1,2 +1,12 @@
-{ "name": "@momo/adapters", "version": "0.0.0", "private": true, "type": "module", "main": "src/index.ts",
-  "dependencies": { "uuid": "11.1.1" } }
+{
+  "name": "@momo/adapters",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "dependencies": {
+    "@momo/domain": "workspace:*",
+    "uuid": "11.1.1"
+  }
+}
+

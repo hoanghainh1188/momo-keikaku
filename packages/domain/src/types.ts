@@ -1,20 +1,55 @@
 import type { IsoDate } from './calendar';
 import type { Jpy, Mh, Ratio } from './units';
 
-/** AD-6: the FR-19 whitelist. Descriptions and comments are never carried. */
+/**
+ * AD-6: closed attribute kinds for Backlog in R0. Jira Post-Q1 adds its own closed set
+ * (`label` | `component` | `fixVersion` | `epic`) without migrating the ledger.
+ */
+export type BacklogAttributeKind = 'milestone' | 'category';
+
+/** Per-Tracker attribute kinds. R0 only names Backlog's; the observation carries the closed set. */
+export type TicketAttributeKind = BacklogAttributeKind;
+
+/** One mapping attribute on a TicketObservation (AD-6). */
+export interface TicketAttribute {
+  kind: TicketAttributeKind;
+  id: string;
+  label?: string;
+}
+
+/**
+ * AD-6: the FR-19 whitelist plus `createdAt`. Descriptions and comments are never carried.
+ * The adapter reports `statusId` only — "Resolved" is Connector configuration at compute time.
+ */
 export interface TicketObservation {
   trackerIssueId: string;
   key: string;
   title: string;
   statusId: string;
-  resolved: boolean;
   estimateMh: Mh | null;
   actualMh: Mh | null;
   assigneeAccountId: string | null;
-  issueTypeId: string;
-  categoryIds: string[];
-  milestoneIds: string[];
   createdAt: string; // instant, for FR-42 opening-balance classification
+  parentIssueId: string | null;
+  issueTypeId: string;
+  trackerProjectId: string | null;
+  attributes: TicketAttribute[];
+}
+
+/** AD-6: the only source of `tracker_account` identity rows. */
+export interface TrackerAccountObservation {
+  accountId: string;
+  displayName: string;
+  email?: string;
+}
+
+/** AD-6 adapter kinds recorded on every snapshot. */
+export type AdapterKind = 'fixture' | 'backlog';
+
+/** Rate-limit signal from an HTTP tracker (scaffold for 5.3). */
+export interface RateLimitState {
+  remaining: number | null;
+  resetAt: string | null;
 }
 
 export interface SnapshotRead {
@@ -22,6 +57,11 @@ export interface SnapshotRead {
   observedAt: string;
   hoursFieldPresent: boolean;
   tickets: TicketObservation[];
+  /** AD-6: present on TrackerPort reads; optional on older in-memory demo shapes until filled. */
+  complete?: boolean;
+  accounts?: TrackerAccountObservation[];
+  rateLimit?: RateLimitState | null;
+  adapterKind?: AdapterKind;
 }
 
 export type LedgerEntryKind = 'opening_balance' | 'delta';
@@ -58,7 +98,7 @@ export interface MappingRule {
   priority: number; // strict order, lowest wins
   name: string;
   wpId: string;
-  /** Demo supports the Backlog attribute set from FR-22. */
+  /** Demo supports the Backlog attribute set from FR-22 — values match `attributes[].id`. */
   match:
     | { field: 'milestone'; value: string }
     | { field: 'category'; value: string }
@@ -164,3 +204,17 @@ export const DEFAULT_THRESHOLDS: ProjectConfig['thresholds'] = {
   unplannedGreenBelow: { num: 1n, den: 10n },
   unplannedAmberMax: { num: 2n, den: 10n },
 };
+
+/**
+ * Demo / seed Resolved set until `connector_setting_event` lands (later story).
+ * Compute paths take an explicit `resolvedStatusIds`; this is the shared default.
+ */
+export const DEFAULT_RESOLVED_STATUS_IDS: ReadonlySet<string> = new Set(['Closed']);
+
+/** True when the observation's status is in the Connector's Resolved set (AD-6). */
+export function isResolvedStatus(
+  statusId: string,
+  resolvedStatusIds: ReadonlySet<string>,
+): boolean {
+  return resolvedStatusIds.has(statusId);
+}

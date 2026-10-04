@@ -34,14 +34,14 @@ const ticket = (id: string, estimateHours: number | null, resolved: boolean): Ti
   key: id,
   title: id,
   statusId: resolved ? 'Closed' : 'Open',
-  resolved,
   estimateMh: estimateHours === null ? null : hoursToMh(estimateHours),
   actualMh: 0n,
   assigneeAccountId: null,
-  issueTypeId: 'Task',
-  categoryIds: [],
-  milestoneIds: [],
   createdAt: '2026-06-01T00:00:00.000Z',
+  parentIssueId: null,
+  issueTypeId: 'Task',
+  trackerProjectId: null,
+  attributes: [],
 });
 
 describe('plannedValue (FR-30: PV spread linearly over baseline working days)', () => {

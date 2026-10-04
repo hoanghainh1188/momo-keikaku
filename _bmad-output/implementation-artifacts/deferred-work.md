@@ -1283,3 +1283,15 @@ above can see where it went.
 - source_spec: `_bmad-output/implementation-artifacts/spec-epic-4-retro-item-24-f10-f11-one-head-zero-leaf.md`
   summary: Fail closed at appendVersionWithWps when wps.length === 0 so a bypass of evaluatePinAndCompleteness cannot land an empty Baseline version.
   evidence: Item-24 F10/F11 Blind Hunter review 2026-10-04. Defense in depth; product writers share the gate path that now refuses zero leaves.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-1-one-port-to-every-tracker-and-a-fixture-that-replays-like-on.md`
+  summary: Wire backlog-http auth as Backlog apiKey query (not Bearer) and add AbortSignal timeout on GET.
+  evidence: Story 5.1 review — scaffold only; live read completeness and auth shape land in 5.3.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-1-one-port-to-every-tracker-and-a-fixture-that-replays-like-on.md`
+  summary: FixtureCursorPort compare-and-set under the per-Project lock so concurrent readScope cannot skip or duplicate pages.
+  evidence: Story 5.1 review — race needs the worker ingest transaction (5.5); memory/DB cursor today is single-caller.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-1-one-port-to-every-tracker-and-a-fixture-that-replays-like-on.md`
+  summary: Add a migrate-from-pre-0004 DB check that category_ids/milestone_ids fold into attributes before drop.
+  evidence: Story 5.1 review — fold SQL is in 0004; no REQUIRE_DB environment here to prove upgrade of legacy rows.

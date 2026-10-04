@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { attribute, rateOnDate } from './attribution';
 import { periodOf } from './calendar';
-import { checkLedgerInvariant, ingestSnapshot } from './ledger';
+import { AdapterKindMismatchError, checkLedgerInvariant, ingestSnapshot } from './ledger';
 import { applyRules, evaluateRules, mappingHead } from './mapping';
 import { DEFAULT_THRESHOLDS, type LedgerEntry, type MappingEvent, type ProjectConfig, type Resource, type SnapshotRead, type TicketObservation, type WorkPackage } from './types';
 import { hoursToMh } from './units';
@@ -27,14 +27,14 @@ const obs = (
   key: id,
   title: id,
   statusId: 'Open',
-  resolved: false,
   estimateMh: null,
   actualMh: actualHours === null ? null : hoursToMh(actualHours),
   assigneeAccountId: 'acct-1',
-  issueTypeId: 'Task',
-  categoryIds: [],
-  milestoneIds: [],
   createdAt: '2026-06-01T00:00:00.000Z',
+  parentIssueId: null,
+  issueTypeId: 'Task',
+  trackerProjectId: null,
+  attributes: [],
   ...over,
 });
 
@@ -42,6 +42,10 @@ const snap = (observedAt: string, tickets: TicketObservation[]): SnapshotRead =>
   observedAt,
   hoursFieldPresent: tickets.some((t) => t.actualMh !== null),
   tickets,
+  adapterKind: 'fixture',
+  complete: true,
+  accounts: [],
+  rateLimit: null,
 });
 
 const wp = (over: Partial<WorkPackage> & { id: string }): WorkPackage => ({
@@ -118,6 +122,36 @@ describe('ingestSnapshot (FR-25, FR-42)', () => {
     const r = ingestSnapshot({ prev: null, next: s1, activeBaselineVersionSeq: 7, seqFrom: 1 });
     expect(r.entries[0]!.activeBaselineVersionSeq).toBe(7);
   });
+
+  it('refuses an adapterKind mismatch with an operator-alert error (AD-6)', () => {
+    const s1 = snap('2026-09-01T09:00:00.000Z', [obs('t1', 10)]);
+    const s2 = {
+      ...snap('2026-09-08T09:00:00.000Z', [obs('t1', 12)]),
+      adapterKind: 'backlog' as const,
+    };
+    expect(() =>
+      ingestSnapshot({ prev: s1, next: s2, activeBaselineVersionSeq: 1, seqFrom: 1 }),
+    ).toThrow(AdapterKindMismatchError);
+    try {
+      ingestSnapshot({ prev: s1, next: s2, activeBaselineVersionSeq: 1, seqFrom: 1 });
+    } catch (e) {
+      expect(e).toMatchObject({
+        kind: 'operator-alert',
+        code: 'adapter_kind_mismatch',
+        previousKind: 'fixture',
+        nextKind: 'backlog',
+      });
+    }
+  });
+
+  it('does not refuse when prev omits adapterKind (older in-memory shapes)', () => {
+    const s1 = { ...snap('2026-09-01T09:00:00.000Z', [obs('t1', 10)]) };
+    delete (s1 as { adapterKind?: string }).adapterKind;
+    const s2 = snap('2026-09-08T09:00:00.000Z', [obs('t1', 12)]);
+    expect(() =>
+      ingestSnapshot({ prev: s1, next: s2, activeBaselineVersionSeq: 1, seqFrom: 1 }),
+    ).not.toThrow();
+  });
 });
 
 describe('mapping rules (FR-22)', () => {
@@ -127,13 +161,29 @@ describe('mapping rules (FR-22)', () => {
   ];
 
   it('matches in strict priority order', () => {
-    const t = obs('t1', 1, { categoryIds: ['Support'], issueTypeId: 'Bug' });
+    const t = obs('t1', 1, { attributes: [{ kind: 'category', id: 'Support' }], issueTypeId: 'Bug' });
     expect(evaluateRules(rules, t)).toBe('WP-CATCH');
     expect(evaluateRules([rules[1]!, rules[0]!], t)).toBe('WP-CATCH'); // sorted by priority, not order
   });
 
+  it('matches milestone attributes (AD-6)', () => {
+    const milestoneRules = [
+      {
+        id: 'rm',
+        priority: 1,
+        name: 'sprint',
+        wpId: 'WP-S1',
+        match: { field: 'milestone' as const, value: 'Phase2-Sprint1' },
+      },
+    ];
+    const t = obs('t1', 1, {
+      attributes: [{ kind: 'milestone', id: 'Phase2-Sprint1' }],
+    });
+    expect(evaluateRules(milestoneRules, t)).toBe('WP-S1');
+  });
+
   it('never overrides a manual Mapping', () => {
-    const t = obs('t1', 1, { categoryIds: ['Support'] });
+    const t = obs('t1', 1, { attributes: [{ kind: 'category', id: 'Support' }] });
     const head = mappingHead([
       { seq: 1, ticketId: 't1', wpId: 'WP-9', source: 'manual', at: 'x', actor: 'pm' },
     ]);
@@ -141,7 +191,7 @@ describe('mapping rules (FR-22)', () => {
   });
 
   it('appends an event only when the rule result changes', () => {
-    const t = obs('t1', 1, { categoryIds: ['Support'] });
+    const t = obs('t1', 1, { attributes: [{ kind: 'category', id: 'Support' }] });
     const first = applyRules(rules, [t], new Map(), 1, 'x');
     expect(first).toHaveLength(1);
     expect(applyRules(rules, [t], mappingHead(first), 2, 'x')).toEqual([]);

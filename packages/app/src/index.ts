@@ -44,6 +44,14 @@ export type { Clock } from './ports/clock';
 export type { IdGenerator } from './ports/ids';
 export type { MailerPort, MailMessage } from './ports/mailer';
 export type {
+  FixtureCursorPort,
+  ScopeRead,
+  TrackerAdapterKind,
+  TrackerConnectorConfig,
+  TrackerCredentials,
+  TrackerPort,
+} from './ports/tracker';
+export type {
   DepartmentRow,
   NewProjectRow,
   OrgRepository,

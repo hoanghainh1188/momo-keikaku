@@ -5,15 +5,17 @@ import { computeForecast, type ForecastResult } from './forecast';
 import { computeHealth, isBehindPlan, type HealthColour, type HealthIndicator } from './health';
 import { mappingHead, type MappingHeadEntry } from './mapping';
 import { compareWp } from './schedule/order';
-import type {
-  BaselineVersion,
-  LedgerEntry,
-  MappingEvent,
-  ProjectConfig,
-  Resource,
-  SnapshotRead,
-  TicketObservation,
-  WorkPackage,
+import {
+  DEFAULT_RESOLVED_STATUS_IDS,
+  isResolvedStatus,
+  type BaselineVersion,
+  type LedgerEntry,
+  type MappingEvent,
+  type ProjectConfig,
+  type Resource,
+  type SnapshotRead,
+  type TicketObservation,
+  type WorkPackage,
 } from './types';
 import { compareBigint, costOf, ratio, sum, ZERO, type Jpy, type Mh, type Ratio } from './units';
 
@@ -45,6 +47,11 @@ export interface ReviewInput {
   asOf: IsoDate;
   dispositions: DispositionEvent[];
   formulaVersion?: string;
+  /**
+   * AD-6: Connector Resolved status ids at compute time. Defaults to `Closed` until
+   * `connector_setting_event` is pinned (later story).
+   */
+  resolvedStatusIds?: ReadonlySet<string>;
 }
 
 export interface UnmappedGroup {
@@ -142,6 +149,7 @@ export interface ReviewResult {
 export function computeReview(input: ReviewInput): ReviewResult {
   const head = mappingHead(input.mappingEvents);
   const baseline = activeBaseline(input);
+  const resolvedStatusIds = input.resolvedStatusIds ?? DEFAULT_RESOLVED_STATUS_IDS;
 
   const attribution = attribute({
     entries: input.ledger,
@@ -182,6 +190,7 @@ export function computeReview(input: ReviewInput): ReviewResult {
           totalAcMh: attribution.cumulative.totalMh,
           plannedScopeAcMh,
           measurementBasis,
+          resolvedStatusIds,
         });
 
   const milestones = baseline === null ? null : milestoneRows(baseline, input.wps, input.asOf);
@@ -222,11 +231,12 @@ export function computeReview(input: ReviewInput): ReviewResult {
     if (m?.wpId) continue;
     const mh = attribution.hoursByTicket.get(t.trackerIssueId) ?? 0n;
     if (mh === 0n) continue;
-    const attr = t.categoryIds[0] ?? t.issueTypeId;
+    const categoryId = t.attributes.find((a) => a.kind === 'category')?.id;
+    const attr = categoryId ?? t.issueTypeId;
     const g = groups.get(attr) ?? {
       key: attr,
       label: attr,
-      attribute: t.categoryIds[0] ? 'category' : 'issue type',
+      attribute: categoryId ? 'category' : 'issue type',
       ticketCount: 0,
       mh: 0n,
       jpy: 0n,
@@ -241,7 +251,7 @@ export function computeReview(input: ReviewInput): ReviewResult {
       key: t.key,
       title: t.title,
       mh,
-      resolved: t.resolved,
+      resolved: isResolvedStatus(t.statusId, resolvedStatusIds),
       status: t.statusId,
     });
     groups.set(attr, g);

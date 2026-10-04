@@ -38,7 +38,7 @@ const ticket = (trackerIssueId: string, categoryIds: string[] = []) => ({
   key: `KEY-${trackerIssueId}`,
   title: `Title ${trackerIssueId}`,
   statusId: 'open',
-  categoryIds,
+  attributes: categoryIds.map((id) => ({ kind: 'category' as const, id })),
 });
 
 /**
