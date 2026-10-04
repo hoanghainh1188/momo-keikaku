@@ -43,7 +43,19 @@ export interface ProjectBundle {
     tenantName: string;
     departmentName: string;
     clientName: string;
-    connector: { id: string; adapter: string; scope: string; spaceLabel: string };
+    connector: {
+      id: string;
+      adapter: string;
+      scope: string;
+      spaceLabel: string;
+      site: string;
+      approvalRecordedAt: string | null;
+      approvalName: string | null;
+      lastErrorCode: string | null;
+      lastErrorMessage: string | null;
+      lastErrorAt: string | null;
+      hasCredentials: boolean;
+    };
     /** AD-15 / review G-5: the demo's fixed clock. */
     anchor: string;
     snapshotAgeMinutes: number;
@@ -300,6 +312,14 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
         adapter: con?.adapter ?? 'fixture',
         scope: con?.scope ?? '',
         spaceLabel: con?.spaceLabel ?? '',
+        site: con?.site ?? '',
+        approvalRecordedAt: con?.approvalRecordedAt?.toISOString() ?? null,
+        approvalName: con?.approvalName ?? null,
+        lastErrorCode: con?.lastErrorCode ?? null,
+        lastErrorMessage: con?.lastErrorMessage ?? null,
+        lastErrorAt: con?.lastErrorAt?.toISOString() ?? null,
+        hasCredentials:
+          con?.credentialsCiphertext != null && con?.credentialsNonce != null,
       },
       anchor,
       snapshotAgeMinutes: Math.round(

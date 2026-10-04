@@ -214,6 +214,34 @@ const configShape = z.object({
   SEED_PROFILE: z
     .enum(['demo', 'load'], { error: 'must be `demo` or `load` — which Tenant shape the seed writes' })
     .default('demo'),
+
+  // Tracker credentials crypto (story 5.2 / AR-29). `local` uses AES-256-GCM with
+  // `CREDENTIALS_KEY`; `kms` is Epic 8 and fails only at the composition root naming the missing
+  // adapter (same pattern as `MAILER=ses`).
+  CREDENTIALS_CRYPTO: z
+    .enum(['local', 'kms'], {
+      error: 'must be `local` or `kms` — which credentials crypto to use',
+    })
+    .default('local'),
+
+  // 32-byte AES key, base64-encoded. Required when `CREDENTIALS_CRYPTO=local` (the default).
+  CREDENTIALS_KEY: z
+    .string()
+    .min(1, 'must not be empty — the base64-encoded 32-byte AES-256 key')
+    .refine((value) => {
+      try {
+        return Buffer.from(value, 'base64').length === 32;
+      } catch {
+        return false;
+      }
+    }, 'must be base64 that decodes to exactly 32 bytes')
+    .optional(),
+
+  // Stored with every ciphertext so a key can be rotated offline (AR-29).
+  CREDENTIALS_KEY_ID: z
+    .string()
+    .min(1, 'must not be empty — the key id stored with every ciphertext')
+    .optional(),
 });
 
 /** Keys AD-17 refuses outside `DEPLOYMENT=local`, in the order a failure names them. */
@@ -248,6 +276,22 @@ const configSchema = configShape.superRefine((value, ctx) => {
       path: ['FIXTURE_TIME_ANCHOR'],
       message: 'is required when CLOCK_MODE=fixture',
     });
+  }
+  if (value.CREDENTIALS_CRYPTO === 'local') {
+    if (value.CREDENTIALS_KEY === undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['CREDENTIALS_KEY'],
+        message: 'is required when CREDENTIALS_CRYPTO=local',
+      });
+    }
+    if (value.CREDENTIALS_KEY_ID === undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['CREDENTIALS_KEY_ID'],
+        message: 'is required when CREDENTIALS_CRYPTO=local',
+      });
+    }
   }
   if (value.DEPLOYMENT !== 'local') {
     for (const key of Object.keys(LOCAL_ONLY_WHEN) as (keyof typeof LOCAL_ONLY_WHEN)[]) {
@@ -304,6 +348,17 @@ export function parseConfigKey<K extends keyof AppConfig>(
     const anchor = configShape.shape.FIXTURE_TIME_ANCHOR.safeParse(env.FIXTURE_TIME_ANCHOR);
     if (!anchor.success || anchor.data === undefined) {
       throw new Error('Invalid configuration: FIXTURE_TIME_ANCHOR is required when CLOCK_MODE=fixture');
+    }
+  }
+
+  if (key === 'CREDENTIALS_CRYPTO' && value === 'local') {
+    for (const needed of ['CREDENTIALS_KEY', 'CREDENTIALS_KEY_ID'] as const) {
+      const parsed = configShape.shape[needed].safeParse(env[needed]);
+      if (!parsed.success || parsed.data === undefined) {
+        throw new Error(
+          `Invalid configuration: ${needed} is required when CREDENTIALS_CRYPTO=local`,
+        );
+      }
     }
   }
 
@@ -378,6 +433,15 @@ export const config: AppConfig = {
   },
   get SEED_PROFILE(): 'demo' | 'load' {
     return parseConfigKey(process.env, 'SEED_PROFILE');
+  },
+  get CREDENTIALS_CRYPTO(): 'local' | 'kms' {
+    return parseConfigKey(process.env, 'CREDENTIALS_CRYPTO');
+  },
+  get CREDENTIALS_KEY(): string | undefined {
+    return parseConfigKey(process.env, 'CREDENTIALS_KEY');
+  },
+  get CREDENTIALS_KEY_ID(): string | undefined {
+    return parseConfigKey(process.env, 'CREDENTIALS_KEY_ID');
   },
 };
 

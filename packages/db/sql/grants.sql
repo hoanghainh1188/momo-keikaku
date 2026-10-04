@@ -97,6 +97,14 @@ GRANT SELECT, UPDATE, DELETE ON public."baseline_wp" TO "momo_maintenance";
 -- connector (mutable-audited)
 GRANT SELECT, INSERT, UPDATE, DELETE ON public."connector" TO "momo_app";
 
+-- connector_scope_event (append-only)
+GRANT SELECT, INSERT ON public."connector_scope_event" TO "momo_app";
+GRANT SELECT, UPDATE, DELETE ON public."connector_scope_event" TO "momo_maintenance";
+
+-- tracker_snapshot_attempt (append-only)
+GRANT SELECT, INSERT ON public."tracker_snapshot_attempt" TO "momo_app";
+GRANT SELECT, UPDATE, DELETE ON public."tracker_snapshot_attempt" TO "momo_maintenance";
+
 -- ticket (derived)
 GRANT SELECT, INSERT, UPDATE, DELETE ON public."ticket" TO "momo_app";
 

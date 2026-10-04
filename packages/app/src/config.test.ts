@@ -19,6 +19,9 @@ process.env.APP_DATABASE_URL ??= 'postgres://momo_app:momo_app@localhost:55433/m
 
 const { parseConfig, parseConfigKey, parseGoogleProvider } = await import('./config');
 
+/** 32 zero bytes, base64 — valid local AES key for config tests only. */
+const TEST_CREDENTIALS_KEY = Buffer.alloc(32, 0).toString('base64');
+
 const COMPLETE = {
   DATABASE_URL: 'postgres://momo:momo@localhost:55433/momo_keikaku',
   APP_DATABASE_URL: 'postgres://momo_app:momo_app@localhost:55433/momo_keikaku',
@@ -26,6 +29,8 @@ const COMPLETE = {
   BETTER_AUTH_URL: 'http://localhost:3101',
   SEED_DEMO_PASSWORD: 'demo-password',
   DEPLOYMENT: 'local',
+  CREDENTIALS_KEY: TEST_CREDENTIALS_KEY,
+  CREDENTIALS_KEY_ID: 'local-test',
 } as const;
 
 describe('parseConfig', () => {
@@ -37,6 +42,7 @@ describe('parseConfig', () => {
       MAILER: 'console',
       CLOCK_MODE: 'system',
       SEED_PROFILE: 'demo',
+      CREDENTIALS_CRYPTO: 'local',
     });
   });
 
@@ -256,6 +262,30 @@ describe('DEPLOYMENT and local-only refusals', () => {
   it('defaults SEED_PROFILE to demo and accepts load', () => {
     expect(parseConfig({ ...COMPLETE }).SEED_PROFILE).toBe('demo');
     expect(parseConfig({ ...COMPLETE, SEED_PROFILE: 'load' }).SEED_PROFILE).toBe('load');
+  });
+
+  it('defaults CREDENTIALS_CRYPTO to local and accepts kms', () => {
+    expect(parseConfig({ ...COMPLETE }).CREDENTIALS_CRYPTO).toBe('local');
+    expect(parseConfig({ ...COMPLETE, CREDENTIALS_CRYPTO: 'kms' }).CREDENTIALS_CRYPTO).toBe('kms');
+  });
+
+  it('requires CREDENTIALS_KEY and CREDENTIALS_KEY_ID when CREDENTIALS_CRYPTO=local', () => {
+    const { CREDENTIALS_KEY: _k, CREDENTIALS_KEY_ID: _id, ...rest } = COMPLETE;
+    expect(() => parseConfig({ ...rest })).toThrow(/CREDENTIALS_KEY/);
+    expect(() => parseConfig({ ...rest, CREDENTIALS_KEY: TEST_CREDENTIALS_KEY })).toThrow(
+      /CREDENTIALS_KEY_ID/,
+    );
+  });
+
+  it('does not require CREDENTIALS_KEY when CREDENTIALS_CRYPTO=kms', () => {
+    const { CREDENTIALS_KEY: _k, CREDENTIALS_KEY_ID: _id, ...rest } = COMPLETE;
+    expect(parseConfig({ ...rest, CREDENTIALS_CRYPTO: 'kms' }).CREDENTIALS_CRYPTO).toBe('kms');
+  });
+
+  it('refuses a CREDENTIALS_KEY that is not 32 bytes', () => {
+    expect(() =>
+      parseConfig({ ...COMPLETE, CREDENTIALS_KEY: Buffer.alloc(16).toString('base64') }),
+    ).toThrow(/CREDENTIALS_KEY/);
   });
 });
 

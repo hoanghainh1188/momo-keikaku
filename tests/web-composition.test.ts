@@ -263,12 +263,34 @@ vi.mock('@momo/adapters', () => ({
       sink(`to: ${message.to}\nsubject: ${message.subject}\n\n${message.text}`);
     },
   }),
+  credentialsAesOn: () => ({
+    keyId: 'web-composition-test',
+    encrypt: () => ({
+      ciphertext: Buffer.from('c'),
+      nonce: Buffer.from('n-----------'),
+      keyId: 'web-composition-test',
+    }),
+    decrypt: () => ({ apiKey: 'k' }),
+  }),
+  backlogHttpOn: () => ({
+    readScope: async () => {
+      throw new Error('backlogHttpOn stub');
+    },
+  }),
+  fixtureReplayOn: () => ({
+    readScope: async () => {
+      throw new Error('fixtureReplayOn stub');
+    },
+  }),
 }));
 
 const APP_URL = 'postgres://momo_app:momo_app@localhost:55433/momo_keikaku';
 vi.stubEnv('APP_DATABASE_URL', APP_URL);
 vi.stubEnv('BETTER_AUTH_SECRET', 'web-composition-test-secret-0123456789');
 vi.stubEnv('BETTER_AUTH_URL', 'http://localhost:3101');
+vi.stubEnv('CREDENTIALS_CRYPTO', 'local');
+vi.stubEnv('CREDENTIALS_KEY', 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=');
+vi.stubEnv('CREDENTIALS_KEY_ID', 'web-composition-test');
 
 const composition = await import('../apps/web/src/server/composition');
 /** Importing the composition root builds nothing that reads configuration (`next build`). */

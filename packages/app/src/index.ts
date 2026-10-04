@@ -150,6 +150,36 @@ export type {
 } from './use-cases/resource-input';
 export type { ChangeTenantCurrencyInput, TenantCurrencyDeps } from './use-cases/tenant-currency';
 
+// Story 5.2 — Connector writes' inputs/types + ingest notify (off the use-cases barrel so the
+// audit/role harness stays on the audited add/rotate/changeScope trio; composition wires these).
+export type {
+  AddConnectorInput,
+  ChangeScopeInput,
+  RotateCredentialsInput,
+} from './use-cases/connector-input';
+export type { CreatedConnector } from './use-cases/connector-writes';
+export type {
+  ConnectorPublicRow,
+  ConnectorWriteDeps,
+  ConnectorWriteRepository,
+  ConnectorWriteScope,
+} from './ports/connector-write';
+export type {
+  CredentialsCryptoPort,
+  CredentialsPlaintext,
+  EncryptedCredentials,
+} from './ports/credentials-crypto';
+export {
+  APPROVAL_REQUIRED_MESSAGE,
+  APPROVAL_REQUIRED_REASON,
+  CREDENTIAL_AUTH_FAILED_REASON,
+  credentialFailureMessage,
+  gateIngestApproval,
+  notifyCredentialFailure,
+  type GateIngestApprovalInput,
+  type NotifyCredentialFailureInput,
+} from './use-cases/connector-ingest';
+
 // Story 2.10 fence surface — outside the use-cases barrel (role/audit gates enumerate it via a
 // second module list — Epic 2 retro F10 / Q1→B).
 export {

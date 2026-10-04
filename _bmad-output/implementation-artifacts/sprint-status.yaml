@@ -32,7 +32,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 09-20-2026 16:55
-last_updated: 10-04-2026 19:12
+last_updated: 10-04-2026 12:54
 project: momo-keikaku
 project_key: NOKEY
 tracking_system: file-system
@@ -91,7 +91,7 @@ development_status:
 
   epic-5: in-progress
   5-1-one-port-to-every-tracker-and-a-fixture-that-replays-like-on: review
-  5-2-connect-a-backlog-space-read-only: backlog
+  5-2-connect-a-backlog-space-read-only: review
   5-3-a-paginated-read-is-complete-or-it-is-not-a-read: backlog
   5-4-snapshots-run-on-a-schedule-the-pm-can-see: backlog
   5-5-one-writer-builds-the-actuals-ledger: backlog

@@ -82,6 +82,24 @@ export const auditPayloadSchema = z.union([
       reason: z.string(),
     })
     .strict(),
+  // Connector writes (story 5.2) — never secrets.
+  z
+    .object({
+      projectId: z.string(),
+      site: z.string(),
+      scope: z.string(),
+      approvalName: z.string(),
+      scopeSeq: z.number().int(),
+    })
+    .strict(),
+  z.object({ projectId: z.string() }).strict(),
+  z
+    .object({
+      projectId: z.string(),
+      before: z.string(),
+      after: z.string(),
+    })
+    .strict(),
 ]);
 
 /**
@@ -188,6 +206,23 @@ export const AUDIT_PAYLOAD_BY_ACTION = {
       scheduleRunSeq: z.number().int(),
       leafCount: z.number().int(),
       reason: z.string(),
+    })
+    .strict(),
+  'connector.add': z
+    .object({
+      projectId: z.string(),
+      site: z.string(),
+      scope: z.string(),
+      approvalName: z.string(),
+      scopeSeq: z.number().int(),
+    })
+    .strict(),
+  'connector.rotate_credentials': z.object({ projectId: z.string() }).strict(),
+  'connector.change_scope': z
+    .object({
+      projectId: z.string(),
+      before: z.string(),
+      after: z.string(),
     })
     .strict(),
 } as const;

@@ -45,6 +45,10 @@ export default defineConfig({
     // apps/web/.env.development and the worker's start:dev). Never set this in ci.yml's job env.
     env: {
       DEPLOYMENT: 'local',
+      // Story 5.2 / AR-29: local AES key for unit tests that touch credentials crypto.
+      CREDENTIALS_CRYPTO: 'local',
+      CREDENTIALS_KEY: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
+      CREDENTIALS_KEY_ID: 'vitest-local',
     },
   },
 });

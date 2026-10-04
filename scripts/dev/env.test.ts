@@ -27,7 +27,11 @@ describe('resolveDevEnv (decision Q1-A)', () => {
     expect(parseEnvFile(fileToWrite!)).toMatchObject({
       BETTER_AUTH_SECRET: env.BETTER_AUTH_SECRET,
       SEED_DEMO_PASSWORD: env.SEED_DEMO_PASSWORD,
+      CREDENTIALS_CRYPTO: 'local',
+      CREDENTIALS_KEY: env.CREDENTIALS_KEY,
+      CREDENTIALS_KEY_ID: 'local-1',
     });
+    expect(Buffer.from(env.CREDENTIALS_KEY!, 'base64')).toHaveLength(32);
   });
 
   it('writes the web port it was given into BETTER_AUTH_URL', () => {
@@ -69,6 +73,8 @@ describe('resolveDevEnv (decision Q1-A)', () => {
       'SEED_DEMO_PASSWORD',
       'BETTER_AUTH_SECRET',
       'BETTER_AUTH_URL',
+      'CREDENTIALS_KEY',
+      'CREDENTIALS_KEY_ID',
     ]);
   });
 

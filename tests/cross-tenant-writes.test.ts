@@ -83,7 +83,12 @@ assertProbeTenantsDisjoint([PROBE_W, PROBE_V]);
 const WRITES: readonly ReadUseCase[] = READ_USE_CASES.filter((entry) => entry.kind === 'write');
 /** Probe Tenants already have Rates, so these writes only refuse — they are not on the success or audit-rollback paths. */
 const RATE_LOCKED: readonly ReadUseCase[] = WRITES.filter((entry) => entry.refusesWhenAnyRate !== undefined);
-const AUDITED_WRITES: readonly ReadUseCase[] = WRITES.filter((entry) => entry.refusesWhenAnyRate === undefined);
+const CONNECTOR_LOCKED: readonly ReadUseCase[] = WRITES.filter(
+  (entry) => entry.refusesWhenConnectorExists !== undefined,
+);
+const AUDITED_WRITES: readonly ReadUseCase[] = WRITES.filter(
+  (entry) => entry.refusesWhenAnyRate === undefined && entry.refusesWhenConnectorExists === undefined,
+);
 
 /** The id port for every write this file drives — one sequence for the run, never reused. */
 const IDS = idPort('xtwa-id');
@@ -268,6 +273,23 @@ describe.skipIf(!reachable)('the write use cases, against two probe Tenants as t
     },
   );
 
+  describe.skipIf(CONNECTOR_LOCKED.length === 0).each(
+    CONNECTOR_LOCKED.map((entry) => [entry.name, entry] as const),
+  )('write use case %s (refuses when a Connector already exists)', (_name, entry) => {
+    it('answers invalid_input and lands nothing, for the caller and the other Tenant', async () => {
+      const before = { w: await allRows(PROBE_W.tenantId), v: await allRows(PROBE_V.tenantId) };
+      const outcome = await drive(entry, ownTarget());
+      const after = { w: await allRows(PROBE_W.tenantId), v: await allRows(PROBE_V.tenantId) };
+
+      expect(outcome.error, `${entry.name} threw instead of refusing`).toBeUndefined();
+      expect(outcome.refused?.code).toBe('invalid_input');
+      expect(outcome.refused?.details).toEqual({ projectId: ['connector_exists'] });
+      expect(after, `${entry.name} changed a row although a Connector already exists`).toEqual(
+        before,
+      );
+    });
+  });
+
   /**
    * AD-14 against Postgres: the change and its audit record are ONE transaction. Each write is
    * driven on its own Tenant's Project through `packages/db`'s real tenant transaction, with one
@@ -402,6 +424,7 @@ describe.skipIf(!reachable)('the write use cases, against two probe Tenants as t
           audits: withoutSeq(landed.audits),
           rateEntries: withoutSeq(landed.rateEntries),
           projectDefaultRates: withoutSeq(landed.projectDefaultRates),
+          connectorScopeEvents: withoutSeq(landed.connectorScopeEvents),
         },
         `${entry.name} did not land the rows it must`,
       ).toEqual(expected);

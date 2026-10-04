@@ -10,6 +10,8 @@ import { MEMBERSHIP_WRITE_AUDIT } from '../packages/app/src/use-cases/membership
 import { ORG_WRITE_AUDIT } from '../packages/app/src/use-cases/org-writes';
 import { PROJECT_WRITE_AUDIT } from '../packages/app/src/use-cases/project-writes';
 import { RESOURCE_WRITE_AUDIT } from '../packages/app/src/use-cases/resource-writes';
+import { CONNECTOR_WRITE_AUDIT } from '../packages/app/src/use-cases/connector-writes';
+import type { CredentialsCryptoPort } from '../packages/app/src/ports/credentials-crypto';
 import {
   READ_SURFACE_MODULE,
   READ_USE_CASES,
@@ -106,6 +108,7 @@ const TARGET: WriteTarget = {
   staleProjectId: 'prj-gate-gone',
   secondAdminUserId: 'usr-gate-admin-2',
   resourceId: 'res-gate',
+  connectorId: 'con-gate',
 };
 
 interface Committed {
@@ -193,6 +196,37 @@ const FAKE_FAMILIES: {
     appendResourceRate: write('resources.appendResourceRate', undefined),
     appendProjectDefaultRate: write('resources.appendProjectDefaultRate', undefined),
   }),
+  connectorWrite: (write) => ({
+    projectAnchor: async () => AT,
+    findConnector: async (id) =>
+      id === 'con-gate'
+        ? {
+            id: 'con-gate',
+            projectId: WORLD.project.id,
+            adapter: 'backlog',
+            site: 'example.backlog.jp',
+            scope: 'EC2',
+            spaceLabel: 'example.backlog.jp',
+            approvalRecordedAt: AT,
+            approvalName: 'fixture',
+            lastErrorCode: null,
+            lastErrorMessage: null,
+            lastErrorAt: null,
+            hasCredentials: true,
+          }
+        : null,
+    findConnectorForProject: async (projectId) =>
+      projectId === WORLD.project.id ? null : null, // allow addConnector on the gate Project
+    insertConnector: write('connectorWrite.insertConnector', undefined),
+    rotateCredentials: write('connectorWrite.rotateCredentials', undefined),
+    updateScope: write('connectorWrite.updateScope', undefined),
+    appendScopeEvent: write('connectorWrite.appendScopeEvent', 1),
+    latestScopeSeq: async () => 1,
+    appendSnapshotAttempt: write('connectorWrite.appendSnapshotAttempt', undefined),
+    setLastError: write('connectorWrite.setLastError', undefined),
+    countMappingEventsForProject: async () => 0,
+    loadEncryptedCredentials: async () => null,
+  }),
 };
 
 /** Drives one invocation against a fresh fake transaction. */
@@ -221,6 +255,7 @@ async function drive(invoke: InvokeWrite, sabotage: Sabotage = {}): Promise<Run>
         org: FAKE_FAMILIES.org(write),
         membership: FAKE_FAMILIES.membership(write),
         resources: FAKE_FAMILIES.resources(write),
+        connectorWrite: FAKE_FAMILIES.connectorWrite(write),
         bound: { tx: { marker: 'fake-tx' }, tenantId: 'ten-gate' },
         audit: {
           append: async (auditEntry) => {
@@ -406,8 +441,20 @@ function expectedStamp(name: string): Date | undefined {
   if (Object.hasOwn(ORG_WRITE_AUDIT, name)) return NOW;
   if (Object.hasOwn(MEMBERSHIP_WRITE_AUDIT, name)) return NOW;
   if (Object.hasOwn(RESOURCE_WRITE_AUDIT, name)) return NOW;
+  if (Object.hasOwn(CONNECTOR_WRITE_AUDIT, name)) return AT;
   return undefined;
 }
+
+/** Local AES stub for connector writes driven by this gate (no real key material). */
+export const GATE_CREDENTIALS_CRYPTO: CredentialsCryptoPort = {
+  keyId: 'gate-local',
+  encrypt: () => ({
+    ciphertext: Buffer.from('cipher'),
+    nonce: Buffer.from('nonce------'),
+    keyId: 'gate-local',
+  }),
+  decrypt: () => ({ apiKey: 'gate' }),
+};
 
 /** Driven half: Epic 1 use-case surface only (schedule/calendar classified, not driven — Q1→B). */
 const AUDITED = DECLARED_ON_USE_CASE_SURFACE.flatMap(([name, declaration]) =>

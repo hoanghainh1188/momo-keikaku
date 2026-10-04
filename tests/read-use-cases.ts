@@ -116,6 +116,8 @@ export interface WriteTarget extends UseCaseTarget {
    * ever the last admin.
    */
   readonly secondAdminUserId: string;
+  /** The Project's fixture Connector id (story 5.2 rotate / change-scope). */
+  readonly connectorId: string;
 }
 
 /** How a write is driven: the deps its caller chose, and the target's ids. */
@@ -209,6 +211,11 @@ export interface ReadUseCase {
    * success path, and the write is not on the audit-rollback pair.
    */
   readonly refusesWhenAnyRate?: string;
+  /**
+   * Set when the probe Project already has a Connector, so `addConnector` refuses
+   * `invalid_input` / `connector_exists`. Dedicated connector tests cover the success path.
+   */
+  readonly refusesWhenConnectorExists?: string;
 }
 
 /**
@@ -727,6 +734,91 @@ export const READ_USE_CASES: readonly ReadUseCase[] = [
         { currency: 'JPY' },
       ),
   },
+  {
+    name: 'addConnector',
+    kind: 'write',
+    why:
+      'FR-17 / story 5.2: inserts a Backlog Connector with encrypted credentials, client approval, ' +
+      'first connector_scope_event, and audit — never returns secrets.',
+    refusesWhenConnectorExists:
+      'Every probe Project already has a fixture Connector from seed. The success path is covered ' +
+      'by packages/app connector-writes unit tests; here the harness asserts the refuse.',
+    invokeWrite: (deps, target) =>
+      readSurface.addConnector(
+        {
+          ...deps,
+          crypto: {
+            keyId: 'harness-local',
+            encrypt: () => ({
+              ciphertext: Buffer.from('c'),
+              nonce: Buffer.from('n-----------'),
+              keyId: 'harness-local',
+            }),
+          },
+        },
+        contextOf(target),
+        {
+          projectId: target.projectId,
+          spaceUrl: 'https://example.backlog.jp/',
+          apiKey: 'harness-key',
+          projectKey: 'EC2',
+          approvalName: 'Client Approver',
+          approvalRecordedAt: '2026-09-01T00:00:00.000Z',
+        },
+      ),
+  },
+  {
+    name: 'rotateCredentials',
+    kind: 'write',
+    why:
+      'FR-17 / story 5.2: overwrites ciphertext only; Mapping history unchanged; audit without secrets.',
+    invokeWrite: (deps, target) =>
+      readSurface.rotateCredentials(
+        {
+          ...deps,
+          crypto: {
+            keyId: 'harness-local',
+            encrypt: () => ({
+              ciphertext: Buffer.from('rotated'),
+              nonce: Buffer.from('n-----------'),
+              keyId: 'harness-local',
+            }),
+          },
+        },
+        contextOf(target),
+        {
+          projectId: target.projectId,
+          connectorId: target.connectorId,
+          apiKey: 'rotated-key',
+        },
+      ),
+  },
+  {
+    name: 'changeConnectorScope',
+    kind: 'write',
+    why:
+      'FR-17 / AR-19 / story 5.2: updates connector.scope and appends connector_scope_event.',
+    invokeWrite: (deps, target) =>
+      readSurface.changeConnectorScope(
+        {
+          ...deps,
+          crypto: {
+            keyId: 'harness-local',
+            encrypt: () => ({
+              ciphertext: Buffer.from('c'),
+              nonce: Buffer.from('n-----------'),
+              keyId: 'harness-local',
+            }),
+          },
+        },
+        contextOf(target),
+        {
+          projectId: target.projectId,
+          connectorId: target.connectorId,
+          projectKey: 'EC2-NEW',
+        },
+      ),
+  },
 ] as const;
 
 /**
@@ -851,5 +943,19 @@ export const UNREACHED_TENANT_OWNED_TABLES: readonly UnreachedTable[] = [
       'Created by story 5.1 as operational bookkeeping behind FixtureCursorPort. No product READ ' +
       'use case — cursor is only read through the port inside fixture-replay. Keep declared until ' +
       'a dedicated operator/read path exists.',
+  },
+  {
+    table: 'connector_scope_event',
+    why:
+      'Created by story 5.2 as append-only scope history. Written by addConnector / changeScope; ' +
+      'snapshots store scope_seq. No dedicated READ use case yet — Connectors page reads connector ' +
+      'columns via getProjectReview. The first read removes this entry.',
+  },
+  {
+    table: 'tracker_snapshot_attempt',
+    why:
+      'Created by story 5.2 for failed snapshot attempts. Written by ingest gate / credential ' +
+      'notify; no READ use case yet — banner reads connector.last_error_*. The first read removes ' +
+      'this entry.',
   },
 ] as const;

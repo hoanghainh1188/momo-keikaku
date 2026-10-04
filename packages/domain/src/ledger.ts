@@ -13,6 +13,12 @@ export interface IngestInput {
   activeBaselineVersionSeq: number | null;
   /** next free ledger seq */
   seqFrom: number;
+  /**
+   * Client approval instant (story 5.2 / FR-17). When the caller supplies this field,
+   * `null` refuses ingest; omit it only in pure delta-math unit tests that do not model
+   * Connectors.
+   */
+  approvalRecordedAt?: Date | string | null;
 }
 
 export interface IngestResult {
@@ -22,6 +28,31 @@ export interface IngestResult {
   /** AD-8: basis detected from the data, never from a plan name. */
   measurementBasis: 'hours' | 'count';
   nextSeq: number;
+}
+
+/**
+ * FR-17 / story 5.2: ingest refuses a Connector with no client approval.
+ * Callers record the refusal as a failed attempt with a PM-visible reason.
+ */
+export class ApprovalRequiredError extends Error {
+  readonly code = 'approval_required' as const;
+
+  constructor() {
+    super('Connector has no client approval; ingest refused');
+    this.name = 'ApprovalRequiredError';
+  }
+}
+
+/**
+ * Domain gate for FR-17: `approval_recorded_at` must be present before ingest.
+ * Pass the column value (null when missing).
+ */
+export function requireConnectorApproval(
+  approvalRecordedAt: Date | string | null | undefined,
+): asserts approvalRecordedAt is Date | string {
+  if (approvalRecordedAt == null) {
+    throw new ApprovalRequiredError();
+  }
 }
 
 /**
@@ -46,6 +77,11 @@ export class AdapterKindMismatchError extends Error {
 
 export function ingestSnapshot(input: IngestInput): IngestResult {
   const { prev, next, activeBaselineVersionSeq } = input;
+
+  // FR-17: when the caller supplies approvalRecordedAt, null refuses (story 5.2).
+  if ('approvalRecordedAt' in input) {
+    requireConnectorApproval(input.approvalRecordedAt);
+  }
 
   // AD-6: refuse a kind change against the previous snapshot (operator alert).
   // Skip when either side omits adapterKind (older in-memory shapes); both must be set.

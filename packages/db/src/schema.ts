@@ -3,6 +3,7 @@ import {
   bigint,
   boolean,
   check,
+  customType,
   date,
   foreignKey,
   index,
@@ -14,6 +15,13 @@ import {
   timestamp,
   unique,
 } from 'drizzle-orm/pg-core';
+
+/** AES-256-GCM ciphertext / nonce (story 5.2 / AR-29). */
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({
+  dataType() {
+    return 'bytea';
+  },
+});
 
 /**
  * THE SCHEMA, AS ONE MIGRATION (story 2.1, AD-30). `drizzle-kit generate` renders this file (and
@@ -61,6 +69,7 @@ export const FK_MATCH_SIMPLE: readonly string[] = [
   'mapping_event_work_package_fk',
   'mapping_event_mapping_rule_fk',
   'disposition_event_work_package_fk',
+  'tracker_snapshot_scope_seq_fk',
 ];
 
 /** The two FKs that are `DEFERRABLE INITIALLY DEFERRED` (AD-25): `wp_dependency`'s leaf endpoints. */
@@ -823,8 +832,22 @@ export const connector = pgTable(
     tenantId: text('tenant_id').notNull(),
     projectId: text('project_id').notNull(),
     adapter: text('adapter').notNull(), // backlog | fixture | jira
+    /** Backlog host parsed from space URL, or fixture scenario directory name. */
+    site: text('site').notNull(),
     scope: text('scope').notNull(),
     spaceLabel: text('space_label').notNull(),
+    /** Client-side approval instant; null refuses ingest (FR-17 / story 5.2). */
+    approvalRecordedAt: timestamp('approval_recorded_at', { withTimezone: true }),
+    /** Who on the client side approved the connection. */
+    approvalName: text('approval_name'),
+    /** AES-256-GCM ciphertext (apiKey/token JSON); never returned by list/get. */
+    credentialsCiphertext: bytea('credentials_ciphertext'),
+    credentialsNonce: bytea('credentials_nonce'),
+    credentialsKeyId: text('credentials_key_id'),
+    /** Last credential/auth failure banner fields (FR-17). */
+    lastErrorCode: text('last_error_code'),
+    lastErrorMessage: text('last_error_message'),
+    lastErrorAt: timestamp('last_error_at', { withTimezone: true }),
   },
   (t) => ({
     tenantKey: unique('connector_tenant_id_key').on(t.tenantId, t.id),
@@ -832,6 +855,70 @@ export const connector = pgTable(
       name: 'connector_project_fk',
       columns: [t.tenantId, t.projectId],
       foreignColumns: [project.tenantId, project.id],
+    }),
+  }),
+);
+
+/**
+ * Connector scope history (story 5.2 / AR-19). Append-only; head's `seq` is what snapshots
+ * record as `scope_seq`.
+ */
+export const connectorScopeEvent = pgTable(
+  'connector_scope_event',
+  {
+    seq: bigint('seq', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+    tenantId: text('tenant_id').notNull(),
+    connectorId: text('connector_id').notNull(),
+    projectId: text('project_id').notNull(),
+    scope: text('scope').notNull(),
+    actor: text('actor').notNull(),
+    at: timestamp('at', { withTimezone: true }).notNull(),
+  },
+  (t) => ({
+    tenantKey: unique('connector_scope_event_tenant_seq_key').on(t.tenantId, t.seq),
+    byConnector: index('connector_scope_event_connector_idx').on(
+      t.tenantId,
+      t.connectorId,
+      t.seq,
+    ),
+    connector: foreignKey({
+      name: 'connector_scope_event_connector_fk',
+      columns: [t.tenantId, t.connectorId],
+      foreignColumns: [connector.tenantId, connector.id],
+    }),
+    project: foreignKey({
+      name: 'connector_scope_event_project_fk',
+      columns: [t.tenantId, t.projectId],
+      foreignColumns: [project.tenantId, project.id],
+    }),
+  }),
+);
+
+/**
+ * Failed snapshot attempts visible to the PM (story 5.2 / AR-16). Approval refuse and
+ * credential auth failures write rows; the full retry/schedule UX is 5.4.
+ */
+export const trackerSnapshotAttempt = pgTable(
+  'tracker_snapshot_attempt',
+  {
+    seq: bigint('seq', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+    tenantId: text('tenant_id').notNull(),
+    connectorId: text('connector_id').notNull(),
+    reasonCode: text('reason_code').notNull(),
+    /** PM-visible reason copy (never secrets). */
+    message: text('message').notNull(),
+    attemptedAt: timestamp('attempted_at', { withTimezone: true }).notNull(),
+  },
+  (t) => ({
+    byConnector: index('tracker_snapshot_attempt_connector_idx').on(
+      t.tenantId,
+      t.connectorId,
+      t.seq,
+    ),
+    connector: foreignKey({
+      name: 'tracker_snapshot_attempt_connector_fk',
+      columns: [t.tenantId, t.connectorId],
+      foreignColumns: [connector.tenantId, connector.id],
     }),
   }),
 );
@@ -930,6 +1017,8 @@ export const trackerSnapshot = pgTable(
     ticketCount: integer('ticket_count').notNull(),
     /** AD-6: adapter kind in effect for this snapshot; ingest refuses a mismatch. */
     adapterKind: text('adapter_kind').notNull(),
+    /** Scope event this snapshot read under (story 5.2 / AR-19); null on pre-5.2 rows. */
+    scopeSeq: bigint('scope_seq', { mode: 'number' }),
   },
   (t) => ({
     tenantKey: unique('tracker_snapshot_tenant_id_key').on(t.tenantId, t.id),
@@ -937,6 +1026,11 @@ export const trackerSnapshot = pgTable(
       name: 'tracker_snapshot_connector_fk',
       columns: [t.tenantId, t.connectorId],
       foreignColumns: [connector.tenantId, connector.id],
+    }),
+    scope: foreignKey({
+      name: 'tracker_snapshot_scope_seq_fk',
+      columns: [t.tenantId, t.scopeSeq],
+      foreignColumns: [connectorScopeEvent.tenantId, connectorScopeEvent.seq],
     }),
   }),
 );
@@ -1132,6 +1226,8 @@ export const schemaTables = {
   baselineVersion,
   baselineWp,
   connector,
+  connectorScopeEvent,
+  trackerSnapshotAttempt,
   ticket,
   trackerAccount,
   fixtureCursor,

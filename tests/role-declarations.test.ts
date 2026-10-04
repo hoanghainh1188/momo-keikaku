@@ -106,6 +106,24 @@ const WELL_FORMED_INPUT: Readonly<Record<string, unknown>> = {
     toVersionSeq: 2,
   },
   reDerivePinnedBaseline: { projectId: UNREACHED_PROJECT },
+  addConnector: {
+    projectId: UNREACHED_PROJECT,
+    spaceUrl: 'https://example.backlog.jp/',
+    apiKey: 'k',
+    projectKey: 'EC2',
+    approvalName: 'Approver',
+    approvalRecordedAt: '2026-09-01T00:00:00.000Z',
+  },
+  rotateCredentials: {
+    projectId: UNREACHED_PROJECT,
+    connectorId: 'con-1',
+    apiKey: 'k',
+  },
+  changeConnectorScope: {
+    projectId: UNREACHED_PROJECT,
+    connectorId: 'con-1',
+    projectKey: 'EC2',
+  },
 };
 
 type UseCaseFn = (
@@ -170,6 +188,13 @@ describe('every use case declares its roles', () => {
   it('pins every use case\'s declared roles', () => {
     expect(USE_CASE_ROLES).toMatchInlineSnapshot(`
       {
+        "addConnector": {
+          "projectScoped": true,
+          "roles": [
+            "tenant_admin",
+            "pm",
+          ],
+        },
         "addProjectNonWorkingDay": {
           "projectScoped": true,
           "roles": [
@@ -200,6 +225,13 @@ describe('every use case declares its roles', () => {
           "projectScoped": false,
           "roles": [
             "tenant_admin",
+          ],
+        },
+        "changeConnectorScope": {
+          "projectScoped": true,
+          "roles": [
+            "tenant_admin",
+            "pm",
           ],
         },
         "changeMemberRole": {
@@ -402,6 +434,13 @@ describe('every use case declares its roles', () => {
           "projectScoped": false,
           "roles": [
             "tenant_admin",
+          ],
+        },
+        "rotateCredentials": {
+          "projectScoped": true,
+          "roles": [
+            "tenant_admin",
+            "pm",
           ],
         },
         "setBaseline": {

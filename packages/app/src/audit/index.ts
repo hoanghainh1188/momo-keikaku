@@ -64,6 +64,10 @@ export const AUDIT_ACTIONS = [
   'baseline.set',
   // Re-baseline with mandatory reason (story 4.3 / FR-16).
   'baseline.rebaseline',
+  // Backlog Connector set-up / rotate / scope (story 5.2 / FR-17). Payloads never carry secrets.
+  'connector.add',
+  'connector.rotate_credentials',
+  'connector.change_scope',
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
