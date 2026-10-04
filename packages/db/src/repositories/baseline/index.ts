@@ -93,6 +93,28 @@ export function baselineRepositoryOn(bound: Bound) {
       return row?.scheduleRunSeq ?? null;
     },
 
+    /**
+     * Story 4.4: pinned `schedule_run_seq` for one Baseline version seq, or null when unknown.
+     * Compare path loads two pins then `schedule.runBySeq` ×2 — never Current Plan.
+     */
+    async scheduleRunSeqForVersion(
+      projectId: string,
+      baselineVersionSeq: number,
+    ): Promise<number | null> {
+      const [row] = await tx
+        .select({ scheduleRunSeq: s.baselineVersion.scheduleRunSeq })
+        .from(s.baselineVersion)
+        .where(
+          and(
+            eq(s.baselineVersion.tenantId, tenantId),
+            eq(s.baselineVersion.projectId, projectId),
+            eq(s.baselineVersion.seq, baselineVersionSeq),
+          ),
+        )
+        .limit(1);
+      return row?.scheduleRunSeq ?? null;
+    },
+
     async projectStart(projectId: string): Promise<string | null> {
       const [row] = await tx
         .select({ projectStart: s.project.projectStart })

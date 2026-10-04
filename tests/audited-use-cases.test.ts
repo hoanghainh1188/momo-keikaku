@@ -276,6 +276,8 @@ const UNAUDITED_BY_DECISION: Readonly<Record<string, string>> = {
     'R0 accepts only JPY, so the success path changes no reported figure, and the refusal writes ' +
     'nothing. Revisit the moment a second currency is accepted — at which point a currency change ' +
     'moves every money figure in the Tenant and is squarely on NFR-A1\'s list.',
+  compareBaselineVersions:
+    'Story 4.4 read-only Baseline plan compare — loads two pins and diffs; no INSERT/UPDATE/DELETE.',
 };
 
 const DECLARED: readonly (readonly [string, AuditDeclaration])[] = Object.entries(USE_CASE_AUDIT);

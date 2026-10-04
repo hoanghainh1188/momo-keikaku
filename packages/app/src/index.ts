@@ -254,3 +254,7 @@ export {
   reDerivePinnedBaseline,
   type ReDerivePinnedBaselineResult,
 } from './baseline/re-derive-pinned';
+export {
+  compareBaselineVersions,
+  type CompareBaselineVersionsResult,
+} from './baseline/compare-baseline-versions';

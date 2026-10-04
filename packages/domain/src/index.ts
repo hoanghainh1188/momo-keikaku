@@ -19,4 +19,6 @@ export * from './schedule/engine-version';
 export * from './schedule/cause';
 export * from './schedule/stored-run';
 export * from './schedule/re-derive';
+export * from './schedule/compare-baseline-plans';
+export * from './schedule/published-snapshot-pin';
 export * from './schedule/retention';

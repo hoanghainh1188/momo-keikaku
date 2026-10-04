@@ -1,6 +1,7 @@
 import { getTranslations } from 'next-intl/server';
 import {
   baselineSetState,
+  compareProjectBaselineVersions,
   getProjectReview,
   reBaselineState,
   requestContext,
@@ -10,23 +11,62 @@ import { hours } from '@momo/domain/present';
 import { Section } from '@/components/ui';
 import { SetBaselineButton } from '@/components/set-baseline-button';
 import { ReBaselineControl } from '@/components/re-baseline-control';
+import { BaselineComparePanel } from '@/components/baseline-compare';
 
 export const dynamic = 'force-dynamic';
 
-/** FR-15, FR-16: Baseline history with Set / Re-baseline. Compare-as-plans is story 4.4. */
+function parseVersionSeq(raw: string | string[] | undefined): number | null {
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  if (value === undefined || value === '') return null;
+  const n = Number(value);
+  return Number.isInteger(n) && n > 0 ? n : null;
+}
+
+/** FR-15, FR-16: Baseline history with Set / Re-baseline / plan-level compare (story 4.4). */
 export default async function BaselinesPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ projectId: string }>;
+  searchParams: Promise<{ from?: string | string[]; to?: string | string[] }>;
 }) {
   const t = await getTranslations();
   const { projectId } = await params;
+  const query = await searchParams;
   const ctx = await requestContext();
   const [{ bundle, review }, baselineState, reState] = await Promise.all([
     getProjectReview({ projectId }, ctx).then(valueOrNotFound),
     baselineSetState(projectId, ctx).then(valueOrNotFound),
     reBaselineState(projectId, ctx).then(valueOrNotFound),
   ]);
+
+  const versionSeqs = bundle.input.baselineVersions.map((b) => b.seq);
+  const fromVersionSeq = parseVersionSeq(query.from);
+  const toVersionSeq = parseVersionSeq(query.to);
+
+  let compareResult = null;
+  let compareError: string | null = null;
+  if (fromVersionSeq !== null && toVersionSeq !== null) {
+    if (fromVersionSeq === toVersionSeq) {
+      compareError = t('baselines.compare_same_version');
+    } else if (
+      !versionSeqs.includes(fromVersionSeq) ||
+      !versionSeqs.includes(toVersionSeq)
+    ) {
+      compareError = t('baselines.compare_refused');
+    } else {
+      const compared = await compareProjectBaselineVersions(
+        { projectId, fromVersionSeq, toVersionSeq },
+        ctx,
+      );
+      if (compared.ok) {
+        compareResult = compared.value.compare;
+      } else {
+        compareError = t('baselines.compare_refused');
+      }
+    }
+  }
+
   return (
     <div className="sheet">
       <h1 className="report-title">{t('baselines.baselines')}</h1>
@@ -105,6 +145,30 @@ export default async function BaselinesPage({
           )}
         </p>
       </Section>
+      <BaselineComparePanel
+        versionSeqs={versionSeqs}
+        fromVersionSeq={fromVersionSeq}
+        toVersionSeq={toVersionSeq}
+        compare={compareResult}
+        error={compareError}
+        labels={{
+          title: t('baselines.compare_title'),
+          versionA: t('baselines.compare_version_a'),
+          versionB: t('baselines.compare_version_b'),
+          compare: t('baselines.compare_action'),
+          needTwo: t('baselines.compare_need_two'),
+          projectChanges: t('baselines.compare_project_changes'),
+          noProjectChanges: t('baselines.compare_no_project_changes'),
+          wpDates: t('baselines.compare_wp_dates'),
+          noWpDates: t('baselines.compare_no_wp_dates'),
+          wbs: t('baselines.compare_wbs'),
+          wpId: t('baselines.compare_wp_id'),
+          fromDates: t('baselines.compare_from_dates'),
+          toDates: t('baselines.compare_to_dates'),
+          accountedBy: t('baselines.compare_accounted_by'),
+          unattributed: t('baselines.compare_unattributed'),
+        }}
+      />
     </div>
   );
 }
