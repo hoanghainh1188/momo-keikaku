@@ -4,7 +4,6 @@
  */
 import { describe, expect, it } from 'vitest';
 import { and, eq } from 'drizzle-orm';
-import { applyPlanChange } from '../../packages/app/src/schedule/apply-plan-change';
 import { setBaseline } from '../../packages/app/src/baseline/set-baseline';
 import { reDerivePinnedBaseline } from '../../packages/app/src/baseline/re-derive-pinned';
 import { getDb } from '../../packages/db/src/client';
@@ -20,8 +19,10 @@ import { withTenant } from '../../packages/db/src/with-tenant';
 import {
   connectFenceHarness,
   installFenceAfterAll,
+  makeAllLeavesSchedulable,
   pmCtx,
   prepareSchedulableLeaf,
+  scheduleLeaf,
 } from './fence-harness';
 
 const OWNER_DATABASE_URL = process.env.DATABASE_URL;
@@ -50,58 +51,12 @@ const deps = () => ({
   },
 });
 
-/** Give every non-milestone leaf a duration so Set Baseline is not refused for incompleteness. */
-async function makeAllLeavesSchedulable(owner: ReturnType<typeof getDb>) {
-  const leaves = PROBE.state.wps.filter((w) => w.isLeaf && !w.isMilestone);
-  await withTenant(owner, PROBE.tenantId, async (tx) => {
-    for (const leaf of leaves) {
-      await tx
-        .update(s.workPackage)
-        .set({ durationDays: 3, constraintType: 'asap', constraintDate: null })
-        .where(
-          and(
-            eq(s.workPackage.tenantId, PROBE.tenantId),
-            eq(s.workPackage.projectId, PROBE.projectId),
-            eq(s.workPackage.id, leaf.id),
-          ),
-        );
-    }
-    for (const m of PROBE.state.wps.filter((w) => w.isLeaf && w.isMilestone)) {
-      await tx
-        .update(s.workPackage)
-        .set({ durationDays: 0, isMilestone: true })
-        .where(
-          and(
-            eq(s.workPackage.tenantId, PROBE.tenantId),
-            eq(s.workPackage.projectId, PROBE.projectId),
-            eq(s.workPackage.id, m.id),
-          ),
-        );
-    }
-  });
-}
-
-async function scheduleLeaf(leafId: string, durationDays: number) {
-  const result = await applyPlanChange(deps(), ctx(), {
-    kind: 'patch_duration',
-    projectId: PROBE.projectId,
-    wpId: leafId,
-    durationDays,
-  });
-  expect(result.ok).toBe(true);
-  if (!result.ok) {
-    expect.fail(`schedule failed: ${result.error.code} ${JSON.stringify(result.error.details)}`);
-  }
-  expect(result.value.kind).toBe('scheduled');
-  return result.value.seq!;
-}
-
 describe.skipIf(!reachable)('re-derivation fence (story 4.2)', () => {
   it('setBaseline pin re-derives green with null prev (first successful run)', async () => {
     const owner = getDb(OWNER_DATABASE_URL!);
     const leaf = await prepareSchedulableLeaf(owner, PROBE);
-    await makeAllLeavesSchedulable(owner);
-    const runSeq = await scheduleLeaf(leaf.id, 5);
+    await makeAllLeavesSchedulable(owner, PROBE);
+    const runSeq = await scheduleLeaf(deps(), ctx(), PROBE.projectId, leaf.id, 5);
 
     const set = await setBaseline(deps(), ctx(), { projectId: PROBE.projectId });
     expect(set.ok).toBe(true);
@@ -121,8 +76,8 @@ describe.skipIf(!reachable)('re-derivation fence (story 4.2)', () => {
   it('after pin, mutating Current Plan (newer run) still re-derives the pin green', async () => {
     const owner = getDb(OWNER_DATABASE_URL!);
     const leaf = await prepareSchedulableLeaf(owner, PROBE);
-    await makeAllLeavesSchedulable(owner);
-    const pinnedSeq = await scheduleLeaf(leaf.id, 5);
+    await makeAllLeavesSchedulable(owner, PROBE);
+    const pinnedSeq = await scheduleLeaf(deps(), ctx(), PROBE.projectId, leaf.id, 5);
 
     const set = await setBaseline(deps(), ctx(), { projectId: PROBE.projectId });
     expect(set.ok).toBe(true);
@@ -130,7 +85,7 @@ describe.skipIf(!reachable)('re-derivation fence (story 4.2)', () => {
     expect(set.value.scheduleRunSeq).toBe(pinnedSeq);
 
     // Mutate the live plan — appends a newer successful run (Current Plan moves).
-    const newerSeq = await scheduleLeaf(leaf.id, 9);
+    const newerSeq = await scheduleLeaf(deps(), ctx(), PROBE.projectId, leaf.id, 9);
     expect(newerSeq).toBeGreaterThan(pinnedSeq);
 
     const { latestSeq, pinSeq } = await withTenant(
@@ -163,9 +118,9 @@ describe.skipIf(!reachable)('re-derivation fence (story 4.2)', () => {
     // (setBaseline refuses a second Set; we pin the second run by scheduling twice then Set once.)
     const owner = getDb(OWNER_DATABASE_URL!);
     const leaf = await prepareSchedulableLeaf(owner, PROBE);
-    await makeAllLeavesSchedulable(owner);
-    const firstSeq = await scheduleLeaf(leaf.id, 4);
-    const secondSeq = await scheduleLeaf(leaf.id, 7);
+    await makeAllLeavesSchedulable(owner, PROBE);
+    const firstSeq = await scheduleLeaf(deps(), ctx(), PROBE.projectId, leaf.id, 4);
+    const secondSeq = await scheduleLeaf(deps(), ctx(), PROBE.projectId, leaf.id, 7);
     expect(secondSeq).toBeGreaterThan(firstSeq);
 
     const set = await setBaseline(deps(), ctx(), { projectId: PROBE.projectId });
@@ -186,8 +141,8 @@ describe.skipIf(!reachable)('re-derivation fence (story 4.2)', () => {
   it('refuses when no Baseline exists', async () => {
     const owner = getDb(OWNER_DATABASE_URL!);
     const leaf = await prepareSchedulableLeaf(owner, PROBE);
-    await makeAllLeavesSchedulable(owner);
-    await scheduleLeaf(leaf.id, 5);
+    await makeAllLeavesSchedulable(owner, PROBE);
+    await scheduleLeaf(deps(), ctx(), PROBE.projectId, leaf.id, 5);
 
     const derived = await reDerivePinnedBaseline(deps(), ctx(), { projectId: PROBE.projectId });
     expect(derived.ok).toBe(false);

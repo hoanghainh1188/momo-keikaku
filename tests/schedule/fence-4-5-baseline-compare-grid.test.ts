@@ -25,8 +25,10 @@ import { withTenant } from '../../packages/db/src/with-tenant';
 import {
   connectFenceHarness,
   installFenceAfterAll,
+  makeAllLeavesSchedulable,
   pmCtx,
   prepareSchedulableLeaf,
+  scheduleLeaf,
 } from './fence-harness';
 
 const OWNER_DATABASE_URL = process.env.DATABASE_URL;
@@ -54,56 +56,12 @@ const deps = () => ({
   },
 });
 
-async function makeAllLeavesSchedulable(owner: ReturnType<typeof getDb>) {
-  const leaves = PROBE.state.wps.filter((w) => w.isLeaf && !w.isMilestone);
-  await withTenant(owner, PROBE.tenantId, async (tx) => {
-    for (const leaf of leaves) {
-      await tx
-        .update(s.workPackage)
-        .set({ durationDays: 3, constraintType: 'asap', constraintDate: null })
-        .where(
-          and(
-            eq(s.workPackage.tenantId, PROBE.tenantId),
-            eq(s.workPackage.projectId, PROBE.projectId),
-            eq(s.workPackage.id, leaf.id),
-          ),
-        );
-    }
-    for (const m of PROBE.state.wps.filter((w) => w.isLeaf && w.isMilestone)) {
-      await tx
-        .update(s.workPackage)
-        .set({ durationDays: 0, isMilestone: true })
-        .where(
-          and(
-            eq(s.workPackage.tenantId, PROBE.tenantId),
-            eq(s.workPackage.projectId, PROBE.projectId),
-            eq(s.workPackage.id, m.id),
-          ),
-        );
-    }
-  });
-}
-
-async function scheduleLeaf(leafId: string, durationDays = 5) {
-  const result = await applyPlanChange(deps(), ctx(), {
-    kind: 'patch_duration',
-    projectId: PROBE.projectId,
-    wpId: leafId,
-    durationDays,
-  });
-  expect(result.ok).toBe(true);
-  if (!result.ok) {
-    expect.fail(`schedule failed: ${result.error.code} ${JSON.stringify(result.error.details)}`);
-  }
-  return result.value.seq!;
-}
-
 describe.skipIf(!reachable)('Baseline compare Plan grid (story 4.5)', () => {
   it('no Baseline: hasBaseline false; Schedule rows still load (UX-DR23)', async () => {
     const owner = getDb(OWNER_DATABASE_URL!);
     await prepareSchedulableLeaf(owner, PROBE);
-    await makeAllLeavesSchedulable(owner);
-    await scheduleLeaf(PROBE.state.wps.find((w) => w.isLeaf && !w.isMilestone)!.id);
+    await makeAllLeavesSchedulable(owner, PROBE);
+    await scheduleLeaf(deps(), ctx(), PROBE.projectId, PROBE.state.wps.find((w) => w.isLeaf && !w.isMilestone)!.id);
 
     const grid = await getPlanGridState(deps(), ctx(), { projectId: PROBE.projectId });
     expect(grid.ok).toBe(true);
@@ -119,8 +77,8 @@ describe.skipIf(!reachable)('Baseline compare Plan grid (story 4.5)', () => {
   it('happy path: after Set + duration edit, Baseline compare Δ is non-zero on the leaf', async () => {
     const owner = getDb(OWNER_DATABASE_URL!);
     const leaf = await prepareSchedulableLeaf(owner, PROBE);
-    await makeAllLeavesSchedulable(owner);
-    await scheduleLeaf(leaf.id, 5);
+    await makeAllLeavesSchedulable(owner, PROBE);
+    await scheduleLeaf(deps(), ctx(), PROBE.projectId, leaf.id, 5);
 
     const set = await setBaseline(deps(), ctx(), { projectId: PROBE.projectId });
     expect(set.ok).toBe(true);
@@ -142,7 +100,7 @@ describe.skipIf(!reachable)('Baseline compare Plan grid (story 4.5)', () => {
       plannedMh: nextPlannedMh,
     });
     expect(effort.ok).toBe(true);
-    await scheduleLeaf(leaf.id, 8);
+    await scheduleLeaf(deps(), ctx(), PROBE.projectId, leaf.id, 8);
 
     const grid = await getPlanGridState(deps(), ctx(), { projectId: PROBE.projectId });
     expect(grid.ok).toBe(true);
@@ -178,13 +136,13 @@ describe.skipIf(!reachable)('Baseline compare Plan grid (story 4.5)', () => {
   it('Divergence reads pin outputs/inputs only (AR-22), never Current Plan columns', async () => {
     const owner = getDb(OWNER_DATABASE_URL!);
     const leaf = await prepareSchedulableLeaf(owner, PROBE);
-    await makeAllLeavesSchedulable(owner);
-    await scheduleLeaf(leaf.id, 4);
+    await makeAllLeavesSchedulable(owner, PROBE);
+    await scheduleLeaf(deps(), ctx(), PROBE.projectId, leaf.id, 4);
     const set = await setBaseline(deps(), ctx(), { projectId: PROBE.projectId });
     expect(set.ok).toBe(true);
 
     // Mutate Current Plan after pin — Divergence must still use the pin.
-    await scheduleLeaf(leaf.id, 9);
+    await scheduleLeaf(deps(), ctx(), PROBE.projectId, leaf.id, 9);
 
     await withTenant(getDb(APP_DATABASE_URL!), PROBE.tenantId, async (tx) => {
       const bound = { tx, tenantId: PROBE.tenantId };
