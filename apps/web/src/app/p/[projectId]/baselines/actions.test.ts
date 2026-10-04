@@ -51,6 +51,8 @@ describe('setBaselineAction', () => {
       messageKey: 'errors.invalid_input',
       details: { baseline: ['incomplete_plan'] },
     });
+    expect(outcome.ok).toBe(false);
+    if (outcome.ok) throw new Error('expected refuse');
     // Same mapper the Review/Plan/Baselines controls pass into role=alert.
     expect(planWriteRefuseMessage(outcome)).toBe('baseline: incomplete_plan');
     expect(revalidatePath).not.toHaveBeenCalled();
@@ -96,6 +98,8 @@ describe('reBaselineAction', () => {
       messageKey: 'errors.invalid_input',
       details: { baseline: ['incomplete_plan'] },
     });
+    expect(outcome.ok).toBe(false);
+    if (outcome.ok) throw new Error('expected refuse');
     expect(planWriteRefuseMessage(outcome)).toBe('baseline: incomplete_plan');
     expect(revalidatePath).not.toHaveBeenCalled();
   });
