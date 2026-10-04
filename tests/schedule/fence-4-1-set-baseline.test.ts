@@ -103,12 +103,12 @@ async function makeAllLeavesSchedulable(owner: ReturnType<typeof getDb>) {
   });
 }
 
-async function scheduleLeaf(leafId: string) {
+async function scheduleLeaf(leafId: string, durationDays = 5) {
   const result = await applyPlanChange(deps(), ctx(), {
     kind: 'patch_duration',
     projectId: PROBE.projectId,
     wpId: leafId,
-    durationDays: 5,
+    durationDays,
   });
   expect(result.ok).toBe(true);
   if (!result.ok) {
@@ -246,6 +246,64 @@ describe.skipIf(!reachable)('setBaseline fence (story 4.1)', () => {
     );
     const pinned = decisions.find((d) => d.seq === runSeq);
     expect(pinned?.retainInputs).toBe(true);
+  });
+
+  it('retention keeps pin + immediate prev inputs (re-derive prev older than oldest pin)', async () => {
+    // Two successful runs then first Set — pin's prev_run_seq is older than the Baseline pin
+    // (F8). Collector must expand pins so scheduleRunRetention retains prev inputs.
+    const owner = getDb(OWNER_DATABASE_URL!);
+    const leaf = await prepareSchedulableLeaf(owner, PROBE);
+    await makeAllLeavesSchedulable(owner);
+    const prevSeq = await scheduleLeaf(leaf.id, 4);
+    const pinSeq = await scheduleLeaf(leaf.id, 7);
+    expect(pinSeq).toBeGreaterThan(prevSeq);
+
+    const set = await setBaseline(deps(), ctx(), { projectId: PROBE.projectId });
+    expect(set.ok).toBe(true);
+    if (!set.ok) return;
+    expect(set.value.scheduleRunSeq).toBe(pinSeq);
+
+    const { runs, pinnedSeqs, pinPrevRunSeq } = await withTenant(
+      getDb(APP_DATABASE_URL!),
+      PROBE.tenantId,
+      async (tx) => {
+        const bound = { tx, tenantId: PROBE.tenantId };
+        const pinned = await baselineRepositoryOn(bound).pinnedScheduleRunSeqs(PROBE.projectId);
+        const runRows = await tx
+          .select({
+            seq: s.scheduleRun.seq,
+            prevRunSeq: s.scheduleRun.prevRunSeq,
+            inputs: s.scheduleRun.inputs,
+            outputs: s.scheduleRun.outputs,
+          })
+          .from(s.scheduleRun)
+          .where(
+            and(
+              eq(s.scheduleRun.tenantId, PROBE.tenantId),
+              eq(s.scheduleRun.projectId, PROBE.projectId),
+            ),
+          );
+        const pinRow = runRows.find((r) => r.seq === pinSeq);
+        return {
+          runs: runRows,
+          pinnedSeqs: pinned,
+          pinPrevRunSeq: pinRow?.prevRunSeq ?? null,
+        };
+      },
+    );
+    expect(pinPrevRunSeq).toBe(prevSeq);
+    expect(pinnedSeqs).toEqual(expect.arrayContaining([pinSeq, prevSeq]));
+
+    const decisions = scheduleRunRetention(
+      runs.map((r) => ({
+        seq: r.seq,
+        hasInputs: r.inputs !== null,
+        hasOutputs: r.outputs !== null,
+      })),
+      pinnedSeqs,
+    );
+    expect(decisions.find((d) => d.seq === pinSeq)?.retainInputs).toBe(true);
+    expect(decisions.find((d) => d.seq === prevSeq)?.retainInputs).toBe(true);
   });
 
   it('refuses a second Set (Re-baseline is out of scope)', async () => {
