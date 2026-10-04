@@ -2,7 +2,7 @@
 title: 'Story 5.5 — One writer builds the Actuals Ledger'
 type: 'feature'
 created: '2026-10-04'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: 'ca1f9b2a006c10d8656ffb8f21336b0ac4dcd47c'
@@ -111,17 +111,42 @@ context:
 - Deferred-work: durable-write row resolved; compaction re-deferred (AC did not place). Sprint `5-5` → `review`.
 - Worker mints snapshot/row ids via `uuidV7IdsOn`.
 - Idempotency: pre-check `(connector_id, observedAt)` under the Project lock instead of catching `23505` mid-transaction (Postgres aborts the tx). `ensureProjectSettingHead` also runs under that lock.
+- Review patches: load prev under lock; prior-Σ adjust for null→numeric after clear; periodOf from `project_setting_event` head; operator_alert attempt rows; chunked prior-ledger load; incomplete/observedAt guards; NFR asserts obs+ledger counts; drizzle meta 0007; sprint last_updated 23:55.
 
 ## Spec Change Log
 
 ## Review Triage Log
 
+| Finding | Verdict | Evidence / route |
+|---------|---------|------------------|
+| loadPrevSnapshot before lockWatermark (stale prev under concurrency) | high | **patch** — load prev under the Project lock |
+| null→numeric after hours_cleared uses full nowMh and breaks invariant | high | **patch** — prior Σ map; delta = nowMh − prior Σ |
+| periodOf still reads project columns not project_setting_event head | high | **patch** — Review bundle reads setting head with project fallback |
+| Operator alert mails only; no attempt; worker has no notifyRecipients | medium | **patch** — always append `operator_alert` attempt; wire recipients deferred (pre-existing credential gap) |
+| Missing drizzle meta `0007_snapshot.json` | medium | **patch** — added journal-linked meta snapshot |
+| NFR harness only checked snapshot.ticketCount | medium | **patch** — assert observation + ledger row counts |
+| Idempotent already_written only mocked | medium | **defer** — REQUIRE_DB replay case; pre-check under lock is in place |
+| hours_cleared / prev_snapshot_id / mapping re-eval unverified at writer boundary | medium | **defer** — REQUIRE_DB matrix cases |
+| loadPriorLedger unchunked inArray for 2k tickets | medium | **patch** — chunk by 500 |
+| sprint last_updated moved backward | low | **patch** — set to 10-04-2026 23:55 |
+| Vacuous `base.writes` assertion on throwing writer test | low | **patch** — assert attempt row instead |
+| Design Notes still mention catch unique_violation | low | **patch** — notes updated to under-lock pre-check |
+| prev_snapshot_id on later first-sighting deltas | false | Window starts at prev snapshot; first-sighting OB is the `windowStart === null` case only |
+| Incomplete read.complete false reaching writer | low | **patch** — refuse when `complete !== true` |
+| Invalid observedAt opaque DB error | low | **patch** — validate before INSERT |
+| ApprovalRequiredError inside writer rethrows | maybe-false | Gate already ran; domain still checks approval; settle with a job test if gate/writer race appears |
+| Seed remains a second insert path vs AR-15 | false | AR-15 covers runtime ingest; seed/demo fixtures are not the worker writer |
+| One-by-one identity upserts under lock (NFR bottleneck) | medium | **defer** — batch upsert optimization |
+| Empty Spec Change / Triage logs mid-review | false | Filled by this review pass |
+| Adapter-kind refuse / incomplete complete guard at app only | false | Writer now also refuses incomplete; kind mismatch still thrown from domain before INSERT |
+
 ## Design Notes
 
-- **Writer shape:** `writeIngestSnapshot({ projectId, connectorId, read: ScopeRead })` inside `deps.transaction`; read already complete; load prev header+obs → `SnapshotRead`; `activeBaselineVersionSeq = latestVersionSeq` then `lockWatermark`; domain derive; INSERT; `checkLedgerInvariant` over prior entries for in-scope tickets + new ones (or cumulative Σ for tickets in `next`).
-- **Idempotency:** UNIQUE on `(tenant_id, connector_id, observed_at)`; catch unique_violation → return already_written without appending another attempt as failure.
-- **Success attempt:** either skip attempt row on success (pin uses snapshot) or append `snapshot_written` — prefer no pending reason; optional success attempt only if PM list needs it (default: no row on success, matching "failed attempts" table purpose).
-- **project_setting_event:** keys `tz_offset_minutes` / `teirei_weekday` (or single JSON payload); first writer ensures a head exists by copying `project` columns; later Project settings stories may append — R0 read head for `periodOf` callers that today use `project` directly can stay on `project` until a thin helper lands (create table + seed is the AC).
+- **Writer shape:** `writeIngestSnapshot({ projectId, connectorId, read: ScopeRead })` inside `deps.transaction`; read already complete; under Project lock load prev header+obs → `SnapshotRead`; `activeBaselineVersionSeq = latestVersionSeq` then lock; domain derive with prior ledger Σ; INSERT; `checkLedgerInvariant` over prior + new entries.
+- **Idempotency:** UNIQUE on `(tenant_id, connector_id, observed_at)`; under the lock, SELECT existing row first and return `already_written` — never catch `23505` mid-transaction (Postgres aborts the tx).
+- **Success attempt:** no attempt row on success (pin uses snapshot); operator alerts append `operator_alert` attempt + best-effort mail.
+- **project_setting_event:** writer seeds head from `project` columns under the lock; Review bundle `periodOf` reads the head (fallback to `project` columns when empty).
+- **Null→numeric after clear:** domain adjusts delta = nowMh − prior Σ so retained history after `hours_cleared` does not break the invariant.
 
 ## Verification
 

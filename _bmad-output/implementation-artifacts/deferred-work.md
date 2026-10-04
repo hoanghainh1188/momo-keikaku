@@ -1331,3 +1331,15 @@ above can see where it went.
 - source_spec: `_bmad-output/implementation-artifacts/spec-5-4-snapshots-run-on-a-schedule-the-pm-can-see.md`
   summary: REQUIRE_DB probes for worker createQueue/send/schedule options, repository searchLimit/listAttempts/latestSnapshot helpers, and paced-enqueue race if the Connector vanishes after enqueue.
   evidence: Story 5.4 review verification-gap — unit/mocks cover schedule logic; live pg-boss and repo boundary asserts need Postgres CI.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-5-one-writer-builds-the-actuals-ledger.md`
+  summary: REQUIRE_DB writer matrix for idempotent replay, hours_cleared persistence, prev_snapshot_id on second snapshot, and Mapping Rules re-eval append.
+  evidence: Story 5.5 review — domain/app unit coverage exists; live repo boundary cases need Postgres CI (NFR harness only covers first-write counts).
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-5-one-writer-builds-the-actuals-ledger.md`
+  summary: Batch ticket/tracker_account upserts inside writeIngestSnapshot to reduce NFR-P1 lock hold time on 2,000-Ticket ingest.
+  evidence: Story 5.5 review — observations/ledger are chunked at 500; identity upserts remain one-by-one awaits under the Project lock.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-5-one-writer-builds-the-actuals-ledger.md`
+  summary: Wire worker `notifyRecipients` (and credential/operator mail) to real Project ops emails instead of relying on the optional empty default.
+  evidence: Story 5.5 review — operator alerts now always write attempt rows; mail still needs recipients. Pre-existing for credential_failed on the worker path too.

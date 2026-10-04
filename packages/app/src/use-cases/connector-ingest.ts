@@ -96,20 +96,39 @@ function isOperatorAlert(error: unknown): error is Error & { kind: 'operator-ale
   );
 }
 
-/** Best-effort operator mail for AR-36 ledger / adapter-kind alerts. */
+/** Best-effort operator mail for AR-36 ledger / adapter-kind alerts. Always records an attempt. */
 async function notifyOperatorAlert<Handle>(
   deps: ConnectorWriteDeps<Handle> & { readonly mailer: MailerPort },
-  projectId: string,
-  subject: string,
-  text: string,
+  ctx: RequestContext,
+  input: {
+    readonly projectId: string;
+    readonly connectorId: string;
+    readonly subject: string;
+    readonly text: string;
+    readonly code: string;
+  },
 ): Promise<void> {
   try {
-    const recipients = deps.notifyRecipients ? await deps.notifyRecipients(projectId) : [];
+    await deps.transaction(deps.handle, ctx.tenantId, async (scope) => {
+      const connector = await scope.connectorWrite.findConnector(input.connectorId);
+      if (!connector || connector.projectId !== input.projectId) return;
+      await scope.connectorWrite.appendSnapshotAttempt({
+        connectorId: input.connectorId,
+        reasonCode: OPERATOR_ALERT_REASON,
+        message: input.text,
+        attemptedAt: deps.clock.now(),
+      });
+    });
+  } catch {
+    // attempt is best-effort when the connector vanished mid-job
+  }
+  try {
+    const recipients = deps.notifyRecipients ? await deps.notifyRecipients(input.projectId) : [];
     for (const to of recipients) {
-      await deps.mailer.send({ to, subject, text });
+      await deps.mailer.send({ to: to, subject: input.subject, text: input.text });
     }
   } catch {
-    // best-effort
+    // mail is best-effort
   }
 }
 
@@ -417,9 +436,14 @@ export async function runIngestSnapshotJob<Handle>(
             : (error as { code: string }).code;
       await notifyOperatorAlert(
         { ...deps, mailer: deps.mailer },
-        input.projectId,
-        `momo-keikaku: operator alert (${code})`,
-        error.message,
+        ctx,
+        {
+          projectId: input.projectId,
+          connectorId: input.connectorId,
+          subject: `momo-keikaku: operator alert (${code})`,
+          text: error.message,
+          code,
+        },
       );
       return ok('operator_alert');
     }

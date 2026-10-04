@@ -578,7 +578,9 @@ describe('runIngestSnapshotJob (story 5.5 writer)', () => {
         subject: 'momo-keikaku: operator alert (adapter_kind_mismatch)',
       }),
     ]);
-    expect(base.writes).toEqual([]);
+    expect(base.attempts).toEqual([
+      expect.objectContaining({ reasonCode: 'operator_alert' }),
+    ]);
   });
 
   it('alerts the operator on LedgerInvariantError without committing a success path', async () => {
@@ -598,6 +600,9 @@ describe('runIngestSnapshotJob (story 5.5 writer)', () => {
       expect.objectContaining({
         subject: 'momo-keikaku: operator alert (ledger_invariant_broken)',
       }),
+    ]);
+    expect(base.attempts).toEqual([
+      expect.objectContaining({ reasonCode: 'operator_alert' }),
     ]);
   });
 });

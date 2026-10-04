@@ -189,7 +189,7 @@ describe('ingestSnapshot (FR-25, FR-42)', () => {
     expect(checkLedgerInvariant([...r1.entries, ...r2.entries], s2).ok).toBe(true);
   });
 
-  it('records null→numeric as a delta of the full amount, not an Opening Balance', () => {
+  it('records null→numeric as a delta of the full amount when prior Σ is empty', () => {
     const s1 = snap('2026-09-01T09:00:00.000Z', [obs('t1', null)]);
     const s2 = snap('2026-09-08T09:00:00.000Z', [obs('t1', 6)]);
     const r1 = ingestSnapshot({
@@ -211,6 +211,38 @@ describe('ingestSnapshot (FR-25, FR-42)', () => {
       ['t1', 'delta', hoursToMh(6)],
     ]);
     expect(checkLedgerInvariant([...r1.entries, ...r2.entries], s2).ok).toBe(true);
+  });
+
+  it('adjusts null→numeric against prior Σ after hours_cleared so invariant holds', () => {
+    const s1 = snap('2026-09-01T09:00:00.000Z', [obs('t1', 10)]);
+    const s2 = snap('2026-09-08T09:00:00.000Z', [obs('t1', null)]);
+    const s3 = snap('2026-09-15T09:00:00.000Z', [obs('t1', 6)]);
+    const r1 = ingestSnapshot({
+      prev: null,
+      next: s1,
+      activeBaselineVersionSeq: 1,
+      seqFrom: 1,
+      approvalRecordedAt: '2026-09-01T00:00:00.000Z',
+    });
+    const r2 = ingestSnapshot({
+      prev: s1,
+      next: s2,
+      activeBaselineVersionSeq: 1,
+      seqFrom: r1.nextSeq,
+      approvalRecordedAt: '2026-09-01T00:00:00.000Z',
+    });
+    expect(r2.hoursCleared).toEqual([{ ticketId: 't1', key: 't1' }]);
+    const prior = new Map([['t1', hoursToMh(10)]]);
+    const r3 = ingestSnapshot({
+      prev: s2,
+      next: s3,
+      activeBaselineVersionSeq: 1,
+      seqFrom: r2.nextSeq,
+      approvalRecordedAt: '2026-09-01T00:00:00.000Z',
+      priorLedgerMhByTicket: prior,
+    });
+    expect(r3.entries.map((e) => [e.ticketId, e.deltaMh])).toEqual([['t1', hoursToMh(-4)]]);
+    expect(checkLedgerInvariant([...r1.entries, ...r2.entries, ...r3.entries], s3).ok).toBe(true);
   });
 });
 

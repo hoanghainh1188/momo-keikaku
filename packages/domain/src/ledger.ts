@@ -17,6 +17,11 @@ export interface IngestInput {
    * Client approval instant (story 5.2 / FR-17). Required; `null` refuses ingest.
    */
   approvalRecordedAt: Date | string | null;
+  /**
+   * Cumulative Σ delta_mh per Ticket already on the ledger (writer supplies). Used when
+   * hours reappear after null/`hours_cleared` so the adjusting delta keeps the invariant.
+   */
+  priorLedgerMhByTicket?: ReadonlyMap<string, Mh>;
 }
 
 export interface IngestResult {
@@ -158,15 +163,20 @@ export function ingestSnapshot(input: IngestInput): IngestResult {
       continue;
     }
 
-    // Null→null: nothing to do. Null→numeric: hours newly appear as a delta of the full amount.
+    // Null→null: nothing. Null→numeric: only move the ledger by the gap vs prior Σ
+    // (full amount when the Ticket had no prior entries). Value→null already cleared;
+    // restoring hours must not double-count retained history (AR-15 invariant).
     if (prevMh === null && nowMh === null) continue;
     if (prevMh === null && nowMh !== null) {
       if (nowMh === 0n) continue;
+      const priorSum = input.priorLedgerMhByTicket?.get(t.trackerIssueId) ?? 0n;
+      const delta = nowMh - priorSum;
+      if (delta === 0n) continue;
       entries.push({
         seq: seq++,
         ticketId: t.trackerIssueId,
         kind: 'delta',
-        deltaMh: nowMh,
+        deltaMh: delta,
         windowStart: prev!.observedAt,
         windowEnd: next.observedAt,
         assigneeAccountId: t.assigneeAccountId,

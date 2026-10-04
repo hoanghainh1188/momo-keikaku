@@ -215,39 +215,48 @@ export function ingestWriteRepositoryOn(bound: Bound) {
     ticketIds: readonly string[],
   ): Promise<LedgerEntry[]> {
     if (ticketIds.length === 0) return [];
-    const rows = await tx
-      .select({
-        seq: s.actualsLedgerEntry.seq,
-        ticketId: s.actualsLedgerEntry.ticketId,
-        kind: s.actualsLedgerEntry.kind,
-        deltaMh: s.actualsLedgerEntry.deltaMh,
-        windowStart: s.actualsLedgerEntry.windowStart,
-        windowEnd: s.actualsLedgerEntry.windowEnd,
-        assigneeAccountId: s.actualsLedgerEntry.assigneeAccountId,
-        activeBaselineVersionSeq: s.actualsLedgerEntry.activeBaselineVersionSeq,
-      })
-      .from(s.actualsLedgerEntry)
-      .where(
-        and(
-          eq(s.actualsLedgerEntry.tenantId, tenantId),
-          eq(s.actualsLedgerEntry.connectorId, connectorId),
-          inArray(s.actualsLedgerEntry.ticketId, [...ticketIds]),
-        ),
-      );
-    return rows.map((r) => ({
-      seq: r.seq,
-      ticketId: r.ticketId,
-      kind: r.kind as LedgerEntry['kind'],
-      deltaMh: r.deltaMh,
-      windowStart: r.windowStart?.toISOString() ?? null,
-      windowEnd: r.windowEnd.toISOString(),
-      assigneeAccountId: r.assigneeAccountId,
-      activeBaselineVersionSeq: r.activeBaselineVersionSeq,
-    }));
+    const out: LedgerEntry[] = [];
+    await chunked([...ticketIds], 500, async (batch) => {
+      const rows = await tx
+        .select({
+          seq: s.actualsLedgerEntry.seq,
+          ticketId: s.actualsLedgerEntry.ticketId,
+          kind: s.actualsLedgerEntry.kind,
+          deltaMh: s.actualsLedgerEntry.deltaMh,
+          windowStart: s.actualsLedgerEntry.windowStart,
+          windowEnd: s.actualsLedgerEntry.windowEnd,
+          assigneeAccountId: s.actualsLedgerEntry.assigneeAccountId,
+          activeBaselineVersionSeq: s.actualsLedgerEntry.activeBaselineVersionSeq,
+        })
+        .from(s.actualsLedgerEntry)
+        .where(
+          and(
+            eq(s.actualsLedgerEntry.tenantId, tenantId),
+            eq(s.actualsLedgerEntry.connectorId, connectorId),
+            inArray(s.actualsLedgerEntry.ticketId, batch),
+          ),
+        );
+      for (const r of rows) {
+        out.push({
+          seq: r.seq,
+          ticketId: r.ticketId,
+          kind: r.kind as LedgerEntry['kind'],
+          deltaMh: r.deltaMh,
+          windowStart: r.windowStart?.toISOString() ?? null,
+          windowEnd: r.windowEnd.toISOString(),
+          assigneeAccountId: r.assigneeAccountId,
+          activeBaselineVersionSeq: r.activeBaselineVersionSeq,
+        });
+      }
+    });
+    return out;
   }
 
   return {
     async writeIngestSnapshot(input: WriteIngestSnapshotInput): Promise<WriteIngestSnapshotResult> {
+      if (input.read.complete !== true) {
+        throw new Error('writeIngestSnapshot refuses an incomplete ScopeRead');
+      }
       const [connector] = await tx
         .select()
         .from(s.connector)
@@ -262,16 +271,20 @@ export function ingestWriteRepositoryOn(bound: Bound) {
         throw new Error(`connector ${input.connectorId} not found for project ${input.projectId}`);
       }
 
-      const prev = await loadPrevSnapshot(input.connectorId);
-      const activeBaselineVersionSeq = await latestBaselineVersionSeq(input.projectId);
-
       // AR-15: Baseline-by-seq is chosen before the lock; then one Project lock for the write.
+      const activeBaselineVersionSeq = await latestBaselineVersionSeq(input.projectId);
       await lockWatermark(bound, { kind: 'project', projectId: input.projectId });
+
+      // Load prev under the lock so concurrent jobs cannot both derive against a stale predecessor.
+      const prev = await loadPrevSnapshot(input.connectorId);
       await ensureProjectSettingHead(input.projectId, input.actor, input.at);
 
       // Idempotent on (connector_id, observedAt): check under the lock — never catch 23505
       // mid-transaction (Postgres aborts the tx and later statements fail).
       const observedAt = new Date(input.read.observedAt);
+      if (Number.isNaN(observedAt.getTime())) {
+        throw new Error(`writeIngestSnapshot refuses invalid observedAt: ${input.read.observedAt}`);
+      }
       const [existingAt] = await tx
         .select({ id: s.trackerSnapshot.id })
         .from(s.trackerSnapshot)
@@ -312,6 +325,16 @@ export function ingestWriteRepositoryOn(bound: Bound) {
         rateLimit: null,
       };
 
+      const ticketIds = input.read.tickets.map((t) => t.trackerIssueId);
+      const priorLedger = await loadPriorLedger(input.connectorId, ticketIds);
+      const priorLedgerMhByTicket = new Map<string, bigint>();
+      for (const e of priorLedger) {
+        priorLedgerMhByTicket.set(
+          e.ticketId,
+          (priorLedgerMhByTicket.get(e.ticketId) ?? 0n) + e.deltaMh,
+        );
+      }
+
       // Derive before INSERT so AdapterKindMismatchError refuses without a snapshot row.
       const derived = ingestSnapshot({
         prev: prev?.read ?? null,
@@ -319,6 +342,7 @@ export function ingestWriteRepositoryOn(bound: Bound) {
         activeBaselineVersionSeq,
         seqFrom: 1,
         approvalRecordedAt: connector.approvalRecordedAt,
+        priorLedgerMhByTicket,
       });
 
       await tx.insert(s.trackerSnapshot).values({
@@ -357,8 +381,6 @@ export function ingestWriteRepositoryOn(bound: Bound) {
         });
       }
 
-      const ticketIds = input.read.tickets.map((t) => t.trackerIssueId);
-      const priorLedger = await loadPriorLedger(input.connectorId, ticketIds);
       const invariant = checkLedgerInvariant([...priorLedger, ...derived.entries], nextRead);
       if (!invariant.ok) {
         throw new LedgerInvariantError(invariant.violations);

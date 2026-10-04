@@ -159,6 +159,29 @@ describe.skipIf(!live)('NFR-P1 writeIngestSnapshot (story 5.5, REQUIRE_DB)', () 
           and(eq(s.trackerSnapshot.tenantId, TENANT), eq(s.trackerSnapshot.id, 'snap-nfr-5-5')),
         );
       expect(snap?.ticketCount).toBe(TICKET_COUNT);
+
+      const obs = await tx
+        .select({ id: s.ticketObservation.id })
+        .from(s.ticketObservation)
+        .where(
+          and(
+            eq(s.ticketObservation.tenantId, TENANT),
+            eq(s.ticketObservation.snapshotId, 'snap-nfr-5-5'),
+          ),
+        );
+      expect(obs).toHaveLength(TICKET_COUNT);
+
+      const ledger = await tx
+        .select({ id: s.actualsLedgerEntry.id })
+        .from(s.actualsLedgerEntry)
+        .where(
+          and(
+            eq(s.actualsLedgerEntry.tenantId, TENANT),
+            eq(s.actualsLedgerEntry.snapshotId, 'snap-nfr-5-5'),
+          ),
+        );
+      // First snapshot: one opening_balance per ticket with non-zero hours (all NFR tickets).
+      expect(ledger).toHaveLength(TICKET_COUNT);
     });
   });
 });
