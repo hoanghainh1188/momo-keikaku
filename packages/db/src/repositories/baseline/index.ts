@@ -42,6 +42,34 @@ export interface AppendBaselineWpRow {
 export function baselineRepositoryOn(bound: Bound) {
   const { tx, tenantId } = bound;
 
+  async function loadBaselineWpsForVersion(
+    projectId: string,
+    baselineVersionSeq: number,
+  ): Promise<
+    readonly {
+      readonly wpId: string;
+      readonly start: string;
+      readonly finish: string;
+      readonly baselineMh: bigint;
+    }[]
+  > {
+    return tx
+      .select({
+        wpId: s.baselineWp.wpId,
+        start: s.baselineWp.start,
+        finish: s.baselineWp.finish,
+        baselineMh: s.baselineWp.baselineMh,
+      })
+      .from(s.baselineWp)
+      .where(
+        and(
+          eq(s.baselineWp.tenantId, tenantId),
+          eq(s.baselineWp.projectId, projectId),
+          eq(s.baselineWp.baselineVersionSeq, baselineVersionSeq),
+        ),
+      );
+  }
+
   return {
     /** Highest `baseline_version.seq` for the Project, or null when none. */
     async latestVersionSeq(projectId: string): Promise<number | null> {
@@ -139,8 +167,15 @@ export function baselineRepositoryOn(bound: Bound) {
     },
 
     /**
+     * Story 4.5 / Epic 4 retro F10: leaf `baseline_wp` rows for one Baseline version seq.
+     * Display / Divergence projection only — never a schedule input. Empty when the seq has
+     * no wp rows (unknown seq or a version with zero leaves).
+     */
+    loadBaselineWpsForVersion,
+
+    /**
      * Story 4.5: leaf `baseline_wp` rows for the active Baseline (max `seq`), or [] when none.
-     * Display / Divergence projection only — never a schedule input.
+     * Convenience for fences / Divergence — Plan-grid uses one-head-by-seq instead (F10).
      */
     async loadActiveBaselineWps(projectId: string): Promise<
       readonly {
@@ -162,21 +197,7 @@ export function baselineRepositoryOn(bound: Bound) {
         .orderBy(desc(s.baselineVersion.seq))
         .limit(1);
       if (head === undefined) return [];
-      return tx
-        .select({
-          wpId: s.baselineWp.wpId,
-          start: s.baselineWp.start,
-          finish: s.baselineWp.finish,
-          baselineMh: s.baselineWp.baselineMh,
-        })
-        .from(s.baselineWp)
-        .where(
-          and(
-            eq(s.baselineWp.tenantId, tenantId),
-            eq(s.baselineWp.projectId, projectId),
-            eq(s.baselineWp.baselineVersionSeq, head.seq),
-          ),
-        );
+      return loadBaselineWpsForVersion(projectId, head.seq);
     },
 
     async projectStart(projectId: string): Promise<string | null> {

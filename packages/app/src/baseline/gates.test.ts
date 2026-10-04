@@ -136,6 +136,23 @@ describe('evaluateBaselineSetGates', () => {
     expect(result.reason).toBe('incomplete_plan');
     expect(result.blockingWpIds).toContain('wp-b');
   });
+
+  it('refuses incomplete_plan when the Project has zero leaves (F11)', () => {
+    const pin = successfulPin('wp-a');
+    const result = evaluateBaselineSetGates({
+      projectStart: '2026-09-01',
+      existingBaselineSeq: null,
+      latestRun: { ...pin, haltedReason: null },
+      successfulRun: pin,
+      leaves: [],
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.reason).toBe('incomplete_plan');
+    expect(result.blockingWpIds).toEqual([]);
+    expect(result.details.baseline).toEqual(['incomplete_plan']);
+    expect(result.details.notSchedulableCount).toEqual(['0']);
+  });
 });
 
 describe('evaluateReBaselineGates', () => {
@@ -181,6 +198,23 @@ describe('evaluateReBaselineGates', () => {
     if (result.ok) return;
     expect(result.reason).toBe('incomplete_plan');
     expect(result.blockingWpIds).toContain('wp-b');
+  });
+
+  it('shares zero-leaf incomplete_plan refuse with Set (F11)', () => {
+    const pin = successfulPin('wp-a');
+    const result = evaluateReBaselineGates({
+      projectStart: '2026-09-01',
+      existingBaselineSeq: 1,
+      latestRun: { ...pin, haltedReason: null },
+      successfulRun: pin,
+      leaves: [],
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.reason).toBe('incomplete_plan');
+    expect(result.blockingWpIds).toEqual([]);
+    expect(result.details.baseline).toEqual(['incomplete_plan']);
+    expect(result.details.notSchedulableCount).toEqual(['0']);
   });
 
   it('shares halted-head refuse with Set', () => {

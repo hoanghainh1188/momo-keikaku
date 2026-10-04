@@ -1275,3 +1275,11 @@ above can see where it went.
 - source_spec: `_bmad-output/implementation-artifacts/spec-epic-4-retro-item-22-extract-shared-set-re-baseline-writer-an.md`
   summary: Share `loadBaselineGateInput` between writer core and `set-baseline-state` eligibility reads so the Promise.all gate-row load cannot drift.
   evidence: Item-22 Blind Hunter review 2026-10-04. Writer extract intentionally left eligibility helpers alone (F7 carve-out); settle if a third Baseline write surface lands.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-epic-4-retro-item-24-f10-f11-one-head-zero-leaf.md`
+  summary: Update Set / Re-baseline blocked copy so zero-leaf incomplete_plan is not described only as Project start / incomplete leaf durations.
+  evidence: Item-24 F10/F11 Blind Hunter review 2026-10-04. New refuse reuses existing blocked caption; empty Projects are rare — copy/i18n follow-up.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-epic-4-retro-item-24-f10-f11-one-head-zero-leaf.md`
+  summary: Fail closed at appendVersionWithWps when wps.length === 0 so a bypass of evaluatePinAndCompleteness cannot land an empty Baseline version.
+  evidence: Item-24 F10/F11 Blind Hunter review 2026-10-04. Defense in depth; product writers share the gate path that now refuses zero leaves.

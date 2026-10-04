@@ -4,7 +4,7 @@
  * disable and refuse cannot disagree.
  *
  * Set refuses when a Baseline already exists; Re-baseline refuses when none exists. Pin /
- * incomplete / halted checks are shared.
+ * incomplete / halted checks are shared. Zero leaves also refuse `incomplete_plan` (F11).
  */
 import { parseStoredInputs, parseStoredOutputs } from '@momo/domain';
 import type { BaselineLeafProjection } from '../../../db/src/repositories/baseline';
@@ -114,6 +114,15 @@ function evaluatePinAndCompleteness(input: BaselineGateInput): BaselinePinGateRe
       baseline: ['no_project_start'],
       projectStart: ['required'],
       ...(missingDuration.length > 0 ? { blockingWpIds: missingDuration } : {}),
+    });
+  }
+
+  // Epic 4 retro F11: empty leaf set must not pass completeness (no blockers ⇒ empty append).
+  if (input.leaves.length === 0) {
+    return refusePin('incomplete_plan', [], 0, {
+      baseline: ['incomplete_plan'],
+      blockingWpIds: [],
+      notSchedulableCount: ['0'],
     });
   }
 
