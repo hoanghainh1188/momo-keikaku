@@ -2,7 +2,7 @@
 title: 'Story 5.4 — Snapshots run on a schedule the PM can see'
 type: 'feature'
 created: '2026-10-04'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '31e687167b280f5e84f46dbb966181e820adb1c4'
@@ -103,11 +103,43 @@ context:
 - **Job body.** `runIngestSnapshotJob` → gate → creds → `readScope` → `admitScopeRead` → `read_complete_writer_pending` (no writer). Rate-limit paces the *next* send via `startAfter` + attempt row.
 - **Worker.** `schedule: true`; `ingest-snapshot` `stately` + `retryLimit: 3` / backoff max 15 min; hourly `snapshot-tick` `tz: Asia/Tokyo` `missed: skip`; service `tenant_admin` context; `@momo/db` carve-out on `apps/worker/src/index.ts`.
 - **Pin UI.** Client popover + live age/min; Review registers pin id via context for Re-pin offer.
-- **Verification.** `pnpm lint`, `typecheck`, `depcruise`, `test` all exit 0 (1279 passed, 461 skipped). No Postgres here — REQUIRE_DB suites skipped.
+- **Verification.** `pnpm lint`, `typecheck`, `depcruise`, `test` all exit 0 (1283 passed, 461 skipped). No Postgres here — REQUIRE_DB suites skipped.
+- **Review patches.** Auth-only credential_failed; worker `not_found` completes; per-tenant tick isolation; shared adapters `createBoss`; web uses `INGEST_SNAPSHOT_QUEUE_OPTIONS` + boss reset; `searchLimit <= 0` slowdown; pin age/label refresh; ja copy; `rate_limit_paced` job test.
+- **Retry semantics.** Business outcomes (`approval_refused`, `credential_failed`, `read_incomplete`, `writer_pending`, `rate_limit_paced`) return `ok` so they do not burn pg-boss retries; `retryLimit: 3` applies to thrown transient read/infra failures.
 
 ## Spec Change Log
 
 ## Review Triage Log
+
+| Finding | Verdict | Evidence / route |
+|---------|---------|------------------|
+| Business failures never hit pg-boss retryLimit | false | Intentional: those paths return `ok` after writing attempt rows; retry is for rethrown transient read/infra errors |
+| All readScope throws → credential_failed | medium | **patch** — only auth kinds map; others rethrow |
+| not_found burns retry budget | medium | **patch** — worker completes not_found without throw |
+| Re-pin only router.refresh | medium | **defer** — durable Review pin retarget is Epic 6; banner prevents silent figure change |
+| ja.json new strings in English | medium | **patch** — Japanese copy added |
+| formatJst always en-GB months | low | Rejected — pre-existing layout pattern; not introduced as product locale formatting |
+| Refresh does not update age/label | medium | **patch** — reload updates both |
+| Dual createBoss factories | medium | **patch** — worker re-exports adapters factory with schedule:true |
+| Unused pg-boss / i18n deps | low | Rejected — web needs pg-boss via adapters peer; worker i18n carve is inbound-adapter rule |
+| Schedule/ingest roles off USE_CASE_ROLES barrel | false | Matches 5.2/5.3 ingest off-barrel pattern; authorize still runs in each use case |
+| Tick omits rateLimitsByConnectorId | false | rateLimit is observed on ScopeRead inside the job; next send uses startAfter |
+| Dialog a11y incomplete | low | Rejected — everyday use unlikely; Escape/focus trap is polish beyond AC |
+| Multi-connector Refresh uses [0] | false | R0 one Connector per Project (5.2) |
+| last_updated moved backward | low | **patch** — set to 10-04-2026 23:45 |
+| No tick integration test | medium | **defer** — REQUIRE_DB worker probe; constant + unit coverage remain |
+| searchLimit === 0 skips slowdown | medium | **patch** — `<= 0` forces slowdown |
+| paced enqueue orphan if connector vanishes | maybe-false | **defer** — settle with REQUIRE_DB race probe |
+| webBoss sticky failure | medium | **patch** — clear boss handles on start/createQueue fail |
+| One tenant throw aborts tick | medium | **patch** — per-tenant try/catch |
+| Non-auth read errors skip retry | medium | **patch** — same as auth-only credential mapping |
+| Bad job payload burns retries | low | Rejected — malformed payloads should surface loudly; senders are composition roots |
+| decrypt throw retries forever | medium | **patch** — decrypt failure → null → credential_failed |
+| Re-pin id compare without observedAt | false | Id inequality is the Review pin signal; timestamps are not the pin key |
+| rate_limit_paced job body untested | medium | **patch** — ingest test added |
+| Queue contract only constant-tested | medium | **defer** — live createQueue/send/schedule assert under REQUIRE_DB |
+| searchLimit/list helpers unverified at repo boundary | medium | **defer** — extend REQUIRE_DB connector.test.ts |
+| Web hardcodes retry options | medium | **patch** — spreads INGEST_SNAPSHOT_QUEUE_OPTIONS |
 
 ## Design Notes
 
