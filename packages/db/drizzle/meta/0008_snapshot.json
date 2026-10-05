@@ -1,6 +1,6 @@
 {
-  "id": "0007_snapshot",
-  "prevId": "3c870dd3-aacc-4a49-83e2-25994c1d2241",
+  "id": "0008_snapshot",
+  "prevId": "0007_snapshot",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -2889,6 +2889,20 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true
+        },
+        "left_scope": {
+          "name": "left_scope",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "absent_complete_streak": {
+          "name": "absent_complete_streak",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
         }
       },
       "indexes": {},
@@ -4162,7 +4176,7 @@
           "notNull": true,
           "identity": {
             "type": "always",
-            "name": "calendar_day_event_seq_seq",
+            "name": "project_setting_event_seq_seq",
             "schema": "public",
             "increment": "1",
             "startWith": "1",
@@ -4184,15 +4198,15 @@
           "primaryKey": false,
           "notNull": true
         },
-        "day": {
-          "name": "day",
-          "type": "date",
+        "tz_offset_minutes": {
+          "name": "tz_offset_minutes",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true
         },
-        "effect": {
-          "name": "effect",
-          "type": "text",
+        "teirei_weekday": {
+          "name": "teirei_weekday",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true
         },
@@ -4210,8 +4224,8 @@
         }
       },
       "indexes": {
-        "calendar_day_event_day_idx": {
-          "name": "calendar_day_event_day_idx",
+        "project_setting_event_project_idx": {
+          "name": "project_setting_event_project_idx",
           "columns": [
             {
               "expression": "tenant_id",
@@ -4221,12 +4235,6 @@
             },
             {
               "expression": "project_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "day",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -4245,9 +4253,9 @@
         }
       },
       "foreignKeys": {
-        "calendar_day_event_project_fk": {
-          "name": "calendar_day_event_project_fk",
-          "tableFrom": "calendar_day_event",
+        "project_setting_event_project_fk": {
+          "name": "project_setting_event_project_fk",
+          "tableFrom": "project_setting_event",
           "tableTo": "project",
           "columnsFrom": [
             "tenant_id",
@@ -4262,14 +4270,347 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "calendar_day_event_effect_check": {
-          "name": "calendar_day_event_effect_check",
-          "value": "\"calendar_day_event\".\"effect\" IN ('add', 'remove')"
+      "uniqueConstraints": {
+        "project_setting_event_tenant_seq_key": {
+          "name": "project_setting_event_tenant_seq_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "tenant_id",
+            "seq"
+          ]
         }
       },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.connector_ownership_event": {
+      "name": "connector_ownership_event",
+      "schema": "",
+      "columns": {
+        "seq": {
+          "name": "seq",
+          "type": "bigint",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "connector_ownership_event_seq_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "9223372036854775807",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "project_id": {
+          "name": "project_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "tracker_issue_id": {
+          "name": "tracker_issue_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "from_connector_id": {
+          "name": "from_connector_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "to_connector_id": {
+          "name": "to_connector_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "resolution": {
+          "name": "resolution",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "actor": {
+          "name": "actor",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "at": {
+          "name": "at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "connector_ownership_event_ticket_idx": {
+          "name": "connector_ownership_event_ticket_idx",
+          "columns": [
+            {
+              "expression": "tenant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "tracker_issue_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "seq",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "connector_ownership_event_project_fk": {
+          "name": "connector_ownership_event_project_fk",
+          "tableFrom": "connector_ownership_event",
+          "tableTo": "project",
+          "columnsFrom": [
+            "tenant_id",
+            "project_id"
+          ],
+          "columnsTo": [
+            "tenant_id",
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "connector_ownership_event_from_connector_fk": {
+          "name": "connector_ownership_event_from_connector_fk",
+          "tableFrom": "connector_ownership_event",
+          "tableTo": "connector",
+          "columnsFrom": [
+            "tenant_id",
+            "from_connector_id"
+          ],
+          "columnsTo": [
+            "tenant_id",
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "connector_ownership_event_to_connector_fk": {
+          "name": "connector_ownership_event_to_connector_fk",
+          "tableFrom": "connector_ownership_event",
+          "tableTo": "connector",
+          "columnsFrom": [
+            "tenant_id",
+            "to_connector_id"
+          ],
+          "columnsTo": [
+            "tenant_id",
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "connector_ownership_event_tenant_seq_key": {
+          "name": "connector_ownership_event_tenant_seq_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "tenant_id",
+            "seq"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.connector_overlap": {
+      "name": "connector_overlap",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "project_id": {
+          "name": "project_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "tracker_issue_id": {
+          "name": "tracker_issue_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ticket_key": {
+          "name": "ticket_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "owner_connector_id": {
+          "name": "owner_connector_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "claimer_connector_id": {
+          "name": "claimer_connector_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "observed_at": {
+          "name": "observed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "snapshot_id": {
+          "name": "snapshot_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "connector_overlap_project_idx": {
+          "name": "connector_overlap_project_idx",
+          "columns": [
+            {
+              "expression": "tenant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "project_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "connector_overlap_project_fk": {
+          "name": "connector_overlap_project_fk",
+          "tableFrom": "connector_overlap",
+          "tableTo": "project",
+          "columnsFrom": [
+            "tenant_id",
+            "project_id"
+          ],
+          "columnsTo": [
+            "tenant_id",
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "connector_overlap_owner_connector_fk": {
+          "name": "connector_overlap_owner_connector_fk",
+          "tableFrom": "connector_overlap",
+          "tableTo": "connector",
+          "columnsFrom": [
+            "tenant_id",
+            "owner_connector_id"
+          ],
+          "columnsTo": [
+            "tenant_id",
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "connector_overlap_claimer_connector_fk": {
+          "name": "connector_overlap_claimer_connector_fk",
+          "tableFrom": "connector_overlap",
+          "tableTo": "connector",
+          "columnsFrom": [
+            "tenant_id",
+            "claimer_connector_id"
+          ],
+          "columnsTo": [
+            "tenant_id",
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "connector_overlap_snapshot_fk": {
+          "name": "connector_overlap_snapshot_fk",
+          "tableFrom": "connector_overlap",
+          "tableTo": "tracker_snapshot",
+          "columnsFrom": [
+            "tenant_id",
+            "snapshot_id"
+          ],
+          "columnsTo": [
+            "tenant_id",
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "connector_overlap_tenant_id_key": {
+          "name": "connector_overlap_tenant_id_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "tenant_id",
+            "id"
+          ]
+        },
+        "connector_overlap_open_claim_key": {
+          "name": "connector_overlap_open_claim_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "tenant_id",
+            "tracker_issue_id",
+            "claimer_connector_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
       "isRLSEnabled": false
     }
   },

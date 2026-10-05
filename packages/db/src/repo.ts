@@ -1,4 +1,4 @@
-import { asc, desc, eq } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 import {
   buildCalendar,
   computeReview,
@@ -56,6 +56,22 @@ export interface ProjectBundle {
       lastErrorAt: string | null;
       hasCredentials: boolean;
     };
+    /** Story 5.6: open overlap claims (conflict banner). */
+    overlaps: readonly {
+      id: string;
+      trackerIssueId: string;
+      ticketKey: string;
+      ownerConnectorId: string;
+      claimerConnectorId: string;
+      observedAt: string;
+    }[];
+    /** Story 5.6: durable left-scope Tickets with retained hours. */
+    leftScopeTickets: readonly {
+      trackerIssueId: string;
+      key: string;
+      ownerConnectorId: string;
+      hoursMh: bigint;
+    }[];
     /** AD-15 / review G-5: the demo's fixed clock. */
     anchor: string;
     snapshotAgeMinutes: number;
@@ -327,6 +343,54 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
     dispositions,
   };
 
+  const overlapRows = await tx
+    .select({
+      id: s.connectorOverlap.id,
+      trackerIssueId: s.connectorOverlap.trackerIssueId,
+      ticketKey: s.connectorOverlap.ticketKey,
+      ownerConnectorId: s.connectorOverlap.ownerConnectorId,
+      claimerConnectorId: s.connectorOverlap.claimerConnectorId,
+      observedAt: s.connectorOverlap.observedAt,
+    })
+    .from(s.connectorOverlap)
+    .where(and(eq(s.connectorOverlap.tenantId, p.tenantId), eq(s.connectorOverlap.projectId, projectId)))
+    .orderBy(asc(s.connectorOverlap.ticketKey));
+
+  const leftScopeRows = await tx
+    .select({
+      trackerIssueId: s.ticket.trackerIssueId,
+      key: s.ticket.key,
+      ownerConnectorId: s.ticket.ownerConnectorId,
+    })
+    .from(s.ticket)
+    .where(
+      and(
+        eq(s.ticket.tenantId, p.tenantId),
+        eq(s.ticket.projectId, projectId),
+        eq(s.ticket.leftScope, true),
+      ),
+    )
+    .orderBy(asc(s.ticket.key));
+  const leftScopeHours = new Map<string, bigint>();
+  if (leftScopeRows.length > 0) {
+    const leftIds = leftScopeRows.map((r) => r.trackerIssueId);
+    const leftLedger = await tx
+      .select({
+        ticketId: s.actualsLedgerEntry.ticketId,
+        deltaMh: s.actualsLedgerEntry.deltaMh,
+      })
+      .from(s.actualsLedgerEntry)
+      .where(
+        and(
+          eq(s.actualsLedgerEntry.tenantId, p.tenantId),
+          inArray(s.actualsLedgerEntry.ticketId, leftIds),
+        ),
+      );
+    for (const e of leftLedger) {
+      leftScopeHours.set(e.ticketId, (leftScopeHours.get(e.ticketId) ?? 0n) + e.deltaMh);
+    }
+  }
+
   return {
     project,
     meta: {
@@ -347,6 +411,20 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
         hasCredentials:
           con?.credentialsCiphertext != null && con?.credentialsNonce != null,
       },
+      overlaps: overlapRows.map((o) => ({
+        id: o.id,
+        trackerIssueId: o.trackerIssueId,
+        ticketKey: o.ticketKey,
+        ownerConnectorId: o.ownerConnectorId,
+        claimerConnectorId: o.claimerConnectorId,
+        observedAt: o.observedAt.toISOString(),
+      })),
+      leftScopeTickets: leftScopeRows.map((r) => ({
+        trackerIssueId: r.trackerIssueId,
+        key: r.key,
+        ownerConnectorId: r.ownerConnectorId,
+        hoursMh: leftScopeHours.get(r.trackerIssueId) ?? 0n,
+      })),
       anchor,
       snapshotAgeMinutes: latestSnap
         ? Math.round(

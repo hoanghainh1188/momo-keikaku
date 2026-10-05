@@ -157,9 +157,11 @@ export type { ChangeTenantCurrencyInput, TenantCurrencyDeps } from './use-cases/
 export type {
   AddConnectorInput,
   ChangeScopeInput,
+  ConfirmOwnershipInput,
   RotateCredentialsInput,
 } from './use-cases/connector-input';
 export { ADD_CONNECTOR_REFUSALS, type CreatedConnector } from './use-cases/connector-writes';
+export { confirmConnectorOwnership } from './use-cases/connector-ownership';
 export type {
   AddConnectorDeps,
   ConnectorPublicRow,

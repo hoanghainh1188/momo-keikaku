@@ -4,10 +4,12 @@
  * Public reads never return ciphertext or plaintext secrets. Decrypt-for-adapter loads
  * encrypted bytes only for the trusted ingest composition path.
  */
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { Bound } from '../../bound';
 import { projectNotFound } from '../../project-not-found';
 import * as s from '../../schema';
+import { lockWatermark } from '../../watermark-lock';
+import { trackerRepositoryOn, type TrackerKind } from '../tracker';
 
 export interface EncryptedCredentialsRow {
   readonly ciphertext: Buffer;
@@ -44,6 +46,24 @@ export interface LatestSnapshotRow {
   readonly connectorId: string;
   readonly observedAt: Date;
   readonly ticketCount: number;
+}
+
+export interface ConnectorOverlapRow {
+  readonly id: string;
+  readonly projectId: string;
+  readonly trackerIssueId: string;
+  readonly ticketKey: string;
+  readonly ownerConnectorId: string;
+  readonly claimerConnectorId: string;
+  readonly observedAt: Date;
+}
+
+export interface LeftScopeTicketRow {
+  readonly trackerIssueId: string;
+  readonly key: string;
+  readonly ownerConnectorId: string;
+  /** Σ ledger hours retained after leave (not reversed). */
+  readonly hoursMh: bigint;
 }
 
 function toPublic(row: typeof s.connector.$inferSelect): ConnectorPublicRow {
@@ -343,6 +363,161 @@ export function connectorWriteRepositoryOn(bound: Bound) {
         .limit(1);
       if (!row?.ciphertext || !row.nonce || !row.keyId) return null;
       return { ciphertext: row.ciphertext, nonce: row.nonce, keyId: row.keyId };
+    },
+
+    /** Story 5.6: open overlap claims for a Project (conflict banner). */
+    async listOpenOverlaps(projectId: string): Promise<readonly ConnectorOverlapRow[]> {
+      return tx
+        .select({
+          id: s.connectorOverlap.id,
+          projectId: s.connectorOverlap.projectId,
+          trackerIssueId: s.connectorOverlap.trackerIssueId,
+          ticketKey: s.connectorOverlap.ticketKey,
+          ownerConnectorId: s.connectorOverlap.ownerConnectorId,
+          claimerConnectorId: s.connectorOverlap.claimerConnectorId,
+          observedAt: s.connectorOverlap.observedAt,
+        })
+        .from(s.connectorOverlap)
+        .where(
+          and(eq(s.connectorOverlap.tenantId, tenantId), eq(s.connectorOverlap.projectId, projectId)),
+        )
+        .orderBy(s.connectorOverlap.ticketKey);
+    },
+
+    /** Story 5.6: durable left-scope Tickets on a Project with retained ledger hours. */
+    async listLeftScopeTickets(projectId: string): Promise<readonly LeftScopeTicketRow[]> {
+      const rows = await tx
+        .select({
+          trackerIssueId: s.ticket.trackerIssueId,
+          key: s.ticket.key,
+          ownerConnectorId: s.ticket.ownerConnectorId,
+        })
+        .from(s.ticket)
+        .where(
+          and(
+            eq(s.ticket.tenantId, tenantId),
+            eq(s.ticket.projectId, projectId),
+            eq(s.ticket.leftScope, true),
+          ),
+        )
+        .orderBy(s.ticket.key);
+      if (rows.length === 0) return [];
+
+      const hoursByTicket = new Map<string, bigint>();
+      const ids = rows.map((r) => r.trackerIssueId);
+      const ledgerRows = await tx
+        .select({
+          ticketId: s.actualsLedgerEntry.ticketId,
+          deltaMh: s.actualsLedgerEntry.deltaMh,
+        })
+        .from(s.actualsLedgerEntry)
+        .where(
+          and(
+            eq(s.actualsLedgerEntry.tenantId, tenantId),
+            inArray(s.actualsLedgerEntry.ticketId, ids),
+          ),
+        );
+      for (const e of ledgerRows) {
+        hoursByTicket.set(e.ticketId, (hoursByTicket.get(e.ticketId) ?? 0n) + e.deltaMh);
+      }
+      return rows.map((r) => ({
+        trackerIssueId: r.trackerIssueId,
+        key: r.key,
+        ownerConnectorId: r.ownerConnectorId,
+        hoursMh: hoursByTicket.get(r.trackerIssueId) ?? 0n,
+      }));
+    },
+
+    /**
+     * Story 5.6: PM Keep / Transfer under the Project lock. Appends `connector_ownership_event`,
+     * moves `owner_connector_id` only on Transfer, clears this claimer's open overlap row.
+     */
+    async confirmOwnership(input: {
+      readonly projectId: string;
+      readonly trackerIssueId: string;
+      readonly claimerConnectorId: string;
+      readonly resolution: 'keep' | 'transfer';
+      readonly actor: string;
+      readonly at: Date;
+    }): Promise<void> {
+      await lockWatermark(bound, { kind: 'project', projectId: input.projectId });
+
+      const [open] = await tx
+        .select()
+        .from(s.connectorOverlap)
+        .where(
+          and(
+            eq(s.connectorOverlap.tenantId, tenantId),
+            eq(s.connectorOverlap.projectId, input.projectId),
+            eq(s.connectorOverlap.trackerIssueId, input.trackerIssueId),
+            eq(s.connectorOverlap.claimerConnectorId, input.claimerConnectorId),
+          ),
+        )
+        .limit(1);
+      if (!open) {
+        throw new Error(
+          `overlap ${input.trackerIssueId}/${input.claimerConnectorId} not found on project ${input.projectId}`,
+        );
+      }
+
+      const [ticketRow] = await tx
+        .select()
+        .from(s.ticket)
+        .where(
+          and(
+            eq(s.ticket.tenantId, tenantId),
+            eq(s.ticket.projectId, input.projectId),
+            eq(s.ticket.trackerIssueId, input.trackerIssueId),
+          ),
+        )
+        .limit(1);
+      if (!ticketRow) {
+        throw new Error(`ticket ${input.trackerIssueId} not found on project ${input.projectId}`);
+      }
+
+      const fromConnectorId = ticketRow.ownerConnectorId;
+      const toConnectorId =
+        input.resolution === 'keep' ? fromConnectorId : input.claimerConnectorId;
+
+      if (input.resolution === 'transfer') {
+        const [dest] = await tx
+          .select({ id: s.connector.id, projectId: s.connector.projectId })
+          .from(s.connector)
+          .where(and(eq(s.connector.tenantId, tenantId), eq(s.connector.id, toConnectorId)))
+          .limit(1);
+        if (!dest || dest.projectId !== input.projectId) {
+          throw new Error(`connector ${toConnectorId} not found for project ${input.projectId}`);
+        }
+        const tracker = trackerRepositoryOn(bound);
+        await tracker.setOwnerConnectorId(
+          ticketRow.trackerKind as TrackerKind,
+          ticketRow.trackerSite,
+          ticketRow.trackerIssueId,
+          toConnectorId,
+        );
+      }
+
+      await tx.insert(s.connectorOwnershipEvent).values({
+        tenantId,
+        projectId: input.projectId,
+        trackerIssueId: input.trackerIssueId,
+        fromConnectorId,
+        toConnectorId,
+        resolution: input.resolution,
+        actor: input.actor,
+        at: input.at,
+      });
+
+      await tx
+        .delete(s.connectorOverlap)
+        .where(
+          and(
+            eq(s.connectorOverlap.tenantId, tenantId),
+            eq(s.connectorOverlap.projectId, input.projectId),
+            eq(s.connectorOverlap.trackerIssueId, input.trackerIssueId),
+            eq(s.connectorOverlap.claimerConnectorId, input.claimerConnectorId),
+          ),
+        );
     },
   };
 }

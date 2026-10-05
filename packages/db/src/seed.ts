@@ -56,6 +56,8 @@ export const TRUNCATE_ORDER: readonly string[] = [
   'mapping_event',
   'mapping_rule',
   'actuals_ledger_entry',
+  'connector_overlap',
+  'connector_ownership_event',
   'ticket_observation',
   'tracker_snapshot',
   'tracker_snapshot_attempt',
@@ -504,9 +506,8 @@ export async function writeTenantRows(
             s.ticket.trackerIssueId,
           ],
           set: {
+            // Story 5.6: ownership / Project move only via connector_ownership_event / first insert.
             key: sql`excluded.key`,
-            ownerConnectorId: sql`excluded.owner_connector_id`,
-            projectId: sql`excluded.project_id`,
           },
         }),
     );

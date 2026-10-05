@@ -4,6 +4,7 @@ import { valueOrNotFound } from '@/server/result';
 import { hours } from '@momo/domain/present';
 import { Section } from '@/components/ui';
 import { AddConnectorForm, RotateCredentialsForm } from './connector-forms';
+import { OverlapResolveForm } from './overlap-resolve-form';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,6 +20,8 @@ export default async function ConnectorsPage({
   const c = bundle.meta.connector;
   const hasConnector = c.id.length > 0;
   const hasSnapshot = review.snapshot.id.length > 0;
+  const overlaps = bundle.meta.overlaps;
+  const leftScopeTickets = bundle.meta.leftScopeTickets;
 
   return (
     <div className="sheet">
@@ -30,6 +33,47 @@ export default async function ConnectorsPage({
           <strong>{t('connectors.credential_error_title')}</strong>
           <p>{c.lastErrorMessage}</p>
         </div>
+      ) : null}
+
+      {overlaps.length > 0 ? (
+        <div className="connector-error-banner" role="alert" data-testid="connector-overlap-banner">
+          <strong>{t('connectors.overlap_title')}</strong>
+          <p>{t('connectors.overlap_intro')}</p>
+          <ul>
+            {overlaps.map((o) => (
+              <OverlapResolveForm
+                key={o.id}
+                projectId={projectId}
+                trackerIssueId={o.trackerIssueId}
+                claimerConnectorId={o.claimerConnectorId}
+                ticketKey={o.ticketKey}
+                ownerLabel={o.ownerConnectorId}
+                claimerLabel={o.claimerConnectorId}
+                copyNamespace="connectors"
+              />
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {leftScopeTickets.length > 0 ? (
+        <details data-testid="left-scope-list" style={{ marginBottom: 16 }}>
+          <summary>
+            <strong>{t('connectors.left_scope_title')}</strong>
+            {' — '}
+            {t('connectors.left_scope_intro')}
+          </summary>
+          <ul>
+            {leftScopeTickets.map((row) => (
+              <li key={row.trackerIssueId}>
+                {t('connectors.left_scope_row', {
+                  key: row.key,
+                  hours: hours(row.hoursMh),
+                })}
+              </li>
+            ))}
+          </ul>
+        </details>
       ) : null}
 
       {!hasConnector ? (

@@ -94,22 +94,24 @@ export interface TableEntry {
 }
 
 /**
- * The 39 tables of this release (story 1.3 slice 2 added `program`; story 1.4 slice 1 removed
+ * The 41 tables of this release (story 1.3 slice 2 added `program`; story 1.4 slice 1 removed
  * `app_user` and added the four Better Auth tables and `tenant_membership`; slice 4 added
  * `identity_event`; story 1.6 `project_default_rate_entry`; story 2.1 the five scheduling tables;
  * story 2.10 `pct_override_event` + Custom Field definition/value; story 2.12
  * `calendar_day_event`; story 5.1 `ticket`, `tracker_account`, `fixture_cursor`; story 5.2
- * `connector_scope_event`, `tracker_snapshot_attempt`; story 5.5 `project_setting_event`),
+ * `connector_scope_event`, `tracker_snapshot_attempt`; story 5.5 `project_setting_event`;
+ * story 5.6 `connector_ownership_event`, `connector_overlap`),
  * in DEPENDENCY ORDER: every table comes after each table its foreign keys reference, so this order
  * is an insert order and its reverse is a delete order (`probe-tenants.ts` deletes by it). Story
  * 2.1's composite foreign keys made that load-bearing: `schedule_run` before `baseline_version`,
  * `mapping_rule` before `mapping_event`.
  *
- * Eighteen are insert-only and are classed `append-only` accordingly:
+ * Nineteen are insert-only and are classed `append-only` accordingly:
  * rate_entry, project_default_rate_entry, wp_status_event, pct_override_event,
  * calendar_day_event, holiday_calendar_version, schedule_run, baseline_version, baseline_wp,
  * project_setting_event, connector_scope_event, tracker_snapshot_attempt, tracker_snapshot,
- * ticket_observation, actuals_ledger_entry, mapping_event, disposition_event, audit_log.
+ * ticket_observation, connector_ownership_event, actuals_ledger_entry, mapping_event,
+ * disposition_event, audit_log.
  */
 export const TABLE_REGISTRY: readonly TableEntry[] = [
   {
@@ -338,6 +340,22 @@ export const TABLE_REGISTRY: readonly TableEntry[] = [
     class: 'append-only',
     tenantColumn: 'tenant_id',
     why: 'The Tickets inside one Snapshot. Same argument as the Snapshot that carries them.',
+  },
+  {
+    table: 'connector_ownership_event',
+    class: 'append-only',
+    tenantColumn: 'tenant_id',
+    why:
+      'PM-confirmed ownership Keep/Transfer (story 5.6 / FR-42). owner_connector_id moves only ' +
+      'through this event; editing history would rewrite who owned past hours.',
+  },
+  {
+    table: 'connector_overlap',
+    class: 'derived',
+    tenantColumn: 'tenant_id',
+    why:
+      'Non-owner Connector observed an owned Ticket (story 5.6 / FR-42). Derived by the ingest ' +
+      'overlap writer; cleared on Keep/Transfer. Never a second ledger entry.',
   },
   {
     table: 'actuals_ledger_entry',

@@ -198,6 +198,9 @@ describe('requestSnapshotRefresh / pin / attempts (story 5.4)', () => {
       setLastError: async () => {},
       countMappingEventsForProject: async () => 0,
       loadEncryptedCredentials: async () => null,
+      listOpenOverlaps: async () => [],
+      listLeftScopeTickets: async () => [],
+      confirmOwnership: async () => {},
     };
     const deps: ConnectorWriteDeps<{ marker: string }> & { queue: IngestSnapshotQueuePort } = {
       handle: { marker: 'h' },

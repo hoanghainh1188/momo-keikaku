@@ -52,6 +52,7 @@ import {
   addConnector as addConnectorUseCase,
   assignMemberProject as assignMemberProjectUseCase,
   changeConnectorScope as changeConnectorScopeUseCase,
+  confirmConnectorOwnership as confirmConnectorOwnershipUseCase,
   changeMemberRole as changeMemberRoleUseCase,
   changeTenantCurrency as changeTenantCurrencyUseCase,
   config,
@@ -99,6 +100,7 @@ import {
   type AddConnectorInput,
   type AssignMemberProjectInput,
   type ChangeScopeInput,
+  type ConfirmOwnershipInput,
   type ChangeTenantCurrencyInput,
   type TenantCurrencyDeps,
   type AppendProjectDefaultRateInput,
@@ -1009,6 +1011,15 @@ export async function rotateCredentials(input: RotateCredentialsInput, ctx?: Req
 export async function changeConnectorScope(input: ChangeScopeInput, ctx?: RequestContext) {
   const context = ctx ?? (await requestContext());
   return changeConnectorScopeUseCase(connectorWriteDeps(), context, input);
+}
+
+/** Story 5.6 / FR-42: PM Keep / Transfer for a Connector overlap claim. */
+export async function confirmConnectorOwnership(
+  input: ConfirmOwnershipInput,
+  ctx?: RequestContext,
+) {
+  const context = ctx ?? (await requestContext());
+  return confirmConnectorOwnershipUseCase(connectorWriteDeps(), context, input);
 }
 
 /** FR-17: refuse ingest when client approval is missing; record a failed attempt. */

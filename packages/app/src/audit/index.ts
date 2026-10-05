@@ -68,6 +68,7 @@ export const AUDIT_ACTIONS = [
   'connector.add',
   'connector.rotate_credentials',
   'connector.change_scope',
+  'connector.confirm_ownership',
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];

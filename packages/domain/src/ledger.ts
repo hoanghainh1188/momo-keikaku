@@ -19,14 +19,24 @@ export interface IngestInput {
   approvalRecordedAt: Date | string | null;
   /**
    * Cumulative Σ delta_mh per Ticket already on the ledger (writer supplies). Used when
-   * hours reappear after null/`hours_cleared` so the adjusting delta keeps the invariant.
+   * hours reappear after null/`hours_cleared` or after left_scope so the adjusting delta
+   * keeps the invariant (story 5.6 / FR-42).
    */
   priorLedgerMhByTicket?: ReadonlyMap<string, Mh>;
+  /**
+   * Story 5.6: true when this snapshot's Connector `scope_seq` is greater than `prev.scope_seq`
+   * — the first complete read after a recorded `connector_scope_event`.
+   */
+  scopeChangedSincePrev?: boolean;
 }
 
 export interface IngestResult {
   entries: LedgerEntry[];
-  /** FR-42: Tickets that were in the previous snapshot and are no longer in scope. */
+  /**
+   * FR-42 / AR-15: Tickets absent from this complete read that were in `prev`.
+   * Absence candidates for the writer — durable `left_scope` needs two consecutive complete
+   * absences (story 5.6); the domain does not mark durability.
+   */
   leftScope: { ticketId: string; key: string }[];
   /**
    * AR-15: Tickets whose `actualMh` transitioned value→null. Writer sets `hours_cleared` on
@@ -36,6 +46,14 @@ export interface IngestResult {
   /** AD-8: basis detected from the data, never from a plan name. */
   measurementBasis: 'hours' | 'count';
   nextSeq: number;
+}
+
+/** True when `createdAt` is at or before `prev.observedAt` (mid-flight OB clock). */
+function createdAtOnOrBeforePrev(createdAt: string, prevObservedAt: string): boolean {
+  const createdMs = Date.parse(createdAt);
+  const prevMs = Date.parse(prevObservedAt);
+  if (!Number.isFinite(createdMs) || !Number.isFinite(prevMs)) return false;
+  return createdMs <= prevMs;
 }
 
 /**
@@ -141,13 +159,39 @@ export function ingestSnapshot(input: IngestInput): IngestResult {
       // FR-42 first sighting — null hours never move the ledger (AR-15).
       if (nowMh === null) continue;
       if (nowMh === 0n) continue;
-      const kind = isFirstSnapshot ? 'opening_balance' : 'delta';
+      const priorSum = input.priorLedgerMhByTicket?.get(t.trackerIssueId) ?? 0n;
+      // Story 5.6: OB only on Connector first snapshot, or first sighting after a recorded
+      // scope change when the Ticket already existed (createdAt ≤ prev.observedAt) and this
+      // Connector has no prior ledger history. Return-after-leave (prior Σ > 0) is always a
+      // delta from last observed — never restart from 0 as OB.
+      const midFlightOb =
+        !isFirstSnapshot &&
+        priorSum === 0n &&
+        input.scopeChangedSincePrev === true &&
+        prev !== null &&
+        createdAtOnOrBeforePrev(t.createdAt, prev.observedAt);
+      if (isFirstSnapshot || midFlightOb) {
+        entries.push({
+          seq: seq++,
+          ticketId: t.trackerIssueId,
+          kind: 'opening_balance',
+          deltaMh: nowMh,
+          windowStart: prev?.observedAt ?? null,
+          windowEnd: next.observedAt,
+          assigneeAccountId: t.assigneeAccountId,
+          activeBaselineVersionSeq,
+        });
+        continue;
+      }
+      // New since prev, or return after absence/left_scope: delta vs prior Σ (0 when new).
+      const delta = nowMh - priorSum;
+      if (delta === 0n) continue;
       entries.push({
         seq: seq++,
         ticketId: t.trackerIssueId,
-        kind,
-        deltaMh: nowMh,
-        windowStart: prev?.observedAt ?? null,
+        kind: 'delta',
+        deltaMh: delta,
+        windowStart: prev!.observedAt,
         windowEnd: next.observedAt,
         assigneeAccountId: t.assigneeAccountId,
         activeBaselineVersionSeq,
@@ -234,4 +278,46 @@ export function checkLedgerInvariant(
     if (ledger !== observed) violations.push({ ticketId: t.trackerIssueId, ledger, observed });
   }
   return { ok: violations.length === 0, violations };
+}
+
+/**
+ * Story 5.6: durable `left_scope` after two consecutive complete absences.
+ * Sighting clears streak/flag; already-left Tickets stay left until seen again.
+ * Incomplete reads must never call this (writer gate).
+ */
+export function advanceLeftScopeState(
+  current: { readonly leftScope: boolean; readonly absentCompleteStreak: number },
+  presentInCompleteRead: boolean,
+): { leftScope: boolean; absentCompleteStreak: number } {
+  if (presentInCompleteRead) return { leftScope: false, absentCompleteStreak: 0 };
+  if (current.leftScope) {
+    return { leftScope: true, absentCompleteStreak: current.absentCompleteStreak };
+  }
+  const streak = current.absentCompleteStreak + 1;
+  return { leftScope: streak >= 2, absentCompleteStreak: streak };
+}
+
+/**
+ * Story 5.6: partition a Connector's read into owned Tickets (ledger) vs overlap claims
+ * (no ledger). Unknown issue ids are owned by the claiming Connector (first insert).
+ */
+export function partitionOwnedTickets<T extends { readonly trackerIssueId: string }>(
+  tickets: readonly T[],
+  ownerByIssueId: ReadonlyMap<string, string>,
+  connectorId: string,
+): {
+  owned: T[];
+  overlaps: { ticket: T; ownerConnectorId: string }[];
+} {
+  const owned: T[] = [];
+  const overlaps: { ticket: T; ownerConnectorId: string }[] = [];
+  for (const ticket of tickets) {
+    const owner = ownerByIssueId.get(ticket.trackerIssueId);
+    if (owner !== undefined && owner !== connectorId) {
+      overlaps.push({ ticket, ownerConnectorId: owner });
+    } else {
+      owned.push(ticket);
+    }
+  }
+  return { owned, overlaps };
 }

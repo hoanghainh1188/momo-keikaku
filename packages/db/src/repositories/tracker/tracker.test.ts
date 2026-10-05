@@ -149,6 +149,37 @@ describe.skipIf(!live)('tracker identity + fixture cursor (story 5.1)', () => {
     });
   });
 
+  it('does not overwrite owner_connector_id on conflict (story 5.6)', async () => {
+    const db = getDb(APP_DATABASE_URL!);
+    await withTenant(db, TENANT, async (tx) => {
+      const repo = trackerRepositoryOn({ tx, tenantId: TENANT });
+      await repo.upsertTicket({
+        id: 'tkt-owner-1',
+        trackerKind: 'fixture',
+        trackerSite: 'fixture.site',
+        trackerIssueId: 'issue-owner',
+        ownerConnectorId: CONNECTOR,
+        projectId: PROJECT,
+        key: 'K-OWN',
+      });
+      await repo.upsertTicket({
+        id: 'tkt-owner-2',
+        trackerKind: 'fixture',
+        trackerSite: 'fixture.site',
+        trackerIssueId: 'issue-owner',
+        ownerConnectorId: CONNECTOR_B,
+        projectId: PROJECT,
+        key: 'K-OWN-REKEY',
+      });
+      const [row] = await tx
+        .select()
+        .from(s.ticket)
+        .where(eq(s.ticket.trackerIssueId, 'issue-owner'));
+      expect(row!.ownerConnectorId).toBe(CONNECTOR);
+      expect(row!.key).toBe('K-OWN-REKEY');
+    });
+  });
+
   it('upserts tracker_account only from observation-shaped input', async () => {
     const db = getDb(APP_DATABASE_URL!);
     await withTenant(db, TENANT, async (tx) => {

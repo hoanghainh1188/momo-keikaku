@@ -88,7 +88,17 @@ export const changeScopeInputSchema = z.object({
   projectKey: prose,
 });
 
+/** Story 5.6: PM Keep (affirm owner) or Transfer (move owner_connector_id). */
+export const confirmOwnershipInputSchema = z.object({
+  projectId: id,
+  trackerIssueId: id,
+  resolution: z.enum(['keep', 'transfer']),
+  /** Claimer Connector on the open overlap row being resolved. */
+  claimerConnectorId: id,
+});
+
 /** Caller-facing input (pre-transform). The schema adds `site` / `spaceLabel` internally. */
 export type AddConnectorInput = Readonly<z.input<typeof addConnectorInputSchema>>;
 export type RotateCredentialsInput = Readonly<z.infer<typeof rotateCredentialsInputSchema>>;
 export type ChangeScopeInput = Readonly<z.infer<typeof changeScopeInputSchema>>;
+export type ConfirmOwnershipInput = Readonly<z.infer<typeof confirmOwnershipInputSchema>>;

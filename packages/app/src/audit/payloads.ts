@@ -225,6 +225,14 @@ export const AUDIT_PAYLOAD_BY_ACTION = {
       after: z.string(),
     })
     .strict(),
+  'connector.confirm_ownership': z
+    .object({
+      projectId: z.string(),
+      trackerIssueId: z.string(),
+      resolution: z.enum(['keep', 'transfer']),
+      toConnectorId: z.string(),
+    })
+    .strict(),
 } as const;
 
 /**

@@ -104,6 +104,9 @@ function fakeDeps(overrides?: {
       return mappingCount;
     },
     loadEncryptedCredentials: async () => null,
+    listOpenOverlaps: async () => [],
+    listLeftScopeTickets: async () => [],
+    confirmOwnership: async () => {},
   };
 
   const deps: AddConnectorDeps<{ marker: string }> = {

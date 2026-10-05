@@ -226,7 +226,15 @@
     "refused_search_budget": "Not connected: one full read of this Backlog project would use more than 25% of the API user's Search rate limit per minute. Narrow the scope or use an API user on a higher Backlog plan.",
     "refused_credential_rejected": "Not connected: Backlog rejected the API key.",
     "refused_project_not_found": "Not connected: Backlog has no project with that key for this API key.",
-    "refused_backlog_unreachable": "Not connected: the Backlog space could not be reached. Check the space URL and try again."
+    "refused_backlog_unreachable": "Not connected: the Backlog space could not be reached. Check the space URL and try again.",
+    "overlap_title": "Scope overlap",
+    "overlap_intro": "Another Connector observed Tickets this Project already owns. Hours are not counted twice — resolve each claim.",
+    "overlap_row": "{key} — owned by {owner}, also seen by {claimer}",
+    "overlap_keep": "Keep owner",
+    "overlap_transfer": "Transfer to claimer",
+    "left_scope_title": "Left scope",
+    "left_scope_intro": "Tickets absent from two consecutive complete reads. Ledger history is kept; hours are not reversed.",
+    "left_scope_row": "{key} — {hours}h retained"
   },
   "mapping": {
     "coverage": "Coverage",
@@ -414,6 +422,14 @@
       "opening_balance_footnote": "Opening Balance {hours}h — hours the Tickets already carried before momo-keikaku could observe them. Counted in cumulative AC, excluded from period metrics, so a Project connected mid-flight shows no false spike.",
       "mapping_coverage": "Mapping coverage: {hourShare} of hours and {ticketShare} of Tickets are mapped (FR-23 reports the two separately)."
     },
+    "overlap_title": "Scope overlap",
+    "overlap_intro": "Another Connector observed Tickets this Project already owns. Hours are not counted twice — resolve each claim.",
+    "overlap_row": "{key} — owned by {owner}, also seen by {claimer}",
+    "overlap_keep": "Keep owner",
+    "overlap_transfer": "Transfer to claimer",
+    "left_scope_title": "Left scope",
+    "left_scope_intro": "Tickets absent from two consecutive complete reads. Ledger history is kept; hours are not reversed.",
+    "left_scope_row": "{key} — {hours}h retained",
     "divergence": {
       "footnote": "{leafCount} leaf Work Packages in the Current Plan; {baselineCount} carry Baseline hours or are Milestones. Percent Complete is never derived from burned effort."
     },

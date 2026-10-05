@@ -57,6 +57,13 @@
       "when": 1791129600000,
       "tag": "0007_actuals_ledger_writer",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1791136800000,
+      "tag": "0008_ledger_appear_move_vanish",
+      "breakpoints": true
     }
   ]
 }

@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { attribute, rateOnDate } from './attribution';
 import { periodOf } from './calendar';
-import { AdapterKindMismatchError, checkLedgerInvariant, ingestSnapshot } from './ledger';
+import {
+  AdapterKindMismatchError,
+  advanceLeftScopeState,
+  checkLedgerInvariant,
+  ingestSnapshot,
+  partitionOwnedTickets,
+} from './ledger';
 import { applyRules, evaluateRules, mappingHead } from './mapping';
 import { DEFAULT_THRESHOLDS, type LedgerEntry, type MappingEvent, type ProjectConfig, type Resource, type SnapshotRead, type TicketObservation, type WorkPackage } from './types';
 import { hoursToMh } from './units';
@@ -243,6 +249,188 @@ describe('ingestSnapshot (FR-25, FR-42)', () => {
     });
     expect(r3.entries.map((e) => [e.ticketId, e.deltaMh])).toEqual([['t1', hoursToMh(-4)]]);
     expect(checkLedgerInvariant([...r1.entries, ...r2.entries, ...r3.entries], s3).ok).toBe(true);
+  });
+
+  it('books mid-flight Opening Balance after scope change when createdAt ≤ prev.observedAt (story 5.6)', () => {
+    const s1 = snap('2026-09-01T09:00:00.000Z', [obs('t1', 10)]);
+    const s2 = snap('2026-09-08T09:00:00.000Z', [
+      obs('t1', 10),
+      obs('t-old', 40, { createdAt: '2026-06-01T00:00:00.000Z' }),
+      obs('t-new', 6, { createdAt: '2026-09-07T12:00:00.000Z' }),
+    ]);
+    const r1 = ingestSnapshot({
+      prev: null,
+      next: s1,
+      activeBaselineVersionSeq: 1,
+      seqFrom: 1,
+      approvalRecordedAt: '2026-09-01T00:00:00.000Z',
+    });
+    const r2 = ingestSnapshot({
+      prev: s1,
+      next: s2,
+      activeBaselineVersionSeq: 1,
+      seqFrom: r1.nextSeq,
+      approvalRecordedAt: '2026-09-01T00:00:00.000Z',
+      scopeChangedSincePrev: true,
+    });
+    expect(r2.entries.map((e) => [e.ticketId, e.kind, e.deltaMh])).toEqual([
+      ['t-old', 'opening_balance', hoursToMh(40)],
+      ['t-new', 'delta', hoursToMh(6)],
+    ]);
+    expect(checkLedgerInvariant([...r1.entries, ...r2.entries], s2).ok).toBe(true);
+  });
+
+  it('does not Opening-Balance a first sighting without a recorded scope change', () => {
+    const s1 = snap('2026-09-01T09:00:00.000Z', [obs('t1', 10)]);
+    const s2 = snap('2026-09-08T09:00:00.000Z', [
+      obs('t1', 10),
+      obs('t-old', 40, { createdAt: '2026-06-01T00:00:00.000Z' }),
+    ]);
+    const r1 = ingestSnapshot({
+      prev: null,
+      next: s1,
+      activeBaselineVersionSeq: 1,
+      seqFrom: 1,
+      approvalRecordedAt: '2026-09-01T00:00:00.000Z',
+    });
+    const r2 = ingestSnapshot({
+      prev: s1,
+      next: s2,
+      activeBaselineVersionSeq: 1,
+      seqFrom: r1.nextSeq,
+      approvalRecordedAt: '2026-09-01T00:00:00.000Z',
+      scopeChangedSincePrev: false,
+    });
+    expect(r2.entries.map((e) => [e.ticketId, e.kind, e.deltaMh])).toEqual([
+      ['t-old', 'delta', hoursToMh(40)],
+    ]);
+  });
+
+  it('advances durable left_scope only after two consecutive complete absences', () => {
+    expect(advanceLeftScopeState({ leftScope: false, absentCompleteStreak: 0 }, true)).toEqual({
+      leftScope: false,
+      absentCompleteStreak: 0,
+    });
+    expect(advanceLeftScopeState({ leftScope: false, absentCompleteStreak: 0 }, false)).toEqual({
+      leftScope: false,
+      absentCompleteStreak: 1,
+    });
+    expect(advanceLeftScopeState({ leftScope: false, absentCompleteStreak: 1 }, false)).toEqual({
+      leftScope: true,
+      absentCompleteStreak: 2,
+    });
+    expect(advanceLeftScopeState({ leftScope: true, absentCompleteStreak: 2 }, false)).toEqual({
+      leftScope: true,
+      absentCompleteStreak: 2,
+    });
+    expect(advanceLeftScopeState({ leftScope: true, absentCompleteStreak: 2 }, true)).toEqual({
+      leftScope: false,
+      absentCompleteStreak: 0,
+    });
+  });
+
+  it('keeps Ticket identity on trackerIssueId when the display key changes', () => {
+    const s1 = snap('2026-09-01T09:00:00.000Z', [obs('id-1', 10, { key: 'OLD-1' })]);
+    const s2 = snap('2026-09-08T09:00:00.000Z', [obs('id-1', 14, { key: 'NEW-1' })]);
+    const approval = '2026-09-01T00:00:00.000Z';
+    const r1 = ingestSnapshot({
+      prev: null,
+      next: s1,
+      activeBaselineVersionSeq: 1,
+      seqFrom: 1,
+      approvalRecordedAt: approval,
+    });
+    const r2 = ingestSnapshot({
+      prev: s1,
+      next: s2,
+      activeBaselineVersionSeq: 1,
+      seqFrom: r1.nextSeq,
+      approvalRecordedAt: approval,
+    });
+    expect(r1.entries.map((e) => e.ticketId)).toEqual(['id-1']);
+    expect(r2.entries.map((e) => [e.ticketId, e.kind, e.deltaMh])).toEqual([
+      ['id-1', 'delta', hoursToMh(4)],
+    ]);
+    expect(checkLedgerInvariant([...r1.entries, ...r2.entries], s2).ok).toBe(true);
+  });
+
+  it('partitions overlap claims so non-owner Tickets never enter the owned ledger set', () => {
+    const tickets = [obs('owned', 1), obs('claimed', 2), obs('fresh', 3)];
+    const owners = new Map([
+      ['owned', 'con-a'],
+      ['claimed', 'con-a'],
+    ]);
+    const { owned, overlaps } = partitionOwnedTickets(tickets, owners, 'con-b');
+    expect(owned.map((t) => t.trackerIssueId)).toEqual(['fresh']);
+    expect(overlaps.map((o) => [o.ticket.trackerIssueId, o.ownerConnectorId])).toEqual([
+      ['owned', 'con-a'],
+      ['claimed', 'con-a'],
+    ]);
+  });
+
+  it('returns after leave as a delta from prior Σ, never OB (story 5.6 leave-and-return)', () => {
+    const s1 = snap('2026-09-01T09:00:00.000Z', [obs('t1', 10), obs('t2', 20)]);
+    const s2 = snap('2026-09-08T09:00:00.000Z', [obs('t1', 12)]);
+    const s3 = snap('2026-09-15T09:00:00.000Z', [obs('t1', 12)]);
+    const s4 = snap('2026-09-22T09:00:00.000Z', [obs('t1', 12), obs('t2', 22)]);
+    const approval = '2026-09-01T00:00:00.000Z';
+    const r1 = ingestSnapshot({
+      prev: null,
+      next: s1,
+      activeBaselineVersionSeq: 1,
+      seqFrom: 1,
+      approvalRecordedAt: approval,
+    });
+    const r2 = ingestSnapshot({
+      prev: s1,
+      next: s2,
+      activeBaselineVersionSeq: 1,
+      seqFrom: r1.nextSeq,
+      approvalRecordedAt: approval,
+    });
+    expect(r2.leftScope).toEqual([{ ticketId: 't2', key: 't2' }]);
+    const r3 = ingestSnapshot({
+      prev: s2,
+      next: s3,
+      activeBaselineVersionSeq: 1,
+      seqFrom: r2.nextSeq,
+      approvalRecordedAt: approval,
+    });
+    expect(r3.leftScope).toEqual([]);
+    const prior = new Map([
+      ['t1', hoursToMh(12)],
+      ['t2', hoursToMh(20)],
+    ]);
+    const r4 = ingestSnapshot({
+      prev: s3,
+      next: s4,
+      activeBaselineVersionSeq: 1,
+      seqFrom: r3.nextSeq,
+      approvalRecordedAt: approval,
+      priorLedgerMhByTicket: prior,
+      scopeChangedSincePrev: true,
+    });
+    // prior Σ keeps return off OB even when a scope change is recorded.
+    expect(r4.entries.map((e) => [e.ticketId, e.kind, e.deltaMh])).toEqual([
+      ['t2', 'delta', hoursToMh(2)],
+    ]);
+    expect(
+      checkLedgerInvariant([...r1.entries, ...r2.entries, ...r3.entries, ...r4.entries], s4).ok,
+    ).toBe(true);
+
+    // Common return path: no scope change — still delta from prior Σ, never OB.
+    const r4b = ingestSnapshot({
+      prev: s3,
+      next: s4,
+      activeBaselineVersionSeq: 1,
+      seqFrom: r3.nextSeq,
+      approvalRecordedAt: approval,
+      priorLedgerMhByTicket: prior,
+      scopeChangedSincePrev: false,
+    });
+    expect(r4b.entries.map((e) => [e.ticketId, e.kind, e.deltaMh])).toEqual([
+      ['t2', 'delta', hoursToMh(2)],
+    ]);
   });
 });
 

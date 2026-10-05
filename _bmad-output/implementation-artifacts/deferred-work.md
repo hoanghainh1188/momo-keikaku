@@ -1343,3 +1343,28 @@ above can see where it went.
 - source_spec: `_bmad-output/implementation-artifacts/spec-5-5-one-writer-builds-the-actuals-ledger.md`
   summary: Wire worker `notifyRecipients` (and credential/operator mail) to real Project ops emails instead of relying on the optional empty default.
   evidence: Story 5.5 review — operator alerts now always write attempt rows; mail still needs recipients. Pre-existing for credential_failed on the worker path too.
+  note: Re-noted by Story 5.6 (2026-10-04) — still open; out of 5.6 ACs.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-6-the-ledger-stays-correct-as-tickets-appear-move-and-vanish.md`
+  summary: Compaction that deletes only `ticket_observation` (never snapshot headers or the ledger) remains a maintenance path — not placed by 5.6 ACs.
+  evidence: Story 5.6 Intent / Boundaries — compaction/retention out of scope; keep with maintenance.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-6-the-ledger-stays-correct-as-tickets-appear-move-and-vanish.md`
+  summary: Durable Review Re-pin writer that retargets the Review's pinned tracker snapshot.
+  evidence: Story 5.6 Intent — out of 5.6; belongs with Epic 6 Review pin lifecycle (pre-deferred from 5.4/5.5).
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-6-the-ledger-stays-correct-as-tickets-appear-move-and-vanish.md`
+  summary: REQUIRE_DB writer matrix / batch identity upsert / notifyRecipients wire-up from 5.5 remain open (untouched by 5.6).
+  evidence: Story 5.6 Intent — re-note only; do not implement in 5.6.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-6-the-ledger-stays-correct-as-tickets-appear-move-and-vanish.md`
+  summary: REQUIRE_DB writeIngestSnapshot matrix for two-absence durable left_scope, overlap ledger-skip + connector_overlap upsert/clear, and scope_seq mid-flight OB.
+  evidence: Story 5.6 review verification-gap — domain helpers cover logic; live writer persistence of streak/left_scope/overlap/OB kind needs Postgres CI.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-6-the-ledger-stays-correct-as-tickets-appear-move-and-vanish.md`
+  summary: REQUIRE_DB confirmOwnership / loadProjectBundle meta assertions for ownership event, owner move, overlap delete, and overlaps/leftScopeTickets bundle fields.
+  evidence: Story 5.6 review verification-gap — use-case and UI wire-up covered by mocks/unit; repository + bundle boundary need Postgres CI.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-6-the-ledger-stays-correct-as-tickets-appear-move-and-vanish.md`
+  summary: Add confirmOwnershipAction cases to connectors/actions.test.ts (invalid resolution, refuse skips revalidate, success revalidates connectors+review).
+  evidence: Story 5.6 review verification-gap — action now returns form state; sibling suite still only covers add/rotate.
