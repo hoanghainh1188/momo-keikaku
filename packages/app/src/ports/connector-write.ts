@@ -94,6 +94,28 @@ export interface ConnectorWriteRepository {
   readonly updateScope: (connectorId: string, scope: string) => Promise<void>;
   readonly appendScopeEvent: (input: AppendScopeEventInput) => Promise<number>;
   readonly latestScopeSeq: (connectorId: string) => Promise<number | null>;
+  /** Story 5.7: append latched measurement basis (flip only). */
+  readonly appendBasisEvent: (input: {
+    readonly connectorId: string;
+    readonly projectId: string;
+    readonly basis: 'hours' | 'count';
+    readonly actor: string;
+    readonly at: Date;
+  }) => Promise<number>;
+  readonly latestBasis: (
+    connectorId: string,
+  ) => Promise<{ seq: number; basis: 'hours' | 'count' } | null>;
+  /** Story 5.7: append Resolved status set (tests/API; no PM form). */
+  readonly appendSettingEvent: (input: {
+    readonly connectorId: string;
+    readonly projectId: string;
+    readonly resolvedStatusIds: readonly string[];
+    readonly actor: string;
+    readonly at: Date;
+  }) => Promise<number>;
+  readonly latestSetting: (
+    connectorId: string,
+  ) => Promise<{ seq: number; resolvedStatusIds: readonly string[] } | null>;
   readonly appendSnapshotAttempt: (input: AppendSnapshotAttemptInput) => Promise<void>;
   /** Newest-first attempts for a Connector (story 5.4 pin / Connectors UI). */
   readonly listSnapshotAttempts: (

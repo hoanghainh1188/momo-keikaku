@@ -234,7 +234,8 @@
     "overlap_transfer": "Transfer to claimer",
     "left_scope_title": "Left scope",
     "left_scope_intro": "Tickets absent from two consecutive complete reads. Ledger history is kept; hours are not reversed.",
-    "left_scope_row": "{key} — {hours}h retained"
+    "left_scope_row": "{key} — {hours}h retained",
+    "ticket_count_mode_notice": "Ticket-Count Mode — AC, CV, CPI, EAC, ETC, VAC and TCPI are unavailable because this tracker provides no hours."
   },
   "mapping": {
     "coverage": "Coverage",
@@ -490,7 +491,8 @@
         "formula": "Σ Baseline hours over baselined leaf WPs",
         "reading": ""
       }
-    }
+    },
+    "ticket_count_mode": "Ticket-Count Mode"
   },
   "shell": {
     "the_tracker_snapshot_this_view_is_pinned_to": "The Tracker Snapshot this view is pinned to",

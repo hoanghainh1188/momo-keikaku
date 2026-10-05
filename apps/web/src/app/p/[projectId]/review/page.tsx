@@ -84,7 +84,14 @@ export default async function ReviewPage({
             <code>{r.snapshot.id}</code> ·{' '}
             {t('review.meta.tickets_in_scope', { count: r.snapshot.ticketCount })} ·{' '}
             {t('review.meta.connector')} <em>{bundle.meta.connector.spaceLabel}</em> ·{' '}
-            {t('review.meta.measurement_basis')} <strong>{r.measurementBasis}</strong> ·{' '}
+            {t('review.meta.measurement_basis')} <strong>{r.measurementBasis}</strong>
+            {r.measurementBasis === 'count' ? (
+              <>
+                {' '}
+                <span data-testid="review-ticket-count-mode">({t('review.ticket_count_mode')})</span>
+              </>
+            ) : null}{' '}
+            ·{' '}
             {t('review.meta.formula')} {r.formulaVersion}
           </div>
           <div className="btn-row">
@@ -167,7 +174,7 @@ export default async function ReviewPage({
                   label={t('review.spi')}
                   metric={evm.spi}
                   formula={t('review.metrics.formula_spi')}
-                  note={`${hours(evm.evMh)}h ÷ ${hours(evm.pvMh)}h — ${t(r.behindPlan ? 'review.metrics.behind_plan' : 'review.metrics.on_or_ahead_of_plan')}`}
+                  note={`${present(evm.evMh).text}h ÷ ${present(evm.pvMh).text}h — ${t(r.behindPlan ? 'review.metrics.behind_plan' : 'review.metrics.on_or_ahead_of_plan')}`}
                   testId="m-spi"
                 />
                 <MetricCell
@@ -175,7 +182,7 @@ export default async function ReviewPage({
                   label={t('review.cpi_all_in')}
                   metric={evm.cpiAllIn}
                   formula={t('review.metrics.formula_cpi_all_in')}
-                  note={t('review.metrics.note_cpi_all_in', { ev: hours(evm.evMh), ac: hours(evm.acMh) })}
+                  note={t('review.metrics.note_cpi_all_in', { ev: present(evm.evMh).text, ac: present(evm.acMh).text })}
                   testId="m-cpi-allin"
                 />
                 <MetricCell
@@ -312,9 +319,13 @@ export default async function ReviewPage({
               <div className="metric-row">
                 <MetricCell
                   label={t('review.sv_schedule_variance')}
-                  metric={{ text: hoursSigned(evm.svMh), unit: 'h' }}
+                  metric={evm.svMh}
                   formula={t('review.metrics.formula_sv')}
-                  note={t(evm.svMh < 0n ? 'review.metrics.behind_plan_cap' : 'review.metrics.ahead_of_plan')}
+                  note={t(
+                    evm.svMh.kind === 'value' && evm.svMh.value < 0n
+                      ? 'review.metrics.behind_plan_cap'
+                      : 'review.metrics.ahead_of_plan',
+                  )}
                   testId="m-sv"
                 />
                 <MetricCell
@@ -450,14 +461,14 @@ export default async function ReviewPage({
                 <>
                   <EvmRow
                     name={t('review.evm.pv.name')}
-                    value={`${hours(evm.pvMh)}h`}
+                    value={`${present(evm.pvMh).text}h`}
                     money={money(evmMoney.pvJpy)}
                     formula={t('review.evm.pv.formula')}
                     reading={t('review.evm.pv.reading')}
                   />
                   <EvmRow
                     name={t('review.evm.ev.name')}
-                    value={`${hours(evm.evMh)}h`}
+                    value={`${present(evm.evMh).text}h`}
                     money={money(evmMoney.evJpy)}
                     formula={t('review.evm.ev.formula')}
                     reading={t('review.evm.ev.reading')}
@@ -467,10 +478,28 @@ export default async function ReviewPage({
               )}
               <EvmRow
                 name={t('review.evm.ac.name')}
-                value={`${hours(r.attribution.cumulative.totalMh)}h`}
-                money={money(r.attribution.cumulative.totalJpy)}
-                formula={t('review.evm.ac.formula')}
-                reading={t('review.evm.ac.reading')}
+                value={
+                  evm !== null
+                    ? evm.acMh.kind === 'value'
+                      ? `${present(evm.acMh).text}h`
+                      : present(evm.acMh).text
+                    : `${hours(r.attribution.cumulative.totalMh)}h`
+                }
+                money={
+                  evm !== null && evm.acMh.kind === 'unavailable'
+                    ? ''
+                    : money(r.attribution.cumulative.totalJpy)
+                }
+                formula={
+                  evm !== null && evm.acMh.kind === 'unavailable'
+                    ? (present(evm.acMh).unavailableReason ?? t('review.evm.ac.formula'))
+                    : t('review.evm.ac.formula')
+                }
+                reading={
+                  evm !== null && evm.acMh.kind === 'value' && evm.acMh.coverage
+                    ? evm.acMh.coverage
+                    : t('review.evm.ac.reading')
+                }
                 testId="evm-ac"
               />
               {evm === null ? null : (
@@ -502,7 +531,11 @@ export default async function ReviewPage({
                   />
                   <EvmRow
                     name={t('review.evm.sv.name')}
-                    value={`${hoursSigned(evm.svMh)}h`}
+                    value={
+                      evm.svMh.kind === 'value'
+                        ? `${hoursSigned(evm.svMh.value)}h`
+                        : present(evm.svMh).text
+                    }
                     money=""
                     formula={t('review.evm.sv.formula')}
                     reading={t('review.evm.sv.reading')}

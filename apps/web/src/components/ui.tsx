@@ -48,8 +48,12 @@ export function MetricCell({
   testId?: string;
   tone?: 'unplanned';
 }) {
-  const p = 'kind' in metric ? present(metric) : { ...metric, unavailableReason: null };
+  const p =
+    'kind' in metric
+      ? present(metric)
+      : { ...metric, unavailableReason: null, coverage: null as string | null };
   const unavailable = 'unavailableReason' in p && p.unavailableReason !== null;
+  const coverage = 'coverage' in p ? p.coverage : null;
   return (
     <div className={`metric${xl ? ' xl' : ''}`} data-testid={testId}>
       <div className="label">{label}</div>
@@ -64,6 +68,7 @@ export function MetricCell({
       <div className="formula">
         {unavailable ? (p as { unavailableReason: string }).unavailableReason : formula}
       </div>
+      {coverage ? <div className="caption">{coverage}</div> : null}
       {note ? <div className="delta">{note}</div> : null}
     </div>
   );

@@ -71,7 +71,7 @@ describe('the table-class registry is the single source', () => {
     expect(new Set(TRUNCATE_ORDER).size, 'a table is truncated twice').toBe(TRUNCATE_ORDER.length);
   });
 
-  it('holds the 41 tables of this release, 34 of them tenant-owned', () => {
+  it('holds the 43 tables of this release, 36 of them tenant-owned', () => {
     // Pinned as numbers as well as names: a future change that removes a table and adds
     // another keeps the name lists agreeing with `schema.ts` while silently changing what
     // this story was reasoned about. Story 1.4 slice 1: `app_user` out; the four Better Auth
@@ -83,8 +83,9 @@ describe('the table-class registry is the single source', () => {
     // Story 5.2 adds `connector_scope_event`, `tracker_snapshot_attempt` (tenant-owned, append-only).
     // Story 5.5 adds `project_setting_event` (tenant-owned, append-only).
     // Story 5.6 adds `connector_ownership_event` (append-only) and `connector_overlap` (derived).
-    expect(TABLE_REGISTRY).toHaveLength(41);
-    expect(TENANT_OWNED).toHaveLength(34);
+    // Story 5.7 adds `measurement_basis_event`, `connector_setting_event` (append-only).
+    expect(TABLE_REGISTRY).toHaveLength(43);
+    expect(TENANT_OWNED).toHaveLength(36);
     expect(TABLE_REGISTRY.filter((e) => e.tenantColumn === null).map((e) => e.table)).toEqual([
       'tenant',
       'auth_user',
@@ -107,7 +108,7 @@ describe('the table-class registry is the single source', () => {
     expect(TENANT_BRIDGES[0]!.tenantColumn).toBeNull();
   });
 
-  it('classes the nineteen insert-only tables append-only', () => {
+  it('classes the twenty-one insert-only tables append-only', () => {
     expect(APPEND_ONLY.map((e) => e.table).sort()).toEqual(
       [
         'actuals_ledger_entry',
@@ -117,9 +118,11 @@ describe('the table-class registry is the single source', () => {
         'calendar_day_event',
         'connector_ownership_event',
         'connector_scope_event',
+        'connector_setting_event',
         'disposition_event',
         'holiday_calendar_version',
         'mapping_event',
+        'measurement_basis_event',
         'pct_override_event',
         'project_default_rate_entry',
         'project_setting_event',

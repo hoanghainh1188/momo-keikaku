@@ -33,7 +33,7 @@
  * The composition root is `scripts/seed.ts`: this module takes its handle as an argument
  * because `packages/db` may not read the environment.
  */
-import { encode, resolveCalendarVersion } from '@momo/domain';
+import { encode, INITIAL_BASIS_LATCH, replayBasisLatch, resolveCalendarVersion } from '@momo/domain';
 import { sql } from 'drizzle-orm';
 import type { Db } from './client';
 import { actorOf, DEMO_USERS } from './demo-identities';
@@ -61,6 +61,8 @@ export const TRUNCATE_ORDER: readonly string[] = [
   'ticket_observation',
   'tracker_snapshot',
   'tracker_snapshot_attempt',
+  'measurement_basis_event',
+  'connector_setting_event',
   'connector_scope_event',
   'fixture_cursor',
   'ticket',
@@ -413,6 +415,16 @@ export async function writeTenantRows(
     .returning({ seq: s.connectorScopeEvent.seq });
   const fixtureScopeSeq = scopeEvent!.seq;
 
+  // Story 5.7: seed Resolved `{Closed}`; latch basis after snapshots (below).
+  await tx.insert(s.connectorSettingEvent).values({
+    tenantId,
+    connectorId,
+    projectId: f.project.id,
+    resolvedStatusIds: ['Closed'],
+    actor: 'system:seed',
+    at: stamp,
+  });
+
   if (f.mappingRules.length > 0) {
     await tx.insert(s.mappingRule).values(
       f.mappingRules.map((r) => ({
@@ -445,6 +457,22 @@ export async function writeTenantRows(
         adapterKind: snap.adapterKind ?? 'fixture',
         scopeSeq: fixtureScopeSeq,
       });
+  }
+
+  // Story 5.7: latch basis from complete fixture snaps (N=3 hysteresis).
+  {
+    const observed = state.snapshots.map((snap) =>
+      snap.hoursFieldPresent ? ('hours' as const) : ('count' as const),
+    );
+    const advanced = replayBasisLatch(INITIAL_BASIS_LATCH, observed);
+    await tx.insert(s.measurementBasisEvent).values({
+      tenantId,
+      connectorId,
+      projectId: f.project.id,
+      basis: advanced.basis,
+      actor: 'system:seed',
+      at: stamp,
+    });
   }
 
   // AD-6: upsert Ticket + Tracker Account identity from the latest snapshot observations.

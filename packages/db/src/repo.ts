@@ -328,6 +328,54 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
   const calendar = buildCalendar('jp-vn-2026', { jp: p.calendarJp, vn: p.calendarVn });
   const period = periodOf(anchor, tzOffsetMinutes, teireiWeekday);
 
+  // Story 5.7: latched basis + Resolved set from event heads — never snapshot hoursFieldPresent.
+  let measurementBasis: 'hours' | 'count' = 'count';
+  let basisSeqMax: number | null = null;
+  let connectorSettingSeqMax: number | null = null;
+  let resolvedStatusIds: ReadonlySet<string> = new Set(['Closed']);
+  const mappingSeqMax =
+    mappingEvents.length > 0 ? mappingEvents[mappingEvents.length - 1]!.seq : null;
+
+  if (con) {
+    const [basisHead] = await tx
+      .select({
+        seq: s.measurementBasisEvent.seq,
+        basis: s.measurementBasisEvent.basis,
+      })
+      .from(s.measurementBasisEvent)
+      .where(
+        and(
+          eq(s.measurementBasisEvent.tenantId, p.tenantId),
+          eq(s.measurementBasisEvent.connectorId, con.id),
+        ),
+      )
+      .orderBy(desc(s.measurementBasisEvent.seq))
+      .limit(1);
+    if (basisHead) {
+      basisSeqMax = basisHead.seq;
+      measurementBasis = basisHead.basis === 'hours' ? 'hours' : 'count';
+    }
+
+    const [settingHeadRow] = await tx
+      .select({
+        seq: s.connectorSettingEvent.seq,
+        resolvedStatusIds: s.connectorSettingEvent.resolvedStatusIds,
+      })
+      .from(s.connectorSettingEvent)
+      .where(
+        and(
+          eq(s.connectorSettingEvent.tenantId, p.tenantId),
+          eq(s.connectorSettingEvent.connectorId, con.id),
+        ),
+      )
+      .orderBy(desc(s.connectorSettingEvent.seq))
+      .limit(1);
+    if (settingHeadRow) {
+      connectorSettingSeqMax = settingHeadRow.seq;
+      resolvedStatusIds = new Set(settingHeadRow.resolvedStatusIds ?? ['Closed']);
+    }
+  }
+
   const input: ReviewInput = {
     project,
     calendar,
@@ -341,6 +389,11 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
     period,
     asOf: projectDate(anchor, tzOffsetMinutes),
     dispositions,
+    measurementBasis,
+    basisSeqMax,
+    connectorSettingSeqMax,
+    mappingSeqMax,
+    resolvedStatusIds,
   };
 
   const overlapRows = await tx

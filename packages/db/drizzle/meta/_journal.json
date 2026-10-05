@@ -64,6 +64,13 @@
       "when": 1791136800000,
       "tag": "0008_ledger_appear_move_vanish",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1791144000000,
+      "tag": "0009_measurement_basis_and_connector_setting",
+      "breakpoints": true
     }
   ]
 }

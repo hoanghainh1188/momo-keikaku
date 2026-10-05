@@ -134,6 +134,11 @@ export default async function ConnectorsPage({
                     <td>
                       {t('connectors.detected_from_the_data_never_from_the_plan_name_')}
                       <strong>{review.measurementBasis}</strong>
+                      {review.measurementBasis === 'count' ? (
+                        <p className="caption" style={{ margin: '6px 0 0' }} data-testid="ticket-count-mode">
+                          {t('connectors.ticket_count_mode_notice')}
+                        </p>
+                      ) : null}
                     </td>
                   </tr>
                   <tr>

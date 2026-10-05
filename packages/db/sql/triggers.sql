@@ -154,6 +154,26 @@ CREATE TRIGGER "append_only_truncate_guard"
   BEFORE TRUNCATE ON public."connector_scope_event"
   FOR EACH STATEMENT EXECUTE FUNCTION public."momo_append_only_truncate_guard"();
 
+-- measurement_basis_event: Latched measurement basis per Connector (story 5.7 / AD-8). Metrics read the head at basis_seq_max; editing history would flip Ticket-Count Mode retroactively.
+DROP TRIGGER IF EXISTS "append_only_guard" ON public."measurement_basis_event";
+CREATE TRIGGER "append_only_guard"
+  BEFORE UPDATE OR DELETE ON public."measurement_basis_event"
+  FOR EACH ROW EXECUTE FUNCTION public."momo_append_only_guard"();
+DROP TRIGGER IF EXISTS "append_only_truncate_guard" ON public."measurement_basis_event";
+CREATE TRIGGER "append_only_truncate_guard"
+  BEFORE TRUNCATE ON public."measurement_basis_event"
+  FOR EACH STATEMENT EXECUTE FUNCTION public."momo_append_only_truncate_guard"();
+
+-- connector_setting_event: Connector Resolved status set (story 5.7 / AR-38). Percent Complete and Unplanned count read the head at connector_setting_seq_max; editing would rewrite who was Resolved.
+DROP TRIGGER IF EXISTS "append_only_guard" ON public."connector_setting_event";
+CREATE TRIGGER "append_only_guard"
+  BEFORE UPDATE OR DELETE ON public."connector_setting_event"
+  FOR EACH ROW EXECUTE FUNCTION public."momo_append_only_guard"();
+DROP TRIGGER IF EXISTS "append_only_truncate_guard" ON public."connector_setting_event";
+CREATE TRIGGER "append_only_truncate_guard"
+  BEFORE TRUNCATE ON public."connector_setting_event"
+  FOR EACH STATEMENT EXECUTE FUNCTION public."momo_append_only_truncate_guard"();
+
 -- tracker_snapshot_attempt: Failed snapshot attempts (story 5.2 / AR-16). Approval refuse and credential auth failures; a correction is a later successful snapshot, never an edit of a failed attempt.
 DROP TRIGGER IF EXISTS "append_only_guard" ON public."tracker_snapshot_attempt";
 CREATE TRIGGER "append_only_guard"

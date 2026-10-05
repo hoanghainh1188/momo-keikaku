@@ -923,6 +923,79 @@ export const connectorScopeEvent = pgTable(
   }),
 );
 
+
+/**
+ * Story 5.7 / AD-8: latched measurement basis per Connector (append-only).
+ * Head ≤ `basis_seq_max` is what metrics read — never snapshot `measurement_basis`.
+ */
+export const measurementBasisEvent = pgTable(
+  'measurement_basis_event',
+  {
+    seq: bigint('seq', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+    tenantId: text('tenant_id').notNull(),
+    connectorId: text('connector_id').notNull(),
+    projectId: text('project_id').notNull(),
+    /** `hours` | `count` */
+    basis: text('basis').notNull(),
+    actor: text('actor').notNull(),
+    at: timestamp('at', { withTimezone: true }).notNull(),
+  },
+  (t) => ({
+    tenantKey: unique('measurement_basis_event_tenant_seq_key').on(t.tenantId, t.seq),
+    byConnector: index('measurement_basis_event_connector_idx').on(
+      t.tenantId,
+      t.connectorId,
+      t.seq,
+    ),
+    connector: foreignKey({
+      name: 'measurement_basis_event_connector_fk',
+      columns: [t.tenantId, t.connectorId],
+      foreignColumns: [connector.tenantId, connector.id],
+    }),
+    project: foreignKey({
+      name: 'measurement_basis_event_project_fk',
+      columns: [t.tenantId, t.projectId],
+      foreignColumns: [project.tenantId, project.id],
+    }),
+  }),
+);
+
+/**
+ * Story 5.7 / AR-38: Connector Resolved status set (append-only).
+ * Head ≤ `connector_setting_seq_max` applied to observation `statusId`.
+ */
+export const connectorSettingEvent = pgTable(
+  'connector_setting_event',
+  {
+    seq: bigint('seq', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+    tenantId: text('tenant_id').notNull(),
+    connectorId: text('connector_id').notNull(),
+    projectId: text('project_id').notNull(),
+    /** Resolved status ids (e.g. `["Closed"]`). */
+    resolvedStatusIds: jsonb('resolved_status_ids').$type<string[]>().notNull(),
+    actor: text('actor').notNull(),
+    at: timestamp('at', { withTimezone: true }).notNull(),
+  },
+  (t) => ({
+    tenantKey: unique('connector_setting_event_tenant_seq_key').on(t.tenantId, t.seq),
+    byConnector: index('connector_setting_event_connector_idx').on(
+      t.tenantId,
+      t.connectorId,
+      t.seq,
+    ),
+    connector: foreignKey({
+      name: 'connector_setting_event_connector_fk',
+      columns: [t.tenantId, t.connectorId],
+      foreignColumns: [connector.tenantId, connector.id],
+    }),
+    project: foreignKey({
+      name: 'connector_setting_event_project_fk',
+      columns: [t.tenantId, t.projectId],
+      foreignColumns: [project.tenantId, project.id],
+    }),
+  }),
+);
+
 /**
  * Failed snapshot attempts visible to the PM (story 5.2 / AR-16). Approval refuse and
  * credential auth failures, incomplete reads, writer-pending (5.4), and paced
@@ -1371,6 +1444,8 @@ export const schemaTables = {
   baselineWp,
   connector,
   connectorScopeEvent,
+  measurementBasisEvent,
+  connectorSettingEvent,
   trackerSnapshotAttempt,
   ticket,
   trackerAccount,

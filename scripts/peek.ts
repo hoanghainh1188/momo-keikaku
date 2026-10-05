@@ -9,11 +9,13 @@ const r = computeReview({
   ledger: s.ledger, mappingEvents: s.mappingEvents,
   pinnedSnapshot: s.snapshots[s.snapshots.length - 1]!,
   resources: s.resources, period, asOf: asOfDate(s), dispositions: [],
+  measurementBasis: 'hours',
+  resolvedStatusIds: new Set(['Closed']),
 });
 console.log('period', period.label, 'asOf', asOfDate(s));
 // The fixture carries its Baseline in memory, so these are present; the seeded database has none.
 if (!r.evm || !r.forecast || !r.milestones) throw new Error('the fixture Review has no Baseline');
-console.log('BAC', hours(r.evm.bacMh), 'PV', hours(r.evm.pvMh), 'EV', hours(r.evm.evMh), 'AC', hours(r.evm.acMh));
+console.log('BAC', hours(r.evm.bacMh), 'PV', present(r.evm.pvMh).text, 'EV', present(r.evm.evMh).text, 'AC', present(r.evm.acMh).text);
 console.log('SPI', present(r.evm.spi).text, 'CPI all-in', present(r.evm.cpiAllIn).text, 'CPI planned', present(r.evm.cpiPlannedScope).text);
 console.log('TCPI', present(r.evm.tcpi).text, 'EAC', present(r.evm.eacMh).text, 'ETC', present(r.evm.etcMh).text, 'VAC', present(r.evm.vacMh).text);
 console.log('unplanned period', hours(r.unplanned.period.unplannedMh), 'share', r.unplanned.sharePeriod === null ? '-' : share(r.unplanned.sharePeriod));

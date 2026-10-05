@@ -215,6 +215,7 @@ export const AUDIT_PAYLOAD_BY_ACTION = {
       scope: z.string(),
       approvalName: z.string(),
       scopeSeq: z.number().int(),
+      settingSeq: z.number().int().optional(),
     })
     .strict(),
   'connector.rotate_credentials': z.object({ projectId: z.string() }).strict(),
@@ -231,6 +232,13 @@ export const AUDIT_PAYLOAD_BY_ACTION = {
       trackerIssueId: z.string(),
       resolution: z.enum(['keep', 'transfer']),
       toConnectorId: z.string(),
+    })
+    .strict(),
+  'connector.append_resolved_statuses': z
+    .object({
+      projectId: z.string().min(1),
+      seq: z.number().int().positive(),
+      resolvedStatusIds: z.array(z.string().min(1)).min(1),
     })
     .strict(),
 } as const;

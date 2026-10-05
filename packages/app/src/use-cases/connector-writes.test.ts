@@ -88,6 +88,10 @@ function fakeDeps(overrides?: {
       return 7;
     },
     latestScopeSeq: async () => 7,
+    appendBasisEvent: async () => 1,
+    latestBasis: async () => null,
+    appendSettingEvent: async () => 1,
+    latestSetting: async () => ({ seq: 1, resolvedStatusIds: ['Closed'] }),
     appendSnapshotAttempt: async () => {},
     listSnapshotAttempts: async () => [],
     latestAttemptAt: async () => null,

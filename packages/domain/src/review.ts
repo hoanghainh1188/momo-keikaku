@@ -1,4 +1,5 @@
-import { attribute, type AttributionResult, type Buckets } from './attribution';
+import { attribute, periodUnplannedTicketCount, type AttributionResult, type Buckets } from './attribution';
+import type { MeasurementBasis } from './basis';
 import type { HolidayCalendar, IsoDate, ReportingPeriod } from './calendar';
 import { computeEvm, FORMULA_VERSION, type EvmResult, type WpMeasure } from './evm';
 import { computeForecast, type ForecastResult } from './forecast';
@@ -17,7 +18,18 @@ import {
   type TicketObservation,
   type WorkPackage,
 } from './types';
-import { compareBigint, costOf, ratio, sum, ZERO, type Jpy, type Mh, type Ratio } from './units';
+import {
+  compareBigint,
+  costOf,
+  mhAmountOrZero,
+  ratio,
+  sum,
+  ZERO,
+  type Jpy,
+  type Mh,
+  type MetricCoverage,
+  type Ratio,
+} from './units';
 
 export type DispositionKind = 'map' | 'plan' | 'cr_candidate' | 'explain';
 
@@ -48,10 +60,30 @@ export interface ReviewInput {
   dispositions: DispositionEvent[];
   formulaVersion?: string;
   /**
-   * AD-6: Connector Resolved status ids at compute time. Defaults to `Closed` until
-   * `connector_setting_event` is pinned (later story).
+   * Story 5.7: latched measurement basis at `basis_seq_max`. Missing head ≡ `count`.
+   * Metrics never read `pinnedSnapshot.hoursFieldPresent`.
+   */
+  measurementBasis?: MeasurementBasis;
+  /** Pin ceiling for `measurement_basis_event` (ComputationInputs). */
+  basisSeqMax?: number | null;
+  /** Pin ceiling for `connector_setting_event`. */
+  connectorSettingSeqMax?: number | null;
+  /** Pin ceiling for Mapping head used by Unplanned count. */
+  mappingSeqMax?: number | null;
+  /**
+   * Story 5.7: Resolved status set from `connector_setting_event` at `connector_setting_seq_max`.
+   * Seed default `{Closed}` only when the setting head is missing.
    */
   resolvedStatusIds?: ReadonlySet<string>;
+  /**
+   * Mixed Project: caption when AC covers hours Connectors only. `null` when not mixed.
+   */
+  acCoverage?: MetricCoverage;
+  /**
+   * Optional first-observed instants by tracker issue id (for Ticket-Count Unplanned).
+   * Falls back to the observation's `createdAt` when omitted.
+   */
+  firstObservedAtByTicket?: ReadonlyMap<string, string>;
 }
 
 export interface UnmappedGroup {
@@ -131,6 +163,8 @@ export interface ReviewResult {
     cumulative: Buckets;
     sharePeriod: Ratio | null;
     shareCumulative: Ratio | null;
+    /** Ticket-Count Mode: Period Unplanned ticket count (same attribution function as Health). */
+    ticketCountPeriod: number | null;
     /** `share` is the component's part of cumulative Unplanned Work; null while that is zero. */
     components: { key: string; label: string; mh: Mh; jpy: Jpy; share: Ratio | null }[];
   };
@@ -147,7 +181,12 @@ export interface ReviewResult {
 }
 
 export function computeReview(input: ReviewInput): ReviewResult {
-  const head = mappingHead(input.mappingEvents);
+  const mappingSeqMax = input.mappingSeqMax;
+  const mappingEventsForHead =
+    mappingSeqMax === undefined || mappingSeqMax === null
+      ? input.mappingEvents
+      : input.mappingEvents.filter((e) => e.seq <= mappingSeqMax);
+  const head = mappingHead(mappingEventsForHead);
   const baseline = activeBaseline(input);
   const resolvedStatusIds = input.resolvedStatusIds ?? DEFAULT_RESOLVED_STATUS_IDS;
 
@@ -161,7 +200,8 @@ export function computeReview(input: ReviewInput): ReviewResult {
     period: input.period,
   });
 
-  const measurementBasis = input.pinnedSnapshot.hoursFieldPresent ? 'hours' : 'count';
+  // Story 5.7: latched basis at basis_seq_max — never snapshot hoursFieldPresent.
+  const measurementBasis: MeasurementBasis = input.measurementBasis ?? 'count';
 
   // FR-30: mapped Tickets per WP, from the pinned Tracker Snapshot.
   const mappedTicketsByWp = new Map<string, TicketObservation[]>();
@@ -190,15 +230,36 @@ export function computeReview(input: ReviewInput): ReviewResult {
           totalAcMh: attribution.cumulative.totalMh,
           plannedScopeAcMh,
           measurementBasis,
+          acCoverage: input.acCoverage ?? null,
           resolvedStatusIds,
         });
 
   const milestones = baseline === null ? null : milestoneRows(baseline, input.wps, input.asOf);
 
-  const sharePeriod =
+  const unplannedTickets = periodUnplannedTicketCount({
+    tickets: input.pinnedSnapshot.tickets.map((t) => ({
+      trackerIssueId: t.trackerIssueId,
+      firstObservedAt: input.firstObservedAtByTicket?.get(t.trackerIssueId) ?? t.createdAt,
+      statusId: t.statusId,
+      resolvedAt: null,
+    })),
+    period: input.period,
+    head,
+    resolvedStatusIds,
+    tzOffsetMinutes: input.project.tzOffsetMinutes,
+    asOfInstant: input.pinnedSnapshot.observedAt,
+  });
+
+  const sharePeriodHours =
     attribution.period.totalMh > 0n
       ? ratio(attribution.period.unplannedMh, attribution.period.totalMh)
       : null;
+  const sharePeriod =
+    measurementBasis === 'count'
+      ? unplannedTickets.unplannedShare === null
+        ? null
+        : ratio(unplannedTickets.unplannedShare.num, unplannedTickets.unplannedShare.den)
+      : sharePeriodHours;
   const shareCumulative =
     attribution.cumulative.totalMh > 0n
       ? ratio(attribution.cumulative.unplannedMh, attribution.cumulative.totalMh)
@@ -320,8 +381,8 @@ export function computeReview(input: ReviewInput): ReviewResult {
       evm === null
         ? null
         : {
-            pvJpy: costOf(evm.pvMh, input.project.defaultRateYenPerHour),
-            evJpy: costOf(evm.evMh, input.project.defaultRateYenPerHour),
+            pvJpy: costOf(mhAmountOrZero(evm.pvMh), input.project.defaultRateYenPerHour),
+            evJpy: costOf(mhAmountOrZero(evm.evMh), input.project.defaultRateYenPerHour),
           },
     behindPlan: evm !== null && isBehindPlan(evm.spi),
     forecast,
@@ -332,6 +393,8 @@ export function computeReview(input: ReviewInput): ReviewResult {
       cumulative: attribution.cumulative,
       sharePeriod,
       shareCumulative,
+      ticketCountPeriod:
+        measurementBasis === 'count' ? unplannedTickets.unplannedTicketIds.length : null,
       components: [
         { key: 'unmapped', label: 'Unmapped Work', mh: c.unmappedMh, jpy: 0n },
         {

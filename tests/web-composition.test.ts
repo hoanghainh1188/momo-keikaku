@@ -737,6 +737,8 @@ function demoReview(): ProjectReview {
     period: currentPeriod(state),
     asOf: asOfDate(state),
     dispositions: [],
+    measurementBasis: state.measurementBasis,
+    resolvedStatusIds: new Set(['Closed']),
   };
   const bundle = {
     project: state.project,

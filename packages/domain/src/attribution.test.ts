@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { attribute, rateOnDate } from './attribution';
+import { attribute, periodUnplannedTicketCount, rateOnDate } from './attribution';
 import { periodOf } from './calendar';
 import {
   AdapterKindMismatchError,
@@ -753,5 +753,51 @@ describe('rateOnDate (story 1.6 pins)', () => {
     ];
     expect(rateOnDate(rates, '2026-06-01')).toBe(9000n);
     expect(rateOnDate([...rates].reverse(), '2026-06-01')).toBe(9000n);
+  });
+});
+
+describe('periodUnplannedTicketCount (Story 5.7 / FR-27)', () => {
+  const period = periodOf('2026-09-16T09:00:00.000Z', 540, 4);
+  const head = new Map([
+    ['mapped', { wpId: 'WP-1', source: 'manual' as const, seq: 1 }],
+  ]);
+
+  it('counts Tickets first observed or Resolved in Period with Unplanned Mapping', () => {
+    const result = periodUnplannedTicketCount({
+      tickets: [
+        {
+          trackerIssueId: 'new-unplanned',
+          firstObservedAt: '2026-09-15T09:00:00.000Z',
+          statusId: 'Open',
+          resolvedAt: null,
+        },
+        {
+          trackerIssueId: 'mapped',
+          firstObservedAt: '2026-09-15T09:00:00.000Z',
+          statusId: 'Open',
+          resolvedAt: null,
+        },
+        {
+          trackerIssueId: 'resolved-unplanned',
+          firstObservedAt: '2026-01-01T00:00:00.000Z',
+          statusId: 'Closed',
+          resolvedAt: '2026-09-14T09:00:00.000Z',
+        },
+        {
+          trackerIssueId: 'old-open',
+          firstObservedAt: '2026-01-01T00:00:00.000Z',
+          statusId: 'Open',
+          resolvedAt: null,
+        },
+      ],
+      period,
+      head,
+      resolvedStatusIds: new Set(['Closed']),
+      tzOffsetMinutes: 540,
+      asOfInstant: '2026-09-16T09:00:00.000Z',
+    });
+    expect([...result.periodTicketIds].sort()).toEqual(['mapped', 'new-unplanned', 'resolved-unplanned']);
+    expect([...result.unplannedTicketIds].sort()).toEqual(['new-unplanned', 'resolved-unplanned']);
+    expect(result.unplannedCount).toEqual({ kind: 'value', value: 2, unit: 'count', coverage: null });
   });
 });

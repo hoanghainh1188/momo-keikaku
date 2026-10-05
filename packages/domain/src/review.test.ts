@@ -51,6 +51,8 @@ const input: ReviewInput = {
     },
   ],
   activeBaselineSeq: 1,
+  measurementBasis: 'hours',
+  resolvedStatusIds: new Set(['Closed']),
   ledger: [
     {
       seq: 1,

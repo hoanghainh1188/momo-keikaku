@@ -5,7 +5,7 @@
  * `actuals_ledger_entry`. Read happens outside; this runs under one Project
  * `lockWatermark` inside the caller's tenant transaction.
  */
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 import {
   AdapterKindMismatchError,
   LedgerInvariantError,
@@ -13,8 +13,10 @@ import {
   applyRules,
   checkLedgerInvariant,
   ingestSnapshot,
+  INITIAL_BASIS_LATCH,
   mappingHead,
   partitionOwnedTickets,
+  replayBasisLatch,
   type AdapterKind,
   type LedgerEntry,
   type MappingEvent,
@@ -677,6 +679,67 @@ export function ingestWriteRepositoryOn(bound: Bound) {
             actor: m.actor,
           })),
         );
+      }
+
+
+      // Story 5.7 / AD-8: N=3 hysteresis on complete snaps only — append basis event on flip.
+      {
+        const [basisHead] = await tx
+          .select({
+            seq: s.measurementBasisEvent.seq,
+            basis: s.measurementBasisEvent.basis,
+            at: s.measurementBasisEvent.at,
+          })
+          .from(s.measurementBasisEvent)
+          .where(
+            and(
+              eq(s.measurementBasisEvent.tenantId, tenantId),
+              eq(s.measurementBasisEvent.connectorId, input.connectorId),
+            ),
+          )
+          .orderBy(desc(s.measurementBasisEvent.seq))
+          .limit(1);
+
+        const snapRows = await tx
+          .select({
+            measurementBasis: s.trackerSnapshot.measurementBasis,
+            observedAt: s.trackerSnapshot.observedAt,
+            seq: s.trackerSnapshot.seq,
+          })
+          .from(s.trackerSnapshot)
+          .where(
+            and(
+              eq(s.trackerSnapshot.tenantId, tenantId),
+              eq(s.trackerSnapshot.connectorId, input.connectorId),
+            ),
+          )
+          .orderBy(asc(s.trackerSnapshot.seq));
+
+        // Observations after the last flip (by observedAt); if none yet, all snaps.
+        const observedSequence = (
+          basisHead
+            ? snapRows.filter((r) => r.observedAt.getTime() > basisHead.at.getTime())
+            : snapRows
+        ).map((r) => r.measurementBasis as 'hours' | 'count');
+
+        const initial = basisHead
+          ? {
+              basis: basisHead.basis as 'hours' | 'count',
+              streakTowardOpposite: 0,
+            }
+          : INITIAL_BASIS_LATCH;
+        const advanced = replayBasisLatch(initial, observedSequence);
+        const headBasis = initial.basis;
+        if (advanced.basis !== headBasis) {
+          await tx.insert(s.measurementBasisEvent).values({
+            tenantId,
+            connectorId: input.connectorId,
+            projectId: input.projectId,
+            basis: advanced.basis,
+            actor: 'system:ingest',
+            at: observedAt,
+          });
+        }
       }
 
       // Clear a prior credential banner now that a good snapshot landed.

@@ -105,6 +105,14 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON public."connector" TO "momo_app";
 GRANT SELECT, INSERT ON public."connector_scope_event" TO "momo_app";
 GRANT SELECT, UPDATE, DELETE ON public."connector_scope_event" TO "momo_maintenance";
 
+-- measurement_basis_event (append-only)
+GRANT SELECT, INSERT ON public."measurement_basis_event" TO "momo_app";
+GRANT SELECT, UPDATE, DELETE ON public."measurement_basis_event" TO "momo_maintenance";
+
+-- connector_setting_event (append-only)
+GRANT SELECT, INSERT ON public."connector_setting_event" TO "momo_app";
+GRANT SELECT, UPDATE, DELETE ON public."connector_setting_event" TO "momo_maintenance";
+
 -- tracker_snapshot_attempt (append-only)
 GRANT SELECT, INSERT ON public."tracker_snapshot_attempt" TO "momo_app";
 GRANT SELECT, UPDATE, DELETE ON public."tracker_snapshot_attempt" TO "momo_maintenance";

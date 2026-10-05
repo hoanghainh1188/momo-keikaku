@@ -69,6 +69,7 @@ export const AUDIT_ACTIONS = [
   'connector.rotate_credentials',
   'connector.change_scope',
   'connector.confirm_ownership',
+  'connector.append_resolved_statuses',
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];

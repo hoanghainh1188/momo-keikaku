@@ -1,5 +1,6 @@
 import { periodContains, projectDate, type ReportingPeriod } from './calendar';
 import type { MappingHeadEntry } from './mapping';
+import { isResolvedStatus } from './types';
 import type {
   BaselineVersion,
   LedgerEntry,
@@ -9,7 +10,7 @@ import type {
   Resource,
   WorkPackage,
 } from './types';
-import { costOf, minBigint, type Jpy, type Mh } from './units';
+import { costOf, countValue, minBigint, type CountMetric, type Jpy, type Mh } from './units';
 
 /**
  * AD-9: attribution is computed here at query time from the ledger and the Mapping
@@ -241,4 +242,90 @@ export function attribute(input: AttributionInput): AttributionResult {
   }
 
   return { cumulative, period: periodB, acByWp, openingBalanceMh, hoursByTicket };
+}
+
+/**
+ * Story 5.7 / FR-27: Ticket-Count Mode Unplanned — Tickets first observed in, or Resolved
+ * within, the Period whose Mapping at `mapping_seq_max` is Unplanned (null / absent leaf WP).
+ *
+ * One function used by both the Health indicator and the Review so two modules cannot colour
+ * it differently. Does not change FR-20 hour buckets.
+ */
+export interface PeriodUnplannedTicketInput {
+  readonly tickets: readonly {
+    readonly trackerIssueId: string;
+    /** Instant the Connector first observed this Ticket (or tracker createdAt as proxy). */
+    readonly firstObservedAt: string;
+    readonly statusId: string;
+    /**
+     * Instant the Ticket became Resolved, when known. When null and status is Resolved,
+     * `asOf` is treated as the Resolved instant (pinned snapshot).
+     */
+    readonly resolvedAt: string | null;
+  }[];
+  readonly period: ReportingPeriod;
+  /** Mapping head at `mapping_seq_max` — Unplanned when no leaf WP. */
+  readonly head: ReadonlyMap<string, MappingHeadEntry>;
+  readonly resolvedStatusIds: ReadonlySet<string>;
+  readonly tzOffsetMinutes: number;
+  /** Pinned as-of used when `resolvedAt` is null but status is Resolved. */
+  readonly asOfInstant: string;
+}
+
+export interface PeriodUnplannedTicketResult {
+  /** Tickets first observed or Resolved in the Period. */
+  readonly periodTicketIds: readonly string[];
+  /** Subset whose Mapping is Unplanned (null / absent leaf). */
+  readonly unplannedTicketIds: readonly string[];
+  readonly unplannedCount: CountMetric;
+  /** Unplanned ÷ period tickets; null when the Period has no qualifying Tickets. */
+  readonly unplannedShare: { num: bigint; den: bigint } | null;
+}
+
+function isUnplannedMapping(
+  head: ReadonlyMap<string, MappingHeadEntry>,
+  ticketId: string,
+): boolean {
+  const m = head.get(ticketId);
+  return !m?.wpId;
+}
+
+/**
+ * Period Unplanned ticket count (Ticket-Count Mode). Health and Review call only this.
+ */
+export function periodUnplannedTicketCount(
+  input: PeriodUnplannedTicketInput,
+): PeriodUnplannedTicketResult {
+  const periodTicketIds: string[] = [];
+  const unplannedTicketIds: string[] = [];
+
+  for (const t of input.tickets) {
+    const firstInPeriod = periodContains(
+      input.period,
+      projectDate(t.firstObservedAt, input.tzOffsetMinutes),
+    );
+    const resolved = isResolvedStatus(t.statusId, input.resolvedStatusIds);
+    const resolvedInstant = resolved ? (t.resolvedAt ?? input.asOfInstant) : null;
+    const resolvedInPeriod =
+      resolvedInstant !== null &&
+      periodContains(input.period, projectDate(resolvedInstant, input.tzOffsetMinutes));
+
+    if (!firstInPeriod && !resolvedInPeriod) continue;
+    periodTicketIds.push(t.trackerIssueId);
+    if (isUnplannedMapping(input.head, t.trackerIssueId)) {
+      unplannedTicketIds.push(t.trackerIssueId);
+    }
+  }
+
+  const unplannedShare =
+    periodTicketIds.length === 0
+      ? null
+      : { num: BigInt(unplannedTicketIds.length), den: BigInt(periodTicketIds.length) };
+
+  return {
+    periodTicketIds,
+    unplannedTicketIds,
+    unplannedCount: countValue(unplannedTicketIds.length),
+    unplannedShare,
+  };
 }

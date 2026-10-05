@@ -234,7 +234,8 @@
     "overlap_transfer": "観測側へ移譲",
     "left_scope_title": "スコープ外",
     "left_scope_intro": "連続する 2 回の完全な読み取りで欠落した Ticket。台帳履歴は保持され、時間は取り消されません。",
-    "left_scope_row": "{key} — {hours}h を保持"
+    "left_scope_row": "{key} — {hours}h を保持",
+    "ticket_count_mode_notice": "チケット数モード — このトラッカーは工数を提供しないため、AC・CV・CPI・EAC・ETC・VAC・TCPI は利用不可です。"
   },
   "mapping": {
     "coverage": "Coverage",
@@ -490,7 +491,8 @@
         "formula": "Σ Baseline hours over baselined leaf WPs",
         "reading": ""
       }
-    }
+    },
+    "ticket_count_mode": "チケット数モード"
   },
   "shell": {
     "the_tracker_snapshot_this_view_is_pinned_to": "The Tracker Snapshot this view is pinned to",
