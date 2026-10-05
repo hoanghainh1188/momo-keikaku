@@ -237,7 +237,6 @@ export const AUDIT_PAYLOAD_BY_ACTION = {
   'connector.append_resolved_statuses': z
     .object({
       projectId: z.string().min(1),
-      seq: z.number().int().positive(),
       resolvedStatusIds: z.array(z.string().min(1)).min(1),
     })
     .strict(),

@@ -230,7 +230,7 @@ export async function appendResolvedStatuses<Handle>(
   deps: ConnectorWriteDeps<Handle>,
   ctx: RequestContext,
   input: AppendResolvedStatusesInput,
-): Promise<Result<{ seq: number }>> {
+): Promise<Result<void>> {
   return runConnectorWrite(
     appendResolvedStatusesInputSchema,
     deps,
@@ -239,7 +239,7 @@ export async function appendResolvedStatuses<Handle>(
     async (scope, stamp, command) => {
       const connector = await scope.connectorWrite.findConnector(command.connectorId);
       if (!connector || connector.projectId !== command.projectId) refuse('not_found');
-      const seq = await scope.connectorWrite.appendSettingEvent({
+      await scope.connectorWrite.appendSettingEvent({
         connectorId: command.connectorId,
         projectId: command.projectId,
         resolvedStatusIds: command.resolvedStatusIds,
@@ -248,10 +248,8 @@ export async function appendResolvedStatuses<Handle>(
       });
       await audit.record(scope, stamp, 'connector.append_resolved_statuses', command.connectorId, {
         projectId: command.projectId,
-        seq,
         resolvedStatusIds: command.resolvedStatusIds,
       });
-      return { seq };
     },
   );
 }

@@ -425,6 +425,7 @@ describe.skipIf(!reachable)('the write use cases, against two probe Tenants as t
           rateEntries: withoutSeq(landed.rateEntries),
           projectDefaultRates: withoutSeq(landed.projectDefaultRates),
           connectorScopeEvents: withoutSeq(landed.connectorScopeEvents),
+          connectorSettingEvents: withoutSeq(landed.connectorSettingEvents),
         },
         `${entry.name} did not land the rows it must`,
       ).toEqual(expected);

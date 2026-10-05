@@ -828,6 +828,33 @@ export const READ_USE_CASES: readonly ReadUseCase[] = [
         },
       ),
   },
+  {
+    name: 'appendResolvedStatuses',
+    kind: 'write',
+    why:
+      'Story 5.7 surface B: appends connector_setting_event Resolved status set for tests/API only ' +
+      '(no PM form). Seeds on addConnector; this writer is the explicit override path.',
+    invokeWrite: (deps, target) =>
+      readSurface.appendResolvedStatuses(
+        {
+          ...deps,
+          crypto: {
+            keyId: 'harness-local',
+            encrypt: () => ({
+              ciphertext: Buffer.from('c'),
+              nonce: Buffer.from('n-----------'),
+              keyId: 'harness-local',
+            }),
+          },
+        },
+        contextOf(target),
+        {
+          projectId: target.projectId,
+          connectorId: target.connectorId,
+          resolvedStatusIds: ['Closed', 'Done'],
+        },
+      ),
+  },
 ] as const;
 
 /**
@@ -960,6 +987,18 @@ export const UNREACHED_TENANT_OWNED_TABLES: readonly UnreachedTable[] = [
       'Created by story 5.2 as append-only scope history. Written by addConnector / changeScope; ' +
       'snapshots store scope_seq. No dedicated READ use case yet — Connectors page reads connector ' +
       'columns via getProjectReview. The first read removes this entry.',
+  },
+  {
+    table: 'measurement_basis_event',
+    why:
+      'Created by story 5.7 as append-only latched basis. Written by ingest hysteresis / seed; ' +
+      'Review loads the head via loadProjectBundle. No dedicated READ use case yet.',
+  },
+  {
+    table: 'connector_setting_event',
+    why:
+      'Created by story 5.7 as append-only Resolved status set. Written by addConnector seed / ' +
+      'appendResolvedStatuses; Review loads the head via loadProjectBundle. No dedicated READ use case yet.',
   },
   {
     table: 'tracker_snapshot_attempt',

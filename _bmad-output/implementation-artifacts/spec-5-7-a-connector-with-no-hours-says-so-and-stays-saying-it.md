@@ -2,7 +2,7 @@
 title: 'Story 5.7 — A Connector with no hours says so, and stays saying it'
 type: 'feature'
 created: '2026-10-05'
-status: 'in-progress'
+status: 'review'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: 'd8a5466fa294e56ff0f61a27f0ab1039cd1fec0a'

@@ -357,6 +357,10 @@ export async function landedRows(tenantId: string) {
       .select()
       .from(schema.connectorScopeEvent)
       .where(eq(schema.connectorScopeEvent.tenantId, tenantId)),
+    connectorSettingEvents: await tx
+      .select()
+      .from(schema.connectorSettingEvent)
+      .where(eq(schema.connectorSettingEvent.tenantId, tenantId)),
   }));
 }
 
@@ -377,6 +381,7 @@ export const LANDED_TABLE: Readonly<Record<keyof Landed, string>> = {
   memberships: 'tenant_membership',
   connectors: 'connector',
   connectorScopeEvents: 'connector_scope_event',
+  connectorSettingEvents: 'connector_setting_event',
 };
 
 /** The table `newSince`'s removed memberships come from — the same as `memberships`'. */
@@ -419,6 +424,7 @@ export function newSince(before: Landed, after: Landed) {
   const rateSeqs = seqs(before.rateEntries);
   const defaultRateSeqs = seqs(before.projectDefaultRates);
   const scopeSeqs = seqs(before.connectorScopeEvents);
+  const settingSeqs = seqs(before.connectorSettingEvents);
   const wpIds = new Set(before.workPackages.map((row) => row.id));
   const resourceIds = new Set(before.resources.map((row) => row.id));
   return {
@@ -436,6 +442,7 @@ export function newSince(before: Landed, after: Landed) {
     projectDefaultRates: after.projectDefaultRates.filter((row) => !defaultRateSeqs.has(row.seq)),
     connectors: changedSince(before.connectors, after.connectors),
     connectorScopeEvents: after.connectorScopeEvents.filter((row) => !scopeSeqs.has(row.seq)),
+    connectorSettingEvents: after.connectorSettingEvents.filter((row) => !settingSeqs.has(row.seq)),
     ...membershipsSince(before.memberships, after.memberships),
   };
 }

@@ -124,6 +124,11 @@ const WELL_FORMED_INPUT: Readonly<Record<string, unknown>> = {
     connectorId: 'con-1',
     projectKey: 'EC2',
   },
+  appendResolvedStatuses: {
+    projectId: UNREACHED_PROJECT,
+    connectorId: 'con-1',
+    resolvedStatusIds: ['Closed'],
+  },
 };
 
 type UseCaseFn = (
@@ -206,6 +211,13 @@ describe('every use case declares its roles', () => {
           "projectScoped": false,
           "roles": [
             "tenant_admin",
+          ],
+        },
+        "appendResolvedStatuses": {
+          "projectScoped": true,
+          "roles": [
+            "tenant_admin",
+            "pm",
           ],
         },
         "appendResourceRate": {
