@@ -1376,3 +1376,11 @@ above can see where it went.
 - source_spec: `_bmad-output/implementation-artifacts/spec-5-7-a-connector-with-no-hours-says-so-and-stays-saying-it.md`
   summary: REQUIRE_DB / batch identity upsert / notifyRecipients / compaction / durable Review Re-pin remain open (re-noted; out of 5.7 ACs unless needed).
   evidence: Story 5.7 Boundaries — do not expand unless required to land ACs; re-note from 5.5/5.6.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-7-a-connector-with-no-hours-says-so-and-stays-saying-it.md`
+  summary: REQUIRE_DB integration test that three complete ingest writes append `measurement_basis_event` via writer hysteresis (fixtures hours-latch / no-hours unused by executable ingest tests).
+  evidence: Story 5.7 review verification-gap — domain `basis.test.ts` covers latch; writer path unexercised in CI.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-7-a-connector-with-no-hours-says-so-and-stays-saying-it.md`
+  summary: Count-mode Review/Connectors page composition test asserting Ticket-Count notice and unavailable AC render as em dash not 0.0h.
+  evidence: Story 5.7 review verification-gap — domain present/EVM covered; page boundary not asserted.

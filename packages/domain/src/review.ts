@@ -84,6 +84,11 @@ export interface ReviewInput {
    * Falls back to the observation's `createdAt` when omitted.
    */
   firstObservedAtByTicket?: ReadonlyMap<string, string>;
+  /**
+   * Optional first-seen-Resolved instants by tracker issue id (MIN snapshot observedAt
+   * where statusId ∈ Resolved set). When omitted/null, Resolved-in-Period does not fire.
+   */
+  resolvedAtByTicket?: ReadonlyMap<string, string>;
 }
 
 export interface UnmappedGroup {
@@ -241,7 +246,7 @@ export function computeReview(input: ReviewInput): ReviewResult {
       trackerIssueId: t.trackerIssueId,
       firstObservedAt: input.firstObservedAtByTicket?.get(t.trackerIssueId) ?? t.createdAt,
       statusId: t.statusId,
-      resolvedAt: null,
+      resolvedAt: input.resolvedAtByTicket?.get(t.trackerIssueId) ?? null,
     })),
     period: input.period,
     head,

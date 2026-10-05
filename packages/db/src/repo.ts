@@ -399,11 +399,13 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
     mappingEvents.length > 0 ? mappingEvents[mappingEvents.length - 1]!.seq : null;
 
   let firstObservedAtByTicket: Map<string, string> | undefined;
+  let resolvedAtByTicket: Map<string, string> | undefined;
   if (connectorRows.length > 0) {
     const connectorIds = connectorRows.map((c) => c.id);
     const firstObsRows = await tx
       .select({
         trackerIssueId: s.ticketObservation.trackerIssueId,
+        statusId: s.ticketObservation.statusId,
         createdAt: s.ticketObservation.createdAt,
         observedAt: s.trackerSnapshot.observedAt,
       })
@@ -422,6 +424,7 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
         ),
       );
     firstObservedAtByTicket = new Map();
+    resolvedAtByTicket = new Map();
     for (const row of firstObsRows) {
       const created = row.createdAt.toISOString();
       const observed = row.observedAt.toISOString();
@@ -429,6 +432,12 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
       const prev = firstObservedAtByTicket.get(row.trackerIssueId);
       if (prev === undefined || instant < prev) {
         firstObservedAtByTicket.set(row.trackerIssueId, instant);
+      }
+      if (resolvedStatusIds.has(row.statusId)) {
+        const prevResolved = resolvedAtByTicket.get(row.trackerIssueId);
+        if (prevResolved === undefined || observed < prevResolved) {
+          resolvedAtByTicket.set(row.trackerIssueId, observed);
+        }
       }
     }
   }
@@ -453,6 +462,7 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
     resolvedStatusIds,
     acCoverage,
     firstObservedAtByTicket,
+    resolvedAtByTicket,
   };
 
   const overlapRows = await tx

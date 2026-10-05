@@ -2,7 +2,7 @@
 title: 'Story 5.7 — A Connector with no hours says so, and stays saying it'
 type: 'feature'
 created: '2026-10-05'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: 'd8a5466fa294e56ff0f61a27f0ab1039cd1fec0a'
@@ -122,7 +122,8 @@ context:
 - Review loads latched `measurementBasis` + `resolvedStatusIds` from event heads; never `pinnedSnapshot.hoursFieldPresent`.
 - `appendResolvedStatuses` is tests/API only (surface B); PM edit UI deferred.
 - Added Health Ticket-Count Mode matrix test: Effort/Cost unavailable + overallNote names it.
-- Verified: `pnpm lint` / `typecheck` / `depcruise` / `test` green on implement branch; matrix rows covered by `basis.test.ts`, `evm.test.ts` (FR-27), `attribution.test.ts` (`periodUnplannedTicketCount`), `present.test.ts`.
+- Review patches: null `resolvedAt` no longer counts as Resolved-in-Period; `repo` derives `resolvedAtByTicket` as MIN snapshot `observedAt` where status ∈ Resolved set; mixed Project filters ledger to hours Connectors + `acCoverage`; count-mode Unplanned UI uses ticket formula; empty Resolved set falls back to `{Closed}`.
+- Ingest hysteresis remains domain/`basis.test.ts` coverage only (REQUIRE_DB writer test deferred).
 - Ingest writer N=3 hysteresis append: covered by `basis.test.ts` + ingest integration paths; no separate REQUIRE_DB writer test added (domain latch only).
 - Review fix pass: `resolvedAt` null no longer implies Resolved-in-Period; mixed Project ledger filtered to hours Connectors with `acCoverage`; `firstObservedAtByTicket` loaded in `repo.ts`.
 
