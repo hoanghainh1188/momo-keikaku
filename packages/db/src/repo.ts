@@ -107,7 +107,11 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
   if (!p) throw projectNotFound(projectId);
   const [ten] = await tx.select().from(s.tenant).where(eq(s.tenant.id, p.tenantId));
   const [dep] = await tx.select().from(s.department).where(eq(s.department.id, p.departmentId));
-  const [con] = await tx.select().from(s.connector).where(eq(s.connector.projectId, projectId));
+  const connectorRows = await tx
+    .select()
+    .from(s.connector)
+    .where(eq(s.connector.projectId, projectId));
+  const con = connectorRows[0] ?? null;
 
   const wpRows = await tx
     .select()
@@ -240,10 +244,73 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
     };
   }
 
-  const ledgerRows = await tx
+  const ledgerRowsAll = await tx
     .select()
     .from(s.actualsLedgerEntry)
     .orderBy(asc(s.actualsLedgerEntry.seq));
+
+  // Story 5.7: latched basis per Connector — Project basis = hours if any Connector is hours.
+  const hoursConnectorIds = new Set<string>();
+  const countConnectorIds = new Set<string>();
+  let basisSeqMax: number | null = null;
+  let connectorSettingSeqMax: number | null = null;
+  let resolvedStatusIds: ReadonlySet<string> = new Set(['Closed']);
+
+  for (const c of connectorRows) {
+    const [basisHead] = await tx
+      .select({
+        seq: s.measurementBasisEvent.seq,
+        basis: s.measurementBasisEvent.basis,
+      })
+      .from(s.measurementBasisEvent)
+      .where(
+        and(
+          eq(s.measurementBasisEvent.tenantId, p.tenantId),
+          eq(s.measurementBasisEvent.connectorId, c.id),
+        ),
+      )
+      .orderBy(desc(s.measurementBasisEvent.seq))
+      .limit(1);
+    const latched = basisHead?.basis === 'hours' ? 'hours' : 'count';
+    if (latched === 'hours') hoursConnectorIds.add(c.id);
+    else countConnectorIds.add(c.id);
+    if (basisHead && (basisSeqMax === null || basisHead.seq > basisSeqMax)) {
+      basisSeqMax = basisHead.seq;
+    }
+  }
+
+  const measurementBasis: 'hours' | 'count' = hoursConnectorIds.size > 0 ? 'hours' : 'count';
+  const mixedProject =
+    hoursConnectorIds.size > 0 && countConnectorIds.size > 0 && connectorRows.length > 1;
+  const ledgerRows = mixedProject
+    ? ledgerRowsAll.filter((e) => hoursConnectorIds.has(e.connectorId))
+    : ledgerRowsAll;
+  const acCoverage: ReviewInput['acCoverage'] = mixedProject
+    ? `hours Connectors only (${hoursConnectorIds.size} of ${connectorRows.length})`
+    : undefined;
+
+  if (con) {
+    const [settingHeadRow] = await tx
+      .select({
+        seq: s.connectorSettingEvent.seq,
+        resolvedStatusIds: s.connectorSettingEvent.resolvedStatusIds,
+      })
+      .from(s.connectorSettingEvent)
+      .where(
+        and(
+          eq(s.connectorSettingEvent.tenantId, p.tenantId),
+          eq(s.connectorSettingEvent.connectorId, con.id),
+        ),
+      )
+      .orderBy(desc(s.connectorSettingEvent.seq))
+      .limit(1);
+    if (settingHeadRow) {
+      connectorSettingSeqMax = settingHeadRow.seq;
+      const ids = settingHeadRow.resolvedStatusIds ?? ['Closed'];
+      resolvedStatusIds = new Set(ids.length === 0 ? ['Closed'] : ids);
+    }
+  }
+
   const ledger: LedgerEntry[] = ledgerRows.map((e) => ({
     seq: Number(e.seq),
     ticketId: e.ticketId,
@@ -328,51 +395,41 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
   const calendar = buildCalendar('jp-vn-2026', { jp: p.calendarJp, vn: p.calendarVn });
   const period = periodOf(anchor, tzOffsetMinutes, teireiWeekday);
 
-  // Story 5.7: latched basis + Resolved set from event heads — never snapshot hoursFieldPresent.
-  let measurementBasis: 'hours' | 'count' = 'count';
-  let basisSeqMax: number | null = null;
-  let connectorSettingSeqMax: number | null = null;
-  let resolvedStatusIds: ReadonlySet<string> = new Set(['Closed']);
   const mappingSeqMax =
     mappingEvents.length > 0 ? mappingEvents[mappingEvents.length - 1]!.seq : null;
 
-  if (con) {
-    const [basisHead] = await tx
+  let firstObservedAtByTicket: Map<string, string> | undefined;
+  if (connectorRows.length > 0) {
+    const connectorIds = connectorRows.map((c) => c.id);
+    const firstObsRows = await tx
       .select({
-        seq: s.measurementBasisEvent.seq,
-        basis: s.measurementBasisEvent.basis,
+        trackerIssueId: s.ticketObservation.trackerIssueId,
+        createdAt: s.ticketObservation.createdAt,
+        observedAt: s.trackerSnapshot.observedAt,
       })
-      .from(s.measurementBasisEvent)
-      .where(
+      .from(s.ticketObservation)
+      .innerJoin(
+        s.trackerSnapshot,
         and(
-          eq(s.measurementBasisEvent.tenantId, p.tenantId),
-          eq(s.measurementBasisEvent.connectorId, con.id),
+          eq(s.ticketObservation.tenantId, s.trackerSnapshot.tenantId),
+          eq(s.ticketObservation.snapshotId, s.trackerSnapshot.id),
         ),
       )
-      .orderBy(desc(s.measurementBasisEvent.seq))
-      .limit(1);
-    if (basisHead) {
-      basisSeqMax = basisHead.seq;
-      measurementBasis = basisHead.basis === 'hours' ? 'hours' : 'count';
-    }
-
-    const [settingHeadRow] = await tx
-      .select({
-        seq: s.connectorSettingEvent.seq,
-        resolvedStatusIds: s.connectorSettingEvent.resolvedStatusIds,
-      })
-      .from(s.connectorSettingEvent)
       .where(
         and(
-          eq(s.connectorSettingEvent.tenantId, p.tenantId),
-          eq(s.connectorSettingEvent.connectorId, con.id),
+          eq(s.ticketObservation.tenantId, p.tenantId),
+          inArray(s.trackerSnapshot.connectorId, connectorIds),
         ),
-      )
-      .orderBy(desc(s.connectorSettingEvent.seq))
-      .limit(1);
-    if (settingHeadRow) {
-      connectorSettingSeqMax = settingHeadRow.seq;
-      resolvedStatusIds = new Set(settingHeadRow.resolvedStatusIds ?? ['Closed']);
+      );
+    firstObservedAtByTicket = new Map();
+    for (const row of firstObsRows) {
+      const created = row.createdAt.toISOString();
+      const observed = row.observedAt.toISOString();
+      const instant = created < observed ? created : observed;
+      const prev = firstObservedAtByTicket.get(row.trackerIssueId);
+      if (prev === undefined || instant < prev) {
+        firstObservedAtByTicket.set(row.trackerIssueId, instant);
+      }
     }
   }
 
@@ -394,6 +451,8 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
     connectorSettingSeqMax,
     mappingSeqMax,
     resolvedStatusIds,
+    acCoverage,
+    firstObservedAtByTicket,
   };
 
   const overlapRows = await tx

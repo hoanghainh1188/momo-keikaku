@@ -202,17 +202,28 @@ export default async function ReviewPage({
               metric={{
                 text: r.unplanned.sharePeriod === null ? em : share(r.unplanned.sharePeriod),
               }}
-              formula={t('review.metrics.formula_unplanned_period', {
-                unplanned: hours(r.unplanned.period.unplannedMh),
-                total: hours(r.unplanned.period.totalMh),
-              })}
+              formula={
+                r.measurementBasis === 'count'
+                  ? t('review.metrics.formula_unplanned_period_tickets', {
+                      unplanned: r.unplanned.ticketCountPeriod ?? 0,
+                      total: r.unplanned.sharePeriod ? Number(r.unplanned.sharePeriod.den) : 0,
+                    })
+                  : t('review.metrics.formula_unplanned_period', {
+                      unplanned: hours(r.unplanned.period.unplannedMh),
+                      total: hours(r.unplanned.period.totalMh),
+                    })
+              }
               note={
                 r.unplanned.shareCumulative === null
                   ? undefined
-                  : t('review.metrics.note_unplanned_cumulative', {
-                      share: share(r.unplanned.shareCumulative),
-                      hours: hours(r.unplanned.cumulative.unplannedMh),
-                    })
+                  : r.measurementBasis === 'count'
+                    ? t('review.metrics.note_unplanned_cumulative_tickets', {
+                        share: share(r.unplanned.shareCumulative),
+                      })
+                    : t('review.metrics.note_unplanned_cumulative', {
+                        share: share(r.unplanned.shareCumulative),
+                        hours: hours(r.unplanned.cumulative.unplannedMh),
+                      })
               }
               testId="m-unplanned-share"
             />

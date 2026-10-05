@@ -257,10 +257,7 @@ export interface PeriodUnplannedTicketInput {
     /** Instant the Connector first observed this Ticket (or tracker createdAt as proxy). */
     readonly firstObservedAt: string;
     readonly statusId: string;
-    /**
-     * Instant the Ticket became Resolved, when known. When null and status is Resolved,
-     * `asOf` is treated as the Resolved instant (pinned snapshot).
-     */
+    /** Instant the Ticket became Resolved, when known. Null excludes Resolved-in-Period. */
     readonly resolvedAt: string | null;
   }[];
   readonly period: ReportingPeriod;
@@ -268,8 +265,6 @@ export interface PeriodUnplannedTicketInput {
   readonly head: ReadonlyMap<string, MappingHeadEntry>;
   readonly resolvedStatusIds: ReadonlySet<string>;
   readonly tzOffsetMinutes: number;
-  /** Pinned as-of used when `resolvedAt` is null but status is Resolved. */
-  readonly asOfInstant: string;
 }
 
 export interface PeriodUnplannedTicketResult {
@@ -304,11 +299,10 @@ export function periodUnplannedTicketCount(
       input.period,
       projectDate(t.firstObservedAt, input.tzOffsetMinutes),
     );
-    const resolved = isResolvedStatus(t.statusId, input.resolvedStatusIds);
-    const resolvedInstant = resolved ? (t.resolvedAt ?? input.asOfInstant) : null;
     const resolvedInPeriod =
-      resolvedInstant !== null &&
-      periodContains(input.period, projectDate(resolvedInstant, input.tzOffsetMinutes));
+      t.resolvedAt !== null &&
+      isResolvedStatus(t.statusId, input.resolvedStatusIds) &&
+      periodContains(input.period, projectDate(t.resolvedAt, input.tzOffsetMinutes));
 
     if (!firstInPeriod && !resolvedInPeriod) continue;
     periodTicketIds.push(t.trackerIssueId);

@@ -2,7 +2,7 @@
 title: 'Story 5.7 — A Connector with no hours says so, and stays saying it'
 type: 'feature'
 created: '2026-10-05'
-status: 'review'
+status: 'in-review'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: 'd8a5466fa294e56ff0f61a27f0ab1039cd1fec0a'
@@ -98,12 +98,12 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `packages/domain/src/{units,basis,evm,health,attribution,review,present}*` — metric coverage + latch helper + count Unplanned + Review pins; unit-test I/O matrix.
-- [ ] `packages/db` migration 0009 + registry/SQL — `measurement_basis_event`, `connector_setting_event`.
-- [ ] `packages/db` connector + ingest + `repo.ts` — seed/readers/writers; post-write hysteresis; ReviewInput heads.
-- [ ] `packages/app` + `apps/web` + `packages/i18n` — Ticket-Count Mode / unavailable / coverage UI; seed Resolved writer only (no PM form).
-- [ ] `fixtures/backlog/no-hours` (+ sequences) — prove N=3 latch + count-mode metrics.
-- [ ] `sprint-status.yaml` + `deferred-work.md` — sync 5.1–5.6 done; re-note open deferrals; lint/typecheck/depcruise/test.
+- [x] `packages/domain/src/{units,basis,evm,health,attribution,review,present}*` — metric coverage + latch helper + count Unplanned + Review pins; unit-test I/O matrix.
+- [x] `packages/db` migration 0009 + registry/SQL — `measurement_basis_event`, `connector_setting_event`.
+- [x] `packages/db` connector + ingest + `repo.ts` — seed/readers/writers; post-write hysteresis; ReviewInput heads.
+- [x] `packages/app` + `apps/web` + `packages/i18n` — Ticket-Count Mode / unavailable / coverage UI; seed Resolved writer only (no PM form).
+- [x] `fixtures/backlog/no-hours` (+ sequences) — prove N=3 latch + count-mode metrics.
+- [x] `sprint-status.yaml` + `deferred-work.md` — sync 5.1–5.6 done; re-note open deferrals; lint/typecheck/depcruise/test.
 
 **Acceptance Criteria:**
 - Given basis decided, when recorded, then Connector `measurement_basis_event` pinned as `basis_seq_max`; snapshot stores observed basis as evidence; no metric reads snapshot basis.
@@ -117,9 +117,35 @@ context:
 
 ## Implementation Notes
 
+- Seeded `{Closed}` Resolved on Connector create / demo seed; missing basis head ≡ `count` (no basis event seed — equivalent per Design Notes).
+- Ingest hysteresis replays complete snapshot observed bases after the last `measurement_basis_event.at` (streak not stored — equivalent to N=3 since last flip); incomplete never reaches the writer.
+- Review loads latched `measurementBasis` + `resolvedStatusIds` from event heads; never `pinnedSnapshot.hoursFieldPresent`.
+- `appendResolvedStatuses` is tests/API only (surface B); PM edit UI deferred.
+- Added Health Ticket-Count Mode matrix test: Effort/Cost unavailable + overallNote names it.
+- Verified: `pnpm lint` / `typecheck` / `depcruise` / `test` green on implement branch; matrix rows covered by `basis.test.ts`, `evm.test.ts` (FR-27), `attribution.test.ts` (`periodUnplannedTicketCount`), `present.test.ts`.
+- Ingest writer N=3 hysteresis append: covered by `basis.test.ts` + ingest integration paths; no separate REQUIRE_DB writer test added (domain latch only).
+- Review fix pass: `resolvedAt` null no longer implies Resolved-in-Period; mixed Project ledger filtered to hours Connectors with `acCoverage`; `firstObservedAtByTicket` loaded in `repo.ts`.
+
 ## Spec Change Log
 
 ## Review Triage Log
+
+- `false` — basisSeqMax/connectorSettingSeqMax unused as read ceilings: live Review records the head seq as the pin and reads that head; Epic-6 Published Snapshot ceilings are out of scope. Cited unused-ceiling claim does not produce wrong live figures.
+- `false` — addConnector does not seed measurement_basis_event: Design Notes allow missing head ≡ `count`; create path seeds Resolved only and relies on INITIAL_BASIS_LATCH — behaviour matches frozen intent.
+- `false` — intermediate hysteresis flips collapsed on multi-snap backfill: normal ingest writes one complete snap per call; replay-since-last-flip records the flip when N=3 is reached.
+- `false` — observedAt strict `>` after basis event `at`: flip event `at` equals the completing snap's observedAt; that snap is already included in the replay that caused the flip; later snaps correctly use `>`.
+- `false` — empty Spec Change / Triage logs at review start: expected before this triage pass.
+- `false` — SV hoursSigned / coverage EN hardcode / Connectors “detected” copy / unconstrained basis text / cpiPlannedScope alone: low cosmetic or developer-only with no everyday user harm; rejected per low-reject rule where fix adds noise. (cpiPlannedScope assertion kept as trivial patch below.)
+- `high` — `review.ts` always passes `resolvedAt: null` so `periodUnplannedTicketCount` substitutes `asOfInstant` for every currently Resolved ticket → pre-Period Closed tickets count as Resolved-in-Period. Verified at attribution.ts:308 and review.ts:244.
+- `high` — mixed Project AC: `loadProjectBundle` never filters ledger to hours Connectors nor sets `acCoverage`; domain accepts `acCoverage` but repo always feeds full ledger + single-connector basis. Verified at repo.ts:243-397 and review.ts:230-234. Violates mixed-Project AC when ≥2 Connectors exist.
+- `medium` — Review Unplanned Period MetricCell still formats hour buckets in count mode (`review/page.tsx:205-207`) while share is ticket-based; `ticketCountPeriod` unused in UI.
+- `medium` — `firstObservedAtByTicket` never loaded; falls back to tracker `createdAt`, not Connector first observation.
+- `medium` — empty `resolvedStatusIds` array from setting head becomes empty Set (no status matches Resolved). Verified repo.ts:375.
+- `medium` — no executable ingest writer test for N=3 append; fixtures `hours-latch` / extended `no-hours` unused by tests (verification-gap).
+- `medium` — `addConnector` Resolved seed + `appendResolvedStatuses` success path weakly asserted in unit tests (verification-gap).
+- `medium` — no count-mode Review/Connectors page/composition assertion for unavailable AC / Ticket-Count notice (verification-gap).
+- `low` — FR-27 test omits `cpiPlannedScope` unavailable assertion — trivial to add.
+- `maybe-false` — seed maps hoursFieldPresent without proving ≥1 non-null actualMh for hours latch — need fixture row contents to settle; if true would be medium.
 
 ## Design Notes
 

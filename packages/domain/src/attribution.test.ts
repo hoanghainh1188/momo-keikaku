@@ -794,10 +794,28 @@ describe('periodUnplannedTicketCount (Story 5.7 / FR-27)', () => {
       head,
       resolvedStatusIds: new Set(['Closed']),
       tzOffsetMinutes: 540,
-      asOfInstant: '2026-09-16T09:00:00.000Z',
     });
     expect([...result.periodTicketIds].sort()).toEqual(['mapped', 'new-unplanned', 'resolved-unplanned']);
     expect([...result.unplannedTicketIds].sort()).toEqual(['new-unplanned', 'resolved-unplanned']);
     expect(result.unplannedCount).toEqual({ kind: 'value', value: 2, unit: 'count', coverage: null });
+  });
+
+  it('does not treat Resolved tickets with null resolvedAt as Resolved-in-Period', () => {
+    const result = periodUnplannedTicketCount({
+      tickets: [
+        {
+          trackerIssueId: 'closed-no-date',
+          firstObservedAt: '2026-01-01T00:00:00.000Z',
+          statusId: 'Closed',
+          resolvedAt: null,
+        },
+      ],
+      period,
+      head: new Map(),
+      resolvedStatusIds: new Set(['Closed']),
+      tzOffsetMinutes: 540,
+    });
+    expect(result.periodTicketIds).toEqual([]);
+    expect(result.unplannedTicketIds).toEqual([]);
   });
 });

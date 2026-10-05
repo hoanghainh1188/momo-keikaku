@@ -294,7 +294,16 @@ describe('FR-27 Ticket-Count Mode', () => {
     expect(evm.evMh).toEqual(mhMetric(hoursToMh(50))); // 1 of 2 resolved
     expect(evm.spi).toEqual(ratioMetric(hoursToMh(50), hoursToMh(50)));
     // Unavailable, never 0:
-    for (const m of [evm.acMh, evm.cpiAllIn, evm.cvMh, evm.eacMh, evm.etcMh, evm.vacMh, evm.tcpi]) {
+    for (const m of [
+      evm.acMh,
+      evm.cpiAllIn,
+      evm.cpiPlannedScope,
+      evm.cvMh,
+      evm.eacMh,
+      evm.etcMh,
+      evm.vacMh,
+      evm.tcpi,
+    ]) {
       expect(m.kind).toBe('unavailable');
       if (m.kind === 'unavailable') expect(m.reasonCode).toBe('tracker_provides_no_hours');
     }
@@ -327,6 +336,41 @@ describe('FR-27 Ticket-Count Mode', () => {
     });
     expect(evm.acMh).toEqual({ kind: 'value', value: hoursToMh(40), unit: 'mh', coverage: caption });
     expect(evm.cpiAllIn.kind === 'value' && evm.cpiAllIn.coverage).toBe(caption);
+  });
+
+  it('marks Effort/Cost unavailable in Ticket-Count Mode and names it on overall', () => {
+    const baseline: BaselineVersion = {
+      seq: 1,
+      id: 'bl-1',
+      reason: 'x',
+      recordedAt: '2026-06-01T00:00:00.000Z',
+      actor: 'user:pm',
+      wps: [
+        { wpId: 'WP-1', start: '2026-06-01', finish: '2026-06-12', baselineMh: hoursToMh(100), isMilestone: false },
+      ],
+    };
+    const evm = computeEvm({
+      asOf: '2026-06-05',
+      calendar: cal,
+      baseline,
+      wps: [wp({ id: 'WP-1' })],
+      mappedTicketsByWp: new Map([['WP-1', [ticket('t1', null, true), ticket('t2', null, false)]]]),
+      acByWp: new Map(),
+      unplannedAcMh: 0n,
+      totalAcMh: 0n,
+      plannedScopeAcMh: 0n,
+      measurementBasis: 'count',
+    });
+    const h = computeHealth({
+      evm,
+      thresholds: DEFAULT_THRESHOLDS,
+      unplannedSharePeriod: ratio(0n, 1n),
+      unplannedShareCumulative: ratio(0n, 1n),
+      slippedMilestones: [],
+      measurementBasis: 'count',
+    });
+    expect(h.indicators.find((i) => i.key === 'effort_cost')?.colour).toBe('unavailable');
+    expect(h.overallNote).toMatch(/Effort\/Cost/);
   });
 });
 

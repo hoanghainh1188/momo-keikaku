@@ -247,7 +247,6 @@ export function computeReview(input: ReviewInput): ReviewResult {
     head,
     resolvedStatusIds,
     tzOffsetMinutes: input.project.tzOffsetMinutes,
-    asOfInstant: input.pinnedSnapshot.observedAt,
   });
 
   const sharePeriodHours =
