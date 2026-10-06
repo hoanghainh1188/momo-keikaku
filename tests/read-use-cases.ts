@@ -989,18 +989,6 @@ export const UNREACHED_TENANT_OWNED_TABLES: readonly UnreachedTable[] = [
       'columns via getProjectReview. The first read removes this entry.',
   },
   {
-    table: 'measurement_basis_event',
-    why:
-      'Created by story 5.7 as append-only latched basis. Written by ingest hysteresis / seed; ' +
-      'Review loads the head via loadProjectBundle. No dedicated READ use case yet.',
-  },
-  {
-    table: 'connector_setting_event',
-    why:
-      'Created by story 5.7 as append-only Resolved status set. Written by addConnector seed / ' +
-      'appendResolvedStatuses; Review loads the head via loadProjectBundle. No dedicated READ use case yet.',
-  },
-  {
     table: 'tracker_snapshot_attempt',
     why:
       'Created by story 5.2 for failed snapshot attempts. Written by ingest gate / credential ' +

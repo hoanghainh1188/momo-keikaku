@@ -90,6 +90,7 @@ export const auditPayloadSchema = z.union([
       scope: z.string(),
       approvalName: z.string(),
       scopeSeq: z.number().int(),
+      settingSeq: z.number().int().optional(),
     })
     .strict(),
   z.object({ projectId: z.string() }).strict(),
@@ -98,6 +99,22 @@ export const auditPayloadSchema = z.union([
       projectId: z.string(),
       before: z.string(),
       after: z.string(),
+    })
+    .strict(),
+  // Story 5.6 ownership confirm.
+  z
+    .object({
+      projectId: z.string(),
+      trackerIssueId: z.string(),
+      resolution: z.enum(['keep', 'transfer']),
+      toConnectorId: z.string(),
+    })
+    .strict(),
+  // Story 5.7 Resolved-status append (tests/API).
+  z
+    .object({
+      projectId: z.string().min(1),
+      resolvedStatusIds: z.array(z.string().min(1)).min(1),
     })
     .strict(),
 ]);
