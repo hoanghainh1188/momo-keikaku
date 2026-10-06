@@ -989,4 +989,12 @@ export const UNREACHED_TENANT_OWNED_TABLES: readonly UnreachedTable[] = [
       'notify; no READ use case yet — banner reads connector.last_error_*. The first read removes ' +
       'this entry.',
   },
+  {
+    table: 'mapping_head',
+    why:
+      'Created by story 5.9 as a derived dual-write index (AR-18 / AR-38). Writers and the ' +
+      'schedule leaf guard read it live; attribution pins and getProjectMapping still replay ' +
+      'mapping_event (never SoT). The first product READ that loads heads instead of events ' +
+      'removes this entry.',
+  },
 ] as const;
