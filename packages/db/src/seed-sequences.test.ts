@@ -25,6 +25,7 @@ import {
   assertProbeTenantsDisjoint,
   buildProbeTenant,
   createProbeTenant,
+  PROBE_SEQ_BAND_WIDTH,
   removeProbeTenant,
 } from './probe-tenants';
 import { acquireSeedSuiteLock, releaseSeedSuiteLock } from './seed-suite-lock';
@@ -86,17 +87,39 @@ afterAll(async () => {
   await closeAllPools();
 });
 
+/**
+ * Raises a counter to at least `floor`, and never touches it when it is already there.
+ *
+ * NOT a bare `setval(seq, floor)`. The counter is shared by every suite running beside this one,
+ * so it may already sit ABOVE `floor` — the fence suites' probes alone carry it into the 961,000,000
+ * band — and setting it to `floor` would then move it backwards, which is the very defect this
+ * suite pins. It is guarded the same way `syncIdentitySequences` is, for the same reason.
+ */
+async function advanceSequenceTo(table: string, floor: number): Promise<void> {
+  await asOwner((client) =>
+    client.query(
+      `SELECT setval(pg_get_serial_sequence($1, 'seq'), $2, true) ` +
+        `WHERE COALESCE(pg_sequence_last_value(pg_get_serial_sequence($1, 'seq')::regclass), 0) < $2`,
+      [table, floor],
+    ),
+  );
+}
+
 describe.skipIf(!reachable)('identity-sequence resync only advances (retro F1)', () => {
   it('never moves a shared counter below where another Tenant already left it', async () => {
     const owner = getDb(OWNER_DATABASE_URL!);
 
-    // Stand a counter well above anything this suite's probe will write, exactly as a suite
-    // holding rows in a higher band would have left it.
-    const high = 960_000_500;
-    await asOwner((client) =>
-      client.query(`SELECT setval(pg_get_serial_sequence('audit_log', 'seq'), $1, true)`, [high]),
-    );
-    expect(await sequencePosition('audit_log')).toBe(high);
+    // Stand the counter above everything this suite's probe will write, as a suite holding rows
+    // in a higher band would have left it. The top of this suite's own band: nothing else writes
+    // explicit seqs in [890M, 900M), so the default inserts every other suite makes from here on
+    // land in a gap no probe band claims (see `RESERVED_SEQ` / `PROBE_SEQ_BAND_WIDTH`).
+    const floor = PROBE.writeOptions.seqOffset + PROBE_SEQ_BAND_WIDTH;
+    await advanceSequenceTo('audit_log', floor);
+
+    // Read AFTER raising it: suites holding the seed-suite lock shared insert audit rows at this
+    // very moment, so the position is `floor` or anywhere above it — never an exact value.
+    const before = await sequencePosition('audit_log');
+    expect(before).toBeGreaterThanOrEqual(floor);
 
     // Writing a probe in a LOWER band resyncs the counters. It must not drag this one down.
     await removeProbeTenant(owner, PROBE).catch(() => {});
@@ -106,7 +129,7 @@ describe.skipIf(!reachable)('identity-sequence resync only advances (retro F1)',
       await sequencePosition('audit_log'),
       'the resync pulled the shared audit_log counter backwards — the next default insert will ' +
         'collide with a surviving row (audit_log_pkey)',
-    ).toBeGreaterThanOrEqual(high);
+    ).toBeGreaterThanOrEqual(before);
 
     await removeProbeTenant(owner, PROBE);
   });
