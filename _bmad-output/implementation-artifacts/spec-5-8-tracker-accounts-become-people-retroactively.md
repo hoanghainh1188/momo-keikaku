@@ -2,7 +2,7 @@
 title: 'Story 5.8 — Tracker Accounts become people, retroactively'
 type: 'feature'
 created: '2026-10-06'
-status: 'in-progress'
+status: 'in-review'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '430053d84c4b1dbe9d9818d8f3c326d16529594d'
@@ -109,6 +109,11 @@ context:
 ## Spec Change Log
 
 ## Review Triage Log
+
+- `false` — formal blind/edge/verification-gap subagent layers not launched this session (worker may not spawn nested reviewers); verification was `pnpm lint`/`typecheck`/`depcruise`/`test` all exit 0 against the I/O matrix unit tests. No code change from skipped layers.
+- `false` — email suggest vs Resource email column: Resource has no email; Design Notes document match against `resource.name`; tests cover email CI and name CI.
+- `medium` — `linkTrackerAccount` / `unlinkTrackerAccount` off use-cases barrel: deferred-work notes harness gap; unit tests cover writers (same pattern as `confirmConnectorOwnership`).
+- `low` — global pino `email` redact may hide auth_user emails in operator logs too — acceptable under NFR-S6 personal-data hygiene.
 
 ## Design Notes
 

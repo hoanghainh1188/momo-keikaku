@@ -512,16 +512,22 @@ export async function writeTenantRows(
           }),
       );
       // Story 5.8: demo links as append-only events (live array already stamped on resource insert).
+      // Only link Resources whose observation account was upserted above — fixture
+      // `resources[].accountId` can name accounts absent from every snapshot (e.g. bk-1001).
       if (!projectOnly) {
-        await tx.insert(s.trackerAccountLinkEvent).values(
-          f.resources.map((r) => ({
-            tenantId,
-            trackerAccountId: own(`ta-${r.accountId}`),
-            resourceId: r.id,
-            actor: 'system:seed',
-            at: stamp,
-          })),
-        );
+        const seededAccountIds = new Set(accounts.map((a) => a.accountId));
+        const linkable = f.resources.filter((r) => seededAccountIds.has(r.accountId));
+        if (linkable.length > 0) {
+          await tx.insert(s.trackerAccountLinkEvent).values(
+            linkable.map((r) => ({
+              tenantId,
+              trackerAccountId: own(`ta-${r.accountId}`),
+              resourceId: r.id,
+              actor: 'system:seed',
+              at: stamp,
+            })),
+          );
+        }
       }
     }
     await chunked(latestForIdentity.tickets, 500, (batch) =>
