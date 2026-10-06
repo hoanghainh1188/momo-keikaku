@@ -396,10 +396,29 @@ export async function createProbeTenant(owner: Db, probe: ProbeTenant): Promise<
  * Idempotent, and safe to call for a Tenant that was never written.
  */
 export async function removeProbeTenant(owner: Db, probe: RemovableProbe): Promise<void> {
+  await removeTenant(owner, probe.tenantId, probeMemberIds(probe));
+}
+
+/**
+ * Deletes every row belonging to `tenantId` — the registry walk `removeProbeTenant` does, for a
+ * suite whose Tenant is hand-built rather than a relabelled demo copy.
+ *
+ * A suite that writes a Tenant and leaves it behind breaks `seed-load-orchestration`, whose
+ * single-Tenant guard then refuses to seed (`this database holds N Tenants — …`) — but only
+ * when vitest happens to schedule it later. Walking the registry rather than listing tables
+ * by hand means a table the suite's use case starts writing later is removed too.
+ *
+ * @param knownUserIds users to delete even if no membership names them any more.
+ */
+export async function removeTenant(
+  owner: Db,
+  tenantId: string,
+  knownUserIds: readonly string[] = [],
+): Promise<void> {
   await owner.transaction(async (tx) => {
     await tx.execute(sql`SELECT set_config(${MAINTENANCE_SETTING}, 'on', true)`);
-    await deleteTenantMembers(tx, probe.tenantId, probeMemberIds(probe));
-    await deleteTenantRows(tx, probe.tenantId);
+    await deleteTenantMembers(tx, tenantId, knownUserIds);
+    await deleteTenantRows(tx, tenantId);
   });
 }
 

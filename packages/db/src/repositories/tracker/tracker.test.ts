@@ -9,6 +9,7 @@ import { getDb } from '../../client';
 import * as s from '../../schema';
 import { withTenant } from '../../with-tenant';
 import { acquireSeedSuiteLock, releaseSeedSuiteLock } from '../../seed-suite-lock';
+import { removeTenant } from '../../probe-tenants';
 import { fixtureCursorPortOn, trackerRepositoryOn } from './index';
 
 const REQUIRE_DB = process.env.REQUIRE_DB === '1';
@@ -76,17 +77,9 @@ async function asOwner(work: (client: pg.Client) => Promise<void>): Promise<void
 
 describe.skipIf(!live)('tracker identity + fixture cursor (story 5.1)', () => {
   beforeAll(async () => {
+    await removeTenant(getDb(OWNER_DATABASE_URL!), TENANT);
     await asOwner(async (client) => {
       await client.query(`SELECT set_config('app.tenant_id', $1, false)`, [TENANT]);
-      await client.query(`DELETE FROM fixture_cursor WHERE tenant_id = $1`, [TENANT]);
-      await client.query(`DELETE FROM ticket WHERE tenant_id = $1`, [TENANT]);
-      await client.query(`DELETE FROM tracker_account WHERE tenant_id = $1`, [TENANT]);
-      await client.query(`DELETE FROM connector WHERE tenant_id = $1`, [TENANT]);
-      await client.query(`DELETE FROM project WHERE tenant_id = $1`, [TENANT]);
-      await client.query(`DELETE FROM program WHERE tenant_id = $1`, [TENANT]);
-      await client.query(`DELETE FROM department WHERE tenant_id = $1`, [TENANT]);
-      await client.query(`DELETE FROM tenant WHERE id = $1`, [TENANT]);
-
       await client.query(
         `INSERT INTO tenant (id, name, currency) VALUES ($1, 'Tracker probe', 'JPY')`,
         [TENANT],
@@ -117,6 +110,13 @@ describe.skipIf(!live)('tracker identity + fixture cursor (story 5.1)', () => {
         [CONNECTOR, TENANT, PROJECT, CONNECTOR_B],
       );
     });
+  });
+
+  // Inside the describe, so it runs before the file-level afterAll releases the seed-suite
+  // lock: a Tenant left behind makes seed-load-orchestration refuse to seed whenever vitest
+  // schedules it after this file.
+  afterAll(async () => {
+    await removeTenant(getDb(OWNER_DATABASE_URL!), TENANT);
   });
 
   it('enforces UNIQUE (tenant_id, tracker_kind, tracker_site, tracker_issue_id)', async () => {

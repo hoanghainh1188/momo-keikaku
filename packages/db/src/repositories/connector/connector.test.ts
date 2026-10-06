@@ -10,6 +10,7 @@ import { getDb } from '../../client';
 import * as s from '../../schema';
 import { withTenant } from '../../with-tenant';
 import { acquireSeedSuiteLock, releaseSeedSuiteLock } from '../../seed-suite-lock';
+import { removeTenant } from '../../probe-tenants';
 import { connectorWriteRepositoryOn } from './index';
 
 const REQUIRE_DB = process.env.REQUIRE_DB === '1';
@@ -67,14 +68,9 @@ const CREDENTIALS = {
 
 describe.skipIf(!live)('connector.search_limit at the repository boundary (story 5.3)', () => {
   beforeAll(async () => {
+    await removeTenant(getDb(OWNER_DATABASE_URL!), TENANT);
     await asOwner(async (client) => {
       await client.query(`SELECT set_config('app.tenant_id', $1, false)`, [TENANT]);
-      await client.query(`DELETE FROM connector WHERE tenant_id = $1`, [TENANT]);
-      await client.query(`DELETE FROM project WHERE tenant_id = $1`, [TENANT]);
-      await client.query(`DELETE FROM program WHERE tenant_id = $1`, [TENANT]);
-      await client.query(`DELETE FROM department WHERE tenant_id = $1`, [TENANT]);
-      await client.query(`DELETE FROM tenant WHERE id = $1`, [TENANT]);
-
       await client.query(
         `INSERT INTO tenant (id, name, currency) VALUES ($1, 'Connector probe', 'JPY')`,
         [TENANT],
@@ -101,6 +97,13 @@ describe.skipIf(!live)('connector.search_limit at the repository boundary (story
         );
       }
     });
+  });
+
+  // Inside the describe, so it runs before the file-level afterAll releases the seed-suite
+  // lock: a Tenant left behind makes seed-load-orchestration refuse to seed whenever vitest
+  // schedules it after this file.
+  afterAll(async () => {
+    await removeTenant(getDb(OWNER_DATABASE_URL!), TENANT);
   });
 
   it.each([

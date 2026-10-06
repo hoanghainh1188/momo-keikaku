@@ -11,6 +11,7 @@ import { hoursToMh } from '@momo/domain';
 import { getDb } from '../../client';
 import * as s from '../../schema';
 import { acquireSeedSuiteLock, releaseSeedSuiteLock } from '../../seed-suite-lock';
+import { removeTenant } from '../../probe-tenants';
 import { withTenant } from '../../with-tenant';
 import { ingestWriteRepositoryOn } from './index';
 
@@ -71,22 +72,10 @@ function ticket(i: number): TicketObservation {
 
 describe.skipIf(!live)('NFR-P1 writeIngestSnapshot (story 5.5, REQUIRE_DB)', () => {
   beforeAll(async () => {
+    await removeTenant(getDb(OWNER_DATABASE_URL!), TENANT);
     const client = new pg.Client({ connectionString: OWNER_DATABASE_URL });
     await client.connect();
     try {
-      await client.query(`SELECT set_config('app.maintenance', 'on', false)`);
-      await client.query(`DELETE FROM actuals_ledger_entry WHERE tenant_id = $1`, [TENANT]);
-      await client.query(`DELETE FROM ticket_observation WHERE tenant_id = $1`, [TENANT]);
-      await client.query(`DELETE FROM tracker_snapshot WHERE tenant_id = $1`, [TENANT]);
-      await client.query(`DELETE FROM ticket WHERE tenant_id = $1`, [TENANT]);
-      await client.query(`DELETE FROM tracker_account WHERE tenant_id = $1`, [TENANT]);
-      await client.query(`DELETE FROM project_setting_event WHERE tenant_id = $1`, [TENANT]);
-      await client.query(`DELETE FROM connector_scope_event WHERE tenant_id = $1`, [TENANT]);
-      await client.query(`DELETE FROM connector WHERE tenant_id = $1`, [TENANT]);
-      await client.query(`DELETE FROM project WHERE id = $1`, [PROJECT]);
-      await client.query(`DELETE FROM department WHERE id = $1`, [`dep-${TENANT}`]);
-      await client.query(`DELETE FROM tenant WHERE id = $1`, [TENANT]);
-
       await client.query(`INSERT INTO tenant (id, name) VALUES ($1, 'ingest-nfr')`, [TENANT]);
       await client.query(
         `INSERT INTO department (id, tenant_id, name) VALUES ($1, $2, 'd')`,
@@ -121,6 +110,13 @@ describe.skipIf(!live)('NFR-P1 writeIngestSnapshot (story 5.5, REQUIRE_DB)', () 
     } finally {
       await client.end();
     }
+  });
+
+  // Inside the describe, so it runs before the file-level afterAll releases the seed-suite
+  // lock: a Tenant left behind makes seed-load-orchestration refuse to seed whenever vitest
+  // schedules it after this file.
+  afterAll(async () => {
+    await removeTenant(getDb(OWNER_DATABASE_URL!), TENANT);
   });
 
   it(`writes ${TICKET_COUNT} tickets to the ledger within 5 minutes`, async () => {
