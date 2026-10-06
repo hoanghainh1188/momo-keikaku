@@ -483,6 +483,17 @@ describe('mapping rules (FR-22)', () => {
     expect(first).toHaveLength(1);
     expect(applyRules(rules, [t], mappingHead(first), 2, 'x')).toEqual([]);
   });
+
+  it('re-evaluates a release head (story 5.9 — not pinned Unmapped)', () => {
+    const t = obs('t1', 1, { attributes: [{ kind: 'category', id: 'Support' }] });
+    const head = mappingHead([
+      { seq: 1, ticketId: 't1', wpId: 'WP-9', source: 'manual', at: 'x', actor: 'pm' },
+      { seq: 2, ticketId: 't1', wpId: null, source: 'release', at: 'x', actor: 'pm' },
+    ]);
+    const next = applyRules(rules, [t], head, 3, 'x');
+    expect(next).toHaveLength(1);
+    expect(next[0]).toMatchObject({ ticketId: 't1', wpId: 'WP-CATCH', source: 'rule' });
+  });
 });
 
 describe('attribution (FR-20, FR-21, FR-24)', () => {
@@ -588,6 +599,33 @@ describe('attribution (FR-20, FR-21, FR-24)', () => {
     expect(after.cumulative.unplannedMh).toBe(0n);
     expect(after.cumulative.mappedBaselinedMh).toBe(hoursToMh(8));
     expect(after.acByWp.get('WP-B')).toBe(hoursToMh(8));
+  });
+
+  it('attributes all ledger hours to the WP mapped now on remap; ledger entries unchanged (FR-21)', () => {
+    const entries = [entry(1, 'tb', 30, IN), entry(2, 'tb', 5, IN)];
+    const ledgerSnapshot = entries.map((e) => ({ ...e }));
+    const remapped = [
+      ...events,
+      { seq: 4, ticketId: 'tb', wpId: 'WP-N', source: 'manual' as const, at: 'x', actor: 'pm' },
+    ];
+    const after = run(entries, remapped);
+    expect(after.acByWp.get('WP-B')).toBeUndefined();
+    expect(after.acByWp.get('WP-N')).toBe(hoursToMh(35));
+    expect(after.cumulative.mappedNonBaselinedMh).toBe(hoursToMh(35));
+    // Ledger itself is never rewritten.
+    expect(entries).toEqual(ledgerSnapshot);
+  });
+
+  it('treats release as Unmapped for attribution until rules remapped (story 5.9)', () => {
+    const entries = [entry(1, 'tb', 30, IN)];
+    const released = [
+      ...events,
+      { seq: 4, ticketId: 'tb', wpId: null, source: 'release' as const, at: 'x', actor: 'pm' },
+    ];
+    const after = run(entries, released);
+    expect(after.cumulative.unmappedMh).toBe(hoursToMh(30));
+    expect(after.cumulative.unplannedMh).toBe(hoursToMh(30));
+    expect(after.acByWp.get('WP-B')).toBeUndefined();
   });
 
   it('keeps Plan-disposition hours Unplanned until a Re-baseline includes the WP', () => {

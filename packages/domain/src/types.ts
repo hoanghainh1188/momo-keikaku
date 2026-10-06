@@ -81,7 +81,7 @@ export interface LedgerEntry {
   activeBaselineVersionSeq: number | null;
 }
 
-export type MappingSource = 'manual' | 'rule' | 'disposition';
+export type MappingSource = 'manual' | 'rule' | 'disposition' | 'release';
 
 export interface MappingEvent {
   seq: number;

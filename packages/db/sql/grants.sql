@@ -156,6 +156,9 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON public."mapping_rule" TO "momo_app";
 GRANT SELECT, INSERT ON public."mapping_event" TO "momo_app";
 GRANT SELECT, UPDATE, DELETE ON public."mapping_event" TO "momo_maintenance";
 
+-- mapping_head (derived)
+GRANT SELECT, INSERT, UPDATE, DELETE ON public."mapping_head" TO "momo_app";
+
 -- disposition_event (append-only)
 GRANT SELECT, INSERT ON public."disposition_event" TO "momo_app";
 GRANT SELECT, UPDATE, DELETE ON public."disposition_event" TO "momo_maintenance";

@@ -494,6 +494,20 @@ CREATE POLICY "maintenance_bypass" ON public."mapping_event"
   USING (true)
   WITH CHECK (true);
 
+-- mapping_head (derived): Derived Mapping head index (story 5.9 / AR-18). Dual-written with every mapping_event append; rebuildable from events; never the source of truth for attribution pins.
+ALTER TABLE public."mapping_head" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public."mapping_head" FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "tenant_isolation" ON public."mapping_head";
+CREATE POLICY "tenant_isolation" ON public."mapping_head"
+  FOR ALL
+  USING ("tenant_id" = NULLIF(current_setting('app.tenant_id', true), ''))
+  WITH CHECK ("tenant_id" = NULLIF(current_setting('app.tenant_id', true), ''));
+DROP POLICY IF EXISTS "maintenance_bypass" ON public."mapping_head";
+CREATE POLICY "maintenance_bypass" ON public."mapping_head"
+  FOR ALL TO "momo_maintenance"
+  USING (true)
+  WITH CHECK (true);
+
 -- disposition_event (append-only): A PM decision at a point in time (FR-29). The record of a decision is not editable.
 ALTER TABLE public."disposition_event" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public."disposition_event" FORCE ROW LEVEL SECURITY;

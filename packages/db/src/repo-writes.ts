@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import type { Bound } from './bound';
 import { projectNotFound } from './project-not-found';
 import * as s from './schema';
@@ -37,7 +37,13 @@ import type { Tx } from './with-tenant';
  * `mapping_event` and `disposition_event` are append-only and read at a watermark, so each insert
  * below is preceded by `lockWatermark(bound, { kind: 'project', projectId })`, and `seq` comes
  * from the identity default the INSERT evaluates after the lock. `watermark-lock.ts` has why.
+ *
+ * Story 5.9: every `mapping_event` append dual-writes `mapping_head` in the same transaction;
+ * ordinary unmap / WP-deletion reassign use `source = release`; map targets must be leaf,
+ * non-milestone WPs; Tickets must belong to the command Project.
  */
+
+export type MappingEventSource = 'manual' | 'rule' | 'disposition' | 'release';
 
 export interface MapDispositionCommand {
   readonly kind: 'map';
@@ -68,7 +74,7 @@ export interface ChangeRequestCandidateCommand {
   readonly ticketIds: readonly string[];
 }
 
-/** `wpId` is the empty string for an unmap. */
+/** `wpId` is the empty string for an unmap (recorded as `release`). */
 export interface ManualMappingCommand {
   readonly projectId: string;
   readonly ticketId: string;
@@ -96,26 +102,111 @@ async function anchorOf(tx: Tx, projectId: string): Promise<Date> {
   return p.demoAnchor;
 }
 
+type HeadRow = {
+  readonly tenantId: string;
+  readonly projectId: string;
+  readonly ticketId: string;
+  readonly wpId: string | null;
+  readonly source: MappingEventSource;
+  readonly ruleId: string | null;
+  readonly seq: number;
+  readonly at: Date;
+  readonly actor: string;
+};
+
+/** Dual-write one Mapping head row (derived; never SoT). */
+export async function upsertMappingHead(bound: Bound, row: HeadRow): Promise<void> {
+  await bound.tx
+    .insert(s.mappingHead)
+    .values(row)
+    .onConflictDoUpdate({
+      target: [s.mappingHead.tenantId, s.mappingHead.projectId, s.mappingHead.ticketId],
+      set: {
+        wpId: row.wpId,
+        source: row.source,
+        ruleId: row.ruleId,
+        seq: row.seq,
+        at: row.at,
+        actor: row.actor,
+      },
+    });
+}
+
+/**
+ * Append Mapping events and dual-write `mapping_head` for each. Callers hold (or take) the
+ * Project watermark lock before the first append.
+ */
+export async function appendMappingEvents(
+  bound: Bound,
+  stamp: WriteStamp,
+  projectId: string,
+  rows: readonly {
+    readonly ticketId: string;
+    readonly wpId: string | null;
+    readonly source: MappingEventSource;
+    readonly ruleId?: string | null;
+    readonly id?: string;
+  }[],
+): Promise<void> {
+  if (rows.length === 0) return;
+  const { tx, tenantId } = bound;
+  await lockWatermark(bound, { kind: 'project', projectId });
+  const inserted = await tx
+    .insert(s.mappingEvent)
+    .values(
+      rows.map((r) => ({
+        id: r.id ?? `map-${r.ticketId}-${stamp.at.getTime()}`,
+        tenantId,
+        projectId,
+        ticketId: r.ticketId,
+        wpId: r.wpId,
+        source: r.source,
+        ruleId: r.ruleId ?? null,
+        at: stamp.at,
+        actor: stamp.actor,
+      })),
+    )
+    .returning({
+      seq: s.mappingEvent.seq,
+      ticketId: s.mappingEvent.ticketId,
+      wpId: s.mappingEvent.wpId,
+      source: s.mappingEvent.source,
+      ruleId: s.mappingEvent.ruleId,
+      at: s.mappingEvent.at,
+      actor: s.mappingEvent.actor,
+    });
+
+  for (const row of inserted) {
+    await upsertMappingHead(bound, {
+      tenantId,
+      projectId,
+      ticketId: row.ticketId,
+      wpId: row.wpId,
+      source: row.source as MappingEventSource,
+      ruleId: row.ruleId,
+      seq: row.seq,
+      at: row.at,
+      actor: row.actor,
+    });
+  }
+}
+
 async function appendMappings(
-  { tx, tenantId }: Bound,
+  bound: Bound,
   stamp: WriteStamp,
   projectId: string,
   ticketIds: readonly string[],
   wpId: string | null,
 ): Promise<void> {
-  await lockWatermark({ tx, tenantId }, { kind: 'project', projectId });
-  await tx.insert(s.mappingEvent).values(
+  await appendMappingEvents(
+    bound,
+    stamp,
+    projectId,
     ticketIds.map((ticketId) => ({
-      id: `map-${ticketId}-${stamp.at.getTime()}`,
-      tenantId,
-      projectId,
       ticketId,
       wpId,
       // AD-9: Dispositions count as manual, so live rules never override them.
       source: 'disposition' as const,
-      ruleId: null,
-      at: stamp.at,
-      actor: stamp.actor,
     })),
   );
 }
@@ -217,43 +308,145 @@ function recordChangeRequestCandidates(bound: Bound) {
 }
 
 /**
- * FR-21 manual Mapping of one Ticket. An empty `wpId` is an unmap: the event carries a null
- * Work Package (the use case records it as `mapping.unmap`, keeping the empty string in the
- * payload as it always has).
+ * FR-21 manual Mapping of one Ticket. An empty `wpId` is an ordinary unmap: `source = release`,
+ * `wp_id = null` (back to rules — not pinned Unmapped). Story 5.9 / A4.
  */
 function recordManualMapping(bound: Bound) {
   return async (stamp: WriteStamp, command: ManualMappingCommand): Promise<void> => {
-    const { tx, tenantId } = bound;
     const { projectId, ticketId, wpId } = command;
-    await lockWatermark(bound, { kind: 'project', projectId });
-    await tx.insert(s.mappingEvent).values({
-      id: `map-${ticketId}-${stamp.at.getTime()}`,
-      tenantId,
-      projectId,
-      ticketId,
-      wpId: wpId === '' ? null : wpId,
-      source: 'manual',
-      ruleId: null,
-      at: stamp.at,
-      actor: stamp.actor,
-    });
+    const release = wpId === '';
+    await appendMappingEvents(bound, stamp, projectId, [
+      {
+        ticketId,
+        wpId: release ? null : wpId,
+        source: release ? 'release' : 'manual',
+      },
+    ]);
   };
 }
 
 /**
- * Whether `wpId` is a Work Package of `projectId` (AD-12). The use case asks before it writes a
- * Mapping or a Disposition naming the Work Package, and refuses `not_found` on `false` — so a PM
- * who reaches one Project cannot append rows in it that name another Project's Work Package.
+ * Whether `wpId` is a mappable Work Package of `projectId` (AD-12 + FR-21 leaf-only): live,
+ * leaf, non-milestone. The use case asks before it writes a Mapping or a Disposition naming the
+ * Work Package, and refuses `not_found` on `false`.
  */
 function workPackageInProject({ tx }: Bound) {
   return async (projectId: string, wpId: string): Promise<boolean> => {
     const rows = await tx
       .select({ id: s.workPackage.id })
       .from(s.workPackage)
-      .where(and(eq(s.workPackage.id, wpId), eq(s.workPackage.projectId, projectId)))
+      .where(
+        and(
+          eq(s.workPackage.id, wpId),
+          eq(s.workPackage.projectId, projectId),
+          eq(s.workPackage.isLeaf, true),
+          eq(s.workPackage.isMilestone, false),
+          isNull(s.workPackage.deletedAt),
+        ),
+      )
       .limit(1);
     return rows.length > 0;
   };
+}
+
+/**
+ * Whether `ticketId` (tracker issue id) is a Ticket of `projectId` (story 5.9 / AR-18).
+ */
+function ticketInProject({ tx, tenantId }: Bound) {
+  return async (projectId: string, ticketId: string): Promise<boolean> => {
+    const rows = await tx
+      .select({ id: s.ticket.id })
+      .from(s.ticket)
+      .where(
+        and(
+          eq(s.ticket.tenantId, tenantId),
+          eq(s.ticket.projectId, projectId),
+          eq(s.ticket.trackerIssueId, ticketId),
+        ),
+      )
+      .limit(1);
+    return rows.length > 0;
+  };
+}
+
+/**
+ * Story 5.9 / AR-18: release every Ticket currently mapped to `wpId` (`source = release`).
+ * Call under the Project watermark lock (idempotent if already held).
+ */
+export async function reassignMappingsFromWp(
+  bound: Bound,
+  stamp: WriteStamp,
+  projectId: string,
+  wpId: string,
+): Promise<void> {
+  const { tx, tenantId } = bound;
+  // Lock before reading heads so concurrent maps cannot land after the select and remain mapped
+  // through soft-delete. appendMappingEvents re-locks idempotently.
+  await lockWatermark(bound, { kind: 'project', projectId });
+  const heads = await tx
+    .select({ ticketId: s.mappingHead.ticketId })
+    .from(s.mappingHead)
+    .where(
+      and(
+        eq(s.mappingHead.tenantId, tenantId),
+        eq(s.mappingHead.projectId, projectId),
+        eq(s.mappingHead.wpId, wpId),
+      ),
+    );
+  if (heads.length === 0) return;
+  await appendMappingEvents(
+    bound,
+    stamp,
+    projectId,
+    heads.map((h) => ({
+      ticketId: h.ticketId,
+      wpId: null,
+      source: 'release' as const,
+      id: `map-release-${h.ticketId}-${stamp.at.getTime()}`,
+    })),
+  );
+}
+
+/**
+ * Story 5.9 / AR-18 / FR-5: delete `mapping_rule` rows targeting `wpId` so a deleted WP cannot
+ * remain a live rule target. Rules CRUD/preview stay 5.10+.
+ */
+export async function disableRulesTargeting(
+  bound: Bound,
+  projectId: string,
+  wpId: string,
+): Promise<void> {
+  const { tx, tenantId } = bound;
+  await tx
+    .delete(s.mappingRule)
+    .where(
+      and(
+        eq(s.mappingRule.tenantId, tenantId),
+        eq(s.mappingRule.projectId, projectId),
+        eq(s.mappingRule.wpId, wpId),
+      ),
+    );
+}
+
+/** Rebuild `mapping_head` for one Project from events (seed / maintenance). */
+export async function rebuildMappingHeadForProject(
+  bound: Bound,
+  projectId: string,
+): Promise<void> {
+  const { tx, tenantId } = bound;
+  await tx
+    .delete(s.mappingHead)
+    .where(and(eq(s.mappingHead.tenantId, tenantId), eq(s.mappingHead.projectId, projectId)));
+
+  // DISTINCT ON latest seq per ticket — same semantics as domain `mappingHead`.
+  await tx.execute(sql`
+    INSERT INTO mapping_head (tenant_id, project_id, ticket_id, wp_id, source, rule_id, seq, at, actor)
+    SELECT DISTINCT ON (tenant_id, project_id, ticket_id)
+      tenant_id, project_id, ticket_id, wp_id, source, rule_id, seq, at, actor
+    FROM mapping_event
+    WHERE tenant_id = ${tenantId} AND project_id = ${projectId}
+    ORDER BY tenant_id, project_id, ticket_id, seq DESC
+  `);
 }
 
 /** The project write repository, bound to one transaction and its Tenant. */
@@ -261,10 +454,15 @@ export function projectWriteRepositoryOn(bound: Bound) {
   return {
     projectAnchor: (projectId: string) => anchorOf(bound.tx, projectId),
     workPackageInProject: workPackageInProject(bound),
+    ticketInProject: ticketInProject(bound),
     recordMapDisposition: recordMapDisposition(bound),
     recordPlanDisposition: recordPlanDisposition(bound),
     recordExplainDisposition: recordExplainDisposition(bound),
     recordChangeRequestCandidates: recordChangeRequestCandidates(bound),
     recordManualMapping: recordManualMapping(bound),
+    reassignMappingsFromWp: (stamp: WriteStamp, projectId: string, wpId: string) =>
+      reassignMappingsFromWp(bound, stamp, projectId, wpId),
+    disableRulesTargeting: (projectId: string, wpId: string) =>
+      disableRulesTargeting(bound, projectId, wpId),
   };
 }

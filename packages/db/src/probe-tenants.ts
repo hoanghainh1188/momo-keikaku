@@ -57,6 +57,7 @@ export const PRESERVED_VOCABULARY: ReadonlySet<string> = new Set([
   'manual',
   'rule',
   'disposition',
+  'release',
   // packages/domain/src/types.ts — MappingRule.match.field. `evaluateRules` switches on it.
   'milestone',
   'category',

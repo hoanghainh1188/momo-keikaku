@@ -44,6 +44,21 @@ const ctx = () => pmCtx(PROBE, { userId: 'user-s210' });
 const prepareSchedulableProject = (owner: ReturnType<typeof getDb>) =>
   prepareSchedulableLeaf(owner, PROBE);
 
+/** Clear derived heads for a WP so leaf→summary create_wp is not refused as mapped_leaf. */
+async function clearMappingsOnWp(owner: ReturnType<typeof getDb>, wpId: string) {
+  await withTenant(owner, PROBE.tenantId, async (tx) => {
+    await tx
+      .delete(s.mappingHead)
+      .where(
+        and(
+          eq(s.mappingHead.tenantId, PROBE.tenantId),
+          eq(s.mappingHead.projectId, PROBE.projectId),
+          eq(s.mappingHead.wpId, wpId),
+        ),
+      );
+  });
+}
+
 describe.skipIf(!reachable)('applyPlanChange fence (story 2.10)', () => {
   it('creates a leaf WP and appends schedule_run with cause wp_created', async () => {
     const owner = getDb(OWNER_DATABASE_URL!);
@@ -502,6 +517,7 @@ describe.skipIf(!reachable)('applyPlanChange fence (story 2.10)', () => {
     const owner = getDb(OWNER_DATABASE_URL!);
     const app = getDb(APP_DATABASE_URL!);
     const leaf = await prepareSchedulableProject(owner);
+    await clearMappingsOnWp(owner, leaf.id);
 
     const result = await applyPlanChange(
       { handle: app, transaction: inTenantTransaction },
@@ -541,6 +557,7 @@ describe.skipIf(!reachable)('applyPlanChange fence (story 2.10)', () => {
     const owner = getDb(OWNER_DATABASE_URL!);
     const app = getDb(APP_DATABASE_URL!);
     const leaf = await prepareSchedulableProject(owner);
+    await clearMappingsOnWp(owner, leaf.id);
     const childId = `${PROBE.tenantId}-moved-child`;
 
     const result = await applyPlanChange(
@@ -587,6 +604,7 @@ describe.skipIf(!reachable)('applyPlanChange fence (story 2.10)', () => {
     const owner = getDb(OWNER_DATABASE_URL!);
     const app = getDb(APP_DATABASE_URL!);
     const leaf = await prepareSchedulableProject(owner);
+    await clearMappingsOnWp(owner, leaf.id);
 
     const result = await applyPlanChange(
       { handle: app, transaction: inTenantTransaction },
@@ -605,6 +623,70 @@ describe.skipIf(!reachable)('applyPlanChange fence (story 2.10)', () => {
     if (result.ok) return;
     expect(result.error.code).toBe('invalid_input');
     expect(result.error.details?.leafResolution).toEqual(['required']);
+  });
+
+  it('refuses create_wp under a mapped leaf until mappings are reassigned (story 5.9)', async () => {
+    const owner = getDb(OWNER_DATABASE_URL!);
+    const app = getDb(APP_DATABASE_URL!);
+    const leaf = await prepareSchedulableProject(owner);
+    const ticketId = PROBE.state.mappingEvents[0]?.ticketId;
+    if (!ticketId) throw new Error('fixture needs a mapping event ticket');
+
+    // Ensure the leaf is intentionally mapped (head SoT for the guard).
+    await withTenant(owner, PROBE.tenantId, async (tx) => {
+      await tx
+        .insert(s.mappingHead)
+        .values({
+          tenantId: PROBE.tenantId,
+          projectId: PROBE.projectId,
+          ticketId,
+          wpId: leaf.id,
+          source: 'manual',
+          ruleId: null,
+          seq: 9_000_001,
+          at: new Date('2026-09-01T00:00:00Z'),
+          actor: 'user:s210-mapped-leaf',
+        })
+        .onConflictDoUpdate({
+          target: [s.mappingHead.tenantId, s.mappingHead.projectId, s.mappingHead.ticketId],
+          set: {
+            wpId: leaf.id,
+            source: 'manual',
+            ruleId: null,
+            seq: 9_000_001,
+            at: new Date('2026-09-01T00:00:00Z'),
+            actor: 'user:s210-mapped-leaf',
+          },
+        });
+    });
+
+    const childId = `${PROBE.tenantId}-mapped-leaf-child`;
+    const result = await applyPlanChange(
+      { handle: app, transaction: inTenantTransaction },
+      ctx(),
+      {
+        kind: 'create_wp',
+        projectId: PROBE.projectId,
+        wpId: childId,
+        parentId: leaf.id,
+        wbsCode: `${leaf.wbsCode}.9`,
+        name: 'Child under mapped leaf',
+        durationDays: 1,
+        leafResolution: { strategy: 'drop' },
+      },
+    );
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe('invalid_input');
+    expect(result.error.details?.wpId).toEqual(['mapped_leaf']);
+
+    const children = await withTenant(app, PROBE.tenantId, async (tx) =>
+      tx
+        .select({ id: s.workPackage.id })
+        .from(s.workPackage)
+        .where(eq(s.workPackage.id, childId)),
+    );
+    expect(children).toEqual([]);
   });
 
   it('lists edge endpoints for delete confirm before soft-delete', async () => {

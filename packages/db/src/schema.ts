@@ -73,6 +73,9 @@ export const FK_MATCH_SIMPLE: readonly string[] = [
   'tracker_snapshot_scope_seq_fk',
   // Story 5.8: resource_id null = unlink; MATCH FULL would refuse unlink rows.
   'tracker_account_link_event_resource_fk',
+  // Story 5.9: head wp_id / rule_id null on release / non-rule sources.
+  'mapping_head_work_package_fk',
+  'mapping_head_mapping_rule_fk',
 ];
 
 /** The two FKs that are `DEFERRABLE INITIALLY DEFERRED` (AD-25): `wp_dependency`'s leaf endpoints. */
@@ -1056,6 +1059,12 @@ export const ticket = pgTable(
       t.trackerSite,
       t.trackerIssueId,
     ),
+    // Story 5.9 / AR-18: Mapping events FK here so a Ticket maps only inside its Project.
+    projectIssue: unique('ticket_project_tracker_issue_key').on(
+      t.tenantId,
+      t.projectId,
+      t.trackerIssueId,
+    ),
     tenantKey: unique('ticket_tenant_id_key').on(t.tenantId, t.id),
     owner: foreignKey({
       name: 'ticket_owner_connector_fk',
@@ -1390,19 +1399,36 @@ export const mappingEvent = pgTable(
     id: text('id').notNull(),
     tenantId: text('tenant_id').notNull(),
     projectId: text('project_id').notNull(),
+    /** Tracker issue id (ledger/attribution key) — not `ticket.id`. */
     ticketId: text('ticket_id').notNull(),
     wpId: text('wp_id'),
-    source: text('source').notNull(), // manual | rule | disposition
+    // manual | rule | disposition | release (story 5.9 / AR-18)
+    source: text('source').notNull(),
     ruleId: text('rule_id'),
     at: timestamp('at', { withTimezone: true }).notNull(),
     actor: text('actor').notNull(),
   },
   (t) => ({
     byTicket: index('mapping_ticket_idx').on(t.ticketId),
+    byProjectTicket: index('mapping_event_project_ticket_seq_idx').on(
+      t.tenantId,
+      t.projectId,
+      t.ticketId,
+      t.seq,
+    ),
+    sourceCheck: check(
+      'mapping_event_source_check',
+      sql`${t.source} IN ('manual', 'rule', 'disposition', 'release')`,
+    ),
     project: foreignKey({
       name: 'mapping_event_project_fk',
       columns: [t.tenantId, t.projectId],
       foreignColumns: [project.tenantId, project.id],
+    }),
+    ticket: foreignKey({
+      name: 'mapping_event_ticket_fk',
+      columns: [t.tenantId, t.projectId, t.ticketId],
+      foreignColumns: [ticket.tenantId, ticket.projectId, ticket.trackerIssueId],
     }),
     workPackage: foreignKey({
       name: 'mapping_event_work_package_fk',
@@ -1411,6 +1437,58 @@ export const mappingEvent = pgTable(
     }),
     rule: foreignKey({
       name: 'mapping_event_mapping_rule_fk',
+      columns: [t.tenantId, t.projectId, t.ruleId],
+      foreignColumns: [mappingRule.tenantId, mappingRule.projectId, mappingRule.id],
+    }),
+  }),
+);
+
+/**
+ * Story 5.9 / AR-18 / AR-38: derived Mapping head index. Dual-written in the same transaction as
+ * every `mapping_event` append; rebuildable from events; never the source of truth for attribution
+ * (pins still replay events ≤ `mappingSeqMax`).
+ */
+export const mappingHead = pgTable(
+  'mapping_head',
+  {
+    tenantId: text('tenant_id').notNull(),
+    projectId: text('project_id').notNull(),
+    /** Tracker issue id — same identity as `mapping_event.ticket_id`. */
+    ticketId: text('ticket_id').notNull(),
+    wpId: text('wp_id'),
+    source: text('source').notNull(),
+    ruleId: text('rule_id'),
+    seq: bigint('seq', { mode: 'number' }).notNull(),
+    at: timestamp('at', { withTimezone: true }).notNull(),
+    actor: text('actor').notNull(),
+  },
+  (t) => ({
+    pk: primaryKey({
+      name: 'mapping_head_pkey',
+      columns: [t.tenantId, t.projectId, t.ticketId],
+    }),
+    sourceCheck: check(
+      'mapping_head_source_check',
+      sql`${t.source} IN ('manual', 'rule', 'disposition', 'release')`,
+    ),
+    byWp: index('mapping_head_wp_idx').on(t.tenantId, t.projectId, t.wpId),
+    project: foreignKey({
+      name: 'mapping_head_project_fk',
+      columns: [t.tenantId, t.projectId],
+      foreignColumns: [project.tenantId, project.id],
+    }),
+    ticket: foreignKey({
+      name: 'mapping_head_ticket_fk',
+      columns: [t.tenantId, t.projectId, t.ticketId],
+      foreignColumns: [ticket.tenantId, ticket.projectId, ticket.trackerIssueId],
+    }),
+    workPackage: foreignKey({
+      name: 'mapping_head_work_package_fk',
+      columns: [t.tenantId, t.projectId, t.wpId],
+      foreignColumns: [workPackage.tenantId, workPackage.projectId, workPackage.id],
+    }),
+    rule: foreignKey({
+      name: 'mapping_head_mapping_rule_fk',
       columns: [t.tenantId, t.projectId, t.ruleId],
       foreignColumns: [mappingRule.tenantId, mappingRule.projectId, mappingRule.id],
     }),
@@ -1497,6 +1575,7 @@ export const schemaTables = {
   actualsLedgerEntry,
   mappingRule,
   mappingEvent,
+  mappingHead,
   dispositionEvent,
   auditLog,
 };

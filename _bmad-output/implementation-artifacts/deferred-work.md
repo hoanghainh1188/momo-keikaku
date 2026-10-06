@@ -1400,3 +1400,39 @@ above can see where it went.
 - source_spec: `_bmad-output/implementation-artifacts/spec-5-8-tracker-accounts-become-people-retroactively.md`
   summary: Cross-tenant write harness / audit-surface gate do not drive `linkTrackerAccount` / `unlinkTrackerAccount` (off use-cases barrel like `confirmConnectorOwnership`); unit tests cover them.
   evidence: Story 5.8 implementation — avoiding REQUIRE_DB identity / harness expansion for 5.8 ACs.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-9-map-a-ticket-to-a-work-package-and-never-move-the-plan.md`
+  summary: Wire Epic 3 `confirmImport` to shared `assertMappedLeafMayBecomeSummary` so import diffs that would turn a mapped leaf into a summary are refused until mappings are reassigned.
+  evidence: Story 5.9 Intent / Code Map — guard lives in `packages/app/src/schedule/mapped-leaf-guard.ts` and is used by plan `create_wp` / `reparent_wp` now; confirmImport is Epic 3.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-9-map-a-ticket-to-a-work-package-and-never-move-the-plan.md`
+  summary: Mapping Rules authoring / priority edit / preview / ingest-time `evaluateRules` changes remain 5.10+ (`disableRulesTargeting` only deletes rules targeting a deleted WP).
+  evidence: Story 5.9 Boundaries — out of 5.9.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-9-map-a-ticket-to-a-work-package-and-never-move-the-plan.md`
+  summary: Compaction / durable Review Re-pin / RESOLVED_WRITE_SURFACE=B / REQUIRE_DB batch identity / notifyRecipients remain open (re-noted; out of 5.9 ACs unless needed).
+  evidence: Story 5.9 Boundaries — re-note from 5.5–5.8.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-9-map-a-ticket-to-a-work-package-and-never-move-the-plan.md`
+  summary: REQUIRE_DB fence assert that delete_wp releases mappings + deletes targeting rules in the same outcome as soft-delete (beyond unit mocks).
+  evidence: Story 5.9 review verification-gap — delete wiring patched in code; full DB outcome assert still skipped without Postgres.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-9-map-a-ticket-to-a-work-package-and-never-move-the-plan.md`
+  summary: Add same-Project summary/milestone map refuse test against real `workPackageInProject` leaf filter.
+  evidence: Story 5.9 review — unit mocks only cover false→not_found; leaf predicates unpinned under REQUIRE_DB.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-9-map-a-ticket-to-a-work-package-and-never-move-the-plan.md`
+  summary: Replace MappingTicketBoard source-text parity tests with a runtime FormData/action test (and schedule side-effect assert beyond regex).
+  evidence: Story 5.9 review verification-gap — no RTL/jsdom board test in apps/web yet.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-9-map-a-ticket-to-a-work-package-and-never-move-the-plan.md`
+  summary: Keyboard Map Escape + focus restore; localize `ticket.source` / `mapping.unmapped` ja; stop emitting removed `unmapped_option` from merge-story-19-i18n.mjs.
+  evidence: Story 5.9 review low/a11y/i18n findings deferred after DnD correctness patches.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-9-map-a-ticket-to-a-work-package-and-never-move-the-plan.md`
+  summary: Migration 0011 preflight for orphan/mismatched mapping_event.ticket_id before adding composite Ticket FK (unverified-high if dirty DBs).
+  evidence: Story 5.9 review maybe-false — settle with SELECT duplicates/orphans on apply.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-9-map-a-ticket-to-a-work-package-and-never-move-the-plan.md`
+  summary: Watermark-concurrency / raw test inserts of mapping_event should dual-write mapping_head when asserting head invariants.
+  evidence: Story 5.9 review — production append paths dual-write; test-only inserts lag.

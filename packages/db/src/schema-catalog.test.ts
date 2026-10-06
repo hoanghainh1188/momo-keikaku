@@ -235,6 +235,8 @@ describe.skipIf(!reachable)('the hand-written clauses of the AD-30 migration are
       'baseline_wp → work_package',
       'rate_entry → resource',
       'mapping_event → work_package',
+      'mapping_event → ticket',
+      'mapping_head → ticket',
     ]) {
       expect(edges, `no foreign key for ${edge}`).toContain(edge);
     }

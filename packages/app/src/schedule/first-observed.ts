@@ -42,7 +42,7 @@ export async function readFirstObservedActivity(
       seq: m.seq,
       ticketId: m.ticketId,
       wpId: m.wpId,
-      source: m.source as 'manual' | 'rule' | 'disposition',
+      source: m.source as 'manual' | 'rule' | 'disposition' | 'release',
       at: m.at.toISOString(),
       actor: m.actor,
       ruleId: m.ruleId,

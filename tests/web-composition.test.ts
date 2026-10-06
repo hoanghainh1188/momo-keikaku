@@ -40,6 +40,7 @@ const spies = vi.hoisted(() => {
   const repository = {
     projectAnchor: vi.fn(async (_projectId: string) => anchor),
     workPackageInProject: vi.fn(async (_projectId: string, _wpId: string) => true),
+    ticketInProject: vi.fn(async (_projectId: string, _ticketId: string) => true),
     recordMapDisposition: vi.fn(async () => {}),
     recordPlanDisposition: vi.fn(async () => ({ wpId: 'wp-new-spy' })),
     recordExplainDisposition: vi.fn(async () => {}),

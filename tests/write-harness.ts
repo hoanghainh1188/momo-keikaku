@@ -165,7 +165,7 @@ export function restrictedWriteDeps(ids: IdPort) {
  */
 export function targetOf(probe: ProbeTenant, tenantId: string): WriteTarget {
   const tickets = [...new Set(probe.state.mappingEvents.map((m) => m.ticketId))];
-  const leaf = probe.state.wps.find((w) => w.isLeaf && !w.isCatchAll);
+  const leaf = probe.state.wps.find((w) => w.isLeaf && !w.isMilestone && !w.isCatchAll);
   if (tickets.length < 2 || !leaf) {
     throw new Error(`${probe.token}'s fixture has too few Tickets or no leaf Work Package`);
   }
@@ -308,6 +308,10 @@ export async function landedRows(tenantId: string) {
       .select()
       .from(schema.mappingEvent)
       .where(eq(schema.mappingEvent.tenantId, tenantId)),
+    mappingHeads: await tx
+      .select()
+      .from(schema.mappingHead)
+      .where(eq(schema.mappingHead.tenantId, tenantId)),
     dispositions: await tx
       .select()
       .from(schema.dispositionEvent)
@@ -369,6 +373,7 @@ export type Landed = Awaited<ReturnType<typeof landedRows>>;
 /** The SQL table each `landedRows` key reads — what `allRows` keys the same rows by. */
 export const LANDED_TABLE: Readonly<Record<keyof Landed, string>> = {
   mappingEvents: 'mapping_event',
+  mappingHeads: 'mapping_head',
   dispositions: 'disposition_event',
   audits: 'audit_log',
   workPackages: 'work_package',
@@ -415,6 +420,23 @@ function membershipsSince(before: readonly MembershipRowOf[], after: readonly Me
   };
 }
 
+type MappingHeadRowOf = Landed['mappingHeads'][number];
+
+/** Derived head key: `(tenant_id, project_id, ticket_id)`. */
+const mappingHeadKey = (row: MappingHeadRowOf) =>
+  `${row.tenantId}\u0000${row.projectId}\u0000${row.ticketId}`;
+
+/** New or changed mapping_head rows (dual-written with every mapping_event append). */
+function mappingHeadsSince(
+  before: readonly MappingHeadRowOf[],
+  after: readonly MappingHeadRowOf[],
+): MappingHeadRowOf[] {
+  const was = new Map(before.map((row) => [mappingHeadKey(row), row]));
+  return after
+    .filter((row) => !isDeepStrictEqual(was.get(mappingHeadKey(row)), row))
+    .sort((a, b) => a.ticketId.localeCompare(b.ticketId));
+}
+
 /** What appeared, changed or (for the bridge) disappeared between two reads, per table. */
 export function newSince(before: Landed, after: Landed) {
   const seqs = (rows: readonly { seq: number }[]) => new Set(rows.map((row) => row.seq));
@@ -431,6 +453,7 @@ export function newSince(before: Landed, after: Landed) {
     mappingEvents: after.mappingEvents
       .filter((row) => !mapSeqs.has(row.seq))
       .sort((a, b) => a.seq - b.seq),
+    mappingHeads: mappingHeadsSince(before.mappingHeads, after.mappingHeads),
     dispositions: after.dispositions.filter((row) => !dispSeqs.has(row.seq)),
     audits: after.audits.filter((row) => !auditSeqs.has(row.seq)),
     workPackages: after.workPackages.filter((row) => !wpIds.has(row.id)),
