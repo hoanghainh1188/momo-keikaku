@@ -396,10 +396,30 @@ export async function createProbeTenant(owner: Db, probe: ProbeTenant): Promise<
  * Idempotent, and safe to call for a Tenant that was never written.
  */
 export async function removeProbeTenant(owner: Db, probe: RemovableProbe): Promise<void> {
+  await removeTenant(owner, probe.tenantId, probeMemberIds(probe));
+}
+
+/**
+ * Deletes every row belonging to `tenantId` — the same teardown as `removeProbeTenant`, for a
+ * suite that writes a hand-built Tenant of its own rather than a relabelled probe copy.
+ *
+ * Such a suite MUST call this before it releases the seed-suite lock: a Tenant left behind is
+ * one more row in `tenant`, and the next `pnpm test` against the same database then fails the
+ * seed orchestration's "Refusing to seed: this database holds N Tenants" guard. CI never sees
+ * it because CI starts from a fresh database.
+ *
+ * @param knownUserIds members that may no longer have a membership row to be found by (see
+ *   `probeMemberIds`). A suite that writes no people passes nothing.
+ */
+export async function removeTenant(
+  owner: Db,
+  tenantId: string,
+  knownUserIds: readonly string[] = [],
+): Promise<void> {
   await owner.transaction(async (tx) => {
     await tx.execute(sql`SELECT set_config(${MAINTENANCE_SETTING}, 'on', true)`);
-    await deleteTenantMembers(tx, probe.tenantId, probeMemberIds(probe));
-    await deleteTenantRows(tx, probe.tenantId);
+    await deleteTenantMembers(tx, tenantId, knownUserIds);
+    await deleteTenantRows(tx, tenantId);
   });
 }
 

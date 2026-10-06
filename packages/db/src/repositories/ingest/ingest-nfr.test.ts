@@ -8,7 +8,8 @@ import { and, eq } from 'drizzle-orm';
 import pg from 'pg';
 import type { TicketObservation } from '@momo/domain';
 import { hoursToMh } from '@momo/domain';
-import { getDb } from '../../client';
+import { closeAllPools, getDb } from '../../client';
+import { removeTenant } from '../../probe-tenants';
 import * as s from '../../schema';
 import { acquireSeedSuiteLock, releaseSeedSuiteLock } from '../../seed-suite-lock';
 import { withTenant } from '../../with-tenant';
@@ -48,8 +49,15 @@ if (live) {
   await acquireSeedSuiteLock(OWNER_DATABASE_URL!, 'shared');
 }
 
+// The Tenant goes BEFORE the lock does: a seed waiting on the exclusive lock must never see it.
 afterAll(async () => {
-  if (live) await releaseSeedSuiteLock();
+  if (!live) return;
+  try {
+    await removeTenant(getDb(OWNER_DATABASE_URL!), TENANT);
+  } finally {
+    await releaseSeedSuiteLock();
+    await closeAllPools();
+  }
 });
 
 function ticket(i: number): TicketObservation {
