@@ -52,6 +52,26 @@ afterAll(async () => {
   if (live) await releaseSeedSuiteLock();
 });
 
+/**
+ * Every row this suite writes, in FK order. Run before (a crashed earlier run) and after (so the
+ * exclusive seed suites never find this Tenant beside the seed's own — `assertSingleTenantDatabase`).
+ * `app.maintenance` lifts the append-only triggers on the ledger and observation tables.
+ */
+async function removeProbeRows(client: pg.Client): Promise<void> {
+  await client.query(`SELECT set_config('app.maintenance', 'on', false)`);
+  await client.query(`DELETE FROM actuals_ledger_entry WHERE tenant_id = $1`, [TENANT]);
+  await client.query(`DELETE FROM ticket_observation WHERE tenant_id = $1`, [TENANT]);
+  await client.query(`DELETE FROM tracker_snapshot WHERE tenant_id = $1`, [TENANT]);
+  await client.query(`DELETE FROM ticket WHERE tenant_id = $1`, [TENANT]);
+  await client.query(`DELETE FROM tracker_account WHERE tenant_id = $1`, [TENANT]);
+  await client.query(`DELETE FROM project_setting_event WHERE tenant_id = $1`, [TENANT]);
+  await client.query(`DELETE FROM connector_scope_event WHERE tenant_id = $1`, [TENANT]);
+  await client.query(`DELETE FROM connector WHERE tenant_id = $1`, [TENANT]);
+  await client.query(`DELETE FROM project WHERE id = $1`, [PROJECT]);
+  await client.query(`DELETE FROM department WHERE id = $1`, [`dep-${TENANT}`]);
+  await client.query(`DELETE FROM tenant WHERE id = $1`, [TENANT]);
+}
+
 function ticket(i: number): TicketObservation {
   return {
     trackerIssueId: `NFR-${i}`,
@@ -74,18 +94,7 @@ describe.skipIf(!live)('NFR-P1 writeIngestSnapshot (story 5.5, REQUIRE_DB)', () 
     const client = new pg.Client({ connectionString: OWNER_DATABASE_URL });
     await client.connect();
     try {
-      await client.query(`SELECT set_config('app.maintenance', 'on', false)`);
-      await client.query(`DELETE FROM actuals_ledger_entry WHERE tenant_id = $1`, [TENANT]);
-      await client.query(`DELETE FROM ticket_observation WHERE tenant_id = $1`, [TENANT]);
-      await client.query(`DELETE FROM tracker_snapshot WHERE tenant_id = $1`, [TENANT]);
-      await client.query(`DELETE FROM ticket WHERE tenant_id = $1`, [TENANT]);
-      await client.query(`DELETE FROM tracker_account WHERE tenant_id = $1`, [TENANT]);
-      await client.query(`DELETE FROM project_setting_event WHERE tenant_id = $1`, [TENANT]);
-      await client.query(`DELETE FROM connector_scope_event WHERE tenant_id = $1`, [TENANT]);
-      await client.query(`DELETE FROM connector WHERE tenant_id = $1`, [TENANT]);
-      await client.query(`DELETE FROM project WHERE id = $1`, [PROJECT]);
-      await client.query(`DELETE FROM department WHERE id = $1`, [`dep-${TENANT}`]);
-      await client.query(`DELETE FROM tenant WHERE id = $1`, [TENANT]);
+      await removeProbeRows(client);
 
       await client.query(`INSERT INTO tenant (id, name) VALUES ($1, 'ingest-nfr')`, [TENANT]);
       await client.query(
@@ -123,6 +132,18 @@ describe.skipIf(!live)('NFR-P1 writeIngestSnapshot (story 5.5, REQUIRE_DB)', () 
     }
   });
 
+  afterAll(async () => {
+    const client = new pg.Client({ connectionString: OWNER_DATABASE_URL });
+    await client.connect();
+    try {
+      await removeProbeRows(client);
+    } finally {
+      await client.end();
+    }
+  });
+
+  // vitest's default 5 s would cut the run off long before BUDGET_MS under full-suite load; the
+  // budget assertion below is the gate, so the timeout sits just above it.
   it(`writes ${TICKET_COUNT} tickets to the ledger within 5 minutes`, async () => {
     const db = getDb(APP_DATABASE_URL!);
     const tickets = Array.from({ length: TICKET_COUNT }, (_, i) => ticket(i));
@@ -183,5 +204,5 @@ describe.skipIf(!live)('NFR-P1 writeIngestSnapshot (story 5.5, REQUIRE_DB)', () 
       // First snapshot: one opening_balance per ticket with non-zero hours (all NFR tickets).
       expect(ledger).toHaveLength(TICKET_COUNT);
     });
-  });
+  }, BUDGET_MS + 60_000);
 });

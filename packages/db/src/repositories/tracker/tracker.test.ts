@@ -74,18 +74,26 @@ async function asOwner(work: (client: pg.Client) => Promise<void>): Promise<void
   }
 }
 
+/**
+ * Every row this suite writes, in FK order. Run before (a crashed earlier run) and after (so the
+ * exclusive seed suites never find this Tenant beside the seed's own — `assertSingleTenantDatabase`).
+ */
+async function removeProbeRows(client: pg.Client): Promise<void> {
+  await client.query(`SELECT set_config('app.tenant_id', $1, false)`, [TENANT]);
+  await client.query(`DELETE FROM fixture_cursor WHERE tenant_id = $1`, [TENANT]);
+  await client.query(`DELETE FROM ticket WHERE tenant_id = $1`, [TENANT]);
+  await client.query(`DELETE FROM tracker_account WHERE tenant_id = $1`, [TENANT]);
+  await client.query(`DELETE FROM connector WHERE tenant_id = $1`, [TENANT]);
+  await client.query(`DELETE FROM project WHERE tenant_id = $1`, [TENANT]);
+  await client.query(`DELETE FROM program WHERE tenant_id = $1`, [TENANT]);
+  await client.query(`DELETE FROM department WHERE tenant_id = $1`, [TENANT]);
+  await client.query(`DELETE FROM tenant WHERE id = $1`, [TENANT]);
+}
+
 describe.skipIf(!live)('tracker identity + fixture cursor (story 5.1)', () => {
   beforeAll(async () => {
     await asOwner(async (client) => {
-      await client.query(`SELECT set_config('app.tenant_id', $1, false)`, [TENANT]);
-      await client.query(`DELETE FROM fixture_cursor WHERE tenant_id = $1`, [TENANT]);
-      await client.query(`DELETE FROM ticket WHERE tenant_id = $1`, [TENANT]);
-      await client.query(`DELETE FROM tracker_account WHERE tenant_id = $1`, [TENANT]);
-      await client.query(`DELETE FROM connector WHERE tenant_id = $1`, [TENANT]);
-      await client.query(`DELETE FROM project WHERE tenant_id = $1`, [TENANT]);
-      await client.query(`DELETE FROM program WHERE tenant_id = $1`, [TENANT]);
-      await client.query(`DELETE FROM department WHERE tenant_id = $1`, [TENANT]);
-      await client.query(`DELETE FROM tenant WHERE id = $1`, [TENANT]);
+      await removeProbeRows(client);
 
       await client.query(
         `INSERT INTO tenant (id, name, currency) VALUES ($1, 'Tracker probe', 'JPY')`,
@@ -117,6 +125,10 @@ describe.skipIf(!live)('tracker identity + fixture cursor (story 5.1)', () => {
         [CONNECTOR, TENANT, PROJECT, CONNECTOR_B],
       );
     });
+  });
+
+  afterAll(async () => {
+    await asOwner(removeProbeRows);
   });
 
   it('enforces UNIQUE (tenant_id, tracker_kind, tracker_site, tracker_issue_id)', async () => {
