@@ -479,11 +479,14 @@ export async function writeTenantRows(
   }
 
   // AD-6: upsert Ticket + Tracker Account identity from the latest snapshot observations.
+  // Story 5.9: `mapping_event` FKs `(tenant_id, project_id, ticket_id)` → ticket identity.
+  // Seed Mappings (and probe copies) name Tickets that never appear in any snapshot — upsert
+  // those rows too so the FK holds when events are written below.
   const latestForIdentity = state.snapshots.at(-1);
+  const site = own(
+    projectOnly ? `${f.project.id}.backlog.jp` : 'osaka-retail.backlog.jp',
+  );
   if (latestForIdentity) {
-    const site = own(
-      projectOnly ? `${f.project.id}.backlog.jp` : 'osaka-retail.backlog.jp',
-    );
     const accounts = latestForIdentity.accounts ?? [];
     if (accounts.length > 0) {
       await chunked(accounts, 500, (batch) =>
@@ -559,34 +562,56 @@ export async function writeTenantRows(
         }
       }
     }
-    await chunked(latestForIdentity.tickets, 500, (batch) =>
-      tx
-        .insert(s.ticket)
-        .values(
-          batch.map((t) => ({
-            id: own(`tkt-${t.trackerIssueId}`),
-            tenantId,
-            trackerKind: 'fixture',
-            trackerSite: site,
-            trackerIssueId: t.trackerIssueId,
-            ownerConnectorId: connectorId,
-            projectId: f.project.id,
-            key: t.key,
-          })),
-        )
-        .onConflictDoUpdate({
-          target: [
-            s.ticket.tenantId,
-            s.ticket.trackerKind,
-            s.ticket.trackerSite,
-            s.ticket.trackerIssueId,
-          ],
-          set: {
-            // Story 5.6: ownership / Project move only via connector_ownership_event / first insert.
-            key: sql`excluded.key`,
-          },
-        }),
-    );
+  }
+
+  {
+    // Prefer the freshest observed key when a Ticket appears in any snapshot; synthesise a
+    // stable key for Mapping-/ledger-only identities (historical seedMappings never observed).
+    const ticketKeyById = new Map<string, string>();
+    for (const snap of state.snapshots) {
+      for (const t of snap.tickets) {
+        ticketKeyById.set(t.trackerIssueId, t.key);
+      }
+    }
+    const referencedIds = new Set<string>(ticketKeyById.keys());
+    for (const m of state.mappingEvents) referencedIds.add(m.ticketId);
+    for (const e of state.ledger) referencedIds.add(e.ticketId);
+    const ticketRows = [...referencedIds].map((trackerIssueId) => {
+      const fromSnap = ticketKeyById.get(trackerIssueId);
+      const demoKey = /^bk-issue-(\d+)$/.exec(trackerIssueId);
+      const key =
+        fromSnap ??
+        (demoKey !== null ? `EC2-${demoKey[1]}` : trackerIssueId);
+      return {
+        id: own(`tkt-${trackerIssueId}`),
+        tenantId,
+        trackerKind: 'fixture' as const,
+        trackerSite: site,
+        trackerIssueId,
+        ownerConnectorId: connectorId,
+        projectId: f.project.id,
+        key,
+      };
+    });
+    if (ticketRows.length > 0) {
+      await chunked(ticketRows, 500, (batch) =>
+        tx
+          .insert(s.ticket)
+          .values(batch)
+          .onConflictDoUpdate({
+            target: [
+              s.ticket.tenantId,
+              s.ticket.trackerKind,
+              s.ticket.trackerSite,
+              s.ticket.trackerIssueId,
+            ],
+            set: {
+              // Story 5.6: ownership / Project move only via connector_ownership_event / first insert.
+              key: sql`excluded.key`,
+            },
+          }),
+      );
+    }
   }
 
   // FR-19: only the latest snapshot's observations are needed for the demo's
