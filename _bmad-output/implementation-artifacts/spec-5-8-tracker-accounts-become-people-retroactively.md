@@ -83,12 +83,12 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `packages/db` migration 0010 + registry/SQL — `tracker_account_link_event`.
-- [ ] `packages/db` resource repo + `repo.ts` + seed — append/latest/heads; dual-write array; load `linkSeqMax` into Review bundle.
-- [ ] `packages/domain` attribution + types + review — pinned link resolution; Department *Unattributed* roll-up; unit-test I/O matrix.
-- [ ] `packages/app` link use cases + logger redact + audit/role wiring — suggest/link/unlink; NFR-S6 tests.
-- [ ] `apps/web` + `packages/i18n` — Connectors linking panel + Accept all.
-- [ ] `sprint-status.yaml` + `deferred-work.md` — sync 5.1–5.7 done; re-note open deferrals; lint/typecheck/depcruise/test.
+- [x] `packages/db` migration 0010 + registry/SQL — `tracker_account_link_event`.
+- [x] `packages/db` resource repo + `repo.ts` + seed — append/latest/heads; dual-write array; load `linkSeqMax` into Review bundle.
+- [x] `packages/domain` attribution + types + review — pinned link resolution; Department *Unattributed* roll-up; unit-test I/O matrix.
+- [x] `packages/app` link use cases + logger redact + audit/role wiring — suggest/link/unlink; NFR-S6 tests.
+- [x] `apps/web` + `packages/i18n` — Connectors linking panel + Accept all.
+- [x] `sprint-status.yaml` + `deferred-work.md` — sync 5.1–5.7 done; re-note open deferrals; lint/typecheck/depcruise/test.
 
 **Acceptance Criteria:**
 - Given observed Tracker Accounts, when the PM opens the Connectors linking panel, then suggestions match names/emails from observation display name + email (FR-13, AR-12).
@@ -100,6 +100,12 @@ context:
 
 ## Implementation Notes
 
+- Resource has no email column — email suggestions match `account.email` CI to `resource.name`.
+- Link writers stay off the use-cases barrel (like `confirmConnectorOwnership`); unit-tested; harness deferred.
+- Seed appends `tracker_account_link_event` after Tracker Account upsert; live array still stamped on Resource insert.
+- `loadProjectBundle` rebuilds `Resource.trackerAccountIds` from link heads when events exist; exposes `meta.trackerAccounts` for the panel.
+- PINO redacts `displayName`/`email` (+ snake_case / nested).
+- Verification: `pnpm lint`, `pnpm typecheck`, `pnpm depcruise`, `pnpm test` — all exit 0.
 ## Spec Change Log
 
 ## Review Triage Log

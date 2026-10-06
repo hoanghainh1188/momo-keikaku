@@ -1,5 +1,5 @@
 import { getTranslations } from 'next-intl/server';
-import { suggestTrackerAccountLinks } from '@momo/domain';
+import { suggestTrackerAccountLinks } from '@momo/app';
 import { getProjectReview } from '@/server/composition';
 import { valueOrNotFound } from '@/server/result';
 import { hours } from '@momo/domain/present';
