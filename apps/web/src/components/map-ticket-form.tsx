@@ -26,7 +26,7 @@ export function MapTicketForm({
         defaultValue={currentWpId}
         aria-label={t('mapping.form.map_ticket_aria', { ticketId })}
       >
-        <option value="">{t('mapping.form.unmapped_option')}</option>
+        <option value="">{t('mapping.form.release_option')}</option>
         {leafWps.map((w) => (
           <option key={w.id} value={w.id}>
             {w.label}

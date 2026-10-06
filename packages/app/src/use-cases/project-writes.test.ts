@@ -42,7 +42,10 @@ const ACTOR = 'user:test-actor';
 const AT = new Date('2026-09-01T00:00:00Z');
 const PLANNED_WP = 'wp-new-fake';
 
-type Member = Exclude<keyof ProjectWriteRepository, 'projectAnchor' | 'workPackageInProject'>;
+type Member = Exclude<
+  keyof ProjectWriteRepository,
+  'projectAnchor' | 'workPackageInProject' | 'ticketInProject'
+>;
 
 interface Call {
   readonly member: Member;
@@ -55,6 +58,8 @@ interface Behaviour {
   readonly anchor?: (projectId: string) => Date | Error;
   /** Whether a Work Package is one of a Project's (AD-12). Every Work Package is, by default. */
   readonly wpInProject?: (projectId: string, wpId: string) => boolean;
+  /** Whether a Ticket belongs to the Project (story 5.9). Every Ticket does, by default. */
+  readonly ticketInProject?: (projectId: string, ticketId: string) => boolean;
   /** What a repository member does, once its call is recorded. */
   readonly member?: () => 'ok' | Error;
   /** What the audit sink does, once its call is recorded. */
@@ -70,6 +75,7 @@ function fakeDeps(behave: Behaviour = {}) {
   const calls: Call[] = [];
   const audits: AuditEntry[] = [];
   const asked: { readonly projectId: string; readonly wpId: string }[] = [];
+  const askedTickets: { readonly projectId: string; readonly ticketId: string }[] = [];
 
   const deps: ProjectWriteDeps<typeof HANDLE> = {
     handle: HANDLE,
@@ -98,6 +104,10 @@ function fakeDeps(behave: Behaviour = {}) {
             asked.push({ projectId, wpId });
             return behave.wpInProject?.(projectId, wpId) ?? true;
           },
+          ticketInProject: async (projectId, ticketId) => {
+            askedTickets.push({ projectId, ticketId });
+            return behave.ticketInProject?.(projectId, ticketId) ?? true;
+          },
           recordMapDisposition: member('recordMapDisposition', undefined),
           recordPlanDisposition: member('recordPlanDisposition', { wpId: PLANNED_WP }),
           recordExplainDisposition: member('recordExplainDisposition', undefined),
@@ -118,7 +128,7 @@ function fakeDeps(behave: Behaviour = {}) {
       return result;
     },
   };
-  return { deps, transactions, calls, audits, asked };
+  return { deps, transactions, calls, audits, asked, askedTickets };
 }
 
 /** packages/db's wording for an invisible Project, verbatim (repo-writes.ts, repo.ts). */
@@ -368,8 +378,8 @@ describe.each(CASES)('$name', ({ run, member, valid, kind, invalid, record }) =>
 });
 
 describe('mapTicket', () => {
-  it('accepts an empty wpId — the unmap — passes it through, and records mapping.unmap with the empty string', async () => {
-    const { deps, calls, audits, asked } = fakeDeps();
+  it('accepts an empty wpId — the release unmap — passes it through, and records mapping.unmap with the empty string', async () => {
+    const { deps, calls, audits, asked, askedTickets } = fakeDeps();
     const result = await mapTicket(deps, CTX, { ...SINGLE, wpId: '' });
 
     expect(result.ok).toBe(true);
@@ -379,6 +389,19 @@ describe('mapTicket', () => {
     ]);
     // An unmap names no Work Package, so there is nothing to check it belongs to.
     expect(asked).toEqual([]);
+    // Ticket ownership is still checked (story 5.9 / AR-18).
+    expect(askedTickets).toEqual([{ projectId: 'prj-1', ticketId: 'tkt-1' }]);
+  });
+
+  it('refuses not_found when the Ticket is not in the Project', async () => {
+    const { deps, calls, audits } = fakeDeps({ ticketInProject: () => false });
+    const result = await mapTicket(deps, CTX, SINGLE);
+    expect(result).toEqual({
+      ok: false,
+      error: { code: 'not_found', messageKey: 'errors.not_found' },
+    });
+    expect(calls).toEqual([]);
+    expect(audits).toEqual([]);
   });
 });
 

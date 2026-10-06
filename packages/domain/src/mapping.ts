@@ -51,7 +51,8 @@ export function evaluateRules(rules: MappingRule[], obs: TicketObservation): str
 
 /**
  * FR-22 "manual wins": rules are only applied to Tickets whose head is not manual
- * (Dispositions count as manual). Returns the events that should be appended.
+ * (Dispositions count as manual). `release` clears the head for rules and is re-evaluable
+ * (story 5.9 / A4). Returns the events that should be appended.
  */
 export function applyRules(
   rules: MappingRule[],

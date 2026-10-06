@@ -36,25 +36,35 @@ import { refuse } from './audited-write';
  * The Tenant comes from `ctx` and nowhere else; the actor from `deps`, where the composition
  * root put it beside the Tenant.
  *
- * The Work Package a Mapping names must be a Work Package of the command's Project (AD-12, a
- * project-scoped call's other ids belong to its Project): `mapTickets` and `mapTicket` ask the
- * repository before they write and refuse `not_found` otherwise, so nothing lands and nothing is
- * audited. An unmap (`mapTicket` with an empty `wpId`) names no Work Package and is exempt. That
- * the TICKETS belong to the Project is not checked yet: it needs Ticket → Project ownership, which
- * Epic 5 provides (deferred-work).
+ * The Work Package a Mapping names must be a mappable leaf of the command's Project (AD-12 +
+ * FR-21): `mapTickets` and `mapTicket` ask the repository before they write and refuse
+ * `not_found` otherwise, so nothing lands and nothing is audited. An unmap (`mapTicket` with an
+ * empty `wpId`) names no Work Package and is exempt — it records `release` (story 5.9 / A4).
+ * Tickets must belong to the Project (tracker issue id → `ticket` row; AR-18).
  *
  * THE AUDIT PAYLOADS are exactly what `packages/db` recorded before this slice moved the insert
  * here: `{ ticketIds, wpId, note }` against the Project for a Disposition, `{ wpId }` against the
  * Ticket for a manual Mapping — the raw `wpId`, so an unmap records the empty string.
  */
 
-/** Refuses `not_found` unless `wpId` is a Work Package of `projectId` — before anything is written. */
+/** Refuses `not_found` unless `wpId` is a mappable leaf WP of `projectId` — before anything is written. */
 async function requireWorkPackageOf(
   scope: ProjectWriteScope,
   projectId: string,
   wpId: string,
 ): Promise<void> {
   if (!(await scope.projectWrite.workPackageInProject(projectId, wpId))) refuse('not_found');
+}
+
+/** Refuses `not_found` unless each Ticket (tracker issue id) belongs to `projectId`. */
+async function requireTicketsOf(
+  scope: ProjectWriteScope,
+  projectId: string,
+  ticketIds: readonly string[],
+): Promise<void> {
+  for (const ticketId of ticketIds) {
+    if (!(await scope.projectWrite.ticketInProject(projectId, ticketId))) refuse('not_found');
+  }
 }
 
 /** FR-29 *Map*: the hours leave Unplanned Work immediately (FR-21 attribution). */
@@ -66,6 +76,7 @@ export async function mapTickets<Handle>(
   return runProjectWrite(mapTicketsInputSchema, deps, ctx, input, async (scope, stamp, command) => {
     const { projectId, wpId, ticketIds } = command;
     await requireWorkPackageOf(scope, projectId, wpId);
+    await requireTicketsOf(scope, projectId, ticketIds);
     await scope.projectWrite.recordMapDisposition(stamp, { ...command, kind: 'map' });
     await audit.record(scope, stamp, 'disposition.map', projectId, {
       ticketIds: [...ticketIds],
@@ -86,6 +97,7 @@ export async function planTicketsAsWorkPackage<Handle>(
 ): Promise<Result<void>> {
   return runProjectWrite(planTicketsInputSchema, deps, ctx, input, async (scope, stamp, command) => {
     const { projectId, ticketIds } = command;
+    await requireTicketsOf(scope, projectId, ticketIds);
     const { wpId } = await scope.projectWrite.recordPlanDisposition(stamp, {
       ...command,
       kind: 'plan',
@@ -142,7 +154,7 @@ export async function markChangeRequestCandidates<Handle>(
   );
 }
 
-/** FR-21 manual Mapping of one Ticket; an empty `wpId` unmaps it. */
+/** FR-21 manual Mapping of one Ticket; an empty `wpId` releases it (`source = release`). */
 export async function mapTicket<Handle>(
   deps: ProjectWriteDeps<Handle>,
   ctx: RequestContext,
@@ -150,6 +162,7 @@ export async function mapTicket<Handle>(
 ): Promise<Result<void>> {
   return runProjectWrite(mapTicketInputSchema, deps, ctx, input, async (scope, stamp, command) => {
     const { projectId, ticketId, wpId } = command;
+    await requireTicketsOf(scope, projectId, [ticketId]);
     if (wpId !== '') await requireWorkPackageOf(scope, projectId, wpId);
     await scope.projectWrite.recordManualMapping(stamp, command);
     await audit.record(scope, stamp, wpId === '' ? 'mapping.unmap' : 'mapping.map', ticketId, {

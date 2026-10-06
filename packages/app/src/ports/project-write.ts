@@ -75,10 +75,10 @@ export interface ChangeRequestCandidateCommand {
 }
 
 /**
- * FR-21 manual Mapping of one Ticket. `wpId` is the empty string for an UNMAP: the event then
- * carries a null Work Package and the audit action is `mapping.unmap`. The empty string, not
- * `null`, because that is what the audit payload has always recorded (`{ wpId: '' }`), and this
- * slice preserves the rows byte for byte.
+ * FR-21 manual Mapping of one Ticket. `wpId` is the empty string for an ordinary UNMAP
+ * (`source = release`, `wp_id = null` — back to rules; story 5.9 / A4). The audit action is
+ * `mapping.unmap`. The empty string, not `null`, because that is what the audit payload has
+ * always recorded (`{ wpId: '' }`).
  */
 export interface ManualMappingCommand {
   readonly projectId: string;
@@ -103,11 +103,15 @@ export interface ProjectWriteRepository {
   /** The Project's event time; rejects with the not-found wording for an invisible Project. */
   readonly projectAnchor: (projectId: string) => Promise<Date>;
   /**
-   * Whether `wpId` is a Work Package of `projectId` (AD-12: a project-scoped call's other ids belong
-   * to its Project). A read on the scope's transaction, so row-level security still applies: another
+   * Whether `wpId` is a mappable Work Package of `projectId` (AD-12 + FR-21): live leaf,
+   * non-milestone. A read on the scope's transaction, so row-level security still applies: another
    * Tenant's Work Package answers `false` like another Project's.
    */
   readonly workPackageInProject: (projectId: string, wpId: string) => Promise<boolean>;
+  /**
+   * Whether `ticketId` (tracker issue id) belongs to `projectId` (story 5.9 / AR-18).
+   */
+  readonly ticketInProject: (projectId: string, ticketId: string) => Promise<boolean>;
   readonly recordMapDisposition: WriteMember<MapDispositionCommand>;
   /** Returns the id of the Work Package it created, which the audit payload records. */
   readonly recordPlanDisposition: WriteMember<PlanDispositionCommand, { readonly wpId: string }>;

@@ -12,6 +12,10 @@ import { z } from 'zod';
 import { and, eq } from 'drizzle-orm';
 import { projectDate, type PlanGraphEdge, type PlanGraphWp, type ScheduleRunCause } from '@momo/domain';
 import type { Bound } from '../../../db/src/bound';
+import {
+  disableRulesTargeting,
+  reassignMappingsFromWp,
+} from '../../../db/src/repo-writes';
 import { lockWatermark } from '../../../db/src/watermark-lock';
 import { planInputRepositoryOn } from '../../../db/src/repositories/plan-input';
 import { scheduleRepositoryOn } from '../../../db/src/repositories/schedule';
@@ -25,6 +29,7 @@ import type { AuditedWriteDeps, WriteStamp } from '../ports/audited-write';
 import type { SchedulingBound } from '../ports/schedule-write';
 import { fail, type Result } from '../result';
 import { refuse, runAuditedWrite } from '../use-cases/audited-write';
+import { assertMappedLeafMayBecomeSummary } from './mapped-leaf-guard';
 import { checkPlanInvariants } from './plan-invariants';
 import { mapSchedulingConstraint } from './pg-errors';
 import {
@@ -427,6 +432,10 @@ async function applyMutation(
       await planInput.reLagDependency(mutation);
       return warnings;
     case 'create_wp': {
+      // Story 5.9: adding a child under a mapped leaf would promote it to a summary — refuse.
+      if (mutation.parentId !== null) {
+        await assertMappedLeafMayBecomeSummary(bound, mutation.projectId, mutation.parentId);
+      }
       // F21: milestone ↔ duration pairing — refuse multi-day; coerce omitted/null → 0.
       const isMilestone = mutation.isMilestone ?? false;
       if (isMilestone) {
@@ -441,6 +450,9 @@ async function applyMutation(
       return warnings;
     }
     case 'delete_wp':
+      // Story 5.9 / AR-18 / FR-5: release mappings + disable rules targeting this WP, then soft-delete.
+      await reassignMappingsFromWp(bound, stamp, mutation.projectId, mutation.wpId);
+      await disableRulesTargeting(bound, mutation.projectId, mutation.wpId);
       await planInput.softDeleteWp({
         projectId: mutation.projectId,
         wpId: mutation.wpId,
@@ -448,6 +460,10 @@ async function applyMutation(
       });
       return warnings;
     case 'reparent_wp':
+      // Story 5.9: reparenting onto a mapped leaf would promote it to a summary — refuse.
+      if (mutation.newParentId !== null) {
+        await assertMappedLeafMayBecomeSummary(bound, mutation.projectId, mutation.newParentId);
+      }
       await planInput.reparentWp(mutation);
       return warnings;
     case 'patch_wp_name':

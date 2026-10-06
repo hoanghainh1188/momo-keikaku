@@ -30,6 +30,8 @@ export interface ExpectContext {
 
 export interface ExpectedRows {
   readonly mappingEvents: readonly Record<string, unknown>[];
+  /** Dual-written mapping_head rows (story 5.9); seq stripped in cross-tenant assert like events. */
+  readonly mappingHeads: readonly Record<string, unknown>[];
   readonly dispositions: readonly Record<string, unknown>[];
   readonly audits: readonly Record<string, unknown>[];
   readonly workPackages: readonly Record<string, unknown>[];
@@ -55,6 +57,7 @@ export type Expect = (ctx: ExpectContext) => ExpectedRows;
 
 export const NO_ROWS: ExpectedRows = {
   mappingEvents: [],
+  mappingHeads: [],
   dispositions: [],
   audits: [],
   workPackages: [],
@@ -83,6 +86,33 @@ function dispositionMappings({ target, at, actor }: ExpectContext, wpId: string)
     at,
     actor,
   }));
+}
+
+/** Head dual-write shape matching an event (no id; seq stripped at assert). Sorted by ticketId. */
+function mappingHeadsFor(
+  events: readonly {
+    readonly tenantId: string;
+    readonly projectId: string;
+    readonly ticketId: string;
+    readonly wpId: string | null;
+    readonly source: string;
+    readonly ruleId: string | null;
+    readonly at: Date;
+    readonly actor: string;
+  }[],
+) {
+  return events
+    .map(({ tenantId, projectId, ticketId, wpId, source, ruleId, at, actor }) => ({
+      tenantId,
+      projectId,
+      ticketId,
+      wpId,
+      source,
+      ruleId,
+      at,
+      actor,
+    }))
+    .sort((a, b) => a.ticketId.localeCompare(b.ticketId));
 }
 
 function disposition(
@@ -118,7 +148,7 @@ function disposition(
   };
 }
 
-/** FR-21's manual Mapping rows. `wpId` is the raw command value: `''` is the unmap. */
+/** FR-21's manual Mapping rows. `wpId` is the raw command value: `''` is release (story 5.9). */
 export function manualMapping(
   target: WriteTarget,
   at: Date,
@@ -126,26 +156,27 @@ export function manualMapping(
   wpId: string,
 ): ExpectedRows {
   const ticketId = target.ticketIds[0];
+  const release = wpId === '';
+  const event = {
+    id: `map-${ticketId}-${at.getTime()}`,
+    tenantId: target.tenantId,
+    projectId: target.projectId,
+    ticketId,
+    wpId: release ? null : wpId,
+    source: release ? 'release' : 'manual',
+    ruleId: null,
+    at,
+    actor,
+  };
   return {
     ...NO_ROWS,
-    mappingEvents: [
-      {
-        id: `map-${ticketId}-${at.getTime()}`,
-        tenantId: target.tenantId,
-        projectId: target.projectId,
-        ticketId,
-        wpId: wpId === '' ? null : wpId,
-        source: 'manual',
-        ruleId: null,
-        at,
-        actor,
-      },
-    ],
+    mappingEvents: [event],
+    mappingHeads: mappingHeadsFor([event]),
     audits: [
       {
         tenantId: target.tenantId,
         actor,
-        action: wpId === '' ? 'mapping.unmap' : 'mapping.map',
+        action: release ? 'mapping.unmap' : 'mapping.map',
         target: ticketId,
         payload: { wpId },
         at,
@@ -179,19 +210,25 @@ function rowBefore<T extends { id: string }>(rows: readonly T[], id: string, tab
 }
 
 export const EXPECTED: Readonly<Record<string, Expect>> = {
-  mapTickets: (ctx) => ({
-    ...NO_ROWS,
-    mappingEvents: dispositionMappings(ctx, ctx.target.wpId),
-    ...disposition(ctx, 'map', ctx.target.wpId, null),
-  }),
+  mapTickets: (ctx) => {
+    const events = dispositionMappings(ctx, ctx.target.wpId);
+    return {
+      ...NO_ROWS,
+      mappingEvents: events,
+      mappingHeads: mappingHeadsFor(events),
+      ...disposition(ctx, 'map', ctx.target.wpId, null),
+    };
+  },
   planTicketsAsWorkPackage: (ctx) => {
     const { target, ninesBefore } = ctx;
     // The id the use case issued from the harness's id port — not `wp-new-<anchor ms>`, which
     // collided across Tenants because `work_package.id` is a global primary key (retro A1).
     const wpId = ctx.newIds.at(-1)!;
+    const events = dispositionMappings(ctx, wpId);
     return {
       ...NO_ROWS,
-      mappingEvents: dispositionMappings(ctx, wpId),
+      mappingEvents: events,
+      mappingHeads: mappingHeadsFor(events),
       ...disposition(ctx, 'plan', wpId, null),
       workPackages: [
         {

@@ -40,6 +40,7 @@ import { actorOf, DEMO_USERS } from './demo-identities';
 import { buildDemoState, type DemoState } from './fixtures';
 import * as s from './schema';
 import { tenantMembership } from './schema-membership';
+import { rebuildMappingHeadForProject } from './repo-writes';
 import { MAINTENANCE_SETTING } from './table-classes';
 import { lockWatermark } from './watermark-lock';
 import { withTenant, type Tx } from './with-tenant';
@@ -53,6 +54,7 @@ import { withTenant, type Tx } from './with-tenant';
 export const TRUNCATE_ORDER: readonly string[] = [
   'audit_log',
   'disposition_event',
+  'mapping_head',
   'mapping_event',
   'mapping_rule',
   'actuals_ledger_entry',
@@ -672,6 +674,8 @@ export async function writeTenantRows(
         })),
       ),
     );
+    // Story 5.9: derived head rebuilt from events (same-txn dual-write for live appends).
+    await rebuildMappingHeadForProject({ tx, tenantId }, f.project.id);
   }
 
   const auditFixtureSeq = projectOnly ? 100 + projectDefaultSeq : 1;

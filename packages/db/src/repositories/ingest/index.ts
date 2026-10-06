@@ -27,6 +27,7 @@ import {
   type TrackerAccountObservation,
 } from '@momo/domain';
 import type { Bound } from '../../bound';
+import { appendMappingEvents } from '../../repo-writes';
 import * as s from '../../schema';
 import { lockWatermark } from '../../watermark-lock';
 import { trackerRepositoryOn, type TrackerKind } from '../tracker';
@@ -666,17 +667,17 @@ export function ingestWriteRepositoryOn(bound: Bound) {
         input.read.observedAt,
       );
       if (newMappings.length > 0) {
-        await tx.insert(s.mappingEvent).values(
+        // Story 5.9: append + dual-write mapping_head (lock already held for ingest).
+        await appendMappingEvents(
+          { tx, tenantId },
+          { actor: 'system:rules', at: new Date(input.read.observedAt) },
+          input.projectId,
           newMappings.map((m) => ({
             id: input.nextId(),
-            tenantId,
-            projectId: input.projectId,
             ticketId: m.ticketId,
             wpId: m.wpId,
             source: 'rule' as const,
             ruleId: m.ruleId ?? null,
-            at: new Date(m.at),
-            actor: m.actor,
           })),
         );
       }

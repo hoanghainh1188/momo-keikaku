@@ -276,9 +276,19 @@
     "unmapped": "Unmapped",
     "money_is_never_shown_on_client_surfaces_every_ma": "Money is never shown on client surfaces. Every Mapping change is recorded with its author and time in the audit log.",
     "form": {
-      "save": "Save",
-      "unmapped_option": "— unmapped —",
-      "map_ticket_aria": "Map {ticketId}"
+      "save": "保存",
+      "release_option": "— リリース（ルールに戻す） —",
+      "map_ticket_aria": "チケット {ticketId} をマップ"
+    },
+    "dnd": {
+      "drop_targets_aria": "リーフ Work Package のドロップ先",
+      "drop_hint": "ここにチケットをドロップ",
+      "keyboard_map": "マップ",
+      "keyboard_map_aria": "キーボードでチケット {ticketId} をマップ",
+      "keyboard_chooser_label": "{ticketId} のマップ先",
+      "keyboard_chooser_placeholder": "リーフ Work Package を選択",
+      "keyboard_map_confirm": "マップ",
+      "keyboard_map_cancel": "キャンセル"
     },
     "ledger": {
       "scope_ledger_every_hour_in_the_connector_apos_s_": "Scope ledger — every hour in the Connector's scope, in one of four buckets",

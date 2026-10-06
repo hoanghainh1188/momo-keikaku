@@ -1,14 +1,14 @@
 import { getTranslations } from 'next-intl/server';
 import { getProjectMapping } from '@/server/composition';
 import { valueOrNotFound } from '@/server/result';
-import { hours, share } from '@momo/domain/present';
-import { Internal, Section, UnplannedChip } from '@/components/ui';
+import { share } from '@momo/domain/present';
+import { Internal, Section } from '@/components/ui';
 import { ScopeLedgerBar } from '@/components/scope-ledger-bar';
-import { MapTicketForm } from '@/components/map-ticket-form';
+import { MappingTicketBoard } from '@/components/mapping-ticket-board';
 
 export const dynamic = 'force-dynamic';
 
-/** FR-21–FR-24: Tickets, Rules and Coverage on one surface. */
+/** FR-21–FR-24: Tickets, Rules and Coverage on one surface. Story 5.9 adds Mapping DnD. */
 export default async function MappingPage({
   params,
 }: {
@@ -80,45 +80,12 @@ export default async function MappingPage({
         id="tickets"
         intro={t('mapping.the_60_tickets_carrying_the_most_hours_map_remap')}
       >
-        <table className="ledger" data-testid="tickets-table">
-          <thead>
-            <tr>
-              <th>{t('mapping.ticket')}</th>
-              <th>{t('mapping.title')}</th>
-              <th>{t('mapping.category')}</th>
-              <th>{t('clientView.status')}</th>
-              <th className="num">{t('mapping.hours')}</th>
-              <th>{t('mapping.mapped_to')}</th>
-              <th>{t('mapping.source')}</th>
-              <th>{t('mapping.change')}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {m.tickets.map((ticket) => (
-              <tr key={ticket.trackerIssueId}>
-                <td>{ticket.key}</td>
-                <td>{ticket.title}</td>
-                <td>{ticket.categoryIds.join(', ') || em}</td>
-                <td>{ticket.statusId}</td>
-                <td className="num">{hours(ticket.mh)}</td>
-                <td>
-                  {ticket.wpLabel ?? <UnplannedChip>{t('mapping.unmapped')}</UnplannedChip>}
-                </td>
-                <td>
-                  <span className="tag">{ticket.source}</span>
-                </td>
-                <td>
-                  <MapTicketForm
-                    projectId={projectId}
-                    ticketId={ticket.trackerIssueId}
-                    currentWpId={ticket.wpId ?? ''}
-                    leafWps={leafWps}
-                  />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <MappingTicketBoard
+          projectId={projectId}
+          leafWps={leafWps}
+          tickets={m.tickets}
+          emDash={em}
+        />
         <p className="caption" style={{ marginTop: 8 }}>
           <Internal />{t('mapping.money_is_never_shown_on_client_surfaces_every_ma')}</p>
       </Section>

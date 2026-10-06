@@ -71,7 +71,7 @@ describe('the table-class registry is the single source', () => {
     expect(new Set(TRUNCATE_ORDER).size, 'a table is truncated twice').toBe(TRUNCATE_ORDER.length);
   });
 
-  it('holds the 44 tables of this release, 37 of them tenant-owned', () => {
+  it('holds the 45 tables of this release, 38 of them tenant-owned', () => {
     // Pinned as numbers as well as names: a future change that removes a table and adds
     // another keeps the name lists agreeing with `schema.ts` while silently changing what
     // this story was reasoned about. Story 1.4 slice 1: `app_user` out; the four Better Auth
@@ -85,8 +85,9 @@ describe('the table-class registry is the single source', () => {
     // Story 5.6 adds `connector_ownership_event` (append-only) and `connector_overlap` (derived).
     // Story 5.7 adds `measurement_basis_event`, `connector_setting_event` (append-only).
     // Story 5.8 adds `tracker_account_link_event` (append-only).
-    expect(TABLE_REGISTRY).toHaveLength(44);
-    expect(TENANT_OWNED).toHaveLength(37);
+    // Story 5.9 adds `mapping_head` (derived).
+    expect(TABLE_REGISTRY).toHaveLength(45);
+    expect(TENANT_OWNED).toHaveLength(38);
     expect(TABLE_REGISTRY.filter((e) => e.tenantColumn === null).map((e) => e.table)).toEqual([
       'tenant',
       'auth_user',

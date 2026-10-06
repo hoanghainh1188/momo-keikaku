@@ -100,7 +100,7 @@ export interface TableEntry {
  * story 2.10 `pct_override_event` + Custom Field definition/value; story 2.12
  * `calendar_day_event`; story 5.1 `ticket`, `tracker_account`, `fixture_cursor`; story 5.2
  * `connector_scope_event`, `tracker_snapshot_attempt`; story 5.5 `project_setting_event`;
- * story 5.6 `connector_ownership_event`, `connector_overlap`),
+ * story 5.6 `connector_ownership_event`, `connector_overlap`; story 5.9 `mapping_head`),
  * in DEPENDENCY ORDER: every table comes after each table its foreign keys reference, so this order
  * is an insert order and its reverse is a delete order (`probe-tenants.ts` deletes by it). Story
  * 2.1's composite foreign keys made that load-bearing: `schedule_run` before `baseline_version`,
@@ -398,6 +398,14 @@ export const TABLE_REGISTRY: readonly TableEntry[] = [
     class: 'append-only',
     tenantColumn: 'tenant_id',
     why: 'Mapping is an event log; the current Mapping is its head. Editing history would move hours retroactively.',
+  },
+  {
+    table: 'mapping_head',
+    class: 'derived',
+    tenantColumn: 'tenant_id',
+    why:
+      'Derived Mapping head index (story 5.9 / AR-18). Dual-written with every mapping_event append; ' +
+      'rebuildable from events; never the source of truth for attribution pins.',
   },
   {
     table: 'disposition_event',

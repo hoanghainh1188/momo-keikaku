@@ -420,6 +420,7 @@ describe.skipIf(!reachable)('the write use cases, against two probe Tenants as t
         {
           ...landed,
           mappingEvents: withoutSeq(landed.mappingEvents),
+          mappingHeads: withoutSeq(landed.mappingHeads),
           dispositions: withoutSeq(landed.dispositions),
           audits: withoutSeq(landed.audits),
           rateEntries: withoutSeq(landed.rateEntries),
@@ -449,7 +450,7 @@ describe.skipIf(!reachable)('the write use cases, against two probe Tenants as t
       expect(seqs).toEqual(seqs.map((_, index) => seqs[0]! + index));
     });
 
-    it('mapTicket with an empty wpId unmaps: a null Work Package, audited as mapping.unmap', async () => {
+    it('mapTicket with an empty wpId releases: null WP + source release, audited as mapping.unmap', async () => {
       const target = ownTarget();
       const before = await landedRows(PROBE_W.tenantId);
       const result = await mapTicket(
@@ -463,6 +464,7 @@ describe.skipIf(!reachable)('the write use cases, against two probe Tenants as t
       expect({
         ...landed,
         mappingEvents: withoutSeq(landed.mappingEvents),
+        mappingHeads: withoutSeq(landed.mappingHeads),
         dispositions: withoutSeq(landed.dispositions),
         audits: withoutSeq(landed.audits),
       }).toEqual(manualMapping(target, anchor, TEST_ACTOR, ''));

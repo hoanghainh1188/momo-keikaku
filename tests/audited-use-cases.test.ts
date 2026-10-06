@@ -154,6 +154,7 @@ const FAKE_FAMILIES: {
   projectWrite: (write): ProjectWriteRepository => ({
     projectAnchor: async () => AT,
     workPackageInProject: async () => true,
+    ticketInProject: async () => true,
     recordMapDisposition: write('projectWrite.recordMapDisposition', undefined),
     recordPlanDisposition: write('projectWrite.recordPlanDisposition', { wpId: 'wp-new-gate' }),
     recordExplainDisposition: write('projectWrite.recordExplainDisposition', undefined),
