@@ -71,6 +71,8 @@ export const FK_MATCH_SIMPLE: readonly string[] = [
   'mapping_event_mapping_rule_fk',
   'disposition_event_work_package_fk',
   'tracker_snapshot_scope_seq_fk',
+  // Story 5.8: resource_id null = unlink; MATCH FULL would refuse unlink rows.
+  'tracker_account_link_event_resource_fk',
 ];
 
 /** The two FKs that are `DEFERRABLE INITIALLY DEFERRED` (AD-25): `wp_dependency`'s leaf endpoints. */
@@ -1094,6 +1096,43 @@ export const trackerAccount = pgTable(
 );
 
 /**
+ * Story 5.8 / FR-13: Tracker Account → Resource link history (append-only).
+ * Head ≤ `link_seq_max` resolves the Resource at query time; `resource_id` null = unlink.
+ * Ledger never stores `resource_id` (AR-15). Live cache dual-writes `resource.tracker_account_ids`.
+ */
+export const trackerAccountLinkEvent = pgTable(
+  'tracker_account_link_event',
+  {
+    seq: bigint('seq', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+    tenantId: text('tenant_id').notNull(),
+    /** Internal `tracker_account.id` (composite FK). Observation `account_id` lives on the account row. */
+    trackerAccountId: text('tracker_account_id').notNull(),
+    /** Null = unlink. */
+    resourceId: text('resource_id'),
+    actor: text('actor').notNull(),
+    at: timestamp('at', { withTimezone: true }).notNull(),
+  },
+  (t) => ({
+    tenantKey: unique('tracker_account_link_event_tenant_seq_key').on(t.tenantId, t.seq),
+    byAccount: index('tracker_account_link_event_account_idx').on(
+      t.tenantId,
+      t.trackerAccountId,
+      t.seq,
+    ),
+    account: foreignKey({
+      name: 'tracker_account_link_event_account_fk',
+      columns: [t.tenantId, t.trackerAccountId],
+      foreignColumns: [trackerAccount.tenantId, trackerAccount.id],
+    }),
+    resource: foreignKey({
+      name: 'tracker_account_link_event_resource_fk',
+      columns: [t.tenantId, t.resourceId],
+      foreignColumns: [resource.tenantId, resource.id],
+    }),
+  }),
+);
+
+/**
  * AD-6 / AD-17 fixture-replay page cursor (story 5.1). Behind `FixtureCursorPort` only.
  */
 export const fixtureCursor = pgTable(
@@ -1449,6 +1488,7 @@ export const schemaTables = {
   trackerSnapshotAttempt,
   ticket,
   trackerAccount,
+  trackerAccountLinkEvent,
   fixtureCursor,
   trackerSnapshot,
   ticketObservation,

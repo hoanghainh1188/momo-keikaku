@@ -75,6 +75,8 @@ export interface ReviewInput {
    * Seed default `{Closed}` only when the setting head is missing.
    */
   resolvedStatusIds?: ReadonlySet<string>;
+  /** Story 5.8: pin ceiling for `tracker_account_link_event` (ComputationInputs). */
+  linkSeqMax?: number | null;
   /**
    * Mixed Project: caption when AC covers hours Connectors only. `null` when not mixed.
    */

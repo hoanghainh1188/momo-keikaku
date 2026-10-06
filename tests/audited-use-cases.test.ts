@@ -192,9 +192,12 @@ const FAKE_FAMILIES: {
         ? { id, departmentId: WORLD.department.id, name: 'Gate Resource', role: 'Engineer' }
         : null,
     findProject: async (id) => (id === WORLD.project.id ? { id } : null),
+    findTrackerAccount: async (id) =>
+      id === 'ta-gate' ? { id: 'ta-gate', accountId: 'acct-gate' } : null,
     insertResource: write('resources.insertResource', undefined),
     appendResourceRate: write('resources.appendResourceRate', undefined),
     appendProjectDefaultRate: write('resources.appendProjectDefaultRate', undefined),
+    appendTrackerAccountLink: write('resources.appendTrackerAccountLink', 1),
   }),
   connectorWrite: (write) => ({
     projectAnchor: async () => AT,

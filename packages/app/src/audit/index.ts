@@ -56,6 +56,9 @@ export const AUDIT_ACTIONS = [
   'resource.create',
   'rate.append',
   'project_default_rate.append',
+  // Tracker Account → Resource links (story 5.8 / FR-13). Payloads carry opaque ids only.
+  'tracker_account.link',
+  'tracker_account.unlink',
   // Scheduling fence (story 2.9): one record per applyPlanChange.
   'schedule.apply_plan_change',
   // Holiday Calendar publish (story 2.12 / AR-57): per-Project audit on publish / fan-out.

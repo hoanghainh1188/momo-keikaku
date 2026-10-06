@@ -50,9 +50,11 @@ const spies = vi.hoisted(() => {
   };
   const resources = {
     findResource: vi.fn(),
+    findTrackerAccount: vi.fn(),
     insertResource: vi.fn(),
     appendResourceRate: vi.fn(),
     appendProjectDefaultRate: vi.fn(),
+    appendTrackerAccountLink: vi.fn(async () => 1),
     findProject: vi.fn(),
   };
   const membership = {

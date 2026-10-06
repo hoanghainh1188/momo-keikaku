@@ -73,9 +73,11 @@ const spies = vi.hoisted(() => {
       role: 'PM',
     })),
     findProject: vi.fn(async (id: string) => ({ id })),
+    findTrackerAccount: vi.fn(async (id: string) => ({ id, accountId: `acct-${id}` })),
     insertResource: vi.fn(async () => {}),
     appendResourceRate: vi.fn(async () => {}),
     appendProjectDefaultRate: vi.fn(async () => {}),
+    appendTrackerAccountLink: vi.fn(async () => 1),
   };
   /** The session's user (below) is a Tenant Admin here, so the membership writes get past the lock. */
   const sessionUserId = '019b76da-a800-7000-8000-0c3333333333';

@@ -70,6 +70,17 @@ export interface ProjectBundle {
       ownerConnectorId: string;
       hoursMh: bigint;
     }[];
+    /**
+     * Story 5.8: Tracker Accounts for the Connectors linking panel.
+     * Personal data under NFR-S6 — UI only; never log these fields.
+     */
+    trackerAccounts: readonly {
+      id: string;
+      accountId: string;
+      displayName: string;
+      email: string | null;
+      linkedResourceId: string | null;
+    }[];
     /** AD-15 / review G-5: the demo's fixed clock. */
     anchor: string;
     snapshotAgeMinutes: number;

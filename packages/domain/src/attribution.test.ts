@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { attribute, periodUnplannedTicketCount, rateOnDate } from './attribution';
+import {
+  attribute,
+  departmentEffortRollup,
+  periodUnplannedTicketCount,
+  rateOnDate,
+  suggestTrackerAccountLinks,
+  trackerAccountIdsFromLinkHeads,
+} from './attribution';
 import { periodOf } from './calendar';
 import {
   AdapterKindMismatchError,
@@ -817,5 +824,162 @@ describe('periodUnplannedTicketCount (Story 5.7 / FR-27)', () => {
     });
     expect(result.periodTicketIds).toEqual([]);
     expect(result.unplannedTicketIds).toEqual([]);
+  });
+});
+
+describe('story 5.8 Tracker Account links (FR-13)', () => {
+  it('suggests by email CI before display-name CI against Resource.name', () => {
+    const suggestions = suggestTrackerAccountLinks({
+      accounts: [
+        {
+          id: 'ta-1',
+          accountId: 'a1',
+          displayName: 'Alice',
+          email: 'alice@example.com',
+        },
+        { id: 'ta-2', accountId: 'a2', displayName: 'Bob', email: null },
+        { id: 'ta-3', accountId: 'a3', displayName: 'Carol', email: null },
+      ],
+      resources: [
+        { id: 'r-alice', name: 'alice@example.com' },
+        { id: 'r-bob', name: 'Bob' },
+        { id: 'r-other', name: 'Other' },
+      ],
+    });
+    expect(suggestions.find((s) => s.accountId === 'a1')).toMatchObject({
+      matchKind: 'email',
+      suggestedResourceIds: ['r-alice'],
+    });
+    expect(suggestions.find((s) => s.accountId === 'a2')).toMatchObject({
+      matchKind: 'name',
+      suggestedResourceIds: ['r-bob'],
+    });
+    expect(suggestions.find((s) => s.accountId === 'a3')).toMatchObject({
+      matchKind: 'none',
+      suggestedResourceIds: [],
+    });
+  });
+
+  it('marks already-linked accounts without re-suggesting', () => {
+    const suggestions = suggestTrackerAccountLinks({
+      accounts: [{ id: 'ta-1', accountId: 'a1', displayName: 'Bob', email: null }],
+      resources: [{ id: 'r-bob', name: 'Bob' }],
+      linkedByAccountId: new Map([['a1', 'r-bob']]),
+    });
+    expect(suggestions[0]).toMatchObject({
+      matchKind: 'linked',
+      linkedResourceId: 'r-bob',
+      suggestedResourceIds: [],
+    });
+  });
+
+  it('rebuilds trackerAccountIds from link heads and honours seqMax pin', () => {
+    const byResource = trackerAccountIdsFromLinkHeads({
+      events: [
+        { seq: 1, trackerAccountId: 'ta-1', resourceId: 'r1' },
+        { seq: 2, trackerAccountId: 'ta-1', resourceId: null },
+        { seq: 3, trackerAccountId: 'ta-1', resourceId: 'r2' },
+      ],
+      accountIdByInternalId: new Map([['ta-1', 'acct-1']]),
+      resourceIds: ['r1', 'r2'],
+      seqMax: 2,
+    });
+    expect(byResource.get('r1')).toEqual([]);
+    expect(byResource.get('r2')).toEqual([]);
+    const live = trackerAccountIdsFromLinkHeads({
+      events: [
+        { seq: 1, trackerAccountId: 'ta-1', resourceId: 'r1' },
+        { seq: 2, trackerAccountId: 'ta-1', resourceId: null },
+        { seq: 3, trackerAccountId: 'ta-1', resourceId: 'r2' },
+      ],
+      accountIdByInternalId: new Map([['ta-1', 'acct-1']]),
+      resourceIds: ['r1', 'r2'],
+    });
+    expect(live.get('r2')).toEqual(['acct-1']);
+    expect(live.get('r1')).toEqual([]);
+  });
+
+  it('costs Unattributed at Project default and emits Department Unattributed line', () => {
+    const linked: Resource = {
+      id: 'r1',
+      name: 'Alice',
+      departmentId: 'd-eng',
+      trackerAccountIds: ['acct-1'],
+      rates: [{ seq: 1, effectiveFrom: '2026-01-01', yenPerHour: 8000n }],
+    };
+    const mk = (
+      seq: number,
+      assigneeAccountId: string | null,
+    ): LedgerEntry => ({
+      seq,
+      ticketId: `t${seq}`,
+      kind: 'delta',
+      deltaMh: hoursToMh(1),
+      windowStart: null,
+      windowEnd: '2026-06-02T00:00:00.000Z',
+      assigneeAccountId,
+      activeBaselineVersionSeq: null,
+    });
+    const entries = [mk(1, 'acct-1'), mk(2, null), mk(3, 'acct-unlinked')];
+    const rollup = departmentEffortRollup({
+      entries,
+      resources: [linked],
+      project,
+    });
+    expect(rollup.totalMh).toBe(hoursToMh(3));
+    expect(rollup.totalJpy).toBe(8000n + 4000n + 4000n);
+    const unattributed = rollup.lines.find((l) => l.departmentId === null);
+    expect(unattributed?.mh).toBe(hoursToMh(2));
+    expect(unattributed?.jpy).toBe(8000n);
+    const eng = rollup.lines.find((l) => l.departmentId === 'd-eng');
+    expect(eng?.mh).toBe(hoursToMh(1));
+    expect(eng?.jpy).toBe(8000n);
+    const deptSumMh = rollup.lines.reduce((s, l) => s + l.mh, 0n);
+    const deptSumJpy = rollup.lines.reduce((s, l) => s + l.jpy, 0n);
+    expect(deptSumMh).toBe(rollup.totalMh);
+    expect(deptSumJpy).toBe(rollup.totalJpy);
+  });
+
+  it('late link is retroactive live; resources without the account stay Unattributed', () => {
+    const period = periodOf('2026-09-16T09:00:00.000Z', 540, 4);
+    const baseResource: Resource = {
+      id: 'r1',
+      name: 'Alice',
+      departmentId: 'd',
+      trackerAccountIds: [],
+      rates: [{ seq: 1, effectiveFrom: '2026-01-01', yenPerHour: 9000n }],
+    };
+    const entries: LedgerEntry[] = [
+      {
+        seq: 1,
+        ticketId: 't-late',
+        kind: 'delta',
+        deltaMh: hoursToMh(1),
+        windowStart: null,
+        windowEnd: '2026-09-15T09:00:00.000Z',
+        assigneeAccountId: 'acct-late',
+        activeBaselineVersionSeq: null,
+      },
+    ];
+    const before = attribute({
+      entries,
+      head: new Map(),
+      wps: [],
+      baselineVersions: [],
+      resources: [baseResource],
+      project,
+      period,
+    });
+    expect(before.cumulative.totalJpy).toBe(4000n);
+    const after = attribute({
+      entries,
+      head: new Map(),
+      wps: [],
+      baselineVersions: [],
+      resources: [{ ...baseResource, trackerAccountIds: ['acct-late'] }],
+      project,
+      period,
+    });
+    expect(after.cumulative.totalJpy).toBe(9000n);
   });
 });

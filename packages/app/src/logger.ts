@@ -22,6 +22,13 @@ export const PINO_REDACT_PATHS = [
   'idToken',
   '*.idToken',
   'authorization',
+  // Story 5.8 / NFR-S6: Tracker Account display names and emails are personal data.
+  'displayName',
+  '*.displayName',
+  'email',
+  '*.email',
+  'display_name',
+  '*.display_name',
 ] as const;
 
 const CENSOR = '[Redacted]';

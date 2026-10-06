@@ -368,6 +368,20 @@ CREATE POLICY "maintenance_bypass" ON public."tracker_account"
   USING (true)
   WITH CHECK (true);
 
+-- tracker_account_link_event (append-only): Tracker Account → Resource links (story 5.8 / FR-13). Attribution reads the head at link_seq_max; editing history would move Unattributed hours between people retroactively.
+ALTER TABLE public."tracker_account_link_event" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public."tracker_account_link_event" FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "tenant_isolation" ON public."tracker_account_link_event";
+CREATE POLICY "tenant_isolation" ON public."tracker_account_link_event"
+  FOR ALL
+  USING ("tenant_id" = NULLIF(current_setting('app.tenant_id', true), ''))
+  WITH CHECK ("tenant_id" = NULLIF(current_setting('app.tenant_id', true), ''));
+DROP POLICY IF EXISTS "maintenance_bypass" ON public."tracker_account_link_event";
+CREATE POLICY "maintenance_bypass" ON public."tracker_account_link_event"
+  FOR ALL TO "momo_maintenance"
+  USING (true)
+  WITH CHECK (true);
+
 -- fixture_cursor (operational): AD-6 / AD-17 fixture-replay page cursor (story 5.1). Operational bookkeeping behind FixtureCursorPort; tenant-owned so withTenant isolates Connectors.
 ALTER TABLE public."fixture_cursor" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public."fixture_cursor" FORCE ROW LEVEL SECURITY;

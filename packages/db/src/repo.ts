@@ -5,6 +5,7 @@ import {
   DEFAULT_THRESHOLDS,
   periodOf,
   projectDate,
+  trackerAccountIdsFromLinkHeads,
   type BaselineVersion,
   type DispositionEvent,
   type LedgerEntry,
@@ -71,6 +72,17 @@ export interface ProjectBundle {
       key: string;
       ownerConnectorId: string;
       hoursMh: bigint;
+    }[];
+    /**
+     * Story 5.8: Tracker Accounts for the Connectors linking panel (display name + email).
+     * Personal data under NFR-S6 — UI only; never log these fields.
+     */
+    trackerAccounts: readonly {
+      id: string;
+      accountId: string;
+      displayName: string;
+      email: string | null;
+      linkedResourceId: string | null;
     }[];
     /** AD-15 / review G-5: the demo's fixed clock. */
     anchor: string;
@@ -179,11 +191,41 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
 
   const resRows = await tx.select().from(s.resource).where(eq(s.resource.tenantId, p.tenantId));
   const rateRows = await tx.select().from(s.rateEntry).orderBy(asc(s.rateEntry.seq));
+  const accountRows = await tx
+    .select({
+      id: s.trackerAccount.id,
+      accountId: s.trackerAccount.accountId,
+      displayName: s.trackerAccount.displayName,
+      email: s.trackerAccount.email,
+    })
+    .from(s.trackerAccount)
+    .where(eq(s.trackerAccount.tenantId, p.tenantId));
+  const linkEventRows = await tx
+    .select({
+      seq: s.trackerAccountLinkEvent.seq,
+      trackerAccountId: s.trackerAccountLinkEvent.trackerAccountId,
+      resourceId: s.trackerAccountLinkEvent.resourceId,
+    })
+    .from(s.trackerAccountLinkEvent)
+    .where(eq(s.trackerAccountLinkEvent.tenantId, p.tenantId))
+    .orderBy(asc(s.trackerAccountLinkEvent.seq));
+  const linkSeqMax =
+    linkEventRows.length > 0 ? linkEventRows[linkEventRows.length - 1]!.seq : null;
+  const accountIdByInternalId = new Map(accountRows.map((a) => [a.id, a.accountId]));
+  // Story 5.8: events are SoT for compute; rebuild trackerAccountIds at link_seq_max (live = head).
+  const idsByResource = trackerAccountIdsFromLinkHeads({
+    events: linkEventRows,
+    accountIdByInternalId,
+    resourceIds: resRows.map((r) => r.id),
+    seqMax: linkSeqMax ?? undefined,
+  });
+  // When no link events yet, keep the live array cache (seed / pre-5.8 dual-write).
   const resources: Resource[] = resRows.map((r) => ({
     id: r.id,
     name: r.name,
     departmentId: r.departmentId,
-    trackerAccountIds: r.trackerAccountIds,
+    trackerAccountIds:
+      linkEventRows.length > 0 ? (idsByResource.get(r.id) ?? []) : r.trackerAccountIds,
     rates: rateRows
       .filter((x) => x.resourceId === r.id)
       // The yen columns stay Postgres `integer`; they are read into `bigint` here (AD-4).
@@ -194,6 +236,24 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
         yenPerHour: BigInt(x.yenPerHour),
       })),
   }));
+  const linkedByInternal = new Map<string, string | null>();
+  for (const e of linkEventRows) linkedByInternal.set(e.trackerAccountId, e.resourceId);
+  const trackerAccountsMeta = accountRows.map((a) => {
+    let linkedResourceId: string | null = null;
+    if (linkEventRows.length > 0) {
+      linkedResourceId = linkedByInternal.get(a.id) ?? null;
+    } else {
+      const holder = resources.find((r) => r.trackerAccountIds.includes(a.accountId));
+      linkedResourceId = holder?.id ?? null;
+    }
+    return {
+      id: a.id,
+      accountId: a.accountId,
+      displayName: a.displayName,
+      email: a.email,
+      linkedResourceId,
+    };
+  });
 
   const [latestSnap] = await tx
     .select()
@@ -459,6 +519,7 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
     basisSeqMax,
     connectorSettingSeqMax,
     mappingSeqMax,
+    linkSeqMax,
     resolvedStatusIds,
     acCoverage,
     firstObservedAtByTicket,
@@ -547,6 +608,7 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
         ownerConnectorId: r.ownerConnectorId,
         hoursMh: leftScopeHours.get(r.trackerIssueId) ?? 0n,
       })),
+      trackerAccounts: trackerAccountsMeta,
       anchor,
       snapshotAgeMinutes: latestSnap
         ? Math.round(

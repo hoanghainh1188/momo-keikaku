@@ -66,6 +66,7 @@ export const TRUNCATE_ORDER: readonly string[] = [
   'connector_scope_event',
   'fixture_cursor',
   'ticket',
+  'tracker_account_link_event',
   'tracker_account',
   'connector',
   'baseline_wp',
@@ -510,6 +511,51 @@ export async function writeTenantRows(
             },
           }),
       );
+      // Story 5.8: demo links as append-only events (live array already stamped on resource insert).
+      // Fixture Resources may name accountIds absent from every snapshot (e.g. bk-1001 / Linh).
+      // Upsert synthetic Tracker Account rows so link events satisfy the FK and cross-tenant
+      // fixture-value coverage still sees those accountIds after link_seq_max rebuild.
+      if (!projectOnly) {
+        const seededAccountIds = new Set(accounts.map((a) => a.accountId));
+        const missingLinked = f.resources.filter((r) => !seededAccountIds.has(r.accountId));
+        if (missingLinked.length > 0) {
+          await tx
+            .insert(s.trackerAccount)
+            .values(
+              missingLinked.map((r) => ({
+                id: own(`ta-${r.accountId}`),
+                tenantId,
+                trackerKind: 'fixture',
+                trackerSite: site,
+                accountId: r.accountId,
+                displayName: r.name,
+                email: null as string | null,
+              })),
+            )
+            .onConflictDoUpdate({
+              target: [
+                s.trackerAccount.tenantId,
+                s.trackerAccount.trackerKind,
+                s.trackerAccount.trackerSite,
+                s.trackerAccount.accountId,
+              ],
+              set: {
+                displayName: sql`excluded.display_name`,
+              },
+            });
+        }
+        if (f.resources.length > 0) {
+          await tx.insert(s.trackerAccountLinkEvent).values(
+            f.resources.map((r) => ({
+              tenantId,
+              trackerAccountId: own(`ta-${r.accountId}`),
+              resourceId: r.id,
+              actor: 'system:seed',
+              at: stamp,
+            })),
+          );
+        }
+      }
     }
     await chunked(latestForIdentity.tickets, 500, (batch) =>
       tx

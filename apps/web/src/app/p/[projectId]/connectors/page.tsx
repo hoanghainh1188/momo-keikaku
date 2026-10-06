@@ -1,14 +1,16 @@
 import { getTranslations } from 'next-intl/server';
+import { suggestTrackerAccountLinks } from '@momo/app';
 import { getProjectReview } from '@/server/composition';
 import { valueOrNotFound } from '@/server/result';
 import { hours } from '@momo/domain/present';
 import { Section } from '@/components/ui';
 import { AddConnectorForm, RotateCredentialsForm } from './connector-forms';
 import { OverlapResolveForm } from './overlap-resolve-form';
+import { TrackerAccountLinkingPanel } from './linking-panel';
 
 export const dynamic = 'force-dynamic';
 
-/** FR-17, FR-19, FR-42: Connector set-up, approval, credentials, snapshot history. */
+/** FR-17, FR-19, FR-42, FR-13: Connector set-up, approval, credentials, linking, snapshot history. */
 export default async function ConnectorsPage({
   params,
 }: {
@@ -22,6 +24,20 @@ export default async function ConnectorsPage({
   const hasSnapshot = review.snapshot.id.length > 0;
   const overlaps = bundle.meta.overlaps;
   const leftScopeTickets = bundle.meta.leftScopeTickets;
+  const linkSuggestions = suggestTrackerAccountLinks({
+    accounts: bundle.meta.trackerAccounts.map((a) => ({
+      id: a.id,
+      accountId: a.accountId,
+      displayName: a.displayName,
+      email: a.email,
+    })),
+    resources: bundle.resources.map((r) => ({ id: r.id, name: r.name })),
+    linkedByAccountId: new Map(
+      bundle.meta.trackerAccounts
+        .filter((a) => a.linkedResourceId !== null)
+        .map((a) => [a.accountId, a.linkedResourceId!]),
+    ),
+  });
 
   return (
     <div className="sheet">
@@ -179,6 +195,14 @@ export default async function ConnectorsPage({
           </p>
         </Section>
       )}
+
+      <Section title={t('connectors.linking_panel')} id="tracker-account-links">
+        <TrackerAccountLinkingPanel
+          projectId={projectId}
+          rows={linkSuggestions}
+          resources={bundle.resources.map((r) => ({ id: r.id, name: r.name }))}
+        />
+      </Section>
     </div>
   );
 }

@@ -14,9 +14,13 @@ import {
   appendProjectDefaultRateInputSchema,
   appendResourceRateInputSchema,
   createResourceInputSchema,
+  linkTrackerAccountInputSchema,
+  unlinkTrackerAccountInputSchema,
   type AppendProjectDefaultRateInput,
   type AppendResourceRateInput,
   type CreateResourceInput,
+  type LinkTrackerAccountInput,
+  type UnlinkTrackerAccountInput,
 } from './resource-input';
 
 /**
@@ -128,10 +132,87 @@ export async function appendProjectDefaultRate<Handle>(
   );
 }
 
+/**
+ * Story 5.8 / FR-13: append a Tracker Account → Resource link (or change). Dual-writes the
+ * live `tracker_account_ids` cache. PM + tenant_admin (same staff resource gate as create).
+ */
+export async function linkTrackerAccount<Handle>(
+  deps: ResourceWriteDeps<Handle>,
+  ctx: RequestContext,
+  input: LinkTrackerAccountInput,
+): Promise<Result<{ seq: number }>> {
+  return runRoleGatedWrite(
+    linkTrackerAccountInputSchema,
+    STAFF_RESOURCE_ROLES,
+    deps,
+    ctx,
+    input,
+    async (scope, stamp, command) => {
+      const account = await scope.resources.findTrackerAccount(command.trackerAccountId);
+      if (!account) refuse('not_found');
+      const resource = await scope.resources.findResource(command.resourceId);
+      if (!resource) refuse('not_found');
+      const seq = await scope.resources.appendTrackerAccountLink({
+        trackerAccountId: account.id,
+        accountId: account.accountId,
+        resourceId: resource.id,
+        actor: stamp.actor,
+        at: stamp.at,
+      });
+      await audit.record(scope, stamp, 'tracker_account.link', account.id, {
+        resourceId: resource.id,
+        accountId: account.accountId,
+      });
+      return { seq };
+    },
+  );
+}
+
+/**
+ * Story 5.8 / FR-13: unlink — append `resource_id = null`. Hours become Unattributed.
+ */
+export async function unlinkTrackerAccount<Handle>(
+  deps: ResourceWriteDeps<Handle>,
+  ctx: RequestContext,
+  input: UnlinkTrackerAccountInput,
+): Promise<Result<{ seq: number }>> {
+  return runRoleGatedWrite(
+    unlinkTrackerAccountInputSchema,
+    STAFF_RESOURCE_ROLES,
+    deps,
+    ctx,
+    input,
+    async (scope, stamp, command) => {
+      const account = await scope.resources.findTrackerAccount(command.trackerAccountId);
+      if (!account) refuse('not_found');
+      const seq = await scope.resources.appendTrackerAccountLink({
+        trackerAccountId: account.id,
+        accountId: account.accountId,
+        resourceId: null,
+        actor: stamp.actor,
+        at: stamp.at,
+      });
+      await audit.record(scope, stamp, 'tracker_account.unlink', account.id, {
+        accountId: account.accountId,
+      });
+      return { seq };
+    },
+  );
+}
+
 export const RESOURCE_WRITE_AUDIT = {
   createResource: { audited: ['resource.create'] },
   appendResourceRate: { audited: ['rate.append'] },
   appendProjectDefaultRate: { audited: ['project_default_rate.append'] },
+} as const satisfies Readonly<Record<string, AuditDeclaration>>;
+
+/**
+ * Story 5.8 link writers — off the use-cases barrel (like `confirmConnectorOwnership`).
+ * Composition + unit tests import them; the cross-tenant / audit-surface gates do not drive them.
+ */
+export const TRACKER_ACCOUNT_LINK_AUDIT = {
+  linkTrackerAccount: { audited: ['tracker_account.link'] },
+  unlinkTrackerAccount: { audited: ['tracker_account.unlink'] },
 } as const satisfies Readonly<Record<string, AuditDeclaration>>;
 
 /** Role declarations for the Resource / Rate writes (colocated — see `role-declarations.ts`). */
@@ -139,4 +220,9 @@ export const RESOURCE_WRITE_ROLES = {
   createResource: STAFF_RESOURCE,
   appendResourceRate: ADMIN_ONLY,
   appendProjectDefaultRate: ADMIN_ONLY,
+} as const satisfies Readonly<Record<string, RoleDeclaration>>;
+
+export const TRACKER_ACCOUNT_LINK_ROLES = {
+  linkTrackerAccount: STAFF_RESOURCE,
+  unlinkTrackerAccount: STAFF_RESOURCE,
 } as const satisfies Readonly<Record<string, RoleDeclaration>>;

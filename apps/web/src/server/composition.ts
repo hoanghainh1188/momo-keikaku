@@ -62,6 +62,8 @@ import {
   createResource as createResourceUseCase,
   appendProjectDefaultRate as appendProjectDefaultRateUseCase,
   appendResourceRate as appendResourceRateUseCase,
+  linkTrackerAccount as linkTrackerAccountUseCase,
+  unlinkTrackerAccount as unlinkTrackerAccountUseCase,
   explainTickets as explainTicketsUseCase,
   gateIngestApproval as gateIngestApprovalUseCase,
   getSnapshotPinState as getSnapshotPinStateUseCase,
@@ -105,6 +107,8 @@ import {
   type TenantCurrencyDeps,
   type AppendProjectDefaultRateInput,
   type AppendResourceRateInput,
+  type LinkTrackerAccountInput,
+  type UnlinkTrackerAccountInput,
   type ChangeMemberRoleInput,
   type ChangeRequestCandidatesInput,
   type ConnectorWriteDeps,
@@ -961,6 +965,18 @@ export async function appendResourceRate(input: AppendResourceRateInput, ctx?: R
 export async function appendProjectDefaultRate(input: AppendProjectDefaultRateInput, ctx?: RequestContext) {
   const context = ctx ?? (await requestContext());
   return appendProjectDefaultRateUseCase(writeDeps(), context, input);
+}
+
+/** Story 5.8 / FR-13: link a Tracker Account to a Resource. */
+export async function linkTrackerAccount(input: LinkTrackerAccountInput, ctx?: RequestContext) {
+  const context = ctx ?? (await requestContext());
+  return linkTrackerAccountUseCase(writeDeps(), context, input);
+}
+
+/** Story 5.8 / FR-13: unlink a Tracker Account (hours become Unattributed). */
+export async function unlinkTrackerAccount(input: UnlinkTrackerAccountInput, ctx?: RequestContext) {
+  const context = ctx ?? (await requestContext());
+  return unlinkTrackerAccountUseCase(writeDeps(), context, input);
 }
 
 // --- Membership changes (story 1.4 slice 2). No page calls them yet — there is no Users screen.

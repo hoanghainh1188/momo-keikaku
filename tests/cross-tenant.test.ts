@@ -291,6 +291,8 @@ const ALLOCATED_SEQ_KEYS: ReadonlySet<string> = new Set([
   'basisSeqMax',
   'connectorSettingSeqMax',
   'mappingSeqMax',
+  // Story 5.8: link event seq is a global identity; probes land in different bands.
+  'linkSeqMax',
 ]);
 
 /**

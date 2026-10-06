@@ -1384,3 +1384,19 @@ above can see where it went.
 - source_spec: `_bmad-output/implementation-artifacts/spec-5-7-a-connector-with-no-hours-says-so-and-stays-saying-it.md`
   summary: Count-mode Review/Connectors page composition test asserting Ticket-Count notice and unavailable AC render as em dash not 0.0h.
   evidence: Story 5.7 review verification-gap — domain present/EVM covered; page boundary not asserted.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-8-tracker-accounts-become-people-retroactively.md`
+  summary: PM edit UI for Connector Resolved status set (`connector_setting_event`) — RESOLVED_WRITE_SURFACE = B remains deferred (seed `{Closed}` + tests/API append only).
+  evidence: Story 5.8 Boundaries — Harry assignment 2026-10-06; do not implement Resolved PM form in 5.8.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-8-tracker-accounts-become-people-retroactively.md`
+  summary: REQUIRE_DB / batch identity upsert / notifyRecipients / compaction / durable Review Re-pin / mapping UX (`mapping_event`/`mapping_head`) remain open (re-noted; out of 5.8 ACs unless needed).
+  evidence: Story 5.8 Boundaries — do not expand unless required to land ACs; re-note from 5.5/5.6/5.7.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-8-tracker-accounts-become-people-retroactively.md`
+  summary: FR-33 Department view UI (Post-Q1) — domain `departmentEffortRollup` emits *Unattributed* line; no Department surface this story.
+  evidence: Story 5.8 Intent / EXPERIENCE Department view Post-Q1.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-8-tracker-accounts-become-people-retroactively.md`
+  summary: Cross-tenant write harness / audit-surface gate do not drive `linkTrackerAccount` / `unlinkTrackerAccount` (off use-cases barrel like `confirmConnectorOwnership`); unit tests cover them.
+  evidence: Story 5.8 implementation — avoiding REQUIRE_DB identity / harness expansion for 5.8 ACs.

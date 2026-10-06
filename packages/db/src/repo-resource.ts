@@ -53,6 +53,16 @@ export interface ProjectDefaultRateAppend {
   readonly yenPerHour: number;
 }
 
+export interface TrackerAccountLinkAppend {
+  readonly trackerAccountId: string;
+  /** Observation account id stored on `resource.tracker_account_ids`. */
+  readonly accountId: string;
+  /** Null = unlink. */
+  readonly resourceId: string | null;
+  readonly actor: string;
+  readonly at: Date;
+}
+
 function exactlyOne(table: string, id: string, rowCount: number | null): void {
   if (rowCount !== 1) {
     throw new Error(`${table} ${id}: expected to update exactly one row, updated ${rowCount ?? 0}`);
@@ -92,6 +102,16 @@ export function resourceWriteRepositoryOn(bound: Bound) {
       return row ?? null;
     },
 
+    findTrackerAccount: async (
+      id: string,
+    ): Promise<{ id: string; accountId: string } | null> => {
+      const [row] = await tx
+        .select({ id: s.trackerAccount.id, accountId: s.trackerAccount.accountId })
+        .from(s.trackerAccount)
+        .where(eq(s.trackerAccount.id, id));
+      return row ?? null;
+    },
+
     insertResource: async (row: NewResourceRow): Promise<void> => {
       await tx.insert(s.resource).values({
         id: row.id,
@@ -126,6 +146,58 @@ export function resourceWriteRepositoryOn(bound: Bound) {
         .set({ defaultRateJpy: row.yenPerHour })
         .where(eq(s.project.id, row.projectId));
       exactlyOne('project', row.projectId, res.rowCount);
+    },
+
+    /**
+     * Story 5.8: append a link/unlink event and dual-write `resource.tracker_account_ids`.
+     * Takes the Tenant watermark lock (same as `rate_entry`).
+     */
+    appendTrackerAccountLink: async (row: TrackerAccountLinkAppend): Promise<number> => {
+      await lockWatermark(bound, { kind: 'tenant' });
+      const [inserted] = await tx
+        .insert(s.trackerAccountLinkEvent)
+        .values({
+          tenantId,
+          trackerAccountId: row.trackerAccountId,
+          resourceId: row.resourceId,
+          actor: row.actor,
+          at: row.at,
+        })
+        .returning({ seq: s.trackerAccountLinkEvent.seq });
+
+      // Remove observation accountId from every Resource that currently lists it.
+      const holders = await tx
+        .select({ id: s.resource.id, trackerAccountIds: s.resource.trackerAccountIds })
+        .from(s.resource)
+        .where(eq(s.resource.tenantId, tenantId));
+      for (const holder of holders) {
+        if (!holder.trackerAccountIds.includes(row.accountId)) continue;
+        const next = holder.trackerAccountIds.filter((id) => id !== row.accountId);
+        const res = await tx
+          .update(s.resource)
+          .set({ trackerAccountIds: next })
+          .where(eq(s.resource.id, holder.id));
+        exactlyOne('resource', holder.id, res.rowCount);
+      }
+
+      if (row.resourceId !== null) {
+        const [target] = await tx
+          .select({ id: s.resource.id, trackerAccountIds: s.resource.trackerAccountIds })
+          .from(s.resource)
+          .where(eq(s.resource.id, row.resourceId));
+        if (!target) {
+          throw new Error(`resource ${row.resourceId}: missing after link append`);
+        }
+        if (!target.trackerAccountIds.includes(row.accountId)) {
+          const res = await tx
+            .update(s.resource)
+            .set({ trackerAccountIds: [...target.trackerAccountIds, row.accountId] })
+            .where(eq(s.resource.id, target.id));
+          exactlyOne('resource', target.id, res.rowCount);
+        }
+      }
+
+      return inserted!.seq;
     },
   };
 }

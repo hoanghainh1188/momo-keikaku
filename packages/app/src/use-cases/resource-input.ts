@@ -40,8 +40,23 @@ export const appendProjectDefaultRateInputSchema = z.object({
   yenPerHour,
 });
 
+/** Story 5.8: link a Tracker Account to a Resource (or change the link). */
+export const linkTrackerAccountInputSchema = z.object({
+  projectId: id,
+  trackerAccountId: id,
+  resourceId: id,
+});
+
+/** Story 5.8: unlink a Tracker Account (append resource_id = null). */
+export const unlinkTrackerAccountInputSchema = z.object({
+  projectId: id,
+  trackerAccountId: id,
+});
+
 export type CreateResourceInput = Readonly<z.input<typeof createResourceInputSchema>>;
 export type AppendResourceRateInput = Readonly<z.input<typeof appendResourceRateInputSchema>>;
 export type AppendProjectDefaultRateInput = Readonly<
   z.input<typeof appendProjectDefaultRateInputSchema>
 >;
+export type LinkTrackerAccountInput = Readonly<z.input<typeof linkTrackerAccountInputSchema>>;
+export type UnlinkTrackerAccountInput = Readonly<z.input<typeof unlinkTrackerAccountInputSchema>>;
