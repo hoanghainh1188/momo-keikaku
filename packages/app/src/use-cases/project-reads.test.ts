@@ -40,7 +40,13 @@ function fakeDeps(behave: (projectId: string) => 'ok' | Error) {
     };
   const deps: ProjectReadDeps<typeof HANDLE> = {
     handle: HANDLE,
-    projectRead: { loadProjectBundle: answer(BUNDLE), loadReview: answer(REVIEW) },
+    projectRead: {
+      loadProjectBundle: answer(BUNDLE),
+      loadReview: answer(REVIEW),
+      loadRuleEvaluation: async () => {
+        throw new Error('the project reads never load a rule evaluation');
+      },
+    },
   };
   return { deps, calls };
 }

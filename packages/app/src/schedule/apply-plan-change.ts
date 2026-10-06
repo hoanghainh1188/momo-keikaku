@@ -452,7 +452,7 @@ async function applyMutation(
     case 'delete_wp':
       // Story 5.9 / AR-18 / FR-5: release mappings + disable rules targeting this WP, then soft-delete.
       await reassignMappingsFromWp(bound, stamp, mutation.projectId, mutation.wpId);
-      await disableRulesTargeting(bound, mutation.projectId, mutation.wpId);
+      await disableRulesTargeting(bound, mutation.projectId, mutation.wpId, stamp.at);
       await planInput.softDeleteWp({
         projectId: mutation.projectId,
         wpId: mutation.wpId,

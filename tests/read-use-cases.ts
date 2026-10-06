@@ -118,6 +118,19 @@ export interface WriteTarget extends UseCaseTarget {
   readonly secondAdminUserId: string;
   /** The Project's fixture Connector id (story 5.2 rotate / change-scope). */
   readonly connectorId: string;
+  /**
+   * The Project's two fixture Mapping Rules, priority order (story 5.10) — what the rule writes
+   * edit, delete and reorder.
+   */
+  readonly rules: readonly [WriteTargetRule, WriteTargetRule];
+}
+
+/** One fixture Mapping Rule, as the rule writes name it. */
+export interface WriteTargetRule {
+  readonly id: string;
+  readonly wpId: string;
+  readonly matchField: 'milestone' | 'category' | 'issueType' | 'parent' | 'keyPattern';
+  readonly matchValue: string;
 }
 
 /** How a write is driven: the deps its caller chose, and the target's ids. */
@@ -505,6 +518,94 @@ export const READ_USE_CASES: readonly ReadUseCase[] = [
           { projectId: target.projectId, ticketId: target.ticketIds[0], wpId: '' },
         ),
     ],
+  },
+  // --- Story 5.10: Mapping Rules authored by the PM ------------------------------------------------
+  {
+    name: 'previewMappingRuleChange',
+    kind: 'read',
+    why:
+      'UX-DR22 move preview (read-only): repo-mapping-rules loadRuleEvaluation — live mapping_rule ' +
+      'rows, the latest ticket_observation per in-scope ticket, mapping_event heads, ledger hours ' +
+      'from hours Connectors — then the domain previewRuleChange. Driven as "delete the first ' +
+      'rule", whose id it reads off getProjectMapping first (rule ids are relabelled per probe).',
+    invoke: async (deps, target) => {
+      const mapping = await readSurface.getProjectMapping(deps, contextOf(target), {
+        projectId: target.projectId,
+      });
+      if (!mapping.ok) return mapping;
+      const first = mapping.value.rules[0];
+      if (!first) throw new Error(`${target.tenantId}'s Project has no Mapping Rule to preview`);
+      return readSurface.previewMappingRuleChange(deps, contextOf(target), {
+        projectId: target.projectId,
+        change: { kind: 'delete', ruleId: first.id },
+      });
+    },
+    mustSurface: (state) => {
+      const first = [...state.fixture.mappingRules].sort((a, b) => a.priority - b.priority)[0];
+      return first ? [first.wpId] : [];
+    },
+    // The preview carries only the Tickets the first rule holds and the WP they leave — a few
+    // dozen labels, not the bundle's hundreds. Floor 0: at least one label is still required.
+    minimumLabels: 0,
+  },
+  {
+    name: 'reorderMappingRules',
+    kind: 'write',
+    why:
+      'Story 5.10 / UX-DR22: renumbers the live mapping_rule priorities 1..n in the given order ' +
+      '(the two fixture rules swapped), re-evaluates under the Project lock (mapping_event + ' +
+      'mapping_head only on change) and records mapping.rule_reorder. Registered before the other ' +
+      'rule writes so the live set is still exactly the fixture\'s two rules.',
+    invokeWrite: (deps, target) =>
+      readSurface.reorderMappingRules(deps, contextOf(target), {
+        projectId: target.projectId,
+        orderedRuleIds: [target.rules[1].id, target.rules[0].id],
+      }),
+  },
+  {
+    name: 'updateMappingRule',
+    kind: 'write',
+    why:
+      'Story 5.10 / FR-22: edits a live mapping_rule in place (renamed, moved to an unused ' +
+      'priority, same target and condition), re-evaluates, records mapping.rule_update.',
+    invokeWrite: (deps, target) =>
+      readSurface.updateMappingRule(deps, contextOf(target), {
+        projectId: target.projectId,
+        ruleId: target.rules[0].id,
+        name: 'Harness rule renamed',
+        priority: 100,
+        wpId: target.rules[0].wpId,
+        matchField: target.rules[0].matchField,
+        matchValue: target.rules[0].matchValue,
+      }),
+  },
+  {
+    name: 'createMappingRule',
+    kind: 'write',
+    why:
+      'Story 5.10 / FR-22: inserts a mapping_rule (id from the id port) whose key pattern matches ' +
+      'no Ticket, re-evaluates (nothing moves), records mapping.rule_create.',
+    invokeWrite: (deps, target) =>
+      readSurface.createMappingRule(deps, contextOf(target), {
+        projectId: target.projectId,
+        name: 'Harness rule',
+        priority: 50,
+        wpId: target.wpId,
+        matchField: 'keyPattern',
+        matchValue: 'ZZ-NOMATCH-*',
+      }),
+  },
+  {
+    name: 'deleteMappingRule',
+    kind: 'write',
+    why:
+      'Story 5.10 / FR-22: soft-deletes a live mapping_rule (deleted_at), re-evaluates — the ' +
+      'Tickets it held leave for Unmapped, each a rule event naming it — records mapping.rule_delete.',
+    invokeWrite: (deps, target) =>
+      readSurface.deleteMappingRule(deps, contextOf(target), {
+        projectId: target.projectId,
+        ruleId: target.rules[1].id,
+      }),
   },
   // --- FR-1's organisation writes (story 1.3 slice 2; story 1.5: tenant_admin only) -------------
   {

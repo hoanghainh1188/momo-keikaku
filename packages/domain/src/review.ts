@@ -91,6 +91,25 @@ export interface ReviewInput {
    * where statusId ∈ Resolved set). When omitted/null, Resolved-in-Period does not fire.
    */
   resolvedAtByTicket?: ReadonlyMap<string, string>;
+  /**
+   * Story 5.10 / UX-DR23: every Mapping Rule's name by id — soft-deleted rules included, because
+   * a Ticket a since-deleted rule moved to Unmapped still names it.
+   */
+  ruleNamesById?: ReadonlyMap<string, string>;
+}
+
+/**
+ * Story 5.10 / UX-DR23 / Harry Q3: a Ticket whose head at the pin is a `rule` event with
+ * `wpId = null` — "moved to Unmapped by rule '…'" — flagged for as long as it stays unmapped.
+ */
+export interface RuleUnmappedRow {
+  ticketId: string;
+  key: string;
+  title: string;
+  /** The rule the Ticket left; null only for a legacy event that recorded none. */
+  ruleId: string | null;
+  ruleName: string | null;
+  mh: Mh;
 }
 
 export interface UnmappedGroup {
@@ -177,6 +196,8 @@ export interface ReviewResult {
   };
   scopeLedger: { key: string; label: string; mh: Mh; share: Ratio }[];
   unmappedGroups: UnmappedGroup[];
+  /** Story 5.10: Tickets a rule moved to Unmapped, still unmapped at the pin (key order). */
+  ruleUnmapped: RuleUnmappedRow[];
   /** Null while the Project has no Baseline: a milestone's slip is judged against it. */
   milestones: MilestoneRow[] | null;
   /** Null while the Project has no Baseline. */
@@ -331,6 +352,25 @@ export function computeReview(input: ReviewInput): ReviewResult {
   }
   const unmappedGroups = [...groups.values()].sort((a, b) => compareBigint(b.mh, a.mh));
 
+  // --- Story 5.10 / UX-DR23: "moved to Unmapped by rule '…'", persisting while unmapped (Q3).
+  const ruleUnmapped: RuleUnmappedRow[] = input.pinnedSnapshot.tickets
+    .flatMap((t) => {
+      const m = head.get(t.trackerIssueId);
+      if (!m || m.source !== 'rule' || m.wpId !== null) return [];
+      const ruleId = m.ruleId ?? null;
+      return [
+        {
+          ticketId: t.trackerIssueId,
+          key: t.key,
+          title: t.title,
+          ruleId,
+          ruleName: ruleId === null ? null : (input.ruleNamesById?.get(ruleId) ?? null),
+          mh: attribution.hoursByTicket.get(t.trackerIssueId) ?? 0n,
+        },
+      ];
+    })
+    .sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+
   const divergence =
     baseline === null || evm === null
       ? null
@@ -422,6 +462,7 @@ export function computeReview(input: ReviewInput): ReviewResult {
     },
     scopeLedger,
     unmappedGroups,
+    ruleUnmapped,
     milestones,
     divergence,
     coverage,

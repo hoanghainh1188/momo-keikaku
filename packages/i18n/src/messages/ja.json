@@ -296,7 +296,63 @@
       "segment_aria": "{label} {hours} hours, {share}",
       "segment_title": "{label}: {hours}h ({share})"
     },
-    "coverage_summary": "{hourShare} of hours mapped · {ticketShare} of Tickets mapped · {unmappedTickets} Unmapped Tickets. The share of Tickets and the share of hours are reported separately on purpose."
+    "coverage_summary": "{hourShare} of hours mapped · {ticketShare} of Tickets mapped · {unmappedTickets} Unmapped Tickets. The share of Tickets and the share of hours are reported separately on purpose.",
+    "rules_editor": {
+      "new_rule": "ルールを追加",
+      "actions": "操作",
+      "edit": "編集",
+      "delete": "削除",
+      "cancel": "キャンセル",
+      "save": "保存",
+      "confirm_delete": "ルールを削除",
+      "form_create_heading": "新しいマッピングルール",
+      "form_edit_heading": "ルール「{name}」を編集",
+      "delete_heading": "ルール「{name}」を削除しますか？",
+      "name": "名前",
+      "priority": "優先度",
+      "field": "条件",
+      "value": "値",
+      "target": "対象のWork Package",
+      "target_placeholder": "末端のWork Packageを選択",
+      "fields": {
+        "milestone": "マイルストーン",
+        "category": "カテゴリー",
+        "issueType": "種別",
+        "parent": "親課題（キー）",
+        "keyPattern": "キーのパターン"
+      },
+      "value_hint": {
+        "milestone": "チケットが持つBacklogのマイルストーンID。",
+        "category": "チケットが持つBacklogのカテゴリーID。",
+        "issueType": "チケットが持つBacklogの種別ID。",
+        "parent": "親チケットのキーを入力（例: EC2-101）。",
+        "keyPattern": "チケットキー全体に対するglob。* は任意の文字列、? はちょうど1文字。大文字・小文字を区別します。"
+      },
+      "preview_heading": "保存すると",
+      "preview_loading": "移動のプレビューを読み込み中… 読み込むまで保存はできません。",
+      "preview_none": "移動するチケットはありません。",
+      "preview_arrival": "{wp} へ +{tickets, plural, other {#件のチケット}} / +{hours}h が移動します",
+      "preview_departure": "{wp} から {tickets, plural, other {#件のチケット}}が外れます",
+      "preview_unmapped": "{tickets, plural, other {#件のチケット}} / {hours}h が未マッピングになります",
+      "preview_failed": "プレビューを読み込めなかったため、保存はできません。",
+      "refusal": {
+        "priority_taken": "この優先度は別のルールが使っています。ルールごとに異なる優先度が必要です。",
+        "not_leaf": "ルールの対象は末端のWork Packageだけです。",
+        "unknown_parent": "このプロジェクトにそのキーのチケットはありません。",
+        "order_mismatch": "並べ替え中にルール一覧が変わりました。再読み込みしてやり直してください。",
+        "not_found": "そのルールまたはWork Packageはもう存在しません。",
+        "invalid": "名前・優先度・値を確認してください。"
+      },
+      "saved": "保存しました。{moved, plural, =0 {移動したチケットはありません} other {#件のチケットが移動しました}}。",
+      "deleted": "削除しました。{moved, plural, =0 {移動したチケットはありません} other {#件のチケットが移動しました}}。",
+      "reordered": "並べ替えました。{moved, plural, =0 {移動したチケットはありません} other {#件のチケットが移動しました}}。",
+      "handle_aria": "ルール {name} の並べ替え：ドラッグ、または Alt+↑ / Alt+↓",
+      "reorder_hint": "ハンドルでルールをドラッグするか、ハンドルにフォーカスして Alt+↑ / Alt+↓ を押します。並べ替えはすぐに反映され、プレビューはありません。",
+      "empty": "ルールはまだありません。ルールか手動マッピングで割り当てるまで、チケットは未マッピングのままです。",
+      "preview_arrival_count": "{wp} へ +{tickets, plural, other {#件のチケット}}が移動します",
+      "preview_unmapped_count": "{tickets, plural, other {#件のチケット}}が未マッピングになります",
+      "action_failed": "変更を送信できませんでした。保存されていません。もう一度お試しください。"
+    }
   },
   "plan": {
     "tree_schedule": "Tree & schedule",
@@ -518,7 +574,13 @@
         "reading": ""
       }
     },
-    "ticket_count_mode": "チケット数モード"
+    "ticket_count_mode": "チケット数モード",
+    "rule_unmapped": {
+      "heading": "ルールにより未マッピングになったチケット",
+      "row": "ルール「{rule}」により未マッピングになりました",
+      "unknown_rule": "ルールにより未マッピングになりました",
+      "caption": "ルールに一致しなくなったチケットです。再びマッピングされるまで表示され続けます。"
+    }
   },
   "shell": {
     "the_tracker_snapshot_this_view_is_pinned_to": "The Tracker Snapshot this view is pinned to",

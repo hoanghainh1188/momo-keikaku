@@ -342,3 +342,35 @@ describe('computeReview Ticket-Count Mode Unplanned share', () => {
     expect(r.unplanned.period.totalMh).toBe(0n);
   });
 });
+
+describe('computeReview flags Tickets a rule moved to Unmapped (story 5.10 / UX-DR23 / Q3)', () => {
+  const ruleEvents = [
+    { seq: 1, ticketId: 'tb', wpId: 'WP-B', source: 'rule' as const, ruleId: 'rule-1', at: 'x', actor: 'a' },
+    { seq: 2, ticketId: 'tb', wpId: null, source: 'rule' as const, ruleId: 'rule-1', at: 'x', actor: 'a' },
+  ];
+
+  it('names the rule the Ticket left, for as long as it stays unmapped', () => {
+    const r = computeReview({
+      ...input,
+      mappingEvents: ruleEvents,
+      ruleNamesById: new Map([['rule-1', 'Support → 7.3']]),
+    });
+    expect(r.ruleUnmapped).toEqual([
+      { ticketId: 'tb', key: 'tb', title: 'tb', ruleId: 'rule-1', ruleName: 'Support → 7.3', mh: hoursToMh(30) },
+    ]);
+  });
+
+  it('clears once the Ticket is mapped again, and at a pin before the move', () => {
+    const remapped = [
+      ...ruleEvents,
+      { seq: 3, ticketId: 'tb', wpId: 'WP-B', source: 'manual' as const, at: 'x', actor: 'pm' },
+    ];
+    expect(computeReview({ ...input, mappingEvents: remapped }).ruleUnmapped).toEqual([]);
+    expect(computeReview({ ...input, mappingEvents: ruleEvents, mappingSeqMax: 1 }).ruleUnmapped).toEqual([]);
+  });
+
+  it('a release (back to rules) is not flagged', () => {
+    const released = [{ seq: 1, ticketId: 'tb', wpId: null, source: 'release' as const, at: 'x', actor: 'pm' }];
+    expect(computeReview({ ...input, mappingEvents: released }).ruleUnmapped).toEqual([]);
+  });
+});

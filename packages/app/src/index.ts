@@ -28,6 +28,7 @@ export type {
   ProjectReadDeps,
   ProjectReadPort,
   ProjectReview,
+  RuleEvaluationInputs,
 } from './ports/project-read';
 export type {
   ChangeRequestCandidateCommand,
@@ -119,6 +120,22 @@ export type {
   ProjectMapping,
 } from './use-cases/get-project-mapping';
 export type { ProjectInput } from './use-cases/project-input';
+// Story 5.10: Mapping Rule authoring — inputs, answers and the refusal codes the form maps.
+export type {
+  CreateMappingRuleInput,
+  DeleteMappingRuleInput,
+  PreviewMappingRuleChangeInput,
+  ReorderMappingRulesInput,
+  UpdateMappingRuleInput,
+} from './use-cases/mapping-rule-input';
+export { MAPPING_RULE_REFUSALS, MAPPING_RULE_TEXT_MAX } from './use-cases/mapping-rule-input';
+export type { MappingRuleSaved, MappingRulesReordered } from './use-cases/mapping-rules';
+export type {
+  MappingRuleRecord,
+  MappingRuleWriteDeps,
+  MappingRuleWriteRepository,
+  MappingRuleWriteScope,
+} from './ports/mapping-rule-write';
 // The one runtime value besides the use cases and `config`: the Explain note's length bound,
 // so the action's truncation and the use case's validation cannot drift apart.
 export { EXPLAIN_NOTE_MAX } from './use-cases/project-write-input';

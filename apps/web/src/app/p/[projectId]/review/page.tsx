@@ -33,6 +33,8 @@ export default async function ReviewPage({
   const leafWps = bundle.wps.filter((w) => w.isLeaf && !w.isMilestone);
   const overlaps = bundle.meta.overlaps;
   const leftScopeTickets = bundle.meta.leftScopeTickets;
+  // Story 5.10: only LIVE rules have a row (an anchor) on the Mapping page.
+  const liveRuleIds = new Set(bundle.rules.map((rule) => rule.id));
 
   const overall = r.health.overall;
   // Story 2.2 (decision Q1-A): with no Baseline these are null, and each block that needs them
@@ -320,6 +322,39 @@ export default async function ReviewPage({
               ticketShare: share(r.coverage.mappedTicketShare),
             })}
           </p>
+
+          {r.ruleUnmapped.length > 0 && (
+            <>
+              {/* Story 5.10 / UX-DR23 / Q3: flagged for as long as the Ticket stays unmapped. */}
+              <h3 className="label" style={{ marginTop: 24 }}>{t('review.rule_unmapped.heading')}</h3>
+              <ul data-testid="rule-unmapped" style={{ margin: '4px 0', paddingLeft: 18 }}>
+                {r.ruleUnmapped.map((row) => (
+                  <li key={row.ticketId} data-testid={`rule-unmapped-${row.ticketId}`}>
+                    <strong>{row.key}</strong> {row.title} —{' '}
+                    {row.ruleId === null ? (
+                      t('review.rule_unmapped.unknown_rule')
+                    ) : !liveRuleIds.has(row.ruleId) ? (
+                      // A soft-deleted rule is not listed on the Mapping page: name it, no link.
+                      t('review.rule_unmapped.row', { rule: row.ruleName ?? row.ruleId })
+                    ) : (
+                      <Link href={`/p/${projectId}/mapping#rule-${row.ruleId}`}>
+                        {t('review.rule_unmapped.row', { rule: row.ruleName ?? row.ruleId })}
+                      </Link>
+                    )}
+                    {/* Ticket-Count Mode carries no hours — never render them as 0 (story 5.7). */}
+                    {r.measurementBasis === 'hours' && (
+                      <span className="caption">
+                        {' '}
+                        {hours(row.mh)}
+                        <span className="unit">h</span>
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+              <p className="caption">{t('review.rule_unmapped.caption')}</p>
+            </>
+          )}
         </Section>
 
         <Section title={t('review.ahead_behind')} id="ahead-behind">

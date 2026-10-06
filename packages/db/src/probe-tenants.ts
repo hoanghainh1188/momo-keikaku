@@ -62,7 +62,8 @@ export const PRESERVED_VOCABULARY: ReadonlySet<string> = new Set([
   'milestone',
   'category',
   'issueType',
-  'keyPrefix',
+  'parent',
+  'keyPattern',
   // packages/domain/src/review.ts — DispositionKind.
   'map',
   'plan',

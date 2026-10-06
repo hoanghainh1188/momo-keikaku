@@ -89,6 +89,29 @@ const WELL_FORMED_INPUT: Readonly<Record<string, unknown>> = {
   explainTickets: { projectId: UNREACHED_PROJECT, note: 'Client asked for it.', ticketIds: ['tkt-1'] },
   markChangeRequestCandidates: { projectId: UNREACHED_PROJECT, ticketIds: ['tkt-1'] },
   mapTicket: { projectId: UNREACHED_PROJECT, ticketId: 'tkt-1', wpId: 'wp-1' },
+  createMappingRule: {
+    projectId: UNREACHED_PROJECT,
+    name: 'Rule',
+    priority: 1,
+    wpId: 'wp-1',
+    matchField: 'category',
+    matchValue: 'Support',
+  },
+  updateMappingRule: {
+    projectId: UNREACHED_PROJECT,
+    ruleId: 'rule-1',
+    name: 'Rule',
+    priority: 1,
+    wpId: 'wp-1',
+    matchField: 'keyPattern',
+    matchValue: 'EC2-*',
+  },
+  deleteMappingRule: { projectId: UNREACHED_PROJECT, ruleId: 'rule-1' },
+  reorderMappingRules: { projectId: UNREACHED_PROJECT, orderedRuleIds: ['rule-1', 'rule-2'] },
+  previewMappingRuleChange: {
+    projectId: UNREACHED_PROJECT,
+    change: { kind: 'delete', ruleId: 'rule-1' },
+  },
   applyPlanChange: { kind: 'clear_project_start', projectId: UNREACHED_PROJECT },
   publishCalendarVersion: { projectId: UNREACHED_PROJECT },
   patchNationalCalendarFlags: {
@@ -271,6 +294,13 @@ describe('every use case declares its roles', () => {
             "tenant_admin",
           ],
         },
+        "createMappingRule": {
+          "projectScoped": true,
+          "roles": [
+            "tenant_admin",
+            "pm",
+          ],
+        },
         "createProgram": {
           "projectScoped": false,
           "roles": [
@@ -285,6 +315,13 @@ describe('every use case declares its roles', () => {
         },
         "createResource": {
           "projectScoped": false,
+          "roles": [
+            "tenant_admin",
+            "pm",
+          ],
+        },
+        "deleteMappingRule": {
+          "projectScoped": true,
           "roles": [
             "tenant_admin",
             "pm",
@@ -377,6 +414,13 @@ describe('every use case declares its roles', () => {
             "pm",
           ],
         },
+        "previewMappingRuleChange": {
+          "projectScoped": true,
+          "roles": [
+            "tenant_admin",
+            "pm",
+          ],
+        },
         "publishCalendarVersion": {
           "projectScoped": true,
           "roles": [
@@ -442,6 +486,13 @@ describe('every use case declares its roles', () => {
             "tenant_admin",
           ],
         },
+        "reorderMappingRules": {
+          "projectScoped": true,
+          "roles": [
+            "tenant_admin",
+            "pm",
+          ],
+        },
         "revokeMembership": {
           "projectScoped": false,
           "roles": [
@@ -466,6 +517,13 @@ describe('every use case declares its roles', () => {
           "projectScoped": false,
           "roles": [
             "tenant_admin",
+          ],
+        },
+        "updateMappingRule": {
+          "projectScoped": true,
+          "roles": [
+            "tenant_admin",
+            "pm",
           ],
         },
       }

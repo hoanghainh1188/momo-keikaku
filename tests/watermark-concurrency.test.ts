@@ -1,9 +1,11 @@
 import { performance } from 'node:perf_hooks';
 import { and, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { applyRules, mappingHead, type TicketObservation } from '@momo/domain';
 import {
   appendProjectDefaultRate,
   appendResourceRate,
+  deleteMappingRule,
   mapTicket,
   mapTickets,
   renameDepartment,
@@ -236,7 +238,6 @@ describe.skipIf(!reachable)('the watermark lock serialises appends per scope', (
           .map(([table]) => `${probe.tenantId}.${table}`),
       );
     }
-    await closeAllPools();
     expect(left, 'the watermark suite left probe rows behind').toEqual([]);
   }, 120_000);
 
@@ -497,4 +498,175 @@ describe.skipIf(!reachable)('the watermark lock serialises appends per scope', (
       expect(after[i]!.mappings - before[i]!.mappings).toBe(10 * ticketCount);
     });
   }, 120_000);
+});
+
+/**
+ * STORY 5.10 — MANUAL WINS (AR-18, AR-37). A manual Mapping that commits while a rule evaluation
+ * is in flight is never overridden: the evaluation takes the Project lock BEFORE it reads the
+ * heads, so it waits for the manual append, then sees it and skips that Ticket. Driven twice —
+ * through the ingest writer (rules re-evaluated on a snapshot) and through a rule save
+ * (`deleteMappingRule`'s same-transaction re-evaluation).
+ *
+ * The Ticket is one a rule holds; the ingest's snapshot moves it into the OTHER rule's category,
+ * and the rule save deletes the rule holding it — so either evaluation, reading a stale head,
+ * WOULD append a rule event over the manual one. The pure precondition below proves that, so the
+ * test cannot pass by the evaluation simply having nothing to do.
+ */
+describe.skipIf(!reachable)('story 5.10: a manual Mapping committed during rule evaluation wins', () => {
+  const probe = PROBE_A;
+  const [first, second] = [...probe.state.fixture.mappingRules].sort((a, b) => a.priority - b.priority);
+  const lastSnapshot = probe.state.snapshots[probe.state.snapshots.length - 1]!;
+  const reserved = new Set(targetOf(probe, probe.tenantId).ticketIds);
+  const seedHead = mappingHead(probe.state.mappingEvents);
+  /** Tickets of the latest snapshot the FIRST rule holds, outside the other tests' two. */
+  const heldByFirst = lastSnapshot.tickets.filter((t) => {
+    const h = seedHead.get(t.trackerIssueId);
+    return !reserved.has(t.trackerIssueId) && h?.source === 'rule' && h.ruleId === first!.id && h.wpId !== null;
+  });
+  const manualWp = probe.state.wps.find(
+    (w) => w.isLeaf && !w.isMilestone && !w.isCatchAll && w.id !== first!.wpId && w.id !== second!.wpId,
+  )!;
+
+  // The suite above removes its probes in its own afterAll; this block writes A afresh.
+  beforeAll(async () => {
+    await createProbeTenant(owner(), probe);
+  }, 120_000);
+
+  afterAll(async () => {
+    await removeProbeTenant(owner(), probe);
+    const left = Object.entries(await rowCounts(probe.tenantId)).filter(([, n]) => n > 0);
+    expect(left, 'the story 5.10 block left probe rows behind').toEqual([]);
+  }, 120_000);
+
+  /** Latest Mapping events of one Ticket, newest last. */
+  async function eventsOf(ticketId: string) {
+    const rows = await withTenant(owner(), probe.tenantId, (tx) =>
+      tx
+        .select({ seq: s.mappingEvent.seq, source: s.mappingEvent.source, wpId: s.mappingEvent.wpId, actor: s.mappingEvent.actor })
+        .from(s.mappingEvent)
+        .where(and(eq(s.mappingEvent.tenantId, probe.tenantId), eq(s.mappingEvent.ticketId, ticketId))),
+    );
+    return rows.sort((a, b) => a.seq - b.seq);
+  }
+
+  /** Holds a manual Mapping of `ticketId` open (lock held) until released. */
+  function holdManual(ticketId: string, actor: string) {
+    const locked = gate();
+    const held = gate();
+    const done = inTenantTransaction(app(), probe.tenantId, async (scope) => {
+      await scope.projectWrite.recordManualMapping(
+        { actor, at: TEST_NOW },
+        { projectId: probe.projectId, ticketId, wpId: manualWp.id },
+      );
+      locked.open();
+      await held.opened;
+    });
+    return { locked: locked.opened, release: held.open, done };
+  }
+
+  it('the precondition: there are rule-held Tickets to fight over', () => {
+    expect(first && second, 'the fixture has two Mapping Rules').toBeTruthy();
+    expect(heldByFirst.length, 'the first rule holds no Ticket in the latest snapshot').toBeGreaterThan(1);
+    expect(manualWp).toBeDefined();
+  });
+
+  it('ingest: the snapshot that would move the Ticket by rule skips it once the manual Mapping commits', async () => {
+    const target = heldByFirst[0]!;
+    const moved: TicketObservation = {
+      ...target,
+      attributes: [
+        ...target.attributes.filter((a) => a.kind !== 'category'),
+        { kind: 'category', id: second!.match.value },
+      ],
+    };
+    // Precondition: against the seed's heads, this snapshot WOULD append a rule event for it.
+    const wouldMove = applyRules([first!, second!], [moved], seedHead, 1, 'x');
+    expect(wouldMove.map((e) => [e.ticketId, e.wpId])).toEqual([[target.trackerIssueId, second!.wpId]]);
+
+    const read = {
+      complete: true,
+      observedAt: new Date(Date.parse(lastSnapshot.observedAt) + 3_600_000).toISOString(),
+      tickets: lastSnapshot.tickets.map((t) => (t.trackerIssueId === target.trackerIssueId ? moved : t)),
+      accounts: [],
+      hoursFieldPresent: lastSnapshot.hoursFieldPresent,
+      rateLimit: null,
+      adapterKind: 'fixture' as const,
+    };
+    // The seed writes `ticket.tracker_site` and `connector.site` differently ('…backlog.jp' vs
+    // 'ec-phase2' — recorded in deferred-work.md), so an ingest onto a seeded Project would key its
+    // Ticket identity upsert on another site and collide. Align the probe's Connector first.
+    const connectorId = targetOf(probe, probe.tenantId).connectorId;
+    await withTenant(owner(), probe.tenantId, async (tx) => {
+      const [seeded] = await tx
+        .select({ site: s.ticket.trackerSite })
+        .from(s.ticket)
+        .where(and(eq(s.ticket.tenantId, probe.tenantId), eq(s.ticket.trackerIssueId, target.trackerIssueId)));
+      await tx
+        .update(s.connector)
+        .set({ site: seeded!.site })
+        .where(and(eq(s.connector.tenantId, probe.tenantId), eq(s.connector.id, connectorId)));
+    });
+    const ingestIds = idPort('xtwm-ingest');
+    const manual = holdManual(target.trackerIssueId, 'user:wm-manual-vs-ingest');
+    await manual.locked;
+    const ingest = inTenantTransaction(app(), probe.tenantId, (scope) =>
+      scope.ingestWrite.writeIngestSnapshot({
+        projectId: probe.projectId,
+        connectorId,
+        read,
+        snapshotId: ingestIds.next(),
+        nextId: () => ingestIds.next(),
+        actor: 'system:wm-ingest',
+        at: TEST_NOW,
+      }),
+    );
+    try {
+      await waiterOn(probe, projectScope(probe), ingest);
+    } finally {
+      manual.release();
+    }
+    await manual.done;
+    expect((await ingest).kind).toBe('written');
+
+    const events = await eventsOf(target.trackerIssueId);
+    const last = events[events.length - 1]!;
+    expect(last, 'the manual Mapping is the Ticket\'s head after the ingest').toMatchObject({
+      source: 'manual',
+      wpId: manualWp.id,
+      actor: 'user:wm-manual-vs-ingest',
+    });
+  }, 60_000);
+
+  it('rule save: deleting the rule that held the Ticket leaves the manual Mapping alone', async () => {
+    const target = heldByFirst[1]!;
+    const manual = holdManual(target.trackerIssueId, 'user:wm-manual-vs-rule');
+    await manual.locked;
+    const save = deleteMappingRule(deps(), asAdmin(probe), {
+      projectId: probe.projectId,
+      ruleId: first!.id,
+    });
+    try {
+      await waiterOn(probe, projectScope(probe), save);
+    } finally {
+      manual.release();
+    }
+    await manual.done;
+    const result = await save;
+    expect(result.ok).toBe(true);
+
+    const events = await eventsOf(target.trackerIssueId);
+    expect(events[events.length - 1]).toMatchObject({
+      source: 'manual',
+      wpId: manualWp.id,
+      actor: 'user:wm-manual-vs-rule',
+    });
+    // …while the other Tickets the deleted rule held DID move (to Unmapped, or the other rule).
+    expect(result.ok && result.value.moved).toBeGreaterThan(0);
+  }, 60_000);
+});
+
+// One pool teardown for the file, after both blocks: closing it drops the seed-suite lock's session
+// (`connectWriteHarness`), so it must not happen between them.
+afterAll(async () => {
+  await closeAllPools();
 });

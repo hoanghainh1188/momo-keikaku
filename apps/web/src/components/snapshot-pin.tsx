@@ -10,8 +10,8 @@ import { useEffect, useState, useTransition, type FormEvent } from 'react';
 import {
   loadSnapshotPinStateAction,
   refreshSnapshotAction,
-  INITIAL_SNAPSHOT_REFRESH,
 } from '@/app/p/[projectId]/snapshot-actions';
+import { INITIAL_SNAPSHOT_REFRESH } from '@/app/p/[projectId]/snapshot-refresh-state';
 
 export interface SnapshotPinProps {
   readonly projectId: string;

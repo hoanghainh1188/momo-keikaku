@@ -98,13 +98,27 @@ export interface MappingRule {
   priority: number; // strict order, lowest wins
   name: string;
   wpId: string;
-  /** Demo supports the Backlog attribute set from FR-22 — values match `attributes[].id`. */
-  match:
-    | { field: 'milestone'; value: string }
-    | { field: 'category'; value: string }
-    | { field: 'issueType'; value: string }
-    | { field: 'keyPrefix'; value: string };
+  /**
+   * FR-22 / story 5.10: ONE condition per rule (Harry Q1 — OR is several rules, no AND), over the
+   * Backlog attribute set. `milestone` / `category` match `attributes[].id`; `issueType` matches
+   * `issueTypeId`; `parent` matches `parentIssueId` (a tracker issue id, resolved from the key the
+   * PM typed at save); `keyPattern` is an anchored, case-sensitive glob with `*` and `?` only
+   * (Harry Q2).
+   */
+  match: MappingRuleMatch;
 }
+
+export const MAPPING_RULE_FIELDS = [
+  'milestone',
+  'category',
+  'issueType',
+  'parent',
+  'keyPattern',
+] as const;
+
+export type MappingRuleField = (typeof MAPPING_RULE_FIELDS)[number];
+
+export type MappingRuleMatch = { field: MappingRuleField; value: string };
 
 export interface WorkPackage {
   id: string;

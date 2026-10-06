@@ -3,6 +3,7 @@ import {
   buildCalendar,
   computeReview,
   DEFAULT_THRESHOLDS,
+  mappingHead,
   periodOf,
   projectDate,
   trackerAccountIdsFromLinkHeads,
@@ -91,7 +92,11 @@ export interface ProjectBundle {
     baselineRecordedAt: string;
   };
   input: ReviewInput;
-  rules: (MappingRule & { currentlyMapped: number })[];
+  /**
+   * Live rules. `parentKey` (story 5.10): for a `parent` rule, the parent Ticket's key from the
+   * Project's Ticket identities (null when no identity carries the stored id).
+   */
+  rules: (MappingRule & { currentlyMapped: number; parentKey: string | null })[];
   wps: WorkPackage[];
   /** The active Baseline — null while the Project has none (story 2.1, decision 2-A). */
   baseline: BaselineVersion | null;
@@ -413,19 +418,43 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
     actor: d.actor,
   }));
 
+  // Story 5.10: every rule (soft-deleted included) names the Review's "moved to Unmapped by
+  // rule '…'" rows; only LIVE rules are listed and evaluated.
   const ruleRows = await tx
     .select()
     .from(s.mappingRule)
     .where(eq(s.mappingRule.projectId, projectId))
-    .orderBy(asc(s.mappingRule.priority));
-  const rules = ruleRows.map((r) => ({
-    id: r.id,
-    priority: r.priority,
-    name: r.name,
-    wpId: r.wpId,
-    match: { field: r.matchField, value: r.matchValue } as MappingRule['match'],
-    currentlyMapped: mappingEvents.filter((m) => m.source === 'rule' && m.wpId === r.wpId).length,
-  }));
+    .orderBy(asc(s.mappingRule.priority), asc(s.mappingRule.id));
+  const ruleNamesById = new Map(ruleRows.map((r) => [r.id, r.name]));
+  // Tickets each rule holds NOW: heads whose `rule_id` is the rule (not every event it ever wrote).
+  const ruleHeads = mappingHead(mappingEvents);
+  const heldByRule = new Map<string, number>();
+  for (const h of ruleHeads.values()) {
+    if (h.source !== 'rule' || h.wpId === null || !h.ruleId) continue;
+    heldByRule.set(h.ruleId, (heldByRule.get(h.ruleId) ?? 0) + 1);
+  }
+  // Story 5.10: a `parent` rule stores the parent's tracker issue id; the PM reads and types its
+  // key — resolved from the Project's Ticket identities (the source `ticketIdForKey` reads).
+  const parentIds = ruleRows.filter((r) => r.matchField === 'parent').map((r) => r.matchValue);
+  const parentKeyById = new Map<string, string>();
+  if (parentIds.length > 0) {
+    const parents = await tx
+      .select({ trackerIssueId: s.ticket.trackerIssueId, key: s.ticket.key })
+      .from(s.ticket)
+      .where(and(eq(s.ticket.projectId, projectId), inArray(s.ticket.trackerIssueId, parentIds)));
+    for (const row of parents) parentKeyById.set(row.trackerIssueId, row.key);
+  }
+  const rules = ruleRows
+    .filter((r) => r.deletedAt === null)
+    .map((r) => ({
+      id: r.id,
+      priority: r.priority,
+      name: r.name,
+      wpId: r.wpId,
+      match: { field: r.matchField, value: r.matchValue } as MappingRule['match'],
+      currentlyMapped: heldByRule.get(r.id) ?? 0,
+      parentKey: r.matchField === 'parent' ? (parentKeyById.get(r.matchValue) ?? null) : null,
+    }));
 
   const [settingHead] = await tx
     .select({
@@ -518,6 +547,7 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
     measurementBasis,
     basisSeqMax,
     connectorSettingSeqMax,
+    ruleNamesById,
     mappingSeqMax,
     linkSeqMax,
     resolvedStatusIds,

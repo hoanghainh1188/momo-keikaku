@@ -27,6 +27,7 @@ import {
   type TrackerAccountObservation,
 } from '@momo/domain';
 import type { Bound } from '../../bound';
+import { loadLiveMappingRules } from '../../repo-mapping-rules';
 import { appendMappingEvents } from '../../repo-writes';
 import * as s from '../../schema';
 import { lockWatermark } from '../../watermark-lock';
@@ -184,18 +185,9 @@ export function ingestWriteRepositoryOn(bound: Bound) {
     });
   }
 
+  /** Story 5.10: live (not soft-deleted) rules only, priority order. */
   async function loadMappingRules(projectId: string): Promise<MappingRule[]> {
-    const rows = await tx
-      .select()
-      .from(s.mappingRule)
-      .where(and(eq(s.mappingRule.tenantId, tenantId), eq(s.mappingRule.projectId, projectId)));
-    return rows.map((r) => ({
-      id: r.id,
-      priority: r.priority,
-      name: r.name,
-      wpId: r.wpId,
-      match: { field: r.matchField, value: r.matchValue } as MappingRule['match'],
-    }));
+    return loadLiveMappingRules(tx, tenantId, projectId);
   }
 
   async function loadMappingEvents(projectId: string): Promise<MappingEvent[]> {
