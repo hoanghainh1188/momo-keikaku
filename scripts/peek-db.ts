@@ -11,7 +11,7 @@ if (r.evm === null) {
   console.log('no Baseline yet — AC', hours(r.attribution.cumulative.totalMh));
 } else {
   console.log('SPI', present(r.evm.spi).text, 'CPI all-in', present(r.evm.cpiAllIn).text, 'CPI planned', present(r.evm.cpiPlannedScope).text, 'TCPI', present(r.evm.tcpi).text);
-  console.log('BAC', hours(r.evm.bacMh), 'PV', hours(r.evm.pvMh), 'EV', hours(r.evm.evMh), 'AC', hours(r.evm.acMh));
+  console.log('BAC', hours(r.evm.bacMh), 'PV', present(r.evm.pvMh).text, 'EV', present(r.evm.evMh).text, 'AC', present(r.evm.acMh).text);
 }
 console.log('unplanned period', hours(r.unplanned.period.unplannedMh), r.unplanned.sharePeriod && share(r.unplanned.sharePeriod));
 console.log('components', r.unplanned.components.map(c=>`${c.label}=${hours(c.mh)}`).join(' | '));

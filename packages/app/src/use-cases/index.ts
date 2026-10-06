@@ -42,6 +42,6 @@ export {
 export { listAuditLog } from './list-audit-log';
 export { listDepartments, listPrograms, listProjects } from './list-org';
 export { changeTenantCurrency } from './tenant-currency';
-export { addConnector, rotateCredentials, changeConnectorScope } from './connector-writes';
+export { addConnector, rotateCredentials, changeConnectorScope, appendResolvedStatuses } from './connector-writes';
 // Ingest gate + credential-failure notify stay off this barrel (composition imports them
 // from `@momo/app`); unit tests cover them. Full snapshot writer is story 5.5.

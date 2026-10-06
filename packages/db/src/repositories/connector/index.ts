@@ -223,6 +223,92 @@ export function connectorWriteRepositoryOn(bound: Bound) {
       return row?.seq ?? null;
     },
 
+    async appendBasisEvent(input: {
+      readonly connectorId: string;
+      readonly projectId: string;
+      readonly basis: 'hours' | 'count';
+      readonly actor: string;
+      readonly at: Date;
+    }): Promise<number> {
+      await lockWatermark(bound, { kind: 'project', projectId: input.projectId });
+      const [row] = await tx
+        .insert(s.measurementBasisEvent)
+        .values({
+          tenantId,
+          connectorId: input.connectorId,
+          projectId: input.projectId,
+          basis: input.basis,
+          actor: input.actor,
+          at: input.at,
+        })
+        .returning({ seq: s.measurementBasisEvent.seq });
+      return row!.seq;
+    },
+
+    async latestBasis(
+      connectorId: string,
+    ): Promise<{ seq: number; basis: 'hours' | 'count' } | null> {
+      const [row] = await tx
+        .select({
+          seq: s.measurementBasisEvent.seq,
+          basis: s.measurementBasisEvent.basis,
+        })
+        .from(s.measurementBasisEvent)
+        .where(
+          and(
+            eq(s.measurementBasisEvent.tenantId, tenantId),
+            eq(s.measurementBasisEvent.connectorId, connectorId),
+          ),
+        )
+        .orderBy(sql`${s.measurementBasisEvent.seq} desc`)
+        .limit(1);
+      if (!row) return null;
+      return { seq: row.seq, basis: row.basis as 'hours' | 'count' };
+    },
+
+    async appendSettingEvent(input: {
+      readonly connectorId: string;
+      readonly projectId: string;
+      readonly resolvedStatusIds: readonly string[];
+      readonly actor: string;
+      readonly at: Date;
+    }): Promise<number> {
+      await lockWatermark(bound, { kind: 'project', projectId: input.projectId });
+      const [row] = await tx
+        .insert(s.connectorSettingEvent)
+        .values({
+          tenantId,
+          connectorId: input.connectorId,
+          projectId: input.projectId,
+          resolvedStatusIds: [...input.resolvedStatusIds],
+          actor: input.actor,
+          at: input.at,
+        })
+        .returning({ seq: s.connectorSettingEvent.seq });
+      return row!.seq;
+    },
+
+    async latestSetting(
+      connectorId: string,
+    ): Promise<{ seq: number; resolvedStatusIds: readonly string[] } | null> {
+      const [row] = await tx
+        .select({
+          seq: s.connectorSettingEvent.seq,
+          resolvedStatusIds: s.connectorSettingEvent.resolvedStatusIds,
+        })
+        .from(s.connectorSettingEvent)
+        .where(
+          and(
+            eq(s.connectorSettingEvent.tenantId, tenantId),
+            eq(s.connectorSettingEvent.connectorId, connectorId),
+          ),
+        )
+        .orderBy(sql`${s.connectorSettingEvent.seq} desc`)
+        .limit(1);
+      if (!row) return null;
+      return { seq: row.seq, resolvedStatusIds: row.resolvedStatusIds ?? [] };
+    },
+
     async appendSnapshotAttempt(input: {
       readonly connectorId: string;
       readonly reasonCode: string;

@@ -2,7 +2,7 @@ import { addWorkingDays, nextWorkingDay, workingDaysBetween, type HolidayCalenda
 import type { EvmResult } from './evm';
 import { compareRatio } from './health';
 import type { BaselineVersion } from './types';
-import { ceilDiv, ZERO } from './units';
+import { ceilDiv, mhAmountOrZero, ZERO } from './units';
 
 /**
  * FR-32: forecast effort at completion (the EAC from the Project's EAC Method) and a
@@ -42,7 +42,7 @@ export function computeForecast(
   const stretched = Number(ceilDiv(BigInt(durationWd) * spi.den, spi.num));
   let finish = addWorkingDays(baselineStart, Math.max(stretched - 1, 0), cal);
   // FR-32: while EV < BAC the forecast is never earlier than the next working day.
-  if (evm.evMh < evm.bacMh) {
+  if (mhAmountOrZero(evm.evMh) < evm.bacMh) {
     const floorDate = nextWorkingDay(asOf, cal);
     if (finish < floorDate) finish = floorDate;
   }

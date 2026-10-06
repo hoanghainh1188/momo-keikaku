@@ -46,6 +46,7 @@ function fakeDeps(overrides?: {
 }) {
   const inserts: unknown[] = [];
   const scopeEvents: unknown[] = [];
+  const settingEvents: unknown[] = [];
   const rotates: unknown[] = [];
   const audits: unknown[] = [];
   const mappingCountCalls: string[] = [];
@@ -88,6 +89,13 @@ function fakeDeps(overrides?: {
       return 7;
     },
     latestScopeSeq: async () => 7,
+    appendBasisEvent: async () => 1,
+    latestBasis: async () => null,
+    appendSettingEvent: async (input: unknown) => {
+      settingEvents.push(input);
+      return 1;
+    },
+    latestSetting: async () => ({ seq: 1, resolvedStatusIds: ['Closed'] }),
     appendSnapshotAttempt: async () => {},
     listSnapshotAttempts: async () => [],
     latestAttemptAt: async () => null,
@@ -139,6 +147,7 @@ function fakeDeps(overrides?: {
     deps,
     inserts,
     scopeEvents,
+    settingEvents,
     rotates,
     audits,
     mappingCountCalls,
@@ -152,7 +161,7 @@ function fakeDeps(overrides?: {
 
 describe('addConnector (story 5.2)', () => {
   it('encrypts credentials, records approval, appends scope_event, never stores plaintext', async () => {
-    const { deps, inserts, scopeEvents, audits } = fakeDeps();
+    const { deps, inserts, scopeEvents, settingEvents, audits } = fakeDeps();
     const result = await addConnector(deps, CTX, {
       projectId: 'prj-1',
       spaceUrl: 'https://example.backlog.jp/projects/EC2',
@@ -175,7 +184,18 @@ describe('addConnector (story 5.2)', () => {
     expect(row.credentials.ciphertext.toString()).toContain('enc:secret-key');
     expect(row).not.toHaveProperty('apiKey');
     expect(scopeEvents).toHaveLength(1);
-    expect(audits[0]).toMatchObject({ action: 'connector.add', target: 'con-new' });
+    expect(settingEvents).toEqual([
+      expect.objectContaining({
+        connectorId: 'con-new',
+        projectId: 'prj-1',
+        resolvedStatusIds: ['Closed'],
+      }),
+    ]);
+    expect(audits[0]).toMatchObject({
+      action: 'connector.add',
+      target: 'con-new',
+      payload: expect.objectContaining({ settingSeq: 1 }),
+    });
     expect(JSON.stringify(audits[0])).not.toContain('secret-key');
   });
 

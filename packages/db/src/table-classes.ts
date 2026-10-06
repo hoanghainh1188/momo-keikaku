@@ -298,6 +298,22 @@ export const TABLE_REGISTRY: readonly TableEntry[] = [
       'editing history would rewrite which scope a figure came from.',
   },
   {
+    table: 'measurement_basis_event',
+    class: 'append-only',
+    tenantColumn: 'tenant_id',
+    why:
+      'Latched measurement basis per Connector (story 5.7 / AD-8). Metrics read the head at ' +
+      'basis_seq_max; editing history would flip Ticket-Count Mode retroactively.',
+  },
+  {
+    table: 'connector_setting_event',
+    class: 'append-only',
+    tenantColumn: 'tenant_id',
+    why:
+      'Connector Resolved status set (story 5.7 / AR-38). Percent Complete and Unplanned count ' +
+      'read the head at connector_setting_seq_max; editing would rewrite who was Resolved.',
+  },
+  {
     table: 'tracker_snapshot_attempt',
     class: 'append-only',
     tenantColumn: 'tenant_id',

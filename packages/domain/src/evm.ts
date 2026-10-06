@@ -19,6 +19,7 @@ import {
   ZERO,
   type Mh,
   type MhMetric,
+  type MetricCoverage,
   type Ratio,
   type RatioMetric,
 } from './units';
@@ -29,6 +30,9 @@ import {
  * AD-4: every quantity is exact — `bigint` milli-hours and unreduced `Ratio`s. PV, EV and EAC
  * are stored-shape milli-hour integers, so each is ONE `divRoundHalfEven` from its exact
  * quotient; nothing here rounds for display.
+ *
+ * Story 5.7 / FR-27: PV/EV/SV/AC are metrics (value+coverage or unavailable). AC-family is
+ * unavailable in Ticket-Count Mode; mixed Projects pass hours-only AC with a coverage caption.
  */
 export const FORMULA_VERSION = 'evm-2026-09-20';
 
@@ -59,14 +63,26 @@ export interface EvmInput {
   acByWp: Map<string, Mh>;
   /** FR-30: the Project *Unplanned* line — actual effort with PV = EV = 0 */
   unplannedAcMh: Mh;
-  /** total AC including the Unplanned line (cumulative, incl. Opening Balances) */
+  /**
+   * total AC including the Unplanned line (cumulative, incl. Opening Balances).
+   * Caller filters to hours-basis Connectors when the Project is mixed (Story 5.7).
+   */
   totalAcMh: Mh;
   /** AC of the baselined WPs only, for CPI (planned scope) */
   plannedScopeAcMh: Mh;
+  /**
+   * Latched Connector basis at `basis_seq_max` (Story 5.7) — never snapshot `hoursFieldPresent`.
+   * `'count'` → Ticket-Count Mode (AC-family unavailable). `'hours'` → AC from hours coverage.
+   */
   measurementBasis: 'hours' | 'count';
   /**
-   * AD-6: Connector Resolved status ids, resolved at compute time. Defaults to
-   * `DEFAULT_RESOLVED_STATUS_IDS` (`Closed`) until `connector_setting_event` lands.
+   * When AC covers only hours Connectors in a mixed Project, the caption naming that coverage.
+   * `null` when every Connector is hours (or the Project has a single hours Connector).
+   */
+  acCoverage?: MetricCoverage;
+  /**
+   * AD-6: Connector Resolved status ids at `connector_setting_seq_max`. Defaults to
+   * `DEFAULT_RESOLVED_STATUS_IDS` (`Closed`) only as the seed fallback.
    */
   resolvedStatusIds?: ReadonlySet<string>;
 }
@@ -75,10 +91,11 @@ export interface EvmResult {
   formulaVersion: string;
   perWp: WpMeasure[];
   bacMh: Mh;
-  pvMh: Mh;
-  evMh: Mh;
-  acMh: Mh;
-  svMh: Mh;
+  /** Story 5.7: totals are metrics — value+coverage or unavailable (never a bare 0 for "unknown"). */
+  pvMh: MhMetric;
+  evMh: MhMetric;
+  acMh: MhMetric;
+  svMh: MhMetric;
   spi: RatioMetric;
   cvMh: MhMetric;
   cpiAllIn: RatioMetric;
@@ -183,41 +200,53 @@ export function computeEvm(input: EvmInput): EvmResult {
   }
 
   const bacMh = sum(perWp.map((w) => w.baselineMh));
-  const pvMh = sum(perWp.map((w) => w.pvMh));
-  const evMh = sum(perWp.map((w) => w.evMh));
-  const acMh = input.totalAcMh;
-  const svMh = evMh - pvMh;
+  const pvRaw = sum(perWp.map((w) => w.pvMh));
+  const evRaw = sum(perWp.map((w) => w.evMh));
+  const acRaw = input.totalAcMh;
+  const svRaw = evRaw - pvRaw;
 
   // FR-27 / AD-8: in Ticket-Count Mode every AC-based metric is unavailable, never 0.
   const noHours = input.measurementBasis === 'count';
   const NO_HOURS = 'tracker_provides_no_hours';
+  const acCoverage = input.acCoverage ?? null;
 
-  const ratioOrUnavailable = (num: Mh, den: Mh, reason: string): RatioMetric =>
-    den === 0n ? unavailable(reason) : ratioValue(ratio(num, den));
+  const ratioOrUnavailable = (
+    num: Mh,
+    den: Mh,
+    reason: string,
+    coverage: MetricCoverage = null,
+  ): RatioMetric => (den === 0n ? unavailable(reason) : ratioValue(ratio(num, den), coverage));
 
-  const spi = ratioOrUnavailable(evMh, pvMh, 'no_planned_value_yet');
+  const pvMh = mhValue(pvRaw);
+  const evMh = mhValue(evRaw);
+  const svMh = mhValue(svRaw);
+  const acMh: MhMetric = noHours ? unavailable(NO_HOURS) : mhValue(acRaw, acCoverage);
+
+  const spi = ratioOrUnavailable(evRaw, pvRaw, 'no_planned_value_yet');
   const cpiAllIn: RatioMetric = noHours
     ? unavailable(NO_HOURS)
-    : ratioOrUnavailable(evMh, acMh, 'no_actuals_yet');
+    : ratioOrUnavailable(evRaw, acRaw, 'no_actuals_yet', acCoverage);
   const cpiPlanned: RatioMetric = noHours
     ? unavailable(NO_HOURS)
-    : ratioOrUnavailable(evMh, input.plannedScopeAcMh, 'no_actuals_yet');
-  const cvMh: MhMetric = noHours ? unavailable(NO_HOURS) : mhValue(evMh - acMh);
+    : ratioOrUnavailable(evRaw, input.plannedScopeAcMh, 'no_actuals_yet', acCoverage);
+  const cvMh: MhMetric = noHours ? unavailable(NO_HOURS) : mhValue(evRaw - acRaw, acCoverage);
 
   // FR-30: EAC Typical = BAC / CPI (all-in) = BAC × AC / EV, exactly. R0's only method.
   const eacMh: MhMetric =
     cpiAllIn.kind === 'value' && compareRatio(cpiAllIn.value, ZERO) > 0
-      ? mhValue(divRoundHalfEven(bacMh * cpiAllIn.value.den, cpiAllIn.value.num))
+      ? mhValue(divRoundHalfEven(bacMh * cpiAllIn.value.den, cpiAllIn.value.num), acCoverage)
       : unavailable(noHours ? NO_HOURS : 'no_cpi_yet');
-  const etcMh: MhMetric = eacMh.kind === 'value' ? mhValue(eacMh.value - acMh) : unavailable(eacMh.reasonCode);
-  const vacMh: MhMetric = eacMh.kind === 'value' ? mhValue(bacMh - eacMh.value) : unavailable(eacMh.reasonCode);
+  const etcMh: MhMetric =
+    eacMh.kind === 'value' ? mhValue(eacMh.value - acRaw, acCoverage) : unavailable(eacMh.reasonCode);
+  const vacMh: MhMetric =
+    eacMh.kind === 'value' ? mhValue(bacMh - eacMh.value, acCoverage) : unavailable(eacMh.reasonCode);
 
-  const bacExhausted = !noHours && bacMh - acMh <= 0n;
+  const bacExhausted = !noHours && bacMh - acRaw <= 0n;
   const tcpi: RatioMetric = noHours
     ? unavailable(NO_HOURS)
     : bacExhausted
       ? unavailable('bac_exhausted')
-      : ratioValue(ratio(bacMh - evMh, bacMh - acMh));
+      : ratioValue(ratio(bacMh - evRaw, bacMh - acRaw), acCoverage);
 
   return {
     formulaVersion: FORMULA_VERSION,

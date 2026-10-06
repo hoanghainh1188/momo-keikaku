@@ -234,7 +234,8 @@
     "overlap_transfer": "Transfer to claimer",
     "left_scope_title": "Left scope",
     "left_scope_intro": "Tickets absent from two consecutive complete reads. Ledger history is kept; hours are not reversed.",
-    "left_scope_row": "{key} — {hours}h retained"
+    "left_scope_row": "{key} — {hours}h retained",
+    "ticket_count_mode_notice": "Ticket-Count Mode — AC, CV, CPI, EAC, ETC, VAC and TCPI are unavailable because this tracker provides no hours."
   },
   "mapping": {
     "coverage": "Coverage",
@@ -401,7 +402,9 @@
       "note_cpi_all_in": "{ev}h ÷ {ac}h — includes Unplanned Work",
       "note_cpi_gap": "The gap between the two CPIs is the Unplanned Work.",
       "formula_unplanned_period": "{unplanned}h of {total}h this period",
+      "formula_unplanned_period_tickets": "{unplanned} of {total} tickets this period",
       "note_unplanned_cumulative": "Cumulative {share} ({hours}h)",
+      "note_unplanned_cumulative_tickets": "Cumulative {share} (ticket counts)",
       "formula_sv": "SV = EV − PV",
       "note_sv": "{behind, select, true {Behind plan} other {Ahead of plan}}",
       "formula_forecast_finish": "Baseline start + (Baseline working days ÷ SPI)",
@@ -490,7 +493,8 @@
         "formula": "Σ Baseline hours over baselined leaf WPs",
         "reading": ""
       }
-    }
+    },
+    "ticket_count_mode": "Ticket-Count Mode"
   },
   "shell": {
     "the_tracker_snapshot_this_view_is_pinned_to": "The Tracker Snapshot this view is pinned to",

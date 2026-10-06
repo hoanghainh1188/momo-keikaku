@@ -1368,3 +1368,19 @@ above can see where it went.
 - source_spec: `_bmad-output/implementation-artifacts/spec-5-6-the-ledger-stays-correct-as-tickets-appear-move-and-vanish.md`
   summary: Add confirmOwnershipAction cases to connectors/actions.test.ts (invalid resolution, refuse skips revalidate, success revalidates connectors+review).
   evidence: Story 5.6 review verification-gap — action now returns form state; sibling suite still only covers add/rotate.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-7-a-connector-with-no-hours-says-so-and-stays-saying-it.md`
+  summary: PM edit UI for Connector Resolved status set (`connector_setting_event`) — RESOLVED_WRITE_SURFACE = B seeds `{Closed}` and exposes tests/API append only. Live Backlog numeric status ids stay wrong until a later story.
+  evidence: Story 5.7 Intent / Harry assignment 2026-10-05 — no Connectors Resolved edit form this story.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-7-a-connector-with-no-hours-says-so-and-stays-saying-it.md`
+  summary: REQUIRE_DB / batch identity upsert / notifyRecipients / compaction / durable Review Re-pin remain open (re-noted; out of 5.7 ACs unless needed).
+  evidence: Story 5.7 Boundaries — do not expand unless required to land ACs; re-note from 5.5/5.6.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-7-a-connector-with-no-hours-says-so-and-stays-saying-it.md`
+  summary: REQUIRE_DB integration test that three complete ingest writes append `measurement_basis_event` via writer hysteresis (fixtures hours-latch / no-hours unused by executable ingest tests).
+  evidence: Story 5.7 review verification-gap — domain `basis.test.ts` covers latch; writer path unexercised in CI.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-7-a-connector-with-no-hours-says-so-and-stays-saying-it.md`
+  summary: Count-mode Review/Connectors page composition test asserting Ticket-Count notice and unavailable AC render as em dash not 0.0h.
+  evidence: Story 5.7 review verification-gap — domain present/EVM covered; page boundary not asserted.

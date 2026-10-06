@@ -51,6 +51,8 @@ const input: ReviewInput = {
     },
   ],
   activeBaselineSeq: 1,
+  measurementBasis: 'hours',
+  resolvedStatusIds: new Set(['Closed']),
   ledger: [
     {
       seq: 1,
@@ -287,5 +289,56 @@ describe('computeReview orders milestone and Divergence rows by compareWp', () =
 
   it('is stable over shuffled input.wps', () => {
     expectShuffleInvariant(ordering, allWps, 50);
+  });
+});
+
+describe('computeReview Ticket-Count Mode Unplanned share', () => {
+  it('uses period ticket counts, not hour buckets, for sharePeriod', () => {
+    const period = periodOf('2026-09-16T09:00:00.000Z', 540, 4);
+    const r = computeReview({
+      ...input,
+      measurementBasis: 'count',
+      ledger: [],
+      period,
+      pinnedSnapshot: {
+        ...input.pinnedSnapshot,
+        tickets: [
+          {
+            trackerIssueId: 'u1',
+            key: 'u1',
+            title: 'u1',
+            statusId: 'Open',
+            estimateMh: null,
+            actualMh: null,
+            assigneeAccountId: null,
+            createdAt: '2026-09-15T09:00:00.000Z',
+            parentIssueId: null,
+            issueTypeId: 'Task',
+            trackerProjectId: null,
+            attributes: [],
+          },
+          {
+            trackerIssueId: 'm1',
+            key: 'm1',
+            title: 'm1',
+            statusId: 'Open',
+            estimateMh: null,
+            actualMh: null,
+            assigneeAccountId: null,
+            createdAt: '2026-09-15T09:00:00.000Z',
+            parentIssueId: null,
+            issueTypeId: 'Task',
+            trackerProjectId: null,
+            attributes: [],
+          },
+        ],
+      },
+      mappingEvents: [
+        { seq: 1, ticketId: 'm1', wpId: 'WP-B', source: 'manual', at: 'x', actor: 'pm' },
+      ],
+    });
+    expect(r.unplanned.sharePeriod).toEqual({ num: 1n, den: 2n });
+    expect(r.unplanned.ticketCountPeriod).toBe(1);
+    expect(r.unplanned.period.totalMh).toBe(0n);
   });
 });

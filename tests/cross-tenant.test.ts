@@ -287,6 +287,10 @@ const ALLOCATED_SEQ_KEYS: ReadonlySet<string> = new Set([
   'seq',
   'activeBaselineSeq',
   'activeBaselineVersionSeq',
+  // Story 5.7: Review pins from generatedAlwaysAsIdentity / global fixture-band seqs.
+  'basisSeqMax',
+  'connectorSettingSeqMax',
+  'mappingSeqMax',
 ]);
 
 /**

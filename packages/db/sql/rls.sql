@@ -298,6 +298,34 @@ CREATE POLICY "maintenance_bypass" ON public."connector_scope_event"
   USING (true)
   WITH CHECK (true);
 
+-- measurement_basis_event (append-only): Latched measurement basis per Connector (story 5.7 / AD-8). Metrics read the head at basis_seq_max; editing history would flip Ticket-Count Mode retroactively.
+ALTER TABLE public."measurement_basis_event" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public."measurement_basis_event" FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "tenant_isolation" ON public."measurement_basis_event";
+CREATE POLICY "tenant_isolation" ON public."measurement_basis_event"
+  FOR ALL
+  USING ("tenant_id" = NULLIF(current_setting('app.tenant_id', true), ''))
+  WITH CHECK ("tenant_id" = NULLIF(current_setting('app.tenant_id', true), ''));
+DROP POLICY IF EXISTS "maintenance_bypass" ON public."measurement_basis_event";
+CREATE POLICY "maintenance_bypass" ON public."measurement_basis_event"
+  FOR ALL TO "momo_maintenance"
+  USING (true)
+  WITH CHECK (true);
+
+-- connector_setting_event (append-only): Connector Resolved status set (story 5.7 / AR-38). Percent Complete and Unplanned count read the head at connector_setting_seq_max; editing would rewrite who was Resolved.
+ALTER TABLE public."connector_setting_event" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public."connector_setting_event" FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "tenant_isolation" ON public."connector_setting_event";
+CREATE POLICY "tenant_isolation" ON public."connector_setting_event"
+  FOR ALL
+  USING ("tenant_id" = NULLIF(current_setting('app.tenant_id', true), ''))
+  WITH CHECK ("tenant_id" = NULLIF(current_setting('app.tenant_id', true), ''));
+DROP POLICY IF EXISTS "maintenance_bypass" ON public."connector_setting_event";
+CREATE POLICY "maintenance_bypass" ON public."connector_setting_event"
+  FOR ALL TO "momo_maintenance"
+  USING (true)
+  WITH CHECK (true);
+
 -- tracker_snapshot_attempt (append-only): Failed snapshot attempts (story 5.2 / AR-16). Approval refuse and credential auth failures; a correction is a later successful snapshot, never an edit of a failed attempt.
 ALTER TABLE public."tracker_snapshot_attempt" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public."tracker_snapshot_attempt" FORCE ROW LEVEL SECURITY;

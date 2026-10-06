@@ -206,8 +206,8 @@ export const DEFAULT_THRESHOLDS: ProjectConfig['thresholds'] = {
 };
 
 /**
- * Demo / seed Resolved set until `connector_setting_event` lands (later story).
- * Compute paths take an explicit `resolvedStatusIds`; this is the shared default.
+ * Seed default Resolved set for `connector_setting_event` on Connector create (Story 5.7).
+ * Compute paths take the pinned setting head; this is the seed / missing-head fallback only.
  */
 export const DEFAULT_RESOLVED_STATUS_IDS: ReadonlySet<string> = new Set(['Closed']);
 

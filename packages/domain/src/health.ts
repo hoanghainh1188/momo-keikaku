@@ -121,7 +121,10 @@ export function computeHealth(input: HealthInput): {
       key: 'unplanned',
       colour: 'unavailable',
       driver: '—',
-      rule: 'Unavailable — no actual work in this Reporting Period',
+      rule:
+        input.measurementBasis === 'count'
+          ? 'Unavailable — no Tickets first observed or Resolved in this Reporting Period'
+          : 'Unavailable — no actual work in this Reporting Period',
     };
   } else {
     const s = input.unplannedSharePeriod;
@@ -132,13 +135,14 @@ export function computeHealth(input: HealthInput): {
           ? 'amber'
           : 'red';
     const pct = share;
+    const unitLabel = input.measurementBasis === 'count' ? "period's Tickets" : "period's hours";
     unplanned = {
       key: 'unplanned',
       colour,
       driver: pct(s),
       rule:
         colour === 'green'
-          ? `Green because ${pct(s)} < ${pct(t.unplannedGreenBelow)} of this period's hours`
+          ? `Green because ${pct(s)} < ${pct(t.unplannedGreenBelow)} of this ${unitLabel}`
           : colour === 'amber'
             ? `Amber because ${pct(t.unplannedGreenBelow)} ≤ ${pct(s)} ≤ ${pct(t.unplannedAmberMax)}`
             : `Red because ${pct(s)} > ${pct(t.unplannedAmberMax)}`,

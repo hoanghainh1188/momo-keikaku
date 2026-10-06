@@ -18,9 +18,11 @@ import { fail, type AppError, type Result } from '../result';
 import { invalidInputDetails, runAuditedWrite, refuse } from './audited-write';
 import {
   addConnectorInputSchema,
+  appendResolvedStatusesInputSchema,
   changeScopeInputSchema,
   rotateCredentialsInputSchema,
   type AddConnectorInput,
+  type AppendResolvedStatusesInput,
   type ChangeScopeInput,
   type RotateCredentialsInput,
 } from './connector-input';
@@ -132,12 +134,21 @@ export async function addConnector<Handle>(
         actor: stamp.actor,
         at: stamp.at,
       });
+      // Story 5.7: seed Resolved set `{Closed}`; missing basis head ≡ count until hours latch.
+      const settingSeq = await scope.connectorWrite.appendSettingEvent({
+        connectorId: id,
+        projectId: command.projectId,
+        resolvedStatusIds: ['Closed'],
+        actor: stamp.actor,
+        at: stamp.at,
+      });
       await audit.record(scope, stamp, 'connector.add', id, {
         projectId: command.projectId,
         site: command.site,
         scope: command.projectKey,
         approvalName: command.approvalName,
         scopeSeq,
+        settingSeq,
       });
       return { id };
     },
@@ -211,14 +222,48 @@ export async function changeConnectorScope<Handle>(
   );
 }
 
+/**
+ * Story 5.7 RESOLVED_WRITE_SURFACE = B: append Resolved status set for tests/API only.
+ * No PM edit UI this story — live Backlog numeric status ids stay wrong until a later story.
+ */
+export async function appendResolvedStatuses<Handle>(
+  deps: ConnectorWriteDeps<Handle>,
+  ctx: RequestContext,
+  input: AppendResolvedStatusesInput,
+): Promise<Result<void>> {
+  return runConnectorWrite(
+    appendResolvedStatusesInputSchema,
+    deps,
+    ctx,
+    input,
+    async (scope, stamp, command) => {
+      const connector = await scope.connectorWrite.findConnector(command.connectorId);
+      if (!connector || connector.projectId !== command.projectId) refuse('not_found');
+      await scope.connectorWrite.appendSettingEvent({
+        connectorId: command.connectorId,
+        projectId: command.projectId,
+        resolvedStatusIds: command.resolvedStatusIds,
+        actor: stamp.actor,
+        at: stamp.at,
+      });
+      await audit.record(scope, stamp, 'connector.append_resolved_statuses', command.connectorId, {
+        projectId: command.projectId,
+        resolvedStatusIds: command.resolvedStatusIds,
+      });
+    },
+  );
+}
+
 export const CONNECTOR_WRITE_AUDIT = {
   addConnector: { audited: ['connector.add'] },
   rotateCredentials: { audited: ['connector.rotate_credentials'] },
   changeConnectorScope: { audited: ['connector.change_scope'] },
+  appendResolvedStatuses: { audited: ['connector.append_resolved_statuses'] },
 } as const satisfies Readonly<Record<string, AuditDeclaration>>;
 
 export const CONNECTOR_WRITE_ROLES = {
   addConnector: PROJECT_REACH,
   rotateCredentials: PROJECT_REACH,
   changeConnectorScope: PROJECT_REACH,
+  appendResolvedStatuses: PROJECT_REACH,
 } as const satisfies Readonly<Record<string, RoleDeclaration>>;

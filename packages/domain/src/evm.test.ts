@@ -6,7 +6,8 @@ import { DEFAULT_THRESHOLDS, type BaselineVersion, type TicketObservation, type 
 import { hoursToMh, ratio, type Ratio } from './units';
 
 /** A Ratio metric, exactly as carried — unreduced. */
-const ratioMetric = (num: bigint, den: bigint) => ({ kind: 'value', value: ratio(num, den), unit: 'ratio' });
+const ratioMetric = (num: bigint, den: bigint) => ({ kind: 'value', value: ratio(num, den), unit: 'ratio', coverage: null });
+const mhMetric = (value: bigint) => ({ kind: 'value' as const, value, unit: 'mh' as const, coverage: null });
 
 /**
  * Golden EVM cases, hand-computed from the PMI formulas in docs/references
@@ -226,23 +227,23 @@ describe('computeEvm — golden case', () => {
 
   it('computes BAC, PV, EV and AC in hours', () => {
     expect(evm.bacMh).toBe(hoursToMh(200));
-    expect(evm.pvMh).toBe(hoursToMh(100));
-    expect(evm.evMh).toBe(hoursToMh(75));
-    expect(evm.acMh).toBe(hoursToMh(120));
+    expect(evm.pvMh).toEqual(mhMetric(hoursToMh(100)));
+    expect(evm.evMh).toEqual(mhMetric(hoursToMh(75)));
+    expect(evm.acMh).toEqual(mhMetric(hoursToMh(120)));
   });
 
   it('computes the variances and indices from the summed values, never by averaging', () => {
-    expect(evm.svMh).toBe(hoursToMh(-25));
+    expect(evm.svMh).toEqual(mhMetric(hoursToMh(-25)));
     expect(evm.spi).toEqual(ratioMetric(hoursToMh(75), hoursToMh(100)));
-    expect(evm.cvMh).toEqual({ kind: 'value', value: hoursToMh(-45), unit: 'mh' });
+    expect(evm.cvMh).toEqual(mhMetric(hoursToMh(-45)));
     expect(evm.cpiAllIn).toEqual(ratioMetric(hoursToMh(75), hoursToMh(120)));
     expect(evm.cpiPlannedScope).toEqual(ratioMetric(hoursToMh(75), hoursToMh(90)));
   });
 
   it('computes EAC Typical, ETC, VAC and TCPI', () => {
-    expect(evm.eacMh).toEqual({ kind: 'value', value: hoursToMh(320), unit: 'mh' });
-    expect(evm.etcMh).toEqual({ kind: 'value', value: hoursToMh(200), unit: 'mh' });
-    expect(evm.vacMh).toEqual({ kind: 'value', value: hoursToMh(-120), unit: 'mh' });
+    expect(evm.eacMh).toEqual(mhMetric(hoursToMh(320)));
+    expect(evm.etcMh).toEqual(mhMetric(hoursToMh(200)));
+    expect(evm.vacMh).toEqual(mhMetric(hoursToMh(-120)));
     expect(evm.tcpi).toEqual(ratioMetric(hoursToMh(125), hoursToMh(80)));
   });
 
@@ -289,13 +290,87 @@ describe('FR-27 Ticket-Count Mode', () => {
       measurementBasis: 'count',
     });
     // Still computed on the count basis:
-    expect(evm.pvMh).toBe(hoursToMh(50));
-    expect(evm.evMh).toBe(hoursToMh(50)); // 1 of 2 resolved
+    expect(evm.pvMh).toEqual(mhMetric(hoursToMh(50)));
+    expect(evm.evMh).toEqual(mhMetric(hoursToMh(50))); // 1 of 2 resolved
     expect(evm.spi).toEqual(ratioMetric(hoursToMh(50), hoursToMh(50)));
     // Unavailable, never 0:
-    for (const m of [evm.cpiAllIn, evm.cvMh, evm.eacMh, evm.etcMh, evm.vacMh, evm.tcpi]) {
+    for (const m of [
+      evm.acMh,
+      evm.cpiAllIn,
+      evm.cpiPlannedScope,
+      evm.cvMh,
+      evm.eacMh,
+      evm.etcMh,
+      evm.vacMh,
+      evm.tcpi,
+    ]) {
       expect(m.kind).toBe('unavailable');
+      if (m.kind === 'unavailable') expect(m.reasonCode).toBe('tracker_provides_no_hours');
     }
+  });
+
+  it('labels mixed-Project AC coverage on hours Connectors only', () => {
+    const baseline: BaselineVersion = {
+      seq: 1,
+      id: 'bl-1',
+      reason: 'x',
+      recordedAt: '2026-06-01T00:00:00.000Z',
+      actor: 'user:pm',
+      wps: [
+        { wpId: 'WP-1', start: '2026-06-01', finish: '2026-06-12', baselineMh: hoursToMh(100), isMilestone: false },
+      ],
+    };
+    const caption = 'hours Connectors only (1 of 2)';
+    const evm = computeEvm({
+      asOf: '2026-06-05',
+      calendar: cal,
+      baseline,
+      wps: [wp({ id: 'WP-1' })],
+      mappedTicketsByWp: new Map([['WP-1', [ticket('t1', 50, true)]]]),
+      acByWp: new Map([['WP-1', hoursToMh(40)]]),
+      unplannedAcMh: 0n,
+      totalAcMh: hoursToMh(40),
+      plannedScopeAcMh: hoursToMh(40),
+      measurementBasis: 'hours',
+      acCoverage: caption,
+    });
+    expect(evm.acMh).toEqual({ kind: 'value', value: hoursToMh(40), unit: 'mh', coverage: caption });
+    expect(evm.cpiAllIn.kind === 'value' && evm.cpiAllIn.coverage).toBe(caption);
+  });
+
+  it('marks Effort/Cost unavailable in Ticket-Count Mode and names it on overall', () => {
+    const baseline: BaselineVersion = {
+      seq: 1,
+      id: 'bl-1',
+      reason: 'x',
+      recordedAt: '2026-06-01T00:00:00.000Z',
+      actor: 'user:pm',
+      wps: [
+        { wpId: 'WP-1', start: '2026-06-01', finish: '2026-06-12', baselineMh: hoursToMh(100), isMilestone: false },
+      ],
+    };
+    const evm = computeEvm({
+      asOf: '2026-06-05',
+      calendar: cal,
+      baseline,
+      wps: [wp({ id: 'WP-1' })],
+      mappedTicketsByWp: new Map([['WP-1', [ticket('t1', null, true), ticket('t2', null, false)]]]),
+      acByWp: new Map(),
+      unplannedAcMh: 0n,
+      totalAcMh: 0n,
+      plannedScopeAcMh: 0n,
+      measurementBasis: 'count',
+    });
+    const h = computeHealth({
+      evm,
+      thresholds: DEFAULT_THRESHOLDS,
+      unplannedSharePeriod: ratio(0n, 1n),
+      unplannedShareCumulative: ratio(0n, 1n),
+      slippedMilestones: [],
+      measurementBasis: 'count',
+    });
+    expect(h.indicators.find((i) => i.key === 'effort_cost')?.colour).toBe('unavailable');
+    expect(h.overallNote).toMatch(/Effort\/Cost/);
   });
 });
 
@@ -314,18 +389,18 @@ describe('FR-31 threshold edges', () => {
       formulaVersion: 'test',
       perWp: [],
       bacMh: hoursToMh(100),
-      pvMh: hoursToMh(100) * spi.den,
-      evMh: hoursToMh(100) * spi.num,
-      acMh: hoursToMh(10),
-      svMh: 0n,
-      spi: { kind: 'value', value: spi, unit: 'ratio' },
-      cvMh: { kind: 'value', value: 0n, unit: 'mh' },
-      cpiAllIn: { kind: 'value', value: cpi, unit: 'ratio' },
-      cpiPlannedScope: { kind: 'value', value: cpi, unit: 'ratio' },
-      eacMh: { kind: 'value', value: 0n, unit: 'mh' },
-      etcMh: { kind: 'value', value: 0n, unit: 'mh' },
-      vacMh: { kind: 'value', value: 0n, unit: 'mh' },
-      tcpi: { kind: 'value', value: ratio(1n, 1n), unit: 'ratio' },
+      pvMh: mhMetric(hoursToMh(100) * spi.den),
+      evMh: mhMetric(hoursToMh(100) * spi.num),
+      acMh: mhMetric(hoursToMh(10)),
+      svMh: mhMetric(0n),
+      spi: { kind: 'value', value: spi, unit: 'ratio', coverage: null },
+      cvMh: mhMetric(0n),
+      cpiAllIn: { kind: 'value', value: cpi, unit: 'ratio', coverage: null },
+      cpiPlannedScope: { kind: 'value', value: cpi, unit: 'ratio', coverage: null },
+      eacMh: mhMetric(0n),
+      etcMh: mhMetric(0n),
+      vacMh: mhMetric(0n),
+      tcpi: { kind: 'value', value: ratio(1n, 1n), unit: 'ratio', coverage: null },
       bacExhausted: false,
     }) as EvmResult;
 
@@ -388,7 +463,7 @@ describe('FR-31 threshold edges', () => {
     const at = (tcpi: Ratio) =>
       computeHealth({
         ...base,
-        evm: { ...evmWith(r('1'), r('1.2')), tcpi: { kind: 'value', value: tcpi, unit: 'ratio' } },
+        evm: { ...evmWith(r('1'), r('1.2')), tcpi: { kind: 'value', value: tcpi, unit: 'ratio', coverage: null } },
         unplannedSharePeriod: ratio(0n, 1n),
       }).indicators[1]!;
     expect(at(ratio(110n, 100n)).colour).toBe('green');

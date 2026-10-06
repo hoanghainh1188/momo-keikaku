@@ -99,6 +99,8 @@ export interface PresentedMetric {
   text: string;
   unit: string | null;
   unavailableReason: string | null;
+  /** Story 5.7: coverage caption when the value covers only part of the Project. */
+  coverage: string | null;
 }
 
 const REASONS: Record<string, string> = {
@@ -112,17 +114,23 @@ const REASONS: Record<string, string> = {
 /** FR-27: unavailable metrics render as an em dash plus the reason, never "0". */
 export function present(m: Metric): PresentedMetric {
   if (m.kind === 'unavailable') {
-    return { text: '—', unit: null, unavailableReason: REASONS[m.reasonCode] ?? m.reasonCode };
+    return {
+      text: '—',
+      unit: null,
+      unavailableReason: REASONS[m.reasonCode] ?? m.reasonCode,
+      coverage: null,
+    };
   }
+  const coverage = m.coverage;
   switch (m.unit) {
     case 'ratio':
-      return { text: ratioText(m.value), unit: null, unavailableReason: null };
+      return { text: ratioText(m.value), unit: null, unavailableReason: null, coverage };
     case 'mh':
-      return { text: hours(m.value), unit: 'h', unavailableReason: null };
+      return { text: hours(m.value), unit: 'h', unavailableReason: null, coverage };
     case 'jpy':
-      return { text: yen(m.value), unit: null, unavailableReason: null };
+      return { text: yen(m.value), unit: null, unavailableReason: null, coverage };
     case 'count':
-      return { text: String(m.value), unit: null, unavailableReason: null };
+      return { text: String(m.value), unit: null, unavailableReason: null, coverage };
   }
 }
 

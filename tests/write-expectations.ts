@@ -47,6 +47,8 @@ export interface ExpectedRows {
   readonly connectors: readonly Record<string, unknown>[];
   /** New connector_scope_event rows (story 5.2). */
   readonly connectorScopeEvents: readonly Record<string, unknown>[];
+  /** New connector_setting_event rows (story 5.7). */
+  readonly connectorSettingEvents: readonly Record<string, unknown>[];
 }
 
 export type Expect = (ctx: ExpectContext) => ExpectedRows;
@@ -66,6 +68,7 @@ export const NO_ROWS: ExpectedRows = {
   membershipsRemoved: [],
   connectors: [],
   connectorScopeEvents: [],
+  connectorSettingEvents: [],
 };
 
 function dispositionMappings({ target, at, actor }: ExpectContext, wpId: string) {
@@ -486,4 +489,22 @@ export const EXPECTED: Readonly<Record<string, Expect>> = {
       }),
     };
   },
+  appendResolvedStatuses: (ctx) => ({
+    ...NO_ROWS,
+    connectorSettingEvents: [
+      {
+        tenantId: ctx.target.tenantId,
+        connectorId: ctx.target.connectorId,
+        projectId: ctx.target.projectId,
+        resolvedStatusIds: ['Closed', 'Done'],
+        actor: ctx.actor,
+        at: ctx.at,
+      },
+    ],
+    audits: projectAudit(ctx, 'connector.append_resolved_statuses', ctx.target.connectorId, {
+      projectId: ctx.target.projectId,
+      resolvedStatusIds: ['Closed', 'Done'],
+    }),
+  }),
 };
+

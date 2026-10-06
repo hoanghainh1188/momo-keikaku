@@ -109,12 +109,57 @@ export interface Unavailable {
   kind: 'unavailable';
   reasonCode: string;
 }
-export type MhMetric = { kind: 'value'; value: Mh; unit: 'mh' } | Unavailable;
-export type JpyMetric = { kind: 'value'; value: Jpy; unit: 'jpy' } | Unavailable;
-export type RatioMetric = { kind: 'value'; value: Ratio; unit: 'ratio' } | Unavailable;
-export type CountMetric = { kind: 'value'; value: number; unit: 'count' } | Unavailable;
+
+/**
+ * Story 5.7 / FR-27: optional caption when a value covers only part of the Project
+ * (e.g. mixed hours+count Connectors — AC from hours Connectors only).
+ * `null` means full coverage / nothing to label.
+ */
+export type MetricCoverage = string | null;
+
+export type MhMetric =
+  | { kind: 'value'; value: Mh; unit: 'mh'; coverage: MetricCoverage }
+  | Unavailable;
+export type JpyMetric =
+  | { kind: 'value'; value: Jpy; unit: 'jpy'; coverage: MetricCoverage }
+  | Unavailable;
+export type RatioMetric =
+  | { kind: 'value'; value: Ratio; unit: 'ratio'; coverage: MetricCoverage }
+  | Unavailable;
+export type CountMetric =
+  | { kind: 'value'; value: number; unit: 'count'; coverage: MetricCoverage }
+  | Unavailable;
 export type Metric = MhMetric | JpyMetric | RatioMetric | CountMetric;
 
-export const mhValue = (value: Mh): MhMetric => ({ kind: 'value', value, unit: 'mh' });
-export const ratioValue = (value: Ratio): RatioMetric => ({ kind: 'value', value, unit: 'ratio' });
+export const mhValue = (value: Mh, coverage: MetricCoverage = null): MhMetric => ({
+  kind: 'value',
+  value,
+  unit: 'mh',
+  coverage,
+});
+export const ratioValue = (value: Ratio, coverage: MetricCoverage = null): RatioMetric => ({
+  kind: 'value',
+  value,
+  unit: 'ratio',
+  coverage,
+});
+export const countValue = (value: number, coverage: MetricCoverage = null): CountMetric => ({
+  kind: 'value',
+  value,
+  unit: 'count',
+  coverage,
+});
 export const unavailable = (reasonCode: string): Unavailable => ({ kind: 'unavailable', reasonCode });
+
+/** Extract the milli-hour amount from a value metric; throws if unavailable. */
+export function mhAmount(m: MhMetric): Mh {
+  if (m.kind !== 'value') {
+    throw new Error(`expected mh value, got unavailable (${m.reasonCode})`);
+  }
+  return m.value;
+}
+
+/** Soft extract — `0n` when unavailable (UI notes / money that already gated on the metric). */
+export function mhAmountOrZero(m: MhMetric): Mh {
+  return m.kind === 'value' ? m.value : 0n;
+}

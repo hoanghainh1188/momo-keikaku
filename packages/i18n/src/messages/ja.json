@@ -234,7 +234,8 @@
     "overlap_transfer": "観測側へ移譲",
     "left_scope_title": "スコープ外",
     "left_scope_intro": "連続する 2 回の完全な読み取りで欠落した Ticket。台帳履歴は保持され、時間は取り消されません。",
-    "left_scope_row": "{key} — {hours}h を保持"
+    "left_scope_row": "{key} — {hours}h を保持",
+    "ticket_count_mode_notice": "チケット数モード — このトラッカーは工数を提供しないため、AC・CV・CPI・EAC・ETC・VAC・TCPI は利用不可です。"
   },
   "mapping": {
     "coverage": "Coverage",
@@ -401,7 +402,9 @@
       "note_cpi_all_in": "{ev}h ÷ {ac}h — includes Unplanned Work",
       "note_cpi_gap": "The gap between the two CPIs is the Unplanned Work.",
       "formula_unplanned_period": "{unplanned}h of {total}h this period",
+      "formula_unplanned_period_tickets": "{unplanned} of {total} tickets this period",
       "note_unplanned_cumulative": "Cumulative {share} ({hours}h)",
+      "note_unplanned_cumulative_tickets": "Cumulative {share} (ticket counts)",
       "formula_sv": "SV = EV − PV",
       "note_sv": "{behind, select, true {Behind plan} other {Ahead of plan}}",
       "formula_forecast_finish": "Baseline start + (Baseline working days ÷ SPI)",
@@ -490,7 +493,8 @@
         "formula": "Σ Baseline hours over baselined leaf WPs",
         "reading": ""
       }
-    }
+    },
+    "ticket_count_mode": "チケット数モード"
   },
   "shell": {
     "the_tracker_snapshot_this_view_is_pinned_to": "The Tracker Snapshot this view is pinned to",

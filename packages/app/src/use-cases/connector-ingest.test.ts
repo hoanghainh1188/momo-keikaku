@@ -58,6 +58,10 @@ function depsWith(approvalRecordedAt: Date | null) {
     updateScope: async () => {},
     appendScopeEvent: async () => 1,
     latestScopeSeq: async () => 1,
+    appendBasisEvent: async () => 1,
+    latestBasis: async () => null,
+    appendSettingEvent: async () => 1,
+    latestSetting: async () => ({ seq: 1, resolvedStatusIds: ['Closed'] }),
     appendSnapshotAttempt: async (input: unknown) => {
       attempts.push(input);
     },
@@ -453,6 +457,10 @@ describe('runIngestSnapshotJob (story 5.5 writer)', () => {
             updateScope: async () => {},
             appendScopeEvent: async () => 1,
             latestScopeSeq: async () => 1,
+    appendBasisEvent: async () => 1,
+    latestBasis: async () => null,
+    appendSettingEvent: async () => 1,
+    latestSetting: async () => ({ seq: 1, resolvedStatusIds: ['Closed'] }),
             appendSnapshotAttempt: async () => {},
             listSnapshotAttempts: async () => [],
             latestAttemptAt: async () => null,
@@ -533,6 +541,10 @@ describe('runIngestSnapshotJob (story 5.5 writer)', () => {
             updateScope: async () => {},
             appendScopeEvent: async () => 1,
             latestScopeSeq: async () => 1,
+    appendBasisEvent: async () => 1,
+    latestBasis: async () => null,
+    appendSettingEvent: async () => 1,
+    latestSetting: async () => ({ seq: 1, resolvedStatusIds: ['Closed'] }),
             appendSnapshotAttempt: async (input: unknown) => {
               base.attempts.push(input);
             },

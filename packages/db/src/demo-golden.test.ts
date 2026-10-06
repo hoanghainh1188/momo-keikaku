@@ -43,6 +43,8 @@ function review() {
       period: currentPeriod(state),
       asOf: asOfDate(state),
       dispositions: [],
+      measurementBasis: state.measurementBasis,
+      resolvedStatusIds: new Set(['Closed']),
     }),
   };
 }
@@ -72,15 +74,28 @@ describe('demo dataset — golden EVM figures', () => {
 
   it('carries effort as exact bigint milli-hours and ratios unreduced (AD-4)', () => {
     expect(evm.bacMh).toBe(2_936_000n);
-    expect(evm.acMh).toBe(1_661_495n);
-    expect(evm.spi.kind === 'value' && evm.spi.value).toEqual({ num: evm.evMh, den: evm.pvMh });
+    expect(evm.acMh.kind).toBe('value');
+    expect(evm.pvMh.kind).toBe('value');
+    expect(evm.evMh.kind).toBe('value');
+    expect(evm.spi.kind).toBe('value');
+    if (evm.acMh.kind !== 'value' || evm.pvMh.kind !== 'value' || evm.evMh.kind !== 'value' || evm.spi.kind !== 'value') {
+      throw new Error('expected value metrics');
+    }
+    expect(evm.acMh.value).toBe(1_661_495n);
+    expect(evm.spi.value).toEqual({ num: evm.evMh.value, den: evm.pvMh.value });
   });
 
   it('reports the headline EVM figures in effort hours', () => {
     expect(hours(evm.bacMh)).toBe('2936.0');
-    expect(hours(evm.pvMh)).toBe('1459.8');
-    expect(hours(evm.evMh)).toBe('1330.8');
-    expect(hours(evm.acMh)).toBe('1661.5');
+    expect(evm.pvMh.kind).toBe('value');
+    expect(evm.evMh.kind).toBe('value');
+    expect(evm.acMh.kind).toBe('value');
+    if (evm.pvMh.kind !== 'value' || evm.evMh.kind !== 'value' || evm.acMh.kind !== 'value') {
+      throw new Error('expected value metrics');
+    }
+    expect(hours(evm.pvMh.value)).toBe('1459.8');
+    expect(hours(evm.evMh.value)).toBe('1330.8');
+    expect(hours(evm.acMh.value)).toBe('1661.5');
   });
 
   it('reports SPI, both CPIs and TCPI', () => {

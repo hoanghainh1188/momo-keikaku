@@ -102,3 +102,12 @@ export type AddConnectorInput = Readonly<z.input<typeof addConnectorInputSchema>
 export type RotateCredentialsInput = Readonly<z.infer<typeof rotateCredentialsInputSchema>>;
 export type ChangeScopeInput = Readonly<z.infer<typeof changeScopeInputSchema>>;
 export type ConfirmOwnershipInput = Readonly<z.infer<typeof confirmOwnershipInputSchema>>;
+
+/** Story 5.7: tests/API-only Resolved set writer (no PM form). */
+export const appendResolvedStatusesInputSchema = z.object({
+  projectId: id,
+  connectorId: id,
+  resolvedStatusIds: z.array(prose).min(1),
+});
+
+export type AppendResolvedStatusesInput = z.infer<typeof appendResolvedStatusesInputSchema>;

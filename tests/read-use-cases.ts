@@ -828,6 +828,33 @@ export const READ_USE_CASES: readonly ReadUseCase[] = [
         },
       ),
   },
+  {
+    name: 'appendResolvedStatuses',
+    kind: 'write',
+    why:
+      'Story 5.7 surface B: appends connector_setting_event Resolved status set for tests/API only ' +
+      '(no PM form). Seeds on addConnector; this writer is the explicit override path.',
+    invokeWrite: (deps, target) =>
+      readSurface.appendResolvedStatuses(
+        {
+          ...deps,
+          crypto: {
+            keyId: 'harness-local',
+            encrypt: () => ({
+              ciphertext: Buffer.from('c'),
+              nonce: Buffer.from('n-----------'),
+              keyId: 'harness-local',
+            }),
+          },
+        },
+        contextOf(target),
+        {
+          projectId: target.projectId,
+          connectorId: target.connectorId,
+          resolvedStatusIds: ['Closed', 'Done'],
+        },
+      ),
+  },
 ] as const;
 
 /**

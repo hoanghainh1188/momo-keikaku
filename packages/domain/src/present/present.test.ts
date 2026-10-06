@@ -80,9 +80,22 @@ describe('present (AD-4: the only rounding site, from the exact value, half-even
       text: '—',
       unit: null,
       unavailableReason: 'unavailable — no actual hours yet',
+      coverage: null,
     });
-    expect(present({ kind: 'value', value: 2_936_000n, unit: 'mh' }).text).toBe('2936.0');
-    expect(present({ kind: 'value', value: ratio(91n, 100n), unit: 'ratio' }).text).toBe('0.91');
+    expect(present({ kind: 'value', value: 2_936_000n, unit: 'mh', coverage: null }).text).toBe(
+      '2936.0',
+    );
+    expect(
+      present({ kind: 'value', value: ratio(91n, 100n), unit: 'ratio', coverage: null }).text,
+    ).toBe('0.91');
+    expect(
+      present({
+        kind: 'value',
+        value: 1_000n,
+        unit: 'mh',
+        coverage: 'hours Connectors only (1 of 2)',
+      }).coverage,
+    ).toBe('hours Connectors only (1 of 2)');
   });
 });
 
