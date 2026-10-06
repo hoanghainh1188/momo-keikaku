@@ -66,6 +66,7 @@ export const TRUNCATE_ORDER: readonly string[] = [
   'connector_scope_event',
   'fixture_cursor',
   'ticket',
+  'tracker_account_link_event',
   'tracker_account',
   'connector',
   'baseline_wp',
@@ -510,6 +511,18 @@ export async function writeTenantRows(
             },
           }),
       );
+      // Story 5.8: demo links as append-only events (live array already stamped on resource insert).
+      if (!projectOnly) {
+        await tx.insert(s.trackerAccountLinkEvent).values(
+          f.resources.map((r) => ({
+            tenantId,
+            trackerAccountId: own(`ta-${r.accountId}`),
+            resourceId: r.id,
+            actor: 'system:seed',
+            at: stamp,
+          })),
+        );
+      }
     }
     await chunked(latestForIdentity.tickets, 500, (batch) =>
       tx

@@ -71,6 +71,13 @@
       "when": 1791246086569,
       "tag": "0009_measurement_basis_and_connector_setting",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1791332400000,
+      "tag": "0010_tracker_account_link_event",
+      "breakpoints": true
     }
   ]
 }

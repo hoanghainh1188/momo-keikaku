@@ -170,6 +170,10 @@ export const AUDIT_PAYLOAD_BY_ACTION = {
   'resource.create': z.object({ departmentId: z.string(), name: z.string(), role: z.string() }).strict(),
   'rate.append': z.object({ effectiveFrom: z.string(), yenPerHour: z.number().int() }).strict(),
   'project_default_rate.append': z.object({ effectiveFrom: z.string(), yenPerHour: z.number().int() }).strict(),
+  'tracker_account.link': z
+    .object({ resourceId: z.string(), accountId: z.string() })
+    .strict(),
+  'tracker_account.unlink': z.object({ accountId: z.string() }).strict(),
   'schedule.apply_plan_change': z
     .object({
       kind: z.string(),

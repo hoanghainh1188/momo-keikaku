@@ -49,6 +49,14 @@ export interface ProjectDefaultRateAppend {
   readonly yenPerHour: number;
 }
 
+export interface TrackerAccountLinkAppend {
+  readonly trackerAccountId: string;
+  readonly accountId: string;
+  readonly resourceId: string | null;
+  readonly actor: string;
+  readonly at: Date;
+}
+
 export interface ResourceWriteRepository {
   /** The Department, or `null` when this Tenant cannot see it. */
   readonly findDepartment: (id: string) => Promise<ResourceDepartmentRow | null>;
@@ -56,6 +64,8 @@ export interface ResourceWriteRepository {
   readonly findResource: (id: string) => Promise<ResourceRow | null>;
   /** The Project, or `null` when this Tenant cannot see it. LOCKS the row. */
   readonly findProject: (id: string) => Promise<ResourceProjectRow | null>;
+  /** Story 5.8: Tracker Account row, or `null` when this Tenant cannot see it. */
+  readonly findTrackerAccount: (id: string) => Promise<{ id: string; accountId: string } | null>;
   /** Inserts a Resource with empty Tracker Account links and no Rate row. */
   readonly insertResource: (row: NewResourceRow) => Promise<void>;
   /** Appends one `rate_entry` row. Does not touch the Actuals Ledger. */
@@ -65,6 +75,11 @@ export interface ResourceWriteRepository {
    * (dual-write cache). Used by `createProject` (yen 0) and `appendProjectDefaultRate`.
    */
   readonly appendProjectDefaultRate: (row: ProjectDefaultRateAppend) => Promise<void>;
+  /**
+   * Story 5.8: append `tracker_account_link_event` and dual-write `resource.tracker_account_ids`.
+   * Returns the new seq.
+   */
+  readonly appendTrackerAccountLink: (row: TrackerAccountLinkAppend) => Promise<number>;
 }
 
 /** What one Resource/Rate write transaction hands its work. */

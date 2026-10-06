@@ -6,7 +6,9 @@ import {
   appendProjectDefaultRate,
   appendResourceRate,
   createResource,
-} from '.';
+  linkTrackerAccount,
+  unlinkTrackerAccount,
+} from './resource-writes';
 
 /**
  * Resource / Rate writes against a fake tenant transaction (story 1.6) — I/O matrix at the
@@ -62,9 +64,15 @@ function fakeDeps(world: typeof WORLD = WORLD) {
         findDepartment: async (id) => world.departments.find((d) => d.id === id) ?? null,
         findResource: async (id) => world.resources.find((r) => r.id === id) ?? null,
         findProject: async (id) => world.projects.find((p) => p.id === id) ?? null,
+        findTrackerAccount: async (id) =>
+          id === 'ta-1' ? { id: 'ta-1', accountId: 'acct-1' } : null,
         insertResource: write('insertResource'),
         appendResourceRate: write('appendResourceRate'),
         appendProjectDefaultRate: write('appendProjectDefaultRate'),
+        appendTrackerAccountLink: async (row) => {
+          calls.push({ member: 'appendTrackerAccountLink', arg: row });
+          return 1;
+        },
       };
       const result = await work({
         resources,
@@ -286,5 +294,51 @@ describe('appendProjectDefaultRate', () => {
       }),
     ).toMatchObject({ error: { code: 'invalid_input' } });
     expect(transactions).toEqual([]);
+  });
+});
+
+describe('linkTrackerAccount / unlinkTrackerAccount (story 5.8)', () => {
+  it('links a Tracker Account to a Resource and audits opaque ids only', async () => {
+    const { deps, committed, audits } = fakeDeps();
+    expect(
+      await linkTrackerAccount(deps, PM, {
+        projectId: 'prj-1',
+        trackerAccountId: 'ta-1',
+        resourceId: 'res-1',
+      }),
+    ).toEqual({ ok: true, value: { seq: 1 } });
+    expect(committed[0]?.member).toBe('appendTrackerAccountLink');
+    expect(audits[0]).toMatchObject({
+      action: 'tracker_account.link',
+      target: 'ta-1',
+      payload: { resourceId: 'res-1', accountId: 'acct-1' },
+    });
+  });
+
+  it('unlinks a Tracker Account', async () => {
+    const { deps, committed, audits } = fakeDeps();
+    expect(
+      await unlinkTrackerAccount(deps, ADMIN, {
+        projectId: 'prj-1',
+        trackerAccountId: 'ta-1',
+      }),
+    ).toEqual({ ok: true, value: { seq: 1 } });
+    expect(committed[0]?.member).toBe('appendTrackerAccountLink');
+    expect(audits[0]).toMatchObject({
+      action: 'tracker_account.unlink',
+      payload: { accountId: 'acct-1' },
+    });
+  });
+
+  it('answers not_found for a missing Tracker Account', async () => {
+    const { deps, committed } = fakeDeps();
+    expect(
+      await linkTrackerAccount(deps, PM, {
+        projectId: 'prj-1',
+        trackerAccountId: 'ta-gone',
+        resourceId: 'res-1',
+      }),
+    ).toMatchObject({ error: { code: 'not_found' } });
+    expect(committed).toEqual([]);
   });
 });

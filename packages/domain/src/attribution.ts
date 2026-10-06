@@ -323,3 +323,182 @@ export function periodUnplannedTicketCount(
     unplannedShare,
   };
 }
+
+/**
+ * Story 5.8 / FR-13: Department effort/cost roll-up including an *Unattributed* line so
+ * Department totals equal Project totals. Hours with no linked Resource (null assignee or
+ * unlinked account) land on `unattributed` — never a fake Department id.
+ */
+export interface DepartmentEffortLine {
+  /** Home Department id, or `null` for the Unattributed line. */
+  readonly departmentId: string | null;
+  readonly mh: Mh;
+  readonly jpy: Jpy;
+}
+
+export interface DepartmentEffortRollup {
+  readonly lines: readonly DepartmentEffortLine[];
+  readonly totalMh: Mh;
+  readonly totalJpy: Jpy;
+}
+
+export function departmentEffortRollup(input: {
+  readonly entries: readonly LedgerEntry[];
+  readonly resources: readonly Resource[];
+  readonly project: ProjectConfig;
+  readonly pins?: RatePins;
+  readonly projectDefaultRates?: readonly RateEntry[];
+}): DepartmentEffortRollup {
+  const byDept = new Map<string | null, { mh: Mh; jpy: Jpy }>();
+  let totalMh: Mh = 0n;
+  let totalJpy: Jpy = 0n;
+
+  for (const e of input.entries) {
+    const onDate = projectDate(e.windowEnd, input.project.tzOffsetMinutes);
+    const yen = rateFor(
+      [...input.resources],
+      e.assigneeAccountId,
+      onDate,
+      input.project,
+      input.pins,
+      input.projectDefaultRates,
+    );
+    const money = costOf(e.deltaMh, yen);
+    const resource = e.assigneeAccountId
+      ? input.resources.find((r) => r.trackerAccountIds.includes(e.assigneeAccountId!))
+      : undefined;
+    const key = resource?.departmentId ?? null;
+    const prev = byDept.get(key) ?? { mh: 0n, jpy: 0n };
+    byDept.set(key, { mh: prev.mh + e.deltaMh, jpy: prev.jpy + money });
+    totalMh += e.deltaMh;
+    totalJpy += money;
+  }
+
+  const lines: DepartmentEffortLine[] = [...byDept.entries()]
+    .map(([departmentId, v]) => ({ departmentId, mh: v.mh, jpy: v.jpy }))
+    .sort((a, b) => {
+      if (a.departmentId === null) return 1;
+      if (b.departmentId === null) return -1;
+      return a.departmentId < b.departmentId ? -1 : a.departmentId > b.departmentId ? 1 : 0;
+    });
+
+  return { lines, totalMh, totalJpy };
+}
+
+/** One Tracker Account row as FR-13 suggestion input (observation display name + email). */
+export interface TrackerAccountForSuggest {
+  readonly id: string;
+  /** Observation account id — what ledger `assignee_account_id` and the live array store. */
+  readonly accountId: string;
+  readonly displayName: string;
+  readonly email: string | null;
+}
+
+export interface ResourceForSuggest {
+  readonly id: string;
+  readonly name: string;
+}
+
+export interface LinkSuggestion {
+  readonly trackerAccountId: string;
+  readonly accountId: string;
+  readonly displayName: string;
+  readonly email: string | null;
+  /** Linked Resource id when a live head exists; null when unlinked. */
+  readonly linkedResourceId: string | null;
+  /** Suggested Resources (email CI match first, else name CI). Empty when none. */
+  readonly suggestedResourceIds: readonly string[];
+  readonly matchKind: 'email' | 'name' | 'none' | 'linked';
+}
+
+function ciEq(a: string, b: string): boolean {
+  return a.toLowerCase() === b.toLowerCase();
+}
+
+/**
+ * Story 5.8: suggest Tracker Account → Resource links.
+ * Email CI equality of `account.email` vs `resource.name` beats display-name CI vs name
+ * (Resource has no email column). Multiple name matches → all listed; PM picks.
+ */
+export function suggestTrackerAccountLinks(input: {
+  readonly accounts: readonly TrackerAccountForSuggest[];
+  readonly resources: readonly ResourceForSuggest[];
+  /** Live head: observation accountId → resourceId (omit unlinked). */
+  readonly linkedByAccountId?: ReadonlyMap<string, string>;
+}): readonly LinkSuggestion[] {
+  const linked = input.linkedByAccountId ?? new Map<string, string>();
+  return input.accounts.map((account) => {
+    const linkedResourceId = linked.get(account.accountId) ?? null;
+    if (linkedResourceId) {
+      return {
+        trackerAccountId: account.id,
+        accountId: account.accountId,
+        displayName: account.displayName,
+        email: account.email,
+        linkedResourceId,
+        suggestedResourceIds: [],
+        matchKind: 'linked' as const,
+      };
+    }
+    const emailHits =
+      account.email !== null && account.email.length > 0
+        ? input.resources.filter((r) => ciEq(account.email!, r.name)).map((r) => r.id)
+        : [];
+    if (emailHits.length > 0) {
+      return {
+        trackerAccountId: account.id,
+        accountId: account.accountId,
+        displayName: account.displayName,
+        email: account.email,
+        linkedResourceId: null,
+        suggestedResourceIds: emailHits,
+        matchKind: 'email' as const,
+      };
+    }
+    const nameHits = input.resources
+      .filter((r) => ciEq(account.displayName, r.name))
+      .map((r) => r.id);
+    return {
+      trackerAccountId: account.id,
+      accountId: account.accountId,
+      displayName: account.displayName,
+      email: account.email,
+      linkedResourceId: null,
+      suggestedResourceIds: nameHits,
+      matchKind: nameHits.length > 0 ? ('name' as const) : ('none' as const),
+    };
+  });
+}
+
+/**
+ * Build each Resource's `trackerAccountIds` from link-event heads ≤ `seqMax`.
+ * Events ordered by seq ascending; last event per internal tracker_account id wins.
+ * `accountIdByInternalId` maps internal id → observation accountId for the live array.
+ */
+export function trackerAccountIdsFromLinkHeads(input: {
+  readonly events: readonly {
+    readonly seq: number;
+    readonly trackerAccountId: string;
+    readonly resourceId: string | null;
+  }[];
+  readonly accountIdByInternalId: ReadonlyMap<string, string>;
+  readonly resourceIds: readonly string[];
+  readonly seqMax?: number;
+}): Map<string, string[]> {
+  const heads = new Map<string, string | null>();
+  for (const e of input.events) {
+    if (input.seqMax !== undefined && e.seq > input.seqMax) continue;
+    heads.set(e.trackerAccountId, e.resourceId);
+  }
+  const byResource = new Map<string, string[]>();
+  for (const id of input.resourceIds) byResource.set(id, []);
+  for (const [internalId, resourceId] of heads) {
+    if (resourceId === null) continue;
+    const accountId = input.accountIdByInternalId.get(internalId);
+    if (!accountId) continue;
+    const list = byResource.get(resourceId);
+    if (list) list.push(accountId);
+    else byResource.set(resourceId, [accountId]);
+  }
+  return byResource;
+}

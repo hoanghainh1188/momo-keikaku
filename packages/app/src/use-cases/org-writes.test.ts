@@ -112,9 +112,11 @@ function fakeDeps(world: World = WORLD, clockNow: Date = NOW) {
         findDepartment: async (id) => (world.departments.some((d) => d.id === id) ? { id } : null),
         findResource: async () => null,
         findProject: async (id) => (world.projects.some((p) => p.id === id) ? { id } : null),
+        findTrackerAccount: async () => null,
         insertResource: write('resources.insertResource'),
         appendResourceRate: write('resources.appendResourceRate'),
         appendProjectDefaultRate: write('resources.appendProjectDefaultRate'),
+        appendTrackerAccountLink: async () => 1,
       };
       const result = await work({
         projectWrite: {} as never,

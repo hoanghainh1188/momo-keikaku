@@ -338,6 +338,14 @@ export const TABLE_REGISTRY: readonly TableEntry[] = [
       'display name and email are personal data (NFR-S6).',
   },
   {
+    table: 'tracker_account_link_event',
+    class: 'append-only',
+    tenantColumn: 'tenant_id',
+    why:
+      'Tracker Account → Resource links (story 5.8 / FR-13). Attribution reads the head at ' +
+      'link_seq_max; editing history would move Unattributed hours between people retroactively.',
+  },
+  {
     table: 'fixture_cursor',
     class: 'operational',
     tenantColumn: 'tenant_id',

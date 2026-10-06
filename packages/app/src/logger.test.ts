@@ -15,6 +15,10 @@ describe('createLogger redaction (AD-16 / NFR-S2)', () => {
         '*.clientSecret',
         '*.idToken',
         'authorization',
+        'displayName',
+        '*.displayName',
+        'email',
+        '*.email',
       ]),
     );
   });
@@ -62,5 +66,29 @@ describe('createLogger redaction (AD-16 / NFR-S2)', () => {
     expect(line).not.toContain('secret-key');
     expect(line).not.toContain('Bearer abc');
     expect(line).not.toContain('"tok"');
+  });
+
+  it('redacts Tracker Account displayName and email (NFR-S6)', async () => {
+    const chunks: string[] = [];
+    const stream = new Writable({
+      write(chunk, _enc, cb) {
+        chunks.push(String(chunk));
+        cb();
+      },
+    });
+    const log = createLogger({ level: 'info' }, stream);
+    log.info({
+      accountId: 'acct-1',
+      displayName: 'Secret Person',
+      email: 'secret@example.com',
+      nested: { displayName: 'Nested Person', email: 'nested@example.com' },
+    });
+    await new Promise((r) => setImmediate(r));
+    const line = chunks.join('');
+    expect(line).toContain('"accountId":"acct-1"');
+    expect(line).not.toContain('Secret Person');
+    expect(line).not.toContain('secret@example.com');
+    expect(line).not.toContain('Nested Person');
+    expect(line).not.toContain('nested@example.com');
   });
 });

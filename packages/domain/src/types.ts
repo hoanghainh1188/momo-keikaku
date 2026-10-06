@@ -172,6 +172,11 @@ export interface RateEntry {
 export interface RatePins {
   readonly rateSeqMax?: number;
   readonly projectDefaultRateSeqMax?: number;
+  /**
+   * Story 5.8: ceiling for `tracker_account_link_event`. Omit = live head; set = pinned
+   * (Published Snapshots later). Resources fed to attribution must already reflect this pin.
+   */
+  readonly linkSeqMax?: number;
 }
 
 export interface ProjectConfig {

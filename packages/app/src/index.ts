@@ -149,7 +149,10 @@ export type {
   AppendProjectDefaultRateInput,
   AppendResourceRateInput,
   CreateResourceInput,
+  LinkTrackerAccountInput,
+  UnlinkTrackerAccountInput,
 } from './use-cases/resource-input';
+export { linkTrackerAccount, unlinkTrackerAccount } from './use-cases/resource-writes';
 export type { ChangeTenantCurrencyInput, TenantCurrencyDeps } from './use-cases/tenant-currency';
 
 // Story 5.2 — Connector writes' inputs/types + ingest notify (off the use-cases barrel so the

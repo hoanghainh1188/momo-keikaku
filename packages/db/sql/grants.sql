@@ -123,6 +123,10 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON public."ticket" TO "momo_app";
 -- tracker_account (mutable-audited)
 GRANT SELECT, INSERT, UPDATE, DELETE ON public."tracker_account" TO "momo_app";
 
+-- tracker_account_link_event (append-only)
+GRANT SELECT, INSERT ON public."tracker_account_link_event" TO "momo_app";
+GRANT SELECT, UPDATE, DELETE ON public."tracker_account_link_event" TO "momo_maintenance";
+
 -- fixture_cursor (operational)
 GRANT SELECT, INSERT, UPDATE, DELETE ON public."fixture_cursor" TO "momo_app";
 

@@ -10,8 +10,10 @@ import { t } from '@momo/i18n';
 import {
   addConnector,
   confirmConnectorOwnership,
+  linkTrackerAccount,
   requestContext,
   rotateCredentials,
+  unlinkTrackerAccount,
 } from '@/server/composition';
 import { messageFromKey } from '@/server/error-message';
 import { parseApprovalWhen } from './parse-approval-when';
@@ -21,7 +23,12 @@ export type ConnectorActionState = {
   readonly resetKey: number;
 };
 
+export type LinkActionState = {
+  readonly error: string | null;
+};
+
 export const INITIAL_CONNECTOR_ACTION: ConnectorActionState = { error: null, resetKey: 0 };
+export const INITIAL_LINK_ACTION: LinkActionState = { error: null };
 
 function refuse(prev: ConnectorActionState, messageKey: AppErrorMessageKey): ConnectorActionState {
   return { error: messageFromKey(messageKey), resetKey: prev.resetKey };
@@ -119,4 +126,68 @@ export async function confirmOwnershipAction(
   revalidatePath(`/p/${projectId}/connectors`);
   revalidatePath(`/p/${projectId}/review`);
   return ok(prev);
+}
+
+function linkRefuse(prev: LinkActionState, messageKey: AppErrorMessageKey): LinkActionState {
+  return { error: messageFromKey(messageKey) };
+}
+
+/** Story 5.8: link (or change) Tracker Account → Resource. */
+export async function linkTrackerAccountAction(
+  prev: LinkActionState,
+  formData: FormData,
+): Promise<LinkActionState> {
+  const ctx = await requestContext();
+  const projectId = field(formData, 'projectId');
+  const result = await linkTrackerAccount(
+    {
+      projectId,
+      trackerAccountId: field(formData, 'trackerAccountId'),
+      resourceId: field(formData, 'resourceId'),
+    },
+    ctx,
+  );
+  if (!result.ok) return linkRefuse(prev, result.error.messageKey);
+  revalidatePath(`/p/${projectId}/connectors`);
+  revalidatePath(`/p/${projectId}/review`);
+  return { error: null };
+}
+
+/** Story 5.8: unlink Tracker Account. */
+export async function unlinkTrackerAccountAction(
+  prev: LinkActionState,
+  formData: FormData,
+): Promise<LinkActionState> {
+  const ctx = await requestContext();
+  const projectId = field(formData, 'projectId');
+  const result = await unlinkTrackerAccount(
+    {
+      projectId,
+      trackerAccountId: field(formData, 'trackerAccountId'),
+    },
+    ctx,
+  );
+  if (!result.ok) return linkRefuse(prev, result.error.messageKey);
+  revalidatePath(`/p/${projectId}/connectors`);
+  revalidatePath(`/p/${projectId}/review`);
+  return { error: null };
+}
+
+/** Story 5.8: accept all outstanding suggestions (first suggestion per account). */
+export async function acceptLinkSuggestionAction(
+  prev: LinkActionState,
+  formData: FormData,
+): Promise<LinkActionState> {
+  const ctx = await requestContext();
+  const projectId = field(formData, 'projectId');
+  const pairs = formData.getAll('pair').filter((v): v is string => typeof v === 'string');
+  for (const pair of pairs) {
+    const [trackerAccountId, resourceId] = pair.split(':');
+    if (!trackerAccountId || !resourceId) return linkRefuse(prev, 'errors.invalid_input');
+    const result = await linkTrackerAccount({ projectId, trackerAccountId, resourceId }, ctx);
+    if (!result.ok) return linkRefuse(prev, result.error.messageKey);
+  }
+  revalidatePath(`/p/${projectId}/connectors`);
+  revalidatePath(`/p/${projectId}/review`);
+  return { error: null };
 }
