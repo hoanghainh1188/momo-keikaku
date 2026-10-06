@@ -296,7 +296,63 @@
       "segment_aria": "{label} {hours} hours, {share}",
       "segment_title": "{label}: {hours}h ({share})"
     },
-    "coverage_summary": "{hourShare} of hours mapped · {ticketShare} of Tickets mapped · {unmappedTickets} Unmapped Tickets. The share of Tickets and the share of hours are reported separately on purpose."
+    "coverage_summary": "{hourShare} of hours mapped · {ticketShare} of Tickets mapped · {unmappedTickets} Unmapped Tickets. The share of Tickets and the share of hours are reported separately on purpose.",
+    "rules_editor": {
+      "new_rule": "New rule",
+      "actions": "Actions",
+      "edit": "Edit",
+      "delete": "Delete",
+      "cancel": "Cancel",
+      "save": "Save",
+      "confirm_delete": "Delete rule",
+      "form_create_heading": "New Mapping Rule",
+      "form_edit_heading": "Edit rule “{name}”",
+      "delete_heading": "Delete rule “{name}”?",
+      "name": "Name",
+      "priority": "Priority",
+      "field": "Condition",
+      "value": "Value",
+      "target": "Target Work Package",
+      "target_placeholder": "Choose a leaf Work Package",
+      "fields": {
+        "milestone": "Milestone",
+        "category": "Category",
+        "issueType": "Issue type",
+        "parent": "Parent issue (key)",
+        "keyPattern": "Key pattern"
+      },
+      "value_hint": {
+        "milestone": "The Backlog milestone id, as the Tickets carry it.",
+        "category": "The Backlog category id, as the Tickets carry it.",
+        "issueType": "The Backlog issue type id, as the Tickets carry it.",
+        "parent": "Type the parent Ticket's key, e.g. EC2-101.",
+        "keyPattern": "A glob over the Ticket key: * is any run of characters, ? exactly one. Case-sensitive, whole key."
+      },
+      "preview_heading": "If you save",
+      "preview_loading": "Loading the move preview… Save stays disabled until it loads.",
+      "preview_none": "No Ticket would move.",
+      "preview_arrival": "+{tickets, plural, one {# Ticket} other {# Tickets}} / +{hours}h would move to {wp}",
+      "preview_departure": "{tickets, plural, one {# Ticket leaves} other {# Tickets leave}} {wp}",
+      "preview_unmapped": "{tickets, plural, one {# Ticket} other {# Tickets}} / {hours}h would become Unmapped",
+      "preview_failed": "The preview could not load, so Save stays disabled.",
+      "refusal": {
+        "priority_taken": "Another rule already has this priority. Each rule needs its own.",
+        "not_leaf": "Rules target leaf Work Packages only.",
+        "unknown_parent": "No Ticket in this Project has that key.",
+        "order_mismatch": "The rule list changed while you were reordering. Reload and try again.",
+        "not_found": "That rule or Work Package no longer exists.",
+        "invalid": "Check the name, priority and value."
+      },
+      "saved": "Saved. {moved, plural, =0 {No Ticket moved} one {# Ticket moved} other {# Tickets moved}}.",
+      "deleted": "Deleted. {moved, plural, =0 {No Ticket moved} one {# Ticket moved} other {# Tickets moved}}.",
+      "reordered": "Reordered. {moved, plural, =0 {No Ticket moved} one {# Ticket moved} other {# Tickets moved}}.",
+      "handle_aria": "Reorder rule {name}: drag, or press Alt+Up / Alt+Down",
+      "reorder_hint": "Drag a rule by its handle, or focus the handle and press Alt+↑ / Alt+↓. A reorder applies immediately; there is no preview.",
+      "empty": "No rules yet. Tickets stay Unmapped until a rule or a manual Mapping places them.",
+      "preview_arrival_count": "+{tickets, plural, one {# Ticket} other {# Tickets}} would move to {wp}",
+      "preview_unmapped_count": "{tickets, plural, one {# Ticket} other {# Tickets}} would become Unmapped",
+      "action_failed": "The change could not be sent. Nothing was saved — try again."
+    }
   },
   "plan": {
     "tree_schedule": "Tree & schedule",
@@ -518,7 +574,13 @@
         "reading": ""
       }
     },
-    "ticket_count_mode": "Ticket-Count Mode"
+    "ticket_count_mode": "Ticket-Count Mode",
+    "rule_unmapped": {
+      "heading": "Moved to Unmapped by a rule",
+      "row": "moved to Unmapped by rule “{rule}”",
+      "unknown_rule": "moved to Unmapped by a rule",
+      "caption": "A rule stopped matching these Tickets. Each stays flagged until it is mapped again."
+    }
   },
   "shell": {
     "the_tracker_snapshot_this_view_is_pinned_to": "The Tracker Snapshot this view is pinned to",

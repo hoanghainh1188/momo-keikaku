@@ -14,6 +14,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
 } from 'drizzle-orm/pg-core';
 
 /** AES-256-GCM ciphertext / nonce (story 5.2 / AR-29). */
@@ -1374,11 +1375,26 @@ export const mappingRule = pgTable(
     priority: integer('priority').notNull(),
     name: text('name').notNull(),
     wpId: text('wp_id').notNull(),
+    // milestone | category | issueType | parent | keyPattern (story 5.10; one condition per rule).
     matchField: text('match_field').notNull(),
+    /** For `parent`: the parent's tracker issue id (resolved from the key the PM typed). */
     matchValue: text('match_value').notNull(),
+    /**
+     * Story 5.10: soft delete. A deleted rule never evaluates, and stays referenceable by the
+     * `mapping_event.rule_id` rows it produced (the FK would refuse a hard delete).
+     */
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
   },
   (t) => ({
     projectKey: unique('mapping_rule_tenant_project_id_key').on(t.tenantId, t.projectId, t.id),
+    /** Story 5.10 / FR-22: no two LIVE rules of a Project share a priority. */
+    livePriority: uniqueIndex('mapping_rule_live_priority_key')
+      .on(t.tenantId, t.projectId, t.priority)
+      .where(sql`${t.deletedAt} IS NULL`),
+    matchFieldCheck: check(
+      'mapping_rule_match_field_check',
+      sql`${t.matchField} IN ('milestone', 'category', 'issueType', 'parent', 'keyPattern')`,
+    ),
     project: foreignKey({
       name: 'mapping_rule_project_fk',
       columns: [t.tenantId, t.projectId],

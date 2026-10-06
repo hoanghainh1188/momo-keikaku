@@ -19,13 +19,17 @@ import type { Bound } from '../../../db/src/bound';
 const STAMP: WriteStamp = { actor: 'pm-1', at: new Date('2026-10-06T12:00:00.000Z') };
 
 describe('disableRulesTargeting', () => {
-  it('deletes mapping_rule rows targeting the WP', async () => {
+  it('soft-deletes (never hard-deletes) mapping_rule rows targeting the WP (story 5.10)', async () => {
     const where = vi.fn().mockResolvedValue(undefined);
-    const del = vi.fn().mockReturnValue({ where });
-    const bound = { tx: { delete: del }, tenantId: 'ten-1' } as unknown as Bound;
-    await disableRulesTargeting(bound, 'prj-1', 'wp-1');
-    expect(del).toHaveBeenCalled();
+    const set = vi.fn().mockReturnValue({ where });
+    const update = vi.fn().mockReturnValue({ set });
+    const del = vi.fn();
+    const bound = { tx: { update, delete: del }, tenantId: 'ten-1' } as unknown as Bound;
+    await disableRulesTargeting(bound, 'prj-1', 'wp-1', STAMP.at);
+    expect(update).toHaveBeenCalled();
+    expect(set).toHaveBeenCalledWith({ deletedAt: STAMP.at });
     expect(where).toHaveBeenCalled();
+    expect(del).not.toHaveBeenCalled();
   });
 });
 

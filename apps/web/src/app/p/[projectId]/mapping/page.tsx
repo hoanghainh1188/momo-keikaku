@@ -5,10 +5,14 @@ import { share } from '@momo/domain/present';
 import { Internal, Section } from '@/components/ui';
 import { ScopeLedgerBar } from '@/components/scope-ledger-bar';
 import { MappingTicketBoard } from '@/components/mapping-ticket-board';
+import { MappingRulesEditor } from '@/components/mapping-rules-editor';
 
 export const dynamic = 'force-dynamic';
 
-/** FR-21–FR-24: Tickets, Rules and Coverage on one surface. Story 5.9 adds Mapping DnD. */
+/**
+ * FR-21–FR-24: Tickets, Rules and Coverage on one surface. Story 5.9 adds Mapping DnD; story 5.10
+ * makes the Rules editable (preview-gated Save, drag-handle / Alt+↑/↓ reorder).
+ */
 export default async function MappingPage({
   params,
 }: {
@@ -46,32 +50,7 @@ export default async function MappingPage({
         id="rules"
         intro={t('mapping.rules_are_live_on_every_tracker_snapshot_each_ti')}
       >
-        <table className="ledger" data-testid="rules-table">
-          <thead>
-            <tr>
-              <th className="num">{t('mapping.priority')}</th>
-              <th>{t('mapping.rule')}</th>
-              <th>{t('mapping.condition')}</th>
-              <th>{t('mapping.target_work_package')}</th>
-              <th className="num">{t('mapping.tickets_mapped_now')}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {m.rules.map((rule) => (
-              <tr key={rule.id} data-testid={`rule-${rule.id}`}>
-                <td className="num">{rule.priority}</td>
-                <td>{rule.name}</td>
-                <td>
-                  <code>
-                    {rule.match.field} = {rule.match.value}
-                  </code>
-                </td>
-                <td>{rule.wpLabel}</td>
-                <td className="num">{rule.currentlyMapped}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <MappingRulesEditor projectId={projectId} rules={m.rules} leafWps={leafWps} />
         <p className="caption" style={{ marginTop: 8 }}>{t('mapping.a_rule_showing_0_tickets_is_not_broken_those_tic')}</p>
       </Section>
 

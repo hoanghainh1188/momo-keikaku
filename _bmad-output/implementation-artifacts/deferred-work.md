@@ -1436,3 +1436,36 @@ above can see where it went.
 - source_spec: `_bmad-output/implementation-artifacts/spec-5-9-map-a-ticket-to-a-work-package-and-never-move-the-plan.md`
   summary: Watermark-concurrency / raw test inserts of mapping_event should dual-write mapping_head when asserting head invariants.
   evidence: Story 5.9 review — production append paths dual-write; test-only inserts lag.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-10-rules-keep-new-tickets-mapped-and-still-never-move-the-plan.md`
+  summary: Seed writes `ticket.tracker_site` (`…backlog.jp`) and `connector.site` (`ec-phase2`) differently, so a real ingest onto a seeded Project keys its Ticket identity upsert on another site and collides on `ticket_project_tracker_issue_key` (23505). The 5.10 concurrency test aligns the probe's Connector site by hand.
+  evidence: Story 5.10 `tests/watermark-concurrency.test.ts` (ingest vs manual) — first run failed in `upsertTicket`; `packages/db/src/seed.ts` `site` vs `connectorSite`.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-10-rules-keep-new-tickets-mapped-and-still-never-move-the-plan.md`
+  summary: Order-dependent `pnpm test` flake — `connector.test.ts` (ten-connector-5-3), `tracker.test.ts` (ten-tracker-5-1) and `ingest-nfr.test.ts` (ten-ingest-nfr-5-5) leave their Tenants behind, and `tests/seed-load-orchestration.test.ts` refuses to seed a database holding two Tenants when it runs after them.
+  evidence: Story 5.10 verification — 2 of 3 local full runs failed only there (pre-existing; vitest's file order shifted when 5.10 added two test files). Clean those Tenants up in each suite's afterAll.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-10-rules-keep-new-tickets-mapped-and-still-never-move-the-plan.md`
+  summary: Migration data steps (0011 head rebuild, 0012 keyPrefix rewrite + priority renumber) run as the owner role under FORCE row-level security; they touch rows only because the docker/CI owner is a superuser. A non-superuser production migrator would silently update nothing.
+  evidence: Story 5.10 migration `0012_mapping_rule_authoring.sql`; policies in `packages/db/sql/rls.sql` bypass only for `momo_maintenance`.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-10-rules-keep-new-tickets-mapped-and-still-never-move-the-plan.md`
+  summary: `deleteWp` (5.9) soft-deletes the rules targeting the WP and releases its Tickets but does not re-evaluate them against the remaining rules in the same transaction; they wait for the next snapshot.
+  evidence: Story 5.10 kept 5.9's schedule-fence `delete_wp` path unchanged (Boundaries: "Do not change 5.9").
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-10-rules-keep-new-tickets-mapped-and-still-never-move-the-plan.md`
+  summary: Rules editor has no runtime (RTL/Playwright) test — preview gating, Alt+↑/↓ and drag reorder were verified by hand in the browser only.
+  evidence: Story 5.10 — apps/web has no component test harness (same gap as 5.9's board).
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-10-rules-keep-new-tickets-mapped-and-still-never-move-the-plan.md`
+  summary: Map plan refusal codes `mapped_leaf` (5.9) and `rule_target_leaf` (5.10) to user-facing copy so a PM learns to reassign Mappings or retarget/delete the rule instead of seeing a generic invalid error.
+  evidence: 5.10 review; `grep -rn "mapped_leaf\|rule_target_leaf" apps/web/src packages/i18n` finds nothing — both refusals render as the generic `invalid_input` message.
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-10-rules-keep-new-tickets-mapped-and-still-never-move-the-plan.md`
+  summary: Add a DB-level case to `tests/schedule/fence-2-10.test.ts` proving a LIVE rule targeting a leaf refuses leaf→summary while a soft-deleted one does not.
+  evidence: 5.10 verification-gap review; `mapped-leaf-guard.test.ts` fakes the drizzle chain so the `deleted_at IS NULL` filter is never evaluated (same mocked disposition as 5.9's guard tests).
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-10-rules-keep-new-tickets-mapped-and-still-never-move-the-plan.md`
+  summary: Move the non-function exports out of the remaining `'use server'` modules (`apps/web/src/app/admin/actions.ts` `INITIAL_ORG_ACTION`, `apps/web/src/app/p/[projectId]/connectors/actions.ts` `INITIAL_CONNECTOR_ACTION` / `INITIAL_LINK_ACTION`) and add a lint/test that a `'use server'` module exports only async functions.
+  evidence: 5.10 fixed the same defect in `snapshot-actions.ts`, which made every server action on project pages fail with a 500 in the dev server; the two other modules still do it and nothing checks it.
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-10-rules-keep-new-tickets-mapped-and-still-never-move-the-plan.md`
+  summary: Give `packages/db/src/repositories/ingest/ingest-nfr.test.ts` "writes 2000 tickets … within 5 minutes" an explicit vitest timeout (≥ `BUDGET_MS`); it inherits the 5 s default and times out at ~5.0 s under load.
+  evidence: 2026-10-06 5.10 verify on a fresh REQUIRE_DB database: timed out at 5006 ms alone and inside the full suite, passed in other runs; the ingest path's only 5.10 change is loading live rules (the fixture has none), so the flake is the missing timeout, not a regression.

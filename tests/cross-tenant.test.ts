@@ -13,6 +13,7 @@ import {
   loadProjectBundle,
   loadReview,
 } from '../packages/db/src/repo';
+import { loadRuleEvaluation } from '../packages/db/src/repo-mapping-rules';
 import { listAuditLog } from '../packages/db/src/repo-audit';
 import {
   listDepartments,
@@ -503,7 +504,7 @@ function owner(): Db {
 function restrictedDeps(): HarnessReadDeps {
   return {
     handle: restricted!,
-    projectRead: { loadProjectBundle, loadReview },
+    projectRead: { loadProjectBundle, loadReview, loadRuleEvaluation },
     auditLogRead: { list: listAuditLog },
     orgRead: {
       listDepartments,

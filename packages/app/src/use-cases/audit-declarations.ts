@@ -15,6 +15,7 @@ import { RE_DERIVE_PINNED_BASELINE_AUDIT } from '../baseline/re-derive-pinned';
 import { SET_BASELINE_AUDIT } from '../baseline/set-baseline';
 import { CALENDAR_AUDIT } from '../calendar/publish-calendar-version';
 import { SCHEDULE_AUDIT } from '../schedule/apply-plan-change';
+import { MAPPING_RULE_AUDIT } from './mapping-rules';
 import { MEMBERSHIP_WRITE_AUDIT } from './membership-writes';
 import { ORG_WRITE_AUDIT } from './org-writes';
 import { PROJECT_WRITE_AUDIT } from './project-writes';
@@ -28,6 +29,7 @@ import { CONNECTOR_WRITE_AUDIT } from './connector-writes';
  */
 export const USE_CASE_AUDIT: Readonly<Record<string, AuditDeclaration>> = {
   ...PROJECT_WRITE_AUDIT,
+  ...MAPPING_RULE_AUDIT,
   ...ORG_WRITE_AUDIT,
   ...MEMBERSHIP_WRITE_AUDIT,
   ...RESOURCE_WRITE_AUDIT,

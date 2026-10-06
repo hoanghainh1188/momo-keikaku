@@ -11,6 +11,8 @@ import { ORG_WRITE_AUDIT } from '../packages/app/src/use-cases/org-writes';
 import { PROJECT_WRITE_AUDIT } from '../packages/app/src/use-cases/project-writes';
 import { RESOURCE_WRITE_AUDIT } from '../packages/app/src/use-cases/resource-writes';
 import { CONNECTOR_WRITE_AUDIT } from '../packages/app/src/use-cases/connector-writes';
+import { MAPPING_RULE_AUDIT } from '../packages/app/src/use-cases/mapping-rules';
+import type { MappingRuleWriteRepository } from '../packages/app/src/ports/mapping-rule-write';
 import type { CredentialsCryptoPort } from '../packages/app/src/ports/credentials-crypto';
 import {
   READ_SURFACE_MODULE,
@@ -109,6 +111,10 @@ const TARGET: WriteTarget = {
   secondAdminUserId: 'usr-gate-admin-2',
   resourceId: 'res-gate',
   connectorId: 'con-gate',
+  rules: [
+    { id: 'rule-gate-1', wpId: 'wp-gate', matchField: 'category', matchValue: 'Support' },
+    { id: 'rule-gate-2', wpId: 'wp-gate', matchField: 'category', matchValue: 'QA' },
+  ],
 };
 
 interface Committed {
@@ -244,6 +250,27 @@ const FAKE_FAMILIES: {
     listLeftScopeTickets: async () => [],
     confirmOwnership: async () => {},
   }),
+  // Story 5.10: the two gate rules hold priorities 1 and 2 — what TARGET.rules names.
+  mappingRules: (write): MappingRuleWriteRepository => ({
+    projectAnchor: async () => AT,
+    lockProject: async () => {},
+    ruleTargetOf: async () => 'leaf',
+    ticketIdForKey: async () => 'tkt-gate-1',
+    liveRules: async () =>
+      TARGET.rules.map((rule, index) => ({
+        id: rule.id,
+        priority: index + 1,
+        name: rule.id,
+        wpId: rule.wpId,
+        matchField: rule.matchField,
+        matchValue: rule.matchValue,
+      })),
+    insertRule: write('mappingRules.insertRule', undefined),
+    updateRule: write('mappingRules.updateRule', undefined),
+    softDeleteRule: write('mappingRules.softDeleteRule', undefined),
+    renumberRules: write('mappingRules.renumberRules', undefined),
+    reevaluate: write('mappingRules.reevaluate', { moved: 0 }),
+  }),
   ingestWrite: (write) => ({
     writeIngestSnapshot: write('ingestWrite.writeIngestSnapshot', {
       kind: 'written' as const,
@@ -280,6 +307,7 @@ async function drive(invoke: InvokeWrite, sabotage: Sabotage = {}): Promise<Run>
         resources: FAKE_FAMILIES.resources(write),
         connectorWrite: FAKE_FAMILIES.connectorWrite(write),
         ingestWrite: FAKE_FAMILIES.ingestWrite(write),
+        mappingRules: FAKE_FAMILIES.mappingRules(write),
         bound: { tx: { marker: 'fake-tx' }, tenantId: 'ten-gate' },
         audit: {
           append: async (auditEntry) => {
@@ -466,6 +494,7 @@ function expectedStamp(name: string): Date | undefined {
   if (Object.hasOwn(MEMBERSHIP_WRITE_AUDIT, name)) return NOW;
   if (Object.hasOwn(RESOURCE_WRITE_AUDIT, name)) return NOW;
   if (Object.hasOwn(CONNECTOR_WRITE_AUDIT, name)) return AT;
+  if (Object.hasOwn(MAPPING_RULE_AUDIT, name)) return AT;
   return undefined;
 }
 
@@ -522,12 +551,19 @@ describe.each(AUDITED)('audited use case %s', (name, actions) => {
       ).toEqual(stamp);
       // A create answers the id it minted, and that id is what its record names — required of
       // every `create*` write, so one that stops answering `{ id }` fails; any other write that
-      // answers a value is held to the same shape.
+      // answers a value is held to the same shape. Story 5.10's rule writes add ONE field beside
+      // it, `moved` (how many Tickets the same-transaction re-evaluation moved — "N Tickets
+      // moved"), which must be a count; nothing else may ride along.
       const value = (run.returned as { value?: unknown }).value;
       if (name.startsWith('create') || value !== undefined) {
-        expect(value, `${label} answered a value that is not the id its record names`).toEqual({
+        const { moved, ...rest } = (value ?? {}) as { moved?: unknown };
+        expect(rest, `${label} answered a value that is not the id its record names`).toEqual({
           id: committed!.entry.target,
         });
+        if (moved !== undefined) {
+          expect(Object.hasOwn(MAPPING_RULE_AUDIT, name), `${label} answered \`moved\` but is not a rule write`).toBe(true);
+          expect(Number.isInteger(moved), `${label} answered a \`moved\` that is not a count`).toBe(true);
+        }
       }
     }
   });

@@ -80,6 +80,11 @@ import {
   listProjects as listProjectsUseCase,
   mapTicket as mapTicketUseCase,
   mapTickets as mapTicketsUseCase,
+  createMappingRule as createMappingRuleUseCase,
+  updateMappingRule as updateMappingRuleUseCase,
+  deleteMappingRule as deleteMappingRuleUseCase,
+  reorderMappingRules as reorderMappingRulesUseCase,
+  previewMappingRuleChange as previewMappingRuleChangeUseCase,
   markChangeRequestCandidates as markChangeRequestCandidatesUseCase,
   notifyCredentialFailure as notifyCredentialFailureUseCase,
   planTicketsAsWorkPackage as planTicketsAsWorkPackageUseCase,
@@ -125,6 +130,11 @@ import {
   type FixtureCursorPort,
   type MailerPort,
   type MapTicketInput,
+  type CreateMappingRuleInput,
+  type UpdateMappingRuleInput,
+  type DeleteMappingRuleInput,
+  type ReorderMappingRulesInput,
+  type PreviewMappingRuleChangeInput,
   type TrackerConnectorConfig,
   type TrackerCredentials,
   type TrackerPort,
@@ -199,6 +209,7 @@ import {
   tenantCurrencyOn,
   loadProjectBundle,
   loadReview,
+  loadRuleEvaluation,
   membershipsOf,
   type Db,
 } from '@momo/db';
@@ -541,7 +552,7 @@ export async function resetPassword(input: { readonly token: string; readonly pa
 function projectReadDeps() {
   return {
     handle: webDb(),
-    projectRead: { loadProjectBundle, loadReview },
+    projectRead: { loadProjectBundle, loadReview, loadRuleEvaluation },
   } satisfies ProjectReadDeps<Db>;
 }
 
@@ -737,6 +748,39 @@ export async function markChangeRequestCandidates(input: ChangeRequestCandidates
 export async function mapTicket(input: MapTicketInput, ctx?: RequestContext) {
   const context = ctx ?? (await requestContext());
   return mapTicketUseCase(writeDeps(), context, input);
+}
+
+/** Story 5.10 — a new Mapping Rule. See `packages/app`'s `createMappingRule`. */
+export async function createMappingRule(input: CreateMappingRuleInput, ctx?: RequestContext) {
+  const context = ctx ?? (await requestContext());
+  return createMappingRuleUseCase(writeDeps(), context, input);
+}
+
+/** Story 5.10 — an edited Mapping Rule. See `packages/app`'s `updateMappingRule`. */
+export async function updateMappingRule(input: UpdateMappingRuleInput, ctx?: RequestContext) {
+  const context = ctx ?? (await requestContext());
+  return updateMappingRuleUseCase(writeDeps(), context, input);
+}
+
+/** Story 5.10 — a soft-deleted Mapping Rule. See `packages/app`'s `deleteMappingRule`. */
+export async function deleteMappingRule(input: DeleteMappingRuleInput, ctx?: RequestContext) {
+  const context = ctx ?? (await requestContext());
+  return deleteMappingRuleUseCase(writeDeps(), context, input);
+}
+
+/** Story 5.10 — the rule list in a new order. See `packages/app`'s `reorderMappingRules`. */
+export async function reorderMappingRules(input: ReorderMappingRulesInput, ctx?: RequestContext) {
+  const context = ctx ?? (await requestContext());
+  return reorderMappingRulesUseCase(writeDeps(), context, input);
+}
+
+/** Story 5.10 — the read-only move preview. See `packages/app`'s `previewMappingRuleChange`. */
+export async function previewMappingRuleChange(
+  input: PreviewMappingRuleChangeInput,
+  ctx?: RequestContext,
+) {
+  const context = ctx ?? (await requestContext());
+  return previewMappingRuleChangeUseCase(projectReadDeps(), context, input);
 }
 
 /** Story 2.10 fence — plan-input write + recalculation. */

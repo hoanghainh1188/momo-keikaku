@@ -2,6 +2,7 @@ import type { AuditedWriteDeps } from './audited-write';
 import type { Clock } from './clock';
 import type { ConnectorWriteScope } from './connector-write';
 import type { IdGenerator } from './ids';
+import type { MappingRuleWriteScope } from './mapping-rule-write';
 import type { MembershipWriteScope } from './membership-write';
 import type { OrgWriteScope } from './org-write';
 import type { ProjectWriteScope } from './project-write';
@@ -24,6 +25,7 @@ import type { SchedulingScope } from './schedule-write';
  * repositories inside the fence (AR-43: composition must not import them).
  */
 export type WriteScope = ProjectWriteScope &
+  MappingRuleWriteScope &
   OrgWriteScope &
   MembershipWriteScope &
   ResourceWriteScope &

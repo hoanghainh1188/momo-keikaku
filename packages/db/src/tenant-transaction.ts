@@ -6,6 +6,7 @@ import { orgRepositoryOn } from './repo-org';
 import { resourceWriteRepositoryOn } from './repo-resource';
 import { connectorWriteRepositoryOn } from './repositories/connector';
 import { ingestWriteRepositoryOn } from './repositories/ingest';
+import { mappingRuleRepositoryOn } from './repo-mapping-rules';
 import { projectWriteRepositoryOn } from './repo-writes';
 import { withTenant } from './with-tenant';
 
@@ -42,6 +43,8 @@ import { withTenant } from './with-tenant';
 function writeScopeOn(bound: Bound) {
   return {
     projectWrite: projectWriteRepositoryOn(bound),
+    // Story 5.10: Mapping Rule create / edit / delete / reorder + re-evaluation under the lock.
+    mappingRules: mappingRuleRepositoryOn(bound),
     org: orgRepositoryOn(bound),
     resources: resourceWriteRepositoryOn(bound),
     membership: membershipWriterOn(bound),

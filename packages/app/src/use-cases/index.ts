@@ -19,6 +19,13 @@ export {
   planTicketsAsWorkPackage,
 } from './project-writes';
 export {
+  createMappingRule,
+  deleteMappingRule,
+  previewMappingRuleChange,
+  reorderMappingRules,
+  updateMappingRule,
+} from './mapping-rules';
+export {
   createDepartment,
   createProgram,
   createProject,

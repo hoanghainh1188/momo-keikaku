@@ -37,6 +37,7 @@ import { GET_PROJECT_MAPPING_ROLES } from './get-project-mapping';
 import { GET_PROJECT_REVIEW_ROLES } from './get-project-review';
 import { AUDIT_LOG_READ_ROLES } from './list-audit-log';
 import { ORG_LIST_READ_ROLES } from './list-org';
+import { MAPPING_RULE_ROLES } from './mapping-rules';
 import { MEMBERSHIP_WRITE_ROLES } from './membership-writes';
 import { ORG_WRITE_ROLES } from './org-writes';
 import { PROJECT_WRITE_ROLES } from './project-writes';
@@ -56,6 +57,7 @@ export const USE_CASE_ROLES: Readonly<Record<string, RoleDeclaration>> = {
   ...GET_PROJECT_REVIEW_ROLES,
   ...GET_PROJECT_MAPPING_ROLES,
   ...PROJECT_WRITE_ROLES,
+  ...MAPPING_RULE_ROLES,
   ...ORG_WRITE_ROLES,
   ...ORG_LIST_READ_ROLES,
   ...MEMBERSHIP_WRITE_ROLES,

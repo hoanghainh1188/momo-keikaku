@@ -170,6 +170,10 @@ export function targetOf(probe: ProbeTenant, tenantId: string): WriteTarget {
     throw new Error(`${probe.token}'s fixture has too few Tickets or no leaf Work Package`);
   }
   const connectorId = `${probe.writeOptions.idPrefix}con-fixture-ec2`;
+  const rules = [...probe.state.fixture.mappingRules]
+    .sort((a, b) => a.priority - b.priority)
+    .map((r) => ({ id: r.id, wpId: r.wpId, matchField: r.match.field, matchValue: r.match.value }));
+  if (rules.length < 2) throw new Error(`${probe.token}'s fixture has fewer than two Mapping Rules`);
   return {
     tenantId,
     projectId: probe.projectId,
@@ -183,6 +187,7 @@ export function targetOf(probe: ProbeTenant, tenantId: string): WriteTarget {
     // The probe's seeded Tenant Admin; the harness user (`stageProbeMembers`) is the other one.
     secondAdminUserId: `${probe.writeOptions.idPrefix}${DEMO_USERS.hoang.id}`,
     connectorId,
+    rules: [rules[0]!, rules[1]!],
   };
 }
 
@@ -365,6 +370,11 @@ export async function landedRows(tenantId: string) {
       .select()
       .from(schema.connectorSettingEvent)
       .where(eq(schema.connectorSettingEvent.tenantId, tenantId)),
+    // Story 5.10: mutable-audited — a rule edit, delete (soft) or reorder changes rows in place.
+    mappingRules: await tx
+      .select()
+      .from(schema.mappingRule)
+      .where(eq(schema.mappingRule.tenantId, tenantId)),
   }));
 }
 
@@ -387,6 +397,7 @@ export const LANDED_TABLE: Readonly<Record<keyof Landed, string>> = {
   connectors: 'connector',
   connectorScopeEvents: 'connector_scope_event',
   connectorSettingEvents: 'connector_setting_event',
+  mappingRules: 'mapping_rule',
 };
 
 /** The table `newSince`'s removed memberships come from — the same as `memberships`'. */
@@ -466,6 +477,9 @@ export function newSince(before: Landed, after: Landed) {
     connectors: changedSince(before.connectors, after.connectors),
     connectorScopeEvents: after.connectorScopeEvents.filter((row) => !scopeSeqs.has(row.seq)),
     connectorSettingEvents: after.connectorSettingEvents.filter((row) => !settingSeqs.has(row.seq)),
+    mappingRules: changedSince(before.mappingRules, after.mappingRules).sort((a, b) =>
+      a.id.localeCompare(b.id),
+    ),
     ...membershipsSince(before.memberships, after.memberships),
   };
 }
