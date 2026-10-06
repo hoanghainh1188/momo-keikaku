@@ -71,6 +71,8 @@ export const FK_MATCH_SIMPLE: readonly string[] = [
   'mapping_event_mapping_rule_fk',
   'disposition_event_work_package_fk',
   'tracker_snapshot_scope_seq_fk',
+  // Story 5.8: resource_id null = unlink; MATCH FULL would refuse unlink rows.
+  'tracker_account_link_event_resource_fk',
 ];
 
 /** The two FKs that are `DEFERRABLE INITIALLY DEFERRED` (AD-25): `wp_dependency`'s leaf endpoints. */
