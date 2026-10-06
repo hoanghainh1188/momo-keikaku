@@ -1,5 +1,14 @@
-import { defineConfig } from 'vitest/config';
+import { configDefaults, defineConfig } from 'vitest/config';
 import { fileURLToPath } from 'node:url';
+
+/**
+ * Wall-clock NFR suites (`*-nfr*.test.ts`): each asserts elapsed time against a budget — NFR-P1's
+ * p95 ≤ 300 ms under the fence lock, the 5-minute ingest and ledger budgets. Inside `pnpm test`
+ * they shared the machine with 150+ files running in parallel and measured that contention, not
+ * the code: fence-nfr-p1 read p95 455–555 ms on runs where it passes alone. They run instead
+ * under `pnpm test:nfr` (`vitest.nfr.config.ts`), one file at a time, as their own CI step.
+ */
+export const NFR_TESTS = ['**/*-nfr*.test.ts'];
 
 export default defineConfig({
   resolve: {
@@ -40,6 +49,7 @@ export default defineConfig({
       'scripts/**/*.test.ts',
       'tests/**/*.test.ts',
     ],
+    exclude: [...configDefaults.exclude, ...NFR_TESTS],
     environment: 'node',
     // AD-17: vitest is one of the three local suppliers of DEPLOYMENT=local (alongside
     // apps/web/.env.development and the worker's start:dev). Never set this in ci.yml's job env.

@@ -17,6 +17,7 @@
     "scripts/**/*.ts",
     "tests/**/*.ts",
     "vitest.config.ts",
+    "vitest.nfr.config.ts",
     "drizzle.config.ts"
   ],
   "exclude": [

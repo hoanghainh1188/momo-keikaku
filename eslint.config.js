@@ -292,7 +292,13 @@ export default tseslint.config(
     // the tenant bans have no sanctioned home anywhere, and a migration script is exactly
     // where a hand-interpolated `SET LOCAL` would otherwise be written.
     name: 'momo/fence-tooling',
-    files: ['scripts/**/*.ts', 'vitest.config.ts', 'drizzle.config.ts', 'eslint.config.js'],
+    files: [
+      'scripts/**/*.ts',
+      'vitest.config.ts',
+      'vitest.nfr.config.ts',
+      'drizzle.config.ts',
+      'eslint.config.js',
+    ],
     rules: fence({ clock: false, env: false }),
   },
   {

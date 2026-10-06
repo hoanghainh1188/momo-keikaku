@@ -435,3 +435,9 @@ jobs:
       - name: Tests
         if: always()
         run: pnpm test
+
+      # The wall-clock NFR suites (`*-nfr*.test.ts`), excluded from `pnpm test` and run one file
+      # at a time: under the parallel run they timed the other 150 files, not the code.
+      - name: Tests (NFR budgets)
+        if: always()
+        run: pnpm test:nfr
