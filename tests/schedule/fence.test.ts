@@ -28,6 +28,7 @@ import * as s from '../../packages/db/src/schema';
 import { inTenantTransaction } from '../../packages/db/src/tenant-transaction';
 import { lockWatermark } from '../../packages/db/src/watermark-lock';
 import { withTenant } from '../../packages/db/src/with-tenant';
+import { measureBackendWal } from '../support/backend-wal';
 import { expectShuffleInvariant } from '../support/shuffle-invariant';
 import { CAL, edge, inputs, scheduled, wp } from '../support/schedule-fixtures';
 import { generateLoadFixture, LOAD_WP_PER_PROJECT } from '../../packages/db/src/load-generator';
@@ -529,7 +530,7 @@ describe('stored-run shuffle invariance (story 2.9 / deferred 2.3 AC4)', () => {
 });
 
 describe.skipIf(!reachable)('500 WP / 500 edge payload measure (AR-50)', () => {
-  it('raw / pglz (pg_column_size) stay within tolerance of AD-26 figures; WAL recorded when measurable', async () => {
+  it('raw / pglz (pg_column_size) stay within tolerance of AD-26 figures; own-session WAL within budget', async () => {
     const load = generateLoadFixture();
     const project = load.projects[0]!;
     const leaves = project.wps.filter((w) => w.isLeaf);
@@ -619,49 +620,44 @@ describe.skipIf(!reachable)('500 WP / 500 edge payload measure (AR-50)', () => {
     const at = new Date('2026-10-05T02:00:00.000Z');
     const scope = { tenantId: PROBE.tenantId, projectId: PROBE.projectId };
 
-    // WAL must be measured across COMMIT — same-tx pg_wal_lsn_diff is 0.
-    // Start AFTER seed-calendar cleanup so the large delete is not part of AR-50.
-    const beforeWal = await owner.execute<{ lsn: string }>(
-      sql`SELECT pg_current_wal_lsn()::text AS lsn`,
+    // WAL is this session's own (PG18 per-backend stats), read across COMMIT. A cluster-wide
+    // pg_current_wal_lsn() diff counted the WAL of every suite vitest runs beside this one.
+    // Measured AFTER the seed-calendar cleanup so the large delete is not part of AR-50.
+    const { result: runSeq, walBytes } = await measureBackendWal(
+      OWNER_DATABASE_URL!,
+      (measured) =>
+      withTenant(measured, PROBE.tenantId, async (tx) => {
+        const [calendar] = await tx
+          .insert(s.holidayCalendarVersion)
+          .values({
+            ...scope,
+            nonWorkingDays: nonWorkingDays.slice(0, 104), // two years of weekends for the FK row
+            rangeStart: '2020-01-01',
+            rangeEnd: '2040-12-31',
+            nationalSets: [],
+            nationalDatasetVersion: 'size-probe-2.9',
+            reason: 'AD-26 size measure',
+            actor: 'size-probe',
+            at,
+          })
+          .returning({ seq: s.holidayCalendarVersion.seq });
+
+        const [run] = await tx
+          .insert(s.scheduleRun)
+          .values({
+            ...scope,
+            holidayCalendarVersionSeq: calendar!.seq,
+            cause: 'duration',
+            actor: 'size-probe',
+            at,
+            inputs: encodedInputs,
+            outputs: encodedOutputs,
+            engineVersion: ENGINE_VERSION,
+          })
+          .returning({ seq: s.scheduleRun.seq });
+        return run!.seq;
+      }),
     );
-    const walBefore = beforeWal.rows[0]?.lsn;
-
-    const runSeq = await withTenant(owner, PROBE.tenantId, async (tx) => {
-      const [calendar] = await tx
-        .insert(s.holidayCalendarVersion)
-        .values({
-          ...scope,
-          nonWorkingDays: nonWorkingDays.slice(0, 104), // two years of weekends for the FK row
-          rangeStart: '2020-01-01',
-          rangeEnd: '2040-12-31',
-          nationalSets: [],
-          nationalDatasetVersion: 'size-probe-2.9',
-          reason: 'AD-26 size measure',
-          actor: 'size-probe',
-          at,
-        })
-        .returning({ seq: s.holidayCalendarVersion.seq });
-
-      const [run] = await tx
-        .insert(s.scheduleRun)
-        .values({
-          ...scope,
-          holidayCalendarVersionSeq: calendar!.seq,
-          cause: 'duration',
-          actor: 'size-probe',
-          at,
-          inputs: encodedInputs,
-          outputs: encodedOutputs,
-          engineVersion: ENGINE_VERSION,
-        })
-        .returning({ seq: s.scheduleRun.seq });
-      return run!.seq;
-    });
-
-    const afterWal = await owner.execute<{ lsn: string }>(
-      sql`SELECT pg_current_wal_lsn()::text AS lsn`,
-    );
-    const walAfter = afterWal.rows[0]?.lsn;
 
     const sized = await withTenant(owner, PROBE.tenantId, async (tx) => {
       const res = await tx.execute<{
@@ -690,20 +686,10 @@ describe.skipIf(!reachable)('500 WP / 500 edge payload measure (AR-50)', () => {
     expect(totalSize).toBeLessThanOrEqual(storedBudget * 1.25);
     expect(totalSize).toBeGreaterThan(8 * 1024);
 
-    let walBytes: number | null = null;
-    if (walBefore && walAfter) {
-      const diff = await owner.execute<{ bytes: string }>(
-        sql`SELECT pg_wal_lsn_diff(${walAfter}::pg_lsn, ${walBefore}::pg_lsn)::text AS bytes`,
-      );
-      walBytes = Number(diff.rows[0]?.bytes ?? NaN);
-      if (!Number.isFinite(walBytes)) walBytes = null;
-    }
     // AD-26 ~152 kB WAL. Measured ~40–50 kB for this insert across COMMIT (2026-09-24).
-    // Upper-bound against the budget; require positive WAL when LSN advanced.
-    if (walBytes !== null && walBytes > 0) {
-      const walBudget = 152 * 1024;
-      expect(walBytes).toBeLessThanOrEqual(walBudget * 1.25);
-      expect(walBytes).toBeGreaterThan(4 * 1024);
-    }
+    // Upper-bound against the budget; the floor fails an empty or unmeasured write.
+    const walBudget = 152 * 1024;
+    expect(walBytes).toBeLessThanOrEqual(walBudget * 1.25);
+    expect(walBytes).toBeGreaterThan(4 * 1024);
   });
 });
