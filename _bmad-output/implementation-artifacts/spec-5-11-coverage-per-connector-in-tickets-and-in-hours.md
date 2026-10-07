@@ -2,7 +2,7 @@
 title: 'Story 5.11 — Coverage, per Connector, in Tickets and in hours'
 type: 'feature'
 created: '2026-10-07'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '46114e826779d0caeb1dd99aec38479a7a5922fd'
