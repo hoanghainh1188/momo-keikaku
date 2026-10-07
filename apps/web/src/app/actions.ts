@@ -1,7 +1,20 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { hours } from '@momo/domain/present';
+import type {
+  AppError,
+  CreateMappingRuleInput,
+  PreviewMappingRuleChangeInput,
+  ReorderMappingRulesInput,
+  Result,
+} from '@momo/app';
 import {
+  createMappingRule,
+  deleteMappingRule,
+  previewMappingRuleChange,
+  reorderMappingRules,
+  updateMappingRule,
   explainTickets as explainTicketsUseCase,
   mapTicket,
   mapTickets as mapTicketsUseCase,
@@ -79,4 +92,92 @@ export async function mapSingleTicket(formData: FormData): Promise<void> {
   if (!writeLanded(await mapTicket(input, ctx))) return;
   revalidatePath(`/p/${input.projectId}/mapping`);
   revalidatePath(`/p/${input.projectId}/review`);
+}
+
+// --- Story 5.10: Mapping Rules (FR-22, UX-DR22) -------------------------------------------------
+//
+// Called from the Rules editor with plain values rather than FormData: the editor needs the
+// answer (the preview, or "N Tickets moved"), so each action returns a small serialisable value.
+// The use cases validate the whole command (zod) — these actions only pass it through, resolve
+// the request context, and revalidate the pages whose figures a rule change moves.
+
+/** What a rule write answers the editor: how many Tickets moved, or why it was refused. */
+export type RuleActionResult =
+  | { readonly ok: true; readonly moved: number }
+  | { readonly ok: false; readonly code: AppError['code']; readonly details: Readonly<Record<string, readonly string[]>> };
+
+/** One flow of the preview, its hours already presented (no bigint crosses to the client). */
+export interface RulePreviewFlowView {
+  readonly wpId: string;
+  readonly tickets: number;
+  readonly hours: string;
+}
+
+/** The move preview as the editor renders it. */
+export type RulePreviewResult =
+  | {
+      readonly ok: true;
+      readonly arrivals: readonly RulePreviewFlowView[];
+      readonly departures: readonly RulePreviewFlowView[];
+      readonly toUnmapped: { readonly tickets: number; readonly hours: string };
+      readonly moveCount: number;
+      /** False in Ticket-Count Mode: the editor then shows counts only, never "+0h". */
+      readonly hoursAvailable: boolean;
+    }
+  | { readonly ok: false; readonly code: AppError['code']; readonly details: Readonly<Record<string, readonly string[]>> };
+
+function ruleWriteResult(projectId: string, result: Result<{ readonly moved: number }>): RuleActionResult {
+  if (!result.ok) return { ok: false, code: result.error.code, details: result.error.details ?? {} };
+  revalidatePath(`/p/${projectId}/mapping`);
+  revalidatePath(`/p/${projectId}/review`);
+  return { ok: true, moved: result.value.moved };
+}
+
+/** A rule draft as the editor sends it: create when `ruleId` is absent, edit otherwise. */
+export type SaveMappingRuleInput = CreateMappingRuleInput & { readonly ruleId?: string };
+
+/** FR-22: create or edit a rule; the same transaction re-evaluates the Project's Tickets. */
+export async function saveMappingRule(input: SaveMappingRuleInput): Promise<RuleActionResult> {
+  const ctx = await requestContext();
+  const { ruleId, ...draft } = input;
+  const result =
+    ruleId === undefined
+      ? await createMappingRule(draft, ctx)
+      : await updateMappingRule({ ...draft, ruleId }, ctx);
+  return ruleWriteResult(input.projectId, result);
+}
+
+/** FR-22: soft-delete a rule; the Tickets it mapped are re-evaluated against the rest. */
+export async function removeMappingRule(input: {
+  readonly projectId: string;
+  readonly ruleId: string;
+}): Promise<RuleActionResult> {
+  const ctx = await requestContext();
+  return ruleWriteResult(input.projectId, await deleteMappingRule(input, ctx));
+}
+
+/** UX-DR22: the rule list in a new order (drag handle or Alt+↑/↓); applies immediately. */
+export async function reorderMappingRuleList(input: ReorderMappingRulesInput): Promise<RuleActionResult> {
+  const ctx = await requestContext();
+  return ruleWriteResult(input.projectId, await reorderMappingRules(input, ctx));
+}
+
+/** UX-DR22: the read-only move preview Save waits for. */
+export async function previewMappingRule(input: PreviewMappingRuleChangeInput): Promise<RulePreviewResult> {
+  const ctx = await requestContext();
+  const result = await previewMappingRuleChange(input, ctx);
+  if (!result.ok) return { ok: false, code: result.error.code, details: result.error.details ?? {} };
+  const flow = (f: { wpId: string; tickets: number; mh: bigint }) => ({
+    wpId: f.wpId,
+    tickets: f.tickets,
+    hours: hours(f.mh),
+  });
+  return {
+    ok: true,
+    arrivals: result.value.arrivals.map(flow),
+    departures: result.value.departures.map(flow),
+    toUnmapped: { tickets: result.value.toUnmapped.tickets, hours: hours(result.value.toUnmapped.mh) },
+    moveCount: result.value.moves.length,
+    hoursAvailable: result.value.hoursAvailable,
+  };
 }

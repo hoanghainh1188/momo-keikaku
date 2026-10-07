@@ -58,3 +58,6 @@ export {
 export { tenantCurrencyOn } from './repo-tenant-currency';
 export * from './table-classes';
 export * from './with-tenant';
+// Story 5.10: the Mapping Rule move preview's read (a tenant read, like `loadProjectBundle`). The
+// rule WRITERS cross only through the scope `inTenantTransaction` binds (`mappingRules`).
+export { loadRuleEvaluation, type RuleEvaluationInputs } from './repo-mapping-rules';

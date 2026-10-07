@@ -34,6 +34,12 @@ export const AUDIT_ACTIONS = [
   'disposition.cr_candidate',
   'mapping.map',
   'mapping.unmap',
+  // Mapping Rules authored by the PM (story 5.10 / FR-22). Each records the rule (before / after
+  // where there is one) and how many Tickets the same-transaction re-evaluation moved.
+  'mapping.rule_create',
+  'mapping.rule_update',
+  'mapping.rule_delete',
+  'mapping.rule_reorder',
   // FR-1's organisation changes (story 1.3 slice 2), each recording the previous value where
   // there is one. PM assignment joined with story 1.4 slice 2, below.
   'department.create',

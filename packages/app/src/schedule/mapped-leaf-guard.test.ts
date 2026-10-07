@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { assertMappedLeafMayBecomeSummary } from './mapped-leaf-guard';
 import type { Bound } from '../../../db/src/bound';
 
-function chainSelect(results: { wp?: unknown[]; head?: unknown[] }) {
+function chainSelect(results: { wp?: unknown[]; head?: unknown[]; rules?: unknown[] }) {
   let call = 0;
   return {
     select: vi.fn(() => ({
@@ -16,8 +16,9 @@ function chainSelect(results: { wp?: unknown[]; head?: unknown[] }) {
             // work_package lookup
             return Promise.resolve(results.wp ?? []);
           }
-          // mapping_head lookup — may be followed by .limit(1)
-          const rows = results.head ?? [];
+          // mapping_head lookup (call 2), then live mapping_rule targets (call 3) — each may be
+          // followed by .limit(1)
+          const rows = (call === 2 ? results.head : results.rules) ?? [];
           const p = Promise.resolve(rows) as Promise<unknown[]> & {
             limit: (n: number) => Promise<unknown[]>;
           };
@@ -48,6 +49,18 @@ describe('assertMappedLeafMayBecomeSummary', () => {
     });
     const bound = { tx, tenantId: 'ten-1' } as unknown as Bound;
     await expect(assertMappedLeafMayBecomeSummary(bound, 'prj-1', 'wp-1')).resolves.toBeUndefined();
+  });
+
+  it('refuses when a live Mapping Rule targets the leaf (story 5.10)', async () => {
+    const tx = chainSelect({
+      wp: [{ isLeaf: true, deletedAt: null }],
+      head: [],
+      rules: [{ id: 'rule-1' }],
+    });
+    const bound = { tx, tenantId: 'ten-1' } as unknown as Bound;
+    await expect(assertMappedLeafMayBecomeSummary(bound, 'prj-1', 'wp-1')).rejects.toThrow(
+      /refused: invalid_input/,
+    );
   });
 
   it('no-ops when the WP is already a summary', async () => {

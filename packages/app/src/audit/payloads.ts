@@ -11,10 +11,44 @@ import { decode } from '@momo/domain';
 
 const placement = z.object({ departmentId: z.string(), programId: z.string().nullable() }).strict();
 
+/** A Mapping Rule as its audit records carry it (story 5.10). */
+const mappingRule = z
+  .object({
+    name: z.string(),
+    priority: z.number().int(),
+    wpId: z.string(),
+    matchField: z.string(),
+    matchValue: z.string(),
+  })
+  .strict();
+
+const ruleCreatePayload = z
+  .object({ projectId: z.string(), rule: mappingRule, moved: z.number().int() })
+  .strict();
+const ruleUpdatePayload = z
+  .object({ projectId: z.string(), before: mappingRule, after: mappingRule, moved: z.number().int() })
+  .strict();
+const ruleDeletePayload = z
+  .object({ projectId: z.string(), before: mappingRule, moved: z.number().int() })
+  .strict();
+const ruleReorderPayload = z
+  .object({
+    projectId: z.string(),
+    before: z.array(z.string()),
+    after: z.array(z.string()),
+    moved: z.number().int(),
+  })
+  .strict();
+
 /** Every shape a committed `audit_log.payload` may take today. */
 export const auditPayloadSchema = z.union([
   z.object({ ticketIds: z.array(z.string()), wpId: z.string().nullable(), note: z.string().nullable() }).strict(),
   z.object({ wpId: z.string() }).strict(),
+  // Mapping Rule writes (story 5.10).
+  ruleCreatePayload,
+  ruleUpdatePayload,
+  ruleDeletePayload,
+  ruleReorderPayload,
   z
     .object({
       snapshots: z.number().int(),
@@ -138,6 +172,10 @@ export const AUDIT_PAYLOAD_BY_ACTION = {
     .strict(),
   'mapping.map': z.object({ wpId: z.string() }).strict(),
   'mapping.unmap': z.object({ wpId: z.string() }).strict(),
+  'mapping.rule_create': ruleCreatePayload,
+  'mapping.rule_update': ruleUpdatePayload,
+  'mapping.rule_delete': ruleDeletePayload,
+  'mapping.rule_reorder': ruleReorderPayload,
   'department.create': z.object({ name: z.string() }).strict(),
   'department.rename': z.object({ before: z.string().nullable(), after: z.string().nullable() }).strict(),
   'program.create': z.object({ departmentId: z.string(), name: z.string() }).strict(),

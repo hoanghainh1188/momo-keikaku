@@ -16,6 +16,23 @@ describe('mapping write schedule fence (story 5.9)', () => {
     expect(src).not.toMatch(/patch_actual_dates/);
   });
 
+  it('story 5.10: every rule path (use cases, repository, pure evaluation) writes no date and never recalculates', () => {
+    const files = [
+      join(here, 'mapping-rules.ts'),
+      join(here, 'mapping-rule-input.ts'),
+      join(here, '../../../db/src/repo-mapping-rules.ts'),
+      join(here, '../../../domain/src/mapping.ts'),
+    ];
+    for (const file of files) {
+      const src = readFileSync(file, 'utf8');
+      expect(src, file).not.toMatch(/recalculate/);
+      expect(src, file).not.toMatch(/applyPlanChange/);
+      expect(src, file).not.toMatch(/patch_actual_dates/);
+      expect(src, file).not.toMatch(/wpStatusEvent|wp_status_event/);
+      expect(src, file).not.toMatch(/schedule\//);
+    }
+  });
+
   it('MappingTicketBoard DnD/keyboard submit the same FormData fields as MapTicketForm', () => {
     const board = readFileSync(
       join(here, '../../../../apps/web/src/components/mapping-ticket-board.tsx'),

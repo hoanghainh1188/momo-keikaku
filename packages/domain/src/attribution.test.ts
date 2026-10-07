@@ -449,8 +449,8 @@ describe('mapping rules (FR-22)', () => {
 
   it('matches in strict priority order', () => {
     const t = obs('t1', 1, { attributes: [{ kind: 'category', id: 'Support' }], issueTypeId: 'Bug' });
-    expect(evaluateRules(rules, t)).toBe('WP-CATCH');
-    expect(evaluateRules([rules[1]!, rules[0]!], t)).toBe('WP-CATCH'); // sorted by priority, not order
+    expect(evaluateRules(rules, t)?.wpId).toBe('WP-CATCH');
+    expect(evaluateRules([rules[1]!, rules[0]!], t)?.wpId).toBe('WP-CATCH'); // sorted by priority, not order
   });
 
   it('matches milestone attributes (AD-6)', () => {
@@ -466,7 +466,7 @@ describe('mapping rules (FR-22)', () => {
     const t = obs('t1', 1, {
       attributes: [{ kind: 'milestone', id: 'Phase2-Sprint1' }],
     });
-    expect(evaluateRules(milestoneRules, t)).toBe('WP-S1');
+    expect(evaluateRules(milestoneRules, t)?.wpId).toBe('WP-S1');
   });
 
   it('never overrides a manual Mapping', () => {

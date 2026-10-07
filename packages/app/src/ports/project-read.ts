@@ -19,11 +19,14 @@
  */
 import type {
   BaselineVersion,
+  MappingHeadEntry,
   MappingRule,
+  Mh,
   ProjectConfig,
   Resource,
   ReviewInput,
   ReviewResult,
+  TicketObservation,
   WorkPackage,
 } from '@momo/domain';
 
@@ -88,7 +91,11 @@ export interface ProjectBundle {
     baselineRecordedAt: string;
   };
   input: ReviewInput;
-  rules: (MappingRule & { currentlyMapped: number })[];
+  /**
+   * Live rules. `parentKey` (story 5.10): for a `parent` rule, the parent Ticket's key from the
+   * Project's Ticket identities (null when no identity carries the stored id).
+   */
+  rules: (MappingRule & { currentlyMapped: number; parentKey: string | null })[];
   wps: WorkPackage[];
   /** The active Baseline — null while the Project has none (story 2.1, decision 2-A). */
   baseline: BaselineVersion | null;
@@ -99,6 +106,24 @@ export interface ProjectBundle {
 export interface ProjectReview {
   bundle: ProjectBundle;
   review: ReviewResult;
+}
+
+/**
+ * Story 5.10: everything one Mapping Rule evaluation reads — the live rules, the latest
+ * observation of every in-scope Ticket, the current heads, and each Ticket's cumulative ledger
+ * hours from hours Connectors only. The move preview and every rule save read the same shape
+ * (`packages/db/src/repo-mapping-rules.ts`), so the preview is what the save will do.
+ */
+export interface RuleEvaluationInputs {
+  readonly rules: MappingRule[];
+  readonly tickets: TicketObservation[];
+  readonly head: ReadonlyMap<string, MappingHeadEntry>;
+  readonly hoursByTicket: ReadonlyMap<string, Mh>;
+  /** False in Ticket-Count Mode (no hours Connector): hours are not shown, never as 0. */
+  readonly hoursAvailable: boolean;
+  readonly ticketIdsByKey: ReadonlyMap<string, string>;
+  /** Live Work Packages of the Project: `leaf` = live, leaf, non-milestone. */
+  readonly wpKinds: ReadonlyMap<string, 'leaf' | 'not_leaf'>;
 }
 
 export interface ProjectReadPort<Handle> {
@@ -112,6 +137,12 @@ export interface ProjectReadPort<Handle> {
     tenantId: string,
     projectId: string,
   ) => Promise<ProjectReview>;
+  /** Story 5.10: the move preview's read. Rejects like `loadProjectBundle` for an invisible Project. */
+  readonly loadRuleEvaluation: (
+    handle: Handle,
+    tenantId: string,
+    projectId: string,
+  ) => Promise<RuleEvaluationInputs>;
 }
 
 /** What a project read use case is given: the port, and the handle it is called with. */

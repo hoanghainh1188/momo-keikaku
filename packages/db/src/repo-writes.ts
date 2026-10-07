@@ -408,22 +408,26 @@ export async function reassignMappingsFromWp(
 }
 
 /**
- * Story 5.9 / AR-18 / FR-5: delete `mapping_rule` rows targeting `wpId` so a deleted WP cannot
- * remain a live rule target. Rules CRUD/preview stay 5.10+.
+ * Story 5.9 / AR-18 / FR-5: retire the `mapping_rule` rows targeting `wpId` so a deleted WP
+ * cannot remain a live rule target. Story 5.10 makes it a SOFT delete (`deleted_at`): the rule
+ * never evaluates again, and the `mapping_event.rule_id` rows it produced still resolve.
  */
 export async function disableRulesTargeting(
   bound: Bound,
   projectId: string,
   wpId: string,
+  at: Date,
 ): Promise<void> {
   const { tx, tenantId } = bound;
   await tx
-    .delete(s.mappingRule)
+    .update(s.mappingRule)
+    .set({ deletedAt: at })
     .where(
       and(
         eq(s.mappingRule.tenantId, tenantId),
         eq(s.mappingRule.projectId, projectId),
         eq(s.mappingRule.wpId, wpId),
+        isNull(s.mappingRule.deletedAt),
       ),
     );
 }
@@ -462,7 +466,7 @@ export function projectWriteRepositoryOn(bound: Bound) {
     recordManualMapping: recordManualMapping(bound),
     reassignMappingsFromWp: (stamp: WriteStamp, projectId: string, wpId: string) =>
       reassignMappingsFromWp(bound, stamp, projectId, wpId),
-    disableRulesTargeting: (projectId: string, wpId: string) =>
-      disableRulesTargeting(bound, projectId, wpId),
+    disableRulesTargeting: (projectId: string, wpId: string, at: Date) =>
+      disableRulesTargeting(bound, projectId, wpId, at),
   };
 }

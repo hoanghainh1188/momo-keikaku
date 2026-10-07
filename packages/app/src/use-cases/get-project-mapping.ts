@@ -23,6 +23,11 @@ export interface MappingRuleRow {
   readonly priority: number;
   readonly name: string;
   readonly match: { readonly field: string; readonly value: string };
+  /**
+   * The condition value as the PM reads and types it (story 5.10): for `parent`, the parent
+   * Ticket's KEY (the stored value is its tracker issue id); otherwise the stored value.
+   */
+  readonly displayValue: string;
   readonly wpId: string;
   /** The target's label, or its id when it is not a leaf, non-milestone Work Package. */
   readonly wpLabel: string;
@@ -72,6 +77,8 @@ export function toProjectMapping({ bundle, review }: ProjectReview): ProjectMapp
     priority: rule.priority,
     name: rule.name,
     match: { field: rule.match.field, value: rule.match.value },
+    displayValue:
+      rule.match.field === 'parent' ? (rule.parentKey ?? rule.match.value) : rule.match.value,
     wpId: rule.wpId,
     wpLabel: labelOf.get(rule.wpId) ?? rule.wpId,
     currentlyMapped: rule.currentlyMapped,

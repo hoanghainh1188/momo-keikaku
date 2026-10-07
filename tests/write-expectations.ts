@@ -51,6 +51,8 @@ export interface ExpectedRows {
   readonly connectorScopeEvents: readonly Record<string, unknown>[];
   /** New connector_setting_event rows (story 5.7). */
   readonly connectorSettingEvents: readonly Record<string, unknown>[];
+  /** mapping_rule rows new or changed (story 5.10), sorted by id. */
+  readonly mappingRules: readonly Record<string, unknown>[];
 }
 
 export type Expect = (ctx: ExpectContext) => ExpectedRows;
@@ -72,6 +74,7 @@ export const NO_ROWS: ExpectedRows = {
   connectors: [],
   connectorScopeEvents: [],
   connectorSettingEvents: [],
+  mappingRules: [],
 };
 
 function dispositionMappings({ target, at, actor }: ExpectContext, wpId: string) {
@@ -209,7 +212,125 @@ function rowBefore<T extends { id: string }>(rows: readonly T[], id: string, tab
   return row;
 }
 
+/** A fixture rule's row as it was before the write (story 5.10). */
+function ruleBefore({ before }: ExpectContext, ruleId: string) {
+  return rowBefore(before.mappingRules, ruleId, 'mapping_rule');
+}
+
+/** The audit shape of a rule row. */
+function auditedRule(row: {
+  readonly name: string;
+  readonly priority: number;
+  readonly wpId: string;
+  readonly matchField: string;
+  readonly matchValue: string;
+}) {
+  return {
+    name: row.name,
+    priority: row.priority,
+    wpId: row.wpId,
+    matchField: row.matchField,
+    matchValue: row.matchValue,
+  };
+}
+
+/**
+ * The rule events a re-evaluation appends when `ruleId` stops holding its Tickets and no other
+ * live rule matches them: one `rule` event per Ticket it held, `wp_id = null`, naming the rule it
+ * left — and the dual-written heads. (The fixture's two rules match disjoint categories.)
+ */
+function ruleLeft(ctx: ExpectContext, ruleId: string) {
+  const { target, at, actor, before } = ctx;
+  const events = before.mappingHeads
+    .filter((h) => h.projectId === target.projectId && h.source === 'rule' && h.ruleId === ruleId && h.wpId !== null)
+    .map((h) => h.ticketId)
+    .sort((a, b) => a.localeCompare(b))
+    .map((ticketId) => ({
+      id: `map-rule-${ticketId}-${at.getTime()}`,
+      tenantId: target.tenantId,
+      projectId: target.projectId,
+      ticketId,
+      wpId: null,
+      source: 'rule',
+      ruleId,
+      at,
+      actor,
+    }));
+  return { mappingEvents: events, mappingHeads: mappingHeadsFor(events) };
+}
+
 export const EXPECTED: Readonly<Record<string, Expect>> = {
+  // --- Story 5.10: Mapping Rules ---------------------------------------------------------------
+  reorderMappingRules: (ctx) => {
+    const [first, second] = ctx.target.rules;
+    const a = ruleBefore(ctx, first.id);
+    const b = ruleBefore(ctx, second.id);
+    return {
+      ...NO_ROWS,
+      mappingRules: [
+        { ...b, priority: 1 },
+        { ...a, priority: 2 },
+      ].sort((x, y) => x.id.localeCompare(y.id)),
+      audits: projectAudit(ctx, 'mapping.rule_reorder', ctx.target.projectId, {
+        projectId: ctx.target.projectId,
+        before: [a, b].sort((x, y) => x.priority - y.priority).map((r) => r.id),
+        after: [second.id, first.id],
+        moved: 0,
+      }),
+    };
+  },
+  updateMappingRule: (ctx) => {
+    const was = ruleBefore(ctx, ctx.target.rules[0].id);
+    const after = { ...was, name: 'Harness rule renamed', priority: 100 };
+    return {
+      ...NO_ROWS,
+      mappingRules: [after],
+      audits: projectAudit(ctx, 'mapping.rule_update', was.id, {
+        projectId: ctx.target.projectId,
+        before: auditedRule(was),
+        after: auditedRule(after),
+        moved: 0,
+      }),
+    };
+  },
+  createMappingRule: (ctx) => {
+    const id = ctx.newIds.at(-1)!;
+    const row = {
+      id,
+      tenantId: ctx.target.tenantId,
+      projectId: ctx.target.projectId,
+      priority: 50,
+      name: 'Harness rule',
+      wpId: ctx.target.wpId,
+      matchField: 'keyPattern',
+      matchValue: 'ZZ-NOMATCH-*',
+      deletedAt: null,
+    };
+    return {
+      ...NO_ROWS,
+      mappingRules: [row],
+      audits: projectAudit(ctx, 'mapping.rule_create', id, {
+        projectId: ctx.target.projectId,
+        rule: auditedRule(row),
+        moved: 0,
+      }),
+    };
+  },
+  deleteMappingRule: (ctx) => {
+    const was = ruleBefore(ctx, ctx.target.rules[1].id);
+    const left = ruleLeft(ctx, was.id);
+    return {
+      ...NO_ROWS,
+      ...left,
+      mappingRules: [{ ...was, deletedAt: ctx.at }],
+      audits: projectAudit(ctx, 'mapping.rule_delete', was.id, {
+        projectId: ctx.target.projectId,
+        before: auditedRule(was),
+        moved: left.mappingEvents.length,
+      }),
+    };
+  },
+
   mapTickets: (ctx) => {
     const events = dispositionMappings(ctx, ctx.target.wpId);
     return {

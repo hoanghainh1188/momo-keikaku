@@ -56,8 +56,10 @@ const REVIEW = {
       wp('wp-m', '1.9', 'Go-live', { isMilestone: true }),
     ],
     rules: [
-      { id: 'r-2', priority: 2, name: 'Second', wpId: 'wp-p', match: { field: 'category', value: 'c' }, currentlyMapped: 0 },
-      { id: 'r-1', priority: 1, name: 'First', wpId: 'wp-2', match: { field: 'keyPrefix', value: 'K' }, currentlyMapped: 3 },
+      { id: 'r-2', priority: 2, name: 'Second', wpId: 'wp-p', match: { field: 'category', value: 'c' }, currentlyMapped: 0, parentKey: null },
+      { id: 'r-1', priority: 1, name: 'First', wpId: 'wp-2', match: { field: 'keyPattern', value: 'K*' }, currentlyMapped: 3, parentKey: null },
+      // Story 5.10: a parent OUTSIDE the pinned snapshot still shows (and pre-fills) its key.
+      { id: 'r-3', priority: 3, name: 'Children', wpId: 'wp-1', match: { field: 'parent', value: 'iss-700' }, currentlyMapped: 0, parentKey: 'EC2-700' },
     ],
     input: {
       mappingEvents: [
@@ -102,6 +104,9 @@ function fakeDeps(behave: (projectId: string) => ProjectReview | Error) {
       loadProjectBundle: async () => {
         throw new Error('the projection reads load the Review, never the bare bundle');
       },
+      loadRuleEvaluation: async () => {
+        throw new Error('the projection reads never load a rule evaluation');
+      },
       loadReview: async (handle, tenantId, projectId) => {
         calls.push({ handle, tenantId, projectId });
         const outcome = behave(projectId);
@@ -131,6 +136,13 @@ describe('getProjectMapping', () => {
     expect(m.rules.map((r) => [r.id, r.wpLabel, r.currentlyMapped])).toEqual([
       ['r-2', 'wp-p', 0],
       ['r-1', '1.2 Build', 3],
+      ['r-3', '1.1 Design', 0],
+    ]);
+    // A parent rule reads as its parent's key; every other rule as its stored value.
+    expect(m.rules.map((r) => [r.id, r.match.value, r.displayValue])).toEqual([
+      ['r-2', 'c', 'c'],
+      ['r-1', 'K*', 'K*'],
+      ['r-3', 'iss-700', 'EC2-700'],
     ]);
     // Most hours first, ties in snapshot order; the CURRENT Mapping (t-1 was unmapped at seq 3).
     expect(m.tickets.map((t) => [t.trackerIssueId, t.mh, t.wpId, t.wpLabel, t.source])).toEqual([

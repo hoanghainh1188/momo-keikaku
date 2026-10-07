@@ -6,7 +6,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { and, eq } from 'drizzle-orm';
 import pg from 'pg';
-import { getDb } from '../../client';
+import { closeAllPools, getDb } from '../../client';
+import { removeTenant } from '../../probe-tenants';
 import * as s from '../../schema';
 import { withTenant } from '../../with-tenant';
 import { acquireSeedSuiteLock, releaseSeedSuiteLock } from '../../seed-suite-lock';
@@ -41,8 +42,15 @@ if (live) {
   await acquireSeedSuiteLock(OWNER_DATABASE_URL!, 'shared');
 }
 
+// The Tenant goes BEFORE the lock does: a seed waiting on the exclusive lock must never see it.
 afterAll(async () => {
-  if (live) await releaseSeedSuiteLock();
+  if (!live) return;
+  try {
+    await removeTenant(getDb(OWNER_DATABASE_URL!), TENANT);
+  } finally {
+    await releaseSeedSuiteLock();
+    await closeAllPools();
+  }
 });
 
 const TENANT = 'ten-connector-5-3';
@@ -65,23 +73,15 @@ const CREDENTIALS = {
   keyId: 'test-local',
 };
 
-/**
- * Every row this suite writes, in FK order. Run before (a crashed earlier run) and after (so the
- * exclusive seed suites never find this Tenant beside the seed's own — `assertSingleTenantDatabase`).
- */
-async function removeProbeRows(client: pg.Client): Promise<void> {
-  await client.query(`SELECT set_config('app.tenant_id', $1, false)`, [TENANT]);
-  await client.query(`DELETE FROM connector WHERE tenant_id = $1`, [TENANT]);
-  await client.query(`DELETE FROM project WHERE tenant_id = $1`, [TENANT]);
-  await client.query(`DELETE FROM program WHERE tenant_id = $1`, [TENANT]);
-  await client.query(`DELETE FROM department WHERE tenant_id = $1`, [TENANT]);
-  await client.query(`DELETE FROM tenant WHERE id = $1`, [TENANT]);
-}
-
 describe.skipIf(!live)('connector.search_limit at the repository boundary (story 5.3)', () => {
   beforeAll(async () => {
     await asOwner(async (client) => {
-      await removeProbeRows(client);
+      await client.query(`SELECT set_config('app.tenant_id', $1, false)`, [TENANT]);
+      await client.query(`DELETE FROM connector WHERE tenant_id = $1`, [TENANT]);
+      await client.query(`DELETE FROM project WHERE tenant_id = $1`, [TENANT]);
+      await client.query(`DELETE FROM program WHERE tenant_id = $1`, [TENANT]);
+      await client.query(`DELETE FROM department WHERE tenant_id = $1`, [TENANT]);
+      await client.query(`DELETE FROM tenant WHERE id = $1`, [TENANT]);
 
       await client.query(
         `INSERT INTO tenant (id, name, currency) VALUES ($1, 'Connector probe', 'JPY')`,
@@ -109,10 +109,6 @@ describe.skipIf(!live)('connector.search_limit at the repository boundary (story
         );
       }
     });
-  });
-
-  afterAll(async () => {
-    await asOwner(removeProbeRows);
   });
 
   it.each([

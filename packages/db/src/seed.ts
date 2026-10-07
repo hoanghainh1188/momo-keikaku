@@ -962,9 +962,21 @@ const IDENTITY_SEQ_TABLES = [
  * "audit_log_pkey"` — a failure that appeared in whichever suite lost the race, never in the one
  * that caused it. Found by the Epic 1 retrospective (F1); pinned by `seed-sequences.test.ts`.
  *
- * `GREATEST` against the counter's current position makes the operation monotonic, which is what
- * the name always promised. `pg_sequence_last_value` returns NULL for a counter never yet used,
- * hence the COALESCE.
+ * NEVER WRITE THE COUNTER'S OWN POSITION BACK, EITHER. The first fix was
+ * `setval(seq, GREATEST(MAX(seq), last_value))`, which is monotonic only on paper: `last_value` is
+ * read, and the `setval` lands a moment later. Sequences are not transactional, so any `nextval`
+ * another session takes in between is undone — the counter goes back to the value it was read
+ * at, and the next default insert re-issues a `seq` that session already holds. Most syncs find
+ * the counter already past `MAX(seq)` (the common case once any probe band has been written), so
+ * that "no-op" `setval` ran on every probe write, beside suites appending thousands of default
+ * rows: `ingest-nfr.test.ts` met it as `duplicate key value violates unique constraint
+ * "actuals_ledger_entry_pkey"` on its own uncommitted rows. Driving the old statement against a
+ * scratch table with two bulk inserters running beside it gave 841 duplicate-key errors in 15
+ * seconds; the guarded form below gave none.
+ *
+ * So the counter is touched ONLY when `MAX(seq)` is strictly ahead of it, and then only moved up
+ * to that maximum. `pg_sequence_last_value` returns NULL for a counter never yet used, hence the
+ * COALESCE.
  */
 async function syncIdentitySequences(tx: Tx): Promise<void> {
   for (const table of IDENTITY_SEQ_TABLES) {
@@ -973,10 +985,8 @@ async function syncIdentitySequences(tx: Tx): Promise<void> {
     const seqRef = `pg_get_serial_sequence('${table}', 'seq')`;
     await tx.execute(
       sql.raw(
-        `SELECT setval(${seqRef}, GREATEST(` +
-          `COALESCE((SELECT MAX(seq) FROM ${quoted}), 1), ` +
-          `COALESCE(pg_sequence_last_value(${seqRef}::regclass), 1)` +
-          `), true)`,
+        `SELECT setval(${seqRef}, m, true) FROM (SELECT MAX(seq) AS m FROM ${quoted}) AS top ` +
+          `WHERE m > COALESCE(pg_sequence_last_value(${seqRef}::regclass), 0)`,
       ),
     );
   }

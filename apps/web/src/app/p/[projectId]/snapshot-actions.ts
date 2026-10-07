@@ -11,12 +11,7 @@ import {
 } from '@/server/composition';
 import { messageFromKey } from '@/server/error-message';
 
-export type SnapshotRefreshState = {
-  readonly error: string | null;
-  readonly ok: boolean;
-};
-
-export const INITIAL_SNAPSHOT_REFRESH: SnapshotRefreshState = { error: null, ok: false };
+import type { SnapshotRefreshState } from './snapshot-refresh-state';
 
 export async function refreshSnapshotAction(
   prev: SnapshotRefreshState,

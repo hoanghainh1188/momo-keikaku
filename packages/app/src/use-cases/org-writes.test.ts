@@ -120,6 +120,7 @@ function fakeDeps(world: World = WORLD, clockNow: Date = NOW) {
       };
       const result = await work({
         projectWrite: {} as never,
+        mappingRules: {} as never,
         org,
         resources,
         membership: {} as never,

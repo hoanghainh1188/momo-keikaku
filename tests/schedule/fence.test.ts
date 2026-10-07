@@ -28,6 +28,7 @@ import * as s from '../../packages/db/src/schema';
 import { inTenantTransaction } from '../../packages/db/src/tenant-transaction';
 import { lockWatermark } from '../../packages/db/src/watermark-lock';
 import { withTenant } from '../../packages/db/src/with-tenant';
+import { measureBackendWal } from '../support/backend-wal';
 import { expectShuffleInvariant } from '../support/shuffle-invariant';
 import { CAL, edge, inputs, scheduled, wp } from '../support/schedule-fixtures';
 import { generateLoadFixture, LOAD_WP_PER_PROJECT } from '../../packages/db/src/load-generator';
@@ -529,7 +530,7 @@ describe('stored-run shuffle invariance (story 2.9 / deferred 2.3 AC4)', () => {
 });
 
 describe.skipIf(!reachable)('500 WP / 500 edge payload measure (AR-50)', () => {
-  it('raw / pglz (pg_column_size) / WAL of the append stay within tolerance of AD-26 figures', async () => {
+  it('raw / pglz (pg_column_size) stay within tolerance of AD-26 figures; own-session WAL within budget', async () => {
     const load = generateLoadFixture();
     const project = load.projects[0]!;
     const leaves = project.wps.filter((w) => w.isLeaf);
@@ -619,53 +620,44 @@ describe.skipIf(!reachable)('500 WP / 500 edge payload measure (AR-50)', () => {
     const at = new Date('2026-10-05T02:00:00.000Z');
     const scope = { tenantId: PROBE.tenantId, projectId: PROBE.projectId };
 
-    // WAL is read from EXPLAIN (ANALYZE, WAL) on the schedule_run INSERT itself: the bytes THIS
-    // backend generated for the append (heap + TOAST + index, full-page images included). The
-    // earlier pg_current_wal_lsn() diff was cluster-wide, so under `pnpm test` it summed every
-    // suite writing in parallel and read 480–940 kB for a ~40 kB append.
-    const { runSeq, walBytes } = await withTenant(owner, PROBE.tenantId, async (tx) => {
-      const [calendar] = await tx
-        .insert(s.holidayCalendarVersion)
-        .values({
-          ...scope,
-          nonWorkingDays: nonWorkingDays.slice(0, 104), // two years of weekends for the FK row
-          rangeStart: '2020-01-01',
-          rangeEnd: '2040-12-31',
-          nationalSets: [],
-          nationalDatasetVersion: 'size-probe-2.9',
-          reason: 'AD-26 size measure',
-          actor: 'size-probe',
-          at,
-        })
-        .returning({ seq: s.holidayCalendarVersion.seq });
+    // WAL is this session's own (PG18 per-backend stats), read across COMMIT. A cluster-wide
+    // pg_current_wal_lsn() diff counted the WAL of every suite vitest runs beside this one.
+    // Measured AFTER the seed-calendar cleanup so the large delete is not part of AR-50.
+    const { result: runSeq, walBytes } = await measureBackendWal(
+      OWNER_DATABASE_URL!,
+      (measured) =>
+      withTenant(measured, PROBE.tenantId, async (tx) => {
+        const [calendar] = await tx
+          .insert(s.holidayCalendarVersion)
+          .values({
+            ...scope,
+            nonWorkingDays: nonWorkingDays.slice(0, 104), // two years of weekends for the FK row
+            rangeStart: '2020-01-01',
+            rangeEnd: '2040-12-31',
+            nationalSets: [],
+            nationalDatasetVersion: 'size-probe-2.9',
+            reason: 'AD-26 size measure',
+            actor: 'size-probe',
+            at,
+          })
+          .returning({ seq: s.holidayCalendarVersion.seq });
 
-      const insertRun = tx.insert(s.scheduleRun).values({
-        ...scope,
-        holidayCalendarVersionSeq: calendar!.seq,
-        cause: 'duration',
-        actor: 'size-probe',
-        at,
-        inputs: encodedInputs,
-        outputs: encodedOutputs,
-        engineVersion: ENGINE_VERSION,
-      });
-      const explained = await tx.execute<{ 'QUERY PLAN': [{ Plan: { 'WAL Bytes'?: number } }] }>(
-        sql`EXPLAIN (ANALYZE, WAL, FORMAT JSON) ${insertRun.getSQL()}`,
-      );
-      const wal = explained.rows[0]?.['QUERY PLAN'][0]?.Plan['WAL Bytes'];
-      const [run] = await tx
-        .select({ seq: s.scheduleRun.seq })
-        .from(s.scheduleRun)
-        .where(
-          and(
-            eq(s.scheduleRun.tenantId, PROBE.tenantId),
-            eq(s.scheduleRun.projectId, PROBE.projectId),
-          ),
-        )
-        .orderBy(sql`${s.scheduleRun.seq} DESC`)
-        .limit(1);
-      return { runSeq: run!.seq, walBytes: wal };
-    });
+        const [run] = await tx
+          .insert(s.scheduleRun)
+          .values({
+            ...scope,
+            holidayCalendarVersionSeq: calendar!.seq,
+            cause: 'duration',
+            actor: 'size-probe',
+            at,
+            inputs: encodedInputs,
+            outputs: encodedOutputs,
+            engineVersion: ENGINE_VERSION,
+          })
+          .returning({ seq: s.scheduleRun.seq });
+        return run!.seq;
+      }),
+    );
 
     const sized = await withTenant(owner, PROBE.tenantId, async (tx) => {
       const res = await tx.execute<{
@@ -694,9 +686,8 @@ describe.skipIf(!reachable)('500 WP / 500 edge payload measure (AR-50)', () => {
     expect(totalSize).toBeLessThanOrEqual(storedBudget * 1.25);
     expect(totalSize).toBeGreaterThan(8 * 1024);
 
-    // AD-26 ~152 kB WAL per append. Measured ~40–50 kB for this insert (2026-09-24). Upper-bound
-    // against the budget; the floor catches an append that wrote nothing.
-    expect(typeof walBytes).toBe('number');
+    // AD-26 ~152 kB WAL. Measured ~40–50 kB for this insert across COMMIT (2026-09-24).
+    // Upper-bound against the budget; the floor fails an empty or unmeasured write.
     const walBudget = 152 * 1024;
     expect(walBytes).toBeLessThanOrEqual(walBudget * 1.25);
     expect(walBytes).toBeGreaterThan(4 * 1024);

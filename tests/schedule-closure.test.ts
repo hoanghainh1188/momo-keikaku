@@ -184,6 +184,11 @@ describe('AR-52 reachability — unreachable from mapping / disposition / tracke
       'packages/app/src/use-cases/project-writes.ts',
       'packages/db/src/repo-writes.ts',
       'packages/app/src/use-cases/get-project-mapping.ts',
+      // Story 5.10: Mapping Rule authoring + the re-evaluation every rule save and ingest run.
+      'packages/app/src/use-cases/mapping-rules.ts',
+      'packages/app/src/use-cases/mapping-rule-input.ts',
+      'packages/db/src/repo-mapping-rules.ts',
+      'packages/domain/src/mapping.ts',
     ];
     for (const path of banned) {
       const text = readFileSync(join(ROOT, path), 'utf8');
