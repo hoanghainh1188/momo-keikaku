@@ -2,7 +2,7 @@
 title: 'Story 5.11 — Coverage, per Connector, in Tickets and in hours'
 type: 'feature'
 created: '2026-10-07'
-status: 'review'
+status: 'in-review'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '46114e826779d0caeb1dd99aec38479a7a5922fd'
@@ -92,7 +92,27 @@ context:
 - 2026-10-07: Harry chose **Keep full spec** at the token gate (~2,300 tokens > 1,600).
 - 2026-10-07: Harry accepted recommended answers Q1–Q6 (A / A / A+unavailable / A / A / A). Open Questions cleared.
 - 2026-10-07: Matrix audit — extracted `apps/web/src/lib/mapping-coverage-model.ts` (+ tests) so Toggle basis / Show as table / Segment paging rows are covered by unit tests (repo has no React component test runtime).
+- 2026-10-07: Review patches applied (`4c7d010`); Catch-all overflow Ticket membership deferred; ScopeLedgerBar Review test renamed to `*.test.ts` so vitest include picks it up.
 
 ## Spec Change Log
 
 ## Review Triage Log
+
+- `medium` → patch — `ticketBucket` maps missing WP id to Catch-all while `hourBucketForTicket` maps it to Unmapped (`coverage.ts:157–176`); Ticket-share and hour-share disagree for orphan WP ids.
+- `medium` → defer — Catch-all overflow Ticket filter is approximate (all Catch-all Tickets when any overflow hours exist); attribution has no per-Ticket overflow split. Intentional until a later story can split membership.
+- `medium` → patch — Domain hard-codes English `HOUR_SEGMENT_LABELS` / `TICKET_BUCKET_LABELS` into segment `label` fields; frozen agent decision requires keys + next-intl.
+- `medium` → patch — Filtered-list heading interpolates raw `activeSegment` key (`mapping-coverage.tsx`), not a localized bucket label.
+- `false` — Interactive bar “drops under-bar legend”: frozen/UX-DR26 require adjacent text + Show as table; Review keeps the legend via `readOnly`.
+- `low` → patch — `buckets_footnote` still says “four buckets” while Coverage hours mode shows five FR-20 segments.
+- `false` — `ja.json` `mapping.coverage_summary` still English: legacy key unused; UI uses `coverage_summary_v2` / `coverage_summary_count_basis`.
+- `false` — Client-side page over shipped `allTickets` satisfies Q4 “paged”; server re-query was not required by frozen intent.
+- `low` → rejected — Connector `role="tablist"` without tabpanel: everyday harm low; full tabs pattern is more than a direct fix.
+- `medium` → patch — `ownerConnectorId` defaults to first Connector when the ownership map misses a Ticket (`get-project-mapping.ts:145–168`), so a Connector filter can list Tickets `computeCoverage` did not count there.
+- `false` — Spec `in-review` vs sprint `review`: process labels during this step, not a product defect.
+- `medium` → patch (verification-gap) — DB `loadReview` never asserts `connectorsForCoverage` / `projectStart` / `perConnector`; deleting the wiring still greens existing tests.
+- `medium` → patch (verification-gap) — No test exercises hours-basis / `catch-all-overflow` filter with `inCatchAllOverflow: true`.
+- `medium` → patch (verification-gap) — No test pins Review `ScopeLedgerBar` default `readOnly` static path after the rewrite.
+- `medium` → patch (verification-gap) — `toTicketRows` left-scope exclusion from `allTickets` untested in `projection-reads`.
+- `medium` → patch — Show-as-table uses raw `segments` (includes zero-width buckets) while the bar uses `display` (`scope-ledger-bar.tsx`).
+- `low` → patch — Show-as-table checkbox remains checkable while hour share is unavailable, but no table renders.
+- `false` — `projectAgeDays` unbounded loop on non-ISO `asOf`: production `asOf` is always `projectDate(...)` IsoDate; unreachable without a type lie.

@@ -1469,3 +1469,7 @@ above can see where it went.
 - source_spec: `_bmad-output/implementation-artifacts/spec-5-10-rules-keep-new-tickets-mapped-and-still-never-move-the-plan.md`
   summary: Give `packages/db/src/repositories/ingest/ingest-nfr.test.ts` "writes 2000 tickets … within 5 minutes" an explicit vitest timeout (≥ `BUDGET_MS`); it inherits the 5 s default and times out at ~5.0 s under load.
   evidence: 2026-10-06 5.10 verify on a fresh REQUIRE_DB database: timed out at 5006 ms alone and inside the full suite, passed in other runs; the ingest path's only 5.10 change is loading live rules (the fixture has none), so the flake is the missing timeout, not a regression.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-11-coverage-per-connector-in-tickets-and-in-hours.md`
+  summary: Catch-all overflow Ticket filter membership is approximate — every Catch-all Ticket is listed when any Catch-all overflow hours exist, because attribution has no per-Ticket overflow split.
+  evidence: 2026-10-07 story 5.11 review (blind-hunter / verification-gap). Hours bar correctly splits catchAllMh vs catchAllOverflowMh; Ticket membership cannot be mutually exclusive until attribution (or 5.12+) exposes a per-Ticket overflow share. Documented in coverage.ts / get-project-mapping catchAllOverflowTicketIds; deferred rather than inventing a false distinct Ticket set.

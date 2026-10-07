@@ -5,6 +5,7 @@ import { useId, useRef, useState, type KeyboardEvent } from 'react';
 import { cssPercent, hours, share, type Mh, type Ratio } from '@momo/domain/present';
 import { ledgerTableRows } from '@/lib/mapping-coverage-model';
 import { scopeSegmentMessageKey } from '@/lib/scope-segment-label';
+import { scopeLedgerChrome } from '@/lib/scope-ledger-ui';
 
 /**
  * The signature element: one square-cornered bar split into FR-20 (hours) or FR-23
@@ -76,6 +77,7 @@ export function ScopeLedgerBar({
   footnoteKey = 'mapping.ledger.buckets_footnote',
 }: ScopeLedgerBarProps) {
   const t = useTranslations();
+  const chrome = scopeLedgerChrome(readOnly);
   const [showTable, setShowTable] = useState(false);
   const segmentRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const tableToggleId = useId();
@@ -161,7 +163,7 @@ export function ScopeLedgerBar({
         {t(titleKey)}
       </div>
 
-      {!readOnly && onBasisChange ? (
+      {chrome.showBasisToggle && onBasisChange ? (
         <div
           role="group"
           aria-label={t('mapping.ledger.basis_toggle_aria')}
@@ -197,7 +199,7 @@ export function ScopeLedgerBar({
       {!unavailableReason ? (
         <div
           className="scope-bar"
-          role={readOnly ? 'img' : 'toolbar'}
+          role={chrome.role}
           aria-label={adjacentText}
           data-testid="scope-bar"
         >
@@ -260,7 +262,7 @@ export function ScopeLedgerBar({
         {unavailableReason ?? (adjacentText || t('mapping.ledger.empty'))}
       </p>
 
-      {!readOnly ? (
+      {chrome.showTableToggle ? (
         <div style={{ marginTop: 8 }}>
           <label htmlFor={tableToggleId} style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
             <input
@@ -276,8 +278,8 @@ export function ScopeLedgerBar({
         </div>
       ) : null}
 
-      {(readOnly || tableOpen) && !unavailableReason ? (
-        readOnly ? (
+      {(chrome.showLegend || tableOpen) && !unavailableReason ? (
+        chrome.showLegend ? (
           <div className="scope-legend">
             {display
               .filter((s) => (s.mh ?? 0n) > 0n)
