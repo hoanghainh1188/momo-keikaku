@@ -1,3 +1,80 @@
+# Handoff — 2026-10-07 (story 5.10 merged, brief story 5.11)
+
+**Latest (2026-10-07): `main` at `595fcd4`.** Epics 1, 2 and 4 are `done` and have had their retros.
+Epic 5 is `in-progress`. Stories 5.1–5.9 are `done`. Story **5.10** merged via PR #120 and its spec is
+`done`, but its sprint key is still `review`, waiting for an optional post-merge `/bmad-code-review`.
+Epic 3 (Excel import) is still `backlog`. Every retro action item is `done`.
+`sprint-status.yaml` is the source of truth. The 2026-09-27 sections below are history.
+
+**Open on the side:** PR #125 (`claude/fix-flaky-timing-tests`) has green CI but conflicts with
+`main`. It probably overlaps PR #119 (wall-clock NFR budgets run serially under `pnpm test:nfr`).
+Rebase it, or close it if #119 already covers it.
+
+## Brief — Story 5.11: Coverage, per Connector, in Tickets and in hours
+
+Source: `epics.md:2361`; FR-23 (`prd.md:642`); SM-5 (`prd.md:1222`); UX-DR18 and UX-DR26 (`epics.md:237,245`);
+EXPERIENCE.md:142 (Scope Ledger Bar interaction) and :238 (every chart has a table); DESIGN.md:448
+(bar anatomy); AD-8 (metrics are total, hours and counts are never summed) and AD-9 (attribution at
+query time); `epic-5-context.md`.
+
+### What already exists (do not rebuild)
+- `packages/domain/src/review.ts` `// --- FR-23 coverage` (~l.379) computes `mappedTicketShare`,
+  `mappedHourShare` and `unmappedTickets`. It is **Project-wide**, and its "mapped" **includes
+  Catch-all**.
+- `packages/domain/src/attribution.ts` `attribute()` already splits hours into the FR-20 buckets
+  (`catchAllMh`, `catchAllOverflowMh`, `unmappedMh`, …) and keys Catch-all off `wp.isCatchAll`.
+- `apps/web/src/components/scope-ledger-bar.tsx` is a **static** bar in hours (fixed segment order,
+  labels beneath). It is used on **Review** and on **Mapping › Coverage**
+  (`apps/web/src/app/p/[projectId]/mapping/page.tsx`).
+- `get-project-mapping.ts` passes `review.coverage` and `review.scopeLedger` through to the page. Its
+  Tickets list is the 60 Tickets carrying the most hours.
+- Tickets carry exactly one `owner_connector_id` (`schema.ts` ~l.1048), and the basis is latched per
+  Connector (`domain/basis.ts`, AD-8).
+
+### Gaps 5.11 must close
+1. **Per Connector.** Coverage is grouped by owning Connector, not Project-wide.
+2. **Three buckets, two bases.** Each Connector reports mapped (excluding Catch-all), Catch-all and
+   Unmapped. The **Ticket share and the hour share are separate figures** and are never blended.
+3. **Ticket-Count Mode.** The hour share of a count-basis Connector is `unavailable` with its reason
+   and is never shown as 0 (AD-8). Its Ticket share still computes.
+4. **Bar interaction (UX-DR18).** Every segment is a button that filters the Tickets list below to its
+   bucket. Arrow keys move between segments. A toggle switches between hours share and Ticket share.
+   Review must keep working, either through the same component or a read-only variant.
+5. **Accessibility (UX-DR26, NFR-U1).** A "Show as table" toggle, with the figures also given in the
+   adjacent text.
+6. **SM-5.** After a Project's first two weeks, report the hour share on Mapped Tickets excluding
+   Catch-all, against a target of at least 80%.
+
+### Questions for the founder at the spec gate
+- **Q1, where it shows.** One bar and one table per Connector under Mapping › Coverage, plus a
+  Project total? EXPERIENCE.md also lists the Connectors page. In scope here, or deferred?
+- **Q2, Ticket buckets.** Catch-all overflow is an hours idea. In Ticket share, is it three buckets
+  (mapped / Catch-all / Unmapped), or four, with mapped split into baselined and non-baselined to
+  match the hours bar?
+- **Q3, the SM-5 window.** What starts "the first two weeks": Project start, the Connector's first
+  complete snapshot, or the first Baseline? Is it a caption against the 80% target, or a metric that
+  returns `unavailable` before day 14?
+- **Q4, the filter source.** The list shows the top 60 Tickets by hours. Does a segment filter
+  re-query by bucket (all Tickets in it, paged), or only filter those 60?
+- **Q5, the 5.12 seam.** 5.11 reads the current `is_catch_all` flag. Story 5.12 creates
+  `wp_flag_event` and `wp_flag_seq_max`. Confirm 5.11 must not pre-empt 5.12.
+- **Q6, scope.** Do left-scope Tickets and Opening Balances stay out of the shares, so that 5.13 owns
+  the "nothing silently excluded" accounting?
+
+### Guardrails
+- Pure domain functions. Coverage stays in `domain` (review/attribution) and is not computed in the
+  web layer. It returns `{ kind: 'value' | 'unavailable' }` results (AD-8).
+- No schedule motion. Coverage is read-only, and the Epic 2 reachability test (schedule never imports
+  attribution) must hold.
+- Shares use the existing `Ratio` and `share()` presenters, and every new string goes through
+  next-intl with both en and ja catalogs.
+
+### How to start (fresh context window)
+`/bmad-build Story 5.11 — Coverage, per Connector, in Tickets and in hours` — then stop at the spec
+gate with Q1–Q6.
+
+
+## Earlier: Handoff — 2026-09-27 (stories 2.16 + 2.17 hierarchy closed)
 # Handoff — 2026-09-27 (stories 2.16 + 2.17 hierarchy closed)
 
 **Latest (2026-09-27): `main` at `a43517e`.** Story **2.16** is `done` (PR #83 + review patches
