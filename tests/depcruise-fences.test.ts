@@ -1,8 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { acquireTreeProbeLock } from './support/tree-probe-lock';
 
 /**
  * The import-direction fences, pinned — the counterpart to `lint-fences.test.ts`, and here for the
@@ -75,9 +76,13 @@ describe('the AD-1 Better Auth carve-out is still visible to the cruiser', () =>
 });
 
 /**
- * Four files written where a rule should and should not fire, cruised once together. They are
+ * Five files written where a rule should and should not fire, cruised once together. They are
  * removed in `afterAll` even if an assertion throws; a stray `__probe` file would fail
  * `pnpm typecheck` loudly, which is the right failure mode should one ever leak.
+ *
+ * They are written into the REAL tree, so the tree-probe lock is held from the first write to the
+ * last removal: any other suite walking or cruising `apps/` and `packages/` waits for it rather
+ * than listing a probe this file then deletes (`tests/support/tree-probe-lock.ts`).
  */
 const PROBES = {
   support: ['packages/app/src/__probe-test-support.ts', "export { startFakeOidc } from '../../../tests/support/fake-oidc.js';\n"],
@@ -103,24 +108,42 @@ const PROBES = {
 } as const;
 
 const COMPOSITION = 'apps/web/src/server/composition.ts';
+/**
+ * Swapped in by rename, never rewritten in place: suites that import or read the composition root
+ * without the lock (`web-composition.test.ts`, `key-usage.test.ts`) then see the whole file before
+ * or the whole file after, never a half-written one. The temporary sits under `node_modules/`,
+ * which no suite walks, on the same filesystem as the tree so the rename stays atomic.
+ */
+function replaceComposition(source: string): void {
+  const dir = join(ROOT, 'node_modules/.cache');
+  mkdirSync(dir, { recursive: true });
+  const temporary = join(dir, `composition-probe-${process.pid}.ts`);
+  writeFileSync(temporary, source);
+  renameSync(temporary, join(ROOT, COMPOSITION));
+}
+
 const COMPOSITION_BASELINE_PROBE =
   "\n// __probe-baseline-depcruise__\nexport { baselineRepositoryOn as __probeBaselineRepo } from '../../../../packages/db/src/repositories/baseline/index.js';\n";
 
 describe('the import fences fire where they should, and only there', () => {
   let fired: readonly { from: string; to: string; rule: { name: string } }[] = [];
   let compositionOriginal = '';
+  let releaseTree = (): void => {};
 
-  beforeAll(() => {
+  beforeAll(async () => {
+    releaseTree = await acquireTreeProbeLock();
     for (const [path, source] of Object.values(PROBES)) writeFileSync(join(ROOT, path), source);
     compositionOriginal = readFileSync(join(ROOT, COMPOSITION), 'utf8');
-    writeFileSync(join(ROOT, COMPOSITION), compositionOriginal + COMPOSITION_BASELINE_PROBE);
+    replaceComposition(compositionOriginal + COMPOSITION_BASELINE_PROBE);
     fired = depcruise().summary.violations;
-  }, 120_000);
+  }, 300_000);
 
   afterAll(() => {
-    for (const [path] of Object.values(PROBES)) rmSync(join(ROOT, path), { force: true });
-    if (compositionOriginal !== '') {
-      writeFileSync(join(ROOT, COMPOSITION), compositionOriginal);
+    try {
+      for (const [path] of Object.values(PROBES)) rmSync(join(ROOT, path), { force: true });
+      if (compositionOriginal !== '') replaceComposition(compositionOriginal);
+    } finally {
+      releaseTree();
     }
   });
 

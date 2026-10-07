@@ -6,13 +6,25 @@
  * only reached from `applyPlanChange`, `publishCalendarVersion` (story 2.12 / AR-54), and itself.
  * Reachability: mapping / disposition / tracker-shaped modules do not import it.
  */
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { acquireTreeProbeLock } from './support/tree-probe-lock';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
+
+// Every case here walks or cruises the whole of `apps/` and `packages/`, which
+// `depcruise-fences.test.ts` writes `__probe-*` files into. Without the lock a walk lists a probe
+// that is gone by the time it is read (`ENOENT ... __probe-adapters.ts`, seen 1 in 4 full runs),
+// and the cruise counts the probes' deliberate violations as this suite's. Held for the whole
+// file rather than per case: the probe window is one cruise long, so waiting once is cheapest.
+let releaseTree = (): void => {};
+beforeAll(async () => {
+  releaseTree = await acquireTreeProbeLock();
+}, 300_000);
+afterAll(() => releaseTree());
 
 function walk(dir: string, acc: string[] = []): string[] {
   for (const name of readdirSync(dir)) {
