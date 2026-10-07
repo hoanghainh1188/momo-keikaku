@@ -294,6 +294,7 @@
       "scope_ledger_every_hour_in_the_connector_apos_s_": "スコープ台帳 — コネクタの範囲内のすべての時間が、四つの区分のいずれかに入ります",
       "coverage_bar_title": "カバレッジ — マップ済み・キャッチオール・未マップを、チケット数と時間で",
       "buckets_footnote": "四つの区分は互いに排他で、合計は {totalHours}h です。範囲内のものは黙って除外されません。期首残高（{openingHours}h）はバーの外に別掲します。",
+      "coverage_buckets_footnote": "時間の五つの区分は互いに排他で、合計は {totalHours}h です。期首残高（{openingHours}h）はバーの外に別掲します。",
       "segment_aria": "{label} {hours} 時間、{share}",
       "segment_aria_tickets": "{label} {count} チケット、{share}",
       "segment_title": "{label}: {hours}h（{share}）",
@@ -309,6 +310,18 @@
       "page_prev": "前へ",
       "page_next": "次へ",
       "page_status": "{pages} ページ中 {page} ページ目",
+      "hour_segments": {
+        "mapped-baselined": "ベースライン済みWPへマップ",
+        "mapped-non-baselined": "非ベースラインWPへマップ",
+        "catch-all": "キャッチオール（ベースライン内）",
+        "catch-all-overflow": "キャッチオール超過",
+        "unmapped": "未マップ作業"
+      },
+      "ticket_segments": {
+        "mapped": "マップ済み（キャッチオール除く）",
+        "catch-all": "キャッチオール",
+        "unmapped": "未マップ"
+      },
       "unavailable": {
         "tracker_provides_no_hours": "利用不可 — トラッカーが時間を提供していません",
         "project_younger_than_14_days": "利用不可 — プロジェクト開始から14日未満です",

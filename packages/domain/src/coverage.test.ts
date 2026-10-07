@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { addDays, periodOf } from './calendar';
 import {
   computeCoverage,
+  hourBucketForTicket,
   projectAgeDays,
   SM5_MIN_AGE_DAYS,
   SM5_TARGET,
+  ticketShareBucketFor,
   type CoverageInput,
 } from './coverage';
 import { mappingHead } from './mapping';
@@ -135,6 +137,24 @@ describe('projectAgeDays', () => {
     expect(projectAgeDays('2026-01-01', '2026-01-01')).toBe(0);
     expect(projectAgeDays('2026-01-01', '2026-01-15')).toBe(14);
     expect(projectAgeDays('2026-01-01', add14('2026-01-01'))).toBe(SM5_MIN_AGE_DAYS);
+  });
+});
+
+describe('ticketBucket vs hourBucketForTicket', () => {
+  it('treats a Mapping to a missing WP as Unmapped on both paths', () => {
+    const head = mappingHead([
+      { seq: 1, ticketId: 't1', wpId: 'WP-GONE', source: 'manual', at: 'x', actor: 'pm' },
+    ]);
+    expect(ticketShareBucketFor('t1', head, [])).toBe('unmapped');
+    expect(hourBucketForTicket('t1', head, new Map(), new Set())).toBe('unmapped');
+  });
+
+  it('keeps segment labels as stable keys for the UI to translate', () => {
+    const r = computeCoverage(baseInput());
+    const hour = r.connectors[0]!.hourShare;
+    if (hour.kind !== 'value') throw new Error('expected value');
+    expect(hour.segments.every((s) => s.label === s.key)).toBe(true);
+    expect(r.connectors[0]!.ticketShare.segments.every((s) => s.label === s.key)).toBe(true);
   });
 });
 

@@ -45,19 +45,10 @@ export const HOUR_SHARE_SEGMENTS: readonly HourShareSegment[] = [
   'unmapped',
 ] as const;
 
-const HOUR_SEGMENT_LABELS: Record<HourShareSegment, string> = {
-  'mapped-baselined': 'Mapped to baselined WPs',
-  'mapped-non-baselined': 'Mapped to non-baselined WPs',
-  'catch-all': 'Catch-all (within Baseline)',
-  'catch-all-overflow': 'Catch-all overflow',
-  unmapped: 'Unmapped Work',
-};
-
-const TICKET_BUCKET_LABELS: Record<TicketShareBucket, string> = {
-  mapped: 'Mapped (excluding Catch-all)',
-  'catch-all': 'Catch-all',
-  unmapped: 'Unmapped',
-};
+/**
+ * Segment `label` is the stable key (same as `key`) — UI translates via next-intl
+ * (`mapping.ledger.hour_segments.*` / `ticket_segments.*`). Never hard-code locale copy here.
+ */
 
 /** SM-5 target: mapped-excluding-Catch-all hour share ≥ 80%. */
 export const SM5_TARGET: Ratio = { num: 80n, den: 100n };
@@ -156,7 +147,8 @@ function ticketBucket(
   const m = head.get(ticketId);
   if (!m?.wpId) return 'unmapped';
   const wp = wpById.get(m.wpId);
-  if (!wp || wp.isCatchAll) return 'catch-all';
+  if (!wp) return 'unmapped';
+  if (wp.isCatchAll) return 'catch-all';
   return 'mapped';
 }
 
@@ -200,7 +192,7 @@ function ticketShareFigure(tickets: readonly { id: string; bucket: TicketShareBu
       const count = key === 'mapped' ? mapped : key === 'catch-all' ? catchAll : unmapped;
       return {
         key,
-        label: TICKET_BUCKET_LABELS[key],
+        label: key,
         count,
         share: total === 0 ? ZERO : ratio(BigInt(count), den),
       };
@@ -214,38 +206,19 @@ function hourShareFromBuckets(c: Buckets, basis: MeasurementBasis): HourShareFig
   }
   const totalMh = c.totalMh;
   const scopeTotal = totalMh === 0n ? 1n : totalMh;
-  const segments: HourShareSegmentRow[] = [
-    {
-      key: 'mapped-baselined',
-      label: HOUR_SEGMENT_LABELS['mapped-baselined'],
-      mh: c.mappedBaselinedMh,
-      share: ratio(c.mappedBaselinedMh, scopeTotal),
-    },
-    {
-      key: 'mapped-non-baselined',
-      label: HOUR_SEGMENT_LABELS['mapped-non-baselined'],
-      mh: c.mappedNonBaselinedMh,
-      share: ratio(c.mappedNonBaselinedMh, scopeTotal),
-    },
-    {
-      key: 'catch-all',
-      label: HOUR_SEGMENT_LABELS['catch-all'],
-      mh: c.catchAllMh,
-      share: ratio(c.catchAllMh, scopeTotal),
-    },
-    {
-      key: 'catch-all-overflow',
-      label: HOUR_SEGMENT_LABELS['catch-all-overflow'],
-      mh: c.catchAllOverflowMh,
-      share: ratio(c.catchAllOverflowMh, scopeTotal),
-    },
-    {
-      key: 'unmapped',
-      label: HOUR_SEGMENT_LABELS.unmapped,
-      mh: c.unmappedMh,
-      share: ratio(c.unmappedMh, scopeTotal),
-    },
-  ];
+  const segments: HourShareSegmentRow[] = HOUR_SHARE_SEGMENTS.map((key) => {
+    const mh =
+      key === 'mapped-baselined'
+        ? c.mappedBaselinedMh
+        : key === 'mapped-non-baselined'
+          ? c.mappedNonBaselinedMh
+          : key === 'catch-all'
+            ? c.catchAllMh
+            : key === 'catch-all-overflow'
+              ? c.catchAllOverflowMh
+              : c.unmappedMh;
+    return { key, label: key, mh, share: ratio(mh, scopeTotal) };
+  });
   const mappedExcl = c.mappedBaselinedMh + c.mappedNonBaselinedMh;
   return {
     kind: 'value',

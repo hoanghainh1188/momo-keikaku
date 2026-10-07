@@ -453,12 +453,13 @@ export function computeReview(input: ReviewInput): ReviewResult {
 
   const c = attribution.cumulative;
   const scopeTotal = c.totalMh === 0n ? 1n : c.totalMh;
+  // `label` is the stable key — ScopeLedgerBar translates via next-intl (story 5.11).
   const scopeLedger = [
-    { key: 'mapped-baselined', label: 'Mapped to baselined WPs', mh: c.mappedBaselinedMh },
-    { key: 'mapped-non-baselined', label: 'Mapped to non-baselined WPs', mh: c.mappedNonBaselinedMh },
-    { key: 'catch-all', label: 'Catch-all (within Baseline)', mh: c.catchAllMh },
-    { key: 'catch-all-overflow', label: 'Catch-all overflow', mh: c.catchAllOverflowMh },
-    { key: 'unmapped', label: 'Unmapped Work', mh: c.unmappedMh },
+    { key: 'mapped-baselined', label: 'mapped-baselined', mh: c.mappedBaselinedMh },
+    { key: 'mapped-non-baselined', label: 'mapped-non-baselined', mh: c.mappedNonBaselinedMh },
+    { key: 'catch-all', label: 'catch-all', mh: c.catchAllMh },
+    { key: 'catch-all-overflow', label: 'catch-all-overflow', mh: c.catchAllOverflowMh },
+    { key: 'unmapped', label: 'unmapped', mh: c.unmappedMh },
   ].map((s) => ({ ...s, share: ratio(s.mh, scopeTotal) }));
 
   const explainNotes = input.dispositions

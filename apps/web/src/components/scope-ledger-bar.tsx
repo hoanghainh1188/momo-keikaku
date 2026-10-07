@@ -4,6 +4,7 @@ import { useTranslations } from 'next-intl';
 import { useId, useRef, useState, type KeyboardEvent } from 'react';
 import { cssPercent, hours, share, type Mh, type Ratio } from '@momo/domain/present';
 import { ledgerTableRows } from '@/lib/mapping-coverage-model';
+import { scopeSegmentMessageKey } from '@/lib/scope-segment-label';
 
 /**
  * The signature element: one square-cornered bar split into FR-20 (hours) or FR-23
@@ -28,6 +29,7 @@ const SWATCH: Record<string, React.CSSProperties> = {
 
 export type ScopeLedgerSegment = {
   key: string;
+  /** Stable key (same as `key`); UI translates — do not render raw. */
   label: string;
   /** Hours mode: milli-hours. Ticket mode: omit / 0n. */
   mh?: Mh;
@@ -55,6 +57,8 @@ export type ScopeLedgerBarProps = {
   /** Caption above the bar (defaults to the Review/legacy ledger title). */
   titleKey?: string;
   showOpeningBalanceFootnote?: boolean;
+  /** Footnote message key when `showOpeningBalanceFootnote` (Coverage uses five-segment copy). */
+  footnoteKey?: string;
 };
 
 export function ScopeLedgerBar({
@@ -69,11 +73,17 @@ export function ScopeLedgerBar({
   hourShareUnavailableReason = null,
   titleKey = 'mapping.ledger.scope_ledger_every_hour_in_the_connector_apos_s_',
   showOpeningBalanceFootnote = true,
+  footnoteKey = 'mapping.ledger.buckets_footnote',
 }: ScopeLedgerBarProps) {
   const t = useTranslations();
   const [showTable, setShowTable] = useState(false);
   const segmentRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const tableToggleId = useId();
+
+  function segmentLabel(key: string): string {
+    return t(scopeSegmentMessageKey(basis, key));
+  }
+
   const visible = segments.filter((s) => {
     if (basis === 'tickets') return (s.count ?? 0) > 0 || s.share.num > 0n;
     return (s.mh ?? 0n) > 0n;
@@ -106,6 +116,7 @@ export function ScopeLedgerBar({
   }
 
   function segmentValueText(s: ScopeLedgerSegment): string {
+    const label = segmentLabel(s.key);
     if (basis === 'tickets') {
       return t('mapping.ledger.ticket_value', {
         count: s.count ?? 0,
@@ -113,32 +124,36 @@ export function ScopeLedgerBar({
       });
     }
     return t('mapping.ledger.segment_title', {
-      label: s.label,
+      label,
       hours: hours(s.mh ?? 0n),
       share: share(s.share),
     });
   }
 
   const adjacentText = display
-    .map((s) =>
-      basis === 'tickets'
+    .map((s) => {
+      const label = segmentLabel(s.key);
+      return basis === 'tickets'
         ? t('mapping.ledger.segment_aria_tickets', {
-            label: s.label,
+            label,
             count: s.count ?? 0,
             share: share(s.share),
           })
         : t('mapping.ledger.segment_aria', {
-            label: s.label,
+            label,
             hours: hours(s.mh ?? 0n),
             share: share(s.share),
-          }),
-    )
+          });
+    })
     .join('; ');
 
   const unavailableReason =
     basis === 'hours' && hourShareUnavailableReason
       ? t(`mapping.ledger.unavailable.${hourShareUnavailableReason}` as 'mapping.ledger.unavailable.tracker_provides_no_hours')
       : null;
+
+  // Ignore a stale checked state while hours are unavailable.
+  const tableOpen = showTable && !unavailableReason;
 
   return (
     <div data-testid="scope-ledger-bar" data-readonly={readOnly || undefined}>
@@ -201,6 +216,7 @@ export function ScopeLedgerBar({
               );
             }
             const pressed = activeSegmentKey === s.key;
+            const label = segmentLabel(s.key);
             return (
               <button
                 key={s.key}
@@ -221,12 +237,12 @@ export function ScopeLedgerBar({
                 aria-label={
                   basis === 'tickets'
                     ? t('mapping.ledger.segment_aria_tickets', {
-                        label: s.label,
+                        label,
                         count: s.count ?? 0,
                         share: share(s.share),
                       })
                     : t('mapping.ledger.segment_aria', {
-                        label: s.label,
+                        label,
                         hours: hours(s.mh ?? 0n),
                         share: share(s.share),
                       })
@@ -250,7 +266,8 @@ export function ScopeLedgerBar({
             <input
               id={tableToggleId}
               type="checkbox"
-              checked={showTable}
+              checked={tableOpen}
+              disabled={!!unavailableReason}
               onChange={(e) => setShowTable(e.target.checked)}
               data-testid="scope-show-as-table"
             />
@@ -259,7 +276,7 @@ export function ScopeLedgerBar({
         </div>
       ) : null}
 
-      {(readOnly || showTable) && !unavailableReason ? (
+      {(readOnly || tableOpen) && !unavailableReason ? (
         readOnly ? (
           <div className="scope-legend">
             {display
@@ -272,7 +289,7 @@ export function ScopeLedgerBar({
                     ) : (
                       <span className="swatch" style={SWATCH[s.key]} aria-hidden />
                     )}
-                    {s.label}
+                    {segmentLabel(s.key)}
                   </div>
                   <div className="v" data-testid={`scope-value-${s.key}`}>
                     {hours(s.mh ?? 0n)}
@@ -294,9 +311,9 @@ export function ScopeLedgerBar({
               </tr>
             </thead>
             <tbody>
-              {ledgerTableRows(segments, basis).map((row) => (
+              {ledgerTableRows(display, basis).map((row) => (
                 <tr key={row.key} data-testid={`scope-table-row-${row.key}`}>
-                  <td>{row.label}</td>
+                  <td>{segmentLabel(row.key)}</td>
                   <td className="num">
                     {basis === 'tickets'
                       ? row.quantity
@@ -312,7 +329,7 @@ export function ScopeLedgerBar({
 
       {showOpeningBalanceFootnote ? (
         <p className="caption" style={{ marginTop: 12 }}>
-          {t('mapping.ledger.buckets_footnote', {
+          {t(footnoteKey, {
             totalHours: hours(totalMh),
             openingHours: hours(openingBalanceMh),
           })}

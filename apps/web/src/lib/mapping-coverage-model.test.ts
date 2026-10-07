@@ -142,4 +142,55 @@ describe('ticketsInBucket (Segment activate)', () => {
     });
     expect(page1.tickets).toHaveLength(3);
   });
+
+  it('filters by hours-basis segment key', () => {
+    const rows = [
+      ticket({ trackerIssueId: 'a', hourShareBucket: 'mapped-baselined' }),
+      ticket({ trackerIssueId: 'b', hourShareBucket: 'unmapped' }),
+      ticket({ trackerIssueId: 'c', hourShareBucket: 'mapped-baselined' }),
+    ];
+    const result = ticketsInBucket(rows, {
+      connectorId: 'c1',
+      basis: 'hours',
+      segmentKey: 'mapped-baselined',
+      page: 0,
+    });
+    expect(result.tickets.map((t) => t.trackerIssueId)).toEqual(['a', 'c']);
+  });
+
+  it('catch-all-overflow uses inCatchAllOverflow (approximate membership documented)', () => {
+    // Approximate: every Catch-all Ticket is flagged when the Project has any overflow hours;
+    // membership is the flag, not a per-Ticket overflow split.
+    const rows = [
+      ticket({
+        trackerIssueId: 'ca-over',
+        hourShareBucket: 'catch-all',
+        inCatchAllOverflow: true,
+      }),
+      ticket({
+        trackerIssueId: 'ca-within',
+        hourShareBucket: 'catch-all',
+        inCatchAllOverflow: false,
+      }),
+      ticket({
+        trackerIssueId: 'other',
+        hourShareBucket: 'unmapped',
+        inCatchAllOverflow: false,
+      }),
+    ];
+    const overflow = ticketsInBucket(rows, {
+      connectorId: 'c1',
+      basis: 'hours',
+      segmentKey: 'catch-all-overflow',
+      page: 0,
+    });
+    expect(overflow.tickets.map((t) => t.trackerIssueId)).toEqual(['ca-over']);
+    const catchAll = ticketsInBucket(rows, {
+      connectorId: 'c1',
+      basis: 'hours',
+      segmentKey: 'catch-all',
+      page: 0,
+    });
+    expect(catchAll.tickets.map((t) => t.trackerIssueId)).toEqual(['ca-over', 'ca-within']);
+  });
 });

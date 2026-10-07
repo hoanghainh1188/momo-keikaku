@@ -127,6 +127,29 @@ describe.skipIf(!reachable)('persistence round trip — the database reproduces 
     ]);
   });
 
+  it('wires story 5.11 coverage inputs from the Connector and project row (not the synthetic fallback)', async () => {
+    const { bundle, review } = await loadReview(db(), DEMO_TENANT_ID);
+    expect(bundle.input.connectorsForCoverage).toEqual([
+      {
+        id: 'con-fixture-ec2',
+        label: 'osaka-retail.backlog.jp (fixture replay)',
+        measurementBasis: 'hours',
+      },
+    ]);
+    // Seed leaves project_start null — the field is still passed through (not omitted).
+    expect(bundle.input.projectStart).toBeNull();
+    expect(bundle.input.ownerConnectorByTicket).toBeInstanceOf(Map);
+    expect(bundle.input.ownerConnectorByTicket!.size).toBeGreaterThan(0);
+    expect(review.coverage.perConnector.connectors.map((c) => c.connectorId)).toEqual([
+      'con-fixture-ec2',
+    ]);
+    expect(review.coverage.perConnector.projectTotal.connectorId).toBe('project-total');
+    expect(review.coverage.perConnector.sm5).toEqual({
+      kind: 'unavailable',
+      reasonCode: 'no_project_start',
+    });
+  });
+
   it('splits Unplanned Work with every mapped hour non-baselined', async () => {
     // Every ledger entry was ingested with no Baseline active, so a mapped hour is judged
     // against no Baseline at all: an hour on an ordinary WP is non-baselined Unplanned Work, and

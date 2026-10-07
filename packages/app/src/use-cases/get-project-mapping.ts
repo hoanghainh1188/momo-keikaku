@@ -142,7 +142,6 @@ function toTicketRows({ bundle, review }: ProjectReview): MappingTicketRow[] {
   const overflowIds = catchAllOverflowTicketIds(review, head, bundle.wps);
   const ownerByTicket = bundle.input.ownerConnectorByTicket ?? new Map<string, string>();
   const leftScope = bundle.input.leftScopeTicketIds ?? new Set<string>();
-  const defaultConnectorId = bundle.input.connectorsForCoverage?.[0]?.id ?? 'project';
 
   return bundle.input.pinnedSnapshot.tickets
     .filter((t) => !leftScope.has(t.trackerIssueId))
@@ -155,6 +154,9 @@ function toTicketRows({ bundle, review }: ProjectReview): MappingTicketRow[] {
         new Map(bundle.wps.map((w) => [w.id, w])),
         baselineWpIds,
       );
+      // Align with computeCoverage: never invent an owner. Missing map entry → '' so a
+      // Connector filter cannot list Tickets that coverage did not count there.
+      const ownerConnectorId = ownerByTicket.get(t.trackerIssueId) ?? '';
       return {
         trackerIssueId: t.trackerIssueId,
         key: t.key,
@@ -165,7 +167,7 @@ function toTicketRows({ bundle, review }: ProjectReview): MappingTicketRow[] {
         wpId,
         wpLabel: wpId ? (labelOf.get(wpId) ?? wpId) : null,
         source: mapping?.source ?? ('none' as const),
-        ownerConnectorId: ownerByTicket.get(t.trackerIssueId) ?? defaultConnectorId,
+        ownerConnectorId,
         ticketShareBucket: ticketShareBucketFor(t.trackerIssueId, head, bundle.wps),
         hourShareBucket,
         inCatchAllOverflow: overflowIds.has(t.trackerIssueId),

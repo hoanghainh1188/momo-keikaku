@@ -12,6 +12,7 @@ import {
   type CoverageConnectorView,
   type CoverageTicket,
 } from '@/lib/mapping-coverage-model';
+import { scopeSegmentMessageKey } from '@/lib/scope-segment-label';
 
 export type { CoverageConnectorView, CoverageTicket };
 
@@ -137,6 +138,7 @@ export function MappingCoverage({
         hourShareUnavailableReason={unavailableReason}
         titleKey="mapping.ledger.coverage_bar_title"
         showOpeningBalanceFootnote={basis === 'hours' && unavailableReason === null}
+        footnoteKey="mapping.ledger.coverage_buckets_footnote"
       />
 
       <p className="caption" style={{ marginTop: 16 }} data-testid="coverage-summary">
@@ -168,7 +170,9 @@ export function MappingCoverage({
         <>
           <h3 className="label" style={{ marginTop: 28 }} data-testid="coverage-filtered-heading">
             {t('mapping.coverage_filtered_tickets', {
-              segment: activeSegment ?? '',
+              segment: activeSegment
+                ? t(scopeSegmentMessageKey(basis, activeSegment))
+                : '',
               total: filtered.total,
             })}
           </h3>

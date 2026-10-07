@@ -250,6 +250,44 @@ describe('getProjectMapping', () => {
     });
     expect(page1.tickets).toHaveLength(5);
   });
+
+  it('omits left-scope Tickets from allTickets', async () => {
+    const review = {
+      bundle: {
+        ...REVIEW.bundle,
+        input: {
+          ...REVIEW.bundle.input,
+          leftScopeTicketIds: new Set(['t-5']),
+        },
+      },
+      review: REVIEW.review,
+    } as unknown as ProjectReview;
+    const { deps } = fakeDeps(() => review);
+    const result = await getProjectMapping(deps, ctxOf('ten-a'), { projectId: 'prj-1' });
+    if (!result.ok) throw new Error(`answered ${result.error.code}`);
+    expect(result.value.allTickets.map((t) => t.trackerIssueId)).not.toContain('t-5');
+    expect(result.value.allTickets).toHaveLength(4);
+  });
+
+  it('does not invent an owner Connector when the ownership map misses a Ticket', async () => {
+    const review = {
+      bundle: {
+        ...REVIEW.bundle,
+        input: {
+          ...REVIEW.bundle.input,
+          ownerConnectorByTicket: new Map([['t-3', 'con-a']]),
+        },
+      },
+      review: REVIEW.review,
+    } as unknown as ProjectReview;
+    const { deps } = fakeDeps(() => review);
+    const result = await getProjectMapping(deps, ctxOf('ten-a'), { projectId: 'prj-1' });
+    if (!result.ok) throw new Error(`answered ${result.error.code}`);
+    const orphan = result.value.allTickets.find((t) => t.trackerIssueId === 't-1');
+    expect(orphan?.ownerConnectorId).toBe('');
+    const owned = result.value.allTickets.find((t) => t.trackerIssueId === 't-3');
+    expect(owned?.ownerConnectorId).toBe('con-a');
+  });
 });
 
 /** packages/db's wording for an invisible Project, verbatim (repo.ts). */
