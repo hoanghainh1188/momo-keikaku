@@ -317,6 +317,12 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
   // Story 5.7: latched basis per Connector — Project basis = hours if any Connector is hours.
   const hoursConnectorIds = new Set<string>();
   const countConnectorIds = new Set<string>();
+  /** Story 5.11: per-Connector coverage inputs (label + latched basis). */
+  const connectorsForCoverage: {
+    id: string;
+    label: string;
+    measurementBasis: 'hours' | 'count';
+  }[] = [];
   let basisSeqMax: number | null = null;
   let connectorSettingSeqMax: number | null = null;
   let resolvedStatusIds: ReadonlySet<string> = new Set(['Closed']);
@@ -339,6 +345,11 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
     const latched = basisHead?.basis === 'hours' ? 'hours' : 'count';
     if (latched === 'hours') hoursConnectorIds.add(c.id);
     else countConnectorIds.add(c.id);
+    connectorsForCoverage.push({
+      id: c.id,
+      label: c.spaceLabel || c.id,
+      measurementBasis: latched,
+    });
     if (basisHead && (basisSeqMax === null || basisHead.seq > basisSeqMax)) {
       basisSeqMax = basisHead.seq;
     }
@@ -569,21 +580,22 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
     .where(and(eq(s.connectorOverlap.tenantId, p.tenantId), eq(s.connectorOverlap.projectId, projectId)))
     .orderBy(asc(s.connectorOverlap.ticketKey));
 
-  const leftScopeRows = await tx
+  // Story 5.11: ownership + left_scope for coverage shares (one Ticket read).
+  const ticketIdentityRows = await tx
     .select({
       trackerIssueId: s.ticket.trackerIssueId,
       key: s.ticket.key,
       ownerConnectorId: s.ticket.ownerConnectorId,
+      leftScope: s.ticket.leftScope,
     })
     .from(s.ticket)
-    .where(
-      and(
-        eq(s.ticket.tenantId, p.tenantId),
-        eq(s.ticket.projectId, projectId),
-        eq(s.ticket.leftScope, true),
-      ),
-    )
+    .where(and(eq(s.ticket.tenantId, p.tenantId), eq(s.ticket.projectId, projectId)))
     .orderBy(asc(s.ticket.key));
+  const ownerConnectorByTicket = new Map(
+    ticketIdentityRows.map((r) => [r.trackerIssueId, r.ownerConnectorId]),
+  );
+  const leftScopeRows = ticketIdentityRows.filter((r) => r.leftScope);
+  const leftScopeTicketIds = new Set(leftScopeRows.map((r) => r.trackerIssueId));
   const leftScopeHours = new Map<string, bigint>();
   if (leftScopeRows.length > 0) {
     const leftIds = leftScopeRows.map((r) => r.trackerIssueId);
@@ -603,6 +615,12 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
       leftScopeHours.set(e.ticketId, (leftScopeHours.get(e.ticketId) ?? 0n) + e.deltaMh);
     }
   }
+
+  // Story 5.11 inputs must be on ReviewInput before the return (computeReview reads them).
+  input.connectorsForCoverage = connectorsForCoverage;
+  input.ownerConnectorByTicket = ownerConnectorByTicket;
+  input.leftScopeTicketIds = leftScopeTicketIds;
+  input.projectStart = p.projectStart;
 
   return {
     project,

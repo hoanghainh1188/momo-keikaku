@@ -82,6 +82,10 @@ describe('present (AD-4: the only rounding site, from the exact value, half-even
       unavailableReason: 'unavailable — no actual hours yet',
       coverage: null,
     });
+    expect(present(unavailable('project_younger_than_14_days')).unavailableReason).toBe(
+      'unavailable — Project younger than 14 days',
+    );
+    expect(present(unavailable('tracker_provides_no_hours')).text).toBe('—');
     expect(present({ kind: 'value', value: 2_936_000n, unit: 'mh', coverage: null }).text).toBe(
       '2936.0',
     );

@@ -5,6 +5,7 @@ export * from './ledger';
 export * from './mapping';
 export * from './attribution';
 export * from './basis';
+export * from './coverage';
 export * from './evm';
 export * from './health';
 export * from './forecast';

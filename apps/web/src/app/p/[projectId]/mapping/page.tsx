@@ -1,9 +1,8 @@
 import { getTranslations } from 'next-intl/server';
 import { getProjectMapping } from '@/server/composition';
 import { valueOrNotFound } from '@/server/result';
-import { share } from '@momo/domain/present';
 import { Internal, Section } from '@/components/ui';
-import { ScopeLedgerBar } from '@/components/scope-ledger-bar';
+import { MappingCoverage } from '@/components/mapping-coverage';
 import { MappingTicketBoard } from '@/components/mapping-ticket-board';
 import { MappingRulesEditor } from '@/components/mapping-rules-editor';
 
@@ -11,7 +10,7 @@ export const dynamic = 'force-dynamic';
 
 /**
  * FR-21–FR-24: Tickets, Rules and Coverage on one surface. Story 5.9 adds Mapping DnD; story 5.10
- * makes the Rules editable (preview-gated Save, drag-handle / Alt+↑/↓ reorder).
+ * makes the Rules editable; story 5.11 makes Coverage interactive per Connector.
  */
 export default async function MappingPage({
   params,
@@ -25,24 +24,50 @@ export default async function MappingPage({
   const m = valueOrNotFound(await getProjectMapping({ projectId }));
   const leafWps = m.leafWps.map((w) => ({ id: w.id, label: w.label }));
 
+  const coverage = {
+    connectors: m.coverageByConnector.connectors.map((c) => ({
+      connectorId: c.connectorId,
+      label: c.label,
+      measurementBasis: c.measurementBasis,
+      ticketShare: {
+        counts: c.ticketShare.counts,
+        segments: c.ticketShare.segments,
+      },
+      hourShare: c.hourShare,
+    })),
+    projectTotal: {
+      connectorId: m.coverageByConnector.projectTotal.connectorId,
+      label: m.coverageByConnector.projectTotal.label,
+      measurementBasis: m.coverageByConnector.projectTotal.measurementBasis,
+      ticketShare: {
+        counts: m.coverageByConnector.projectTotal.ticketShare.counts,
+        segments: m.coverageByConnector.projectTotal.ticketShare.segments,
+      },
+      hourShare: m.coverageByConnector.projectTotal.hourShare,
+    },
+    sm5:
+      m.coverageByConnector.sm5.kind === 'value'
+        ? { kind: 'value' as const, value: m.coverageByConnector.sm5.value }
+        : {
+            kind: 'unavailable' as const,
+            reasonCode: m.coverageByConnector.sm5.reasonCode,
+          },
+  };
+
   return (
     <div className="sheet">
       <h1 className="report-title">{t('mapping.mapping_work_packages_tickets')}</h1>
       <div className="report-sub">{t('mapping.mappings_persist_across_tracker_snapshots_and_pl')}</div>
 
       <Section title={t('mapping.coverage')} id="coverage">
-        <ScopeLedgerBar
-          segments={m.scopeLedger}
+        <MappingCoverage
+          projectId={projectId}
+          coverage={coverage}
           openingBalanceMh={m.openingBalanceMh}
-          totalMh={m.totalMh}
+          allTickets={m.allTickets}
+          leafWps={leafWps}
+          emDash={em}
         />
-        <p className="caption" style={{ marginTop: 16 }}>
-          {t('mapping.coverage_summary', {
-            hourShare: share(m.coverage.mappedHourShare),
-            ticketShare: share(m.coverage.mappedTicketShare),
-            unmappedTickets: m.coverage.unmappedTickets,
-          })}
-        </p>
       </Section>
 
       <Section

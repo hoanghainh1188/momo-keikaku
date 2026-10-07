@@ -292,11 +292,50 @@
     },
     "ledger": {
       "scope_ledger_every_hour_in_the_connector_apos_s_": "Scope ledger — every hour in the Connector's scope, in one of four buckets",
+      "coverage_bar_title": "Coverage — mapped, Catch-all and Unmapped, in Tickets and in hours",
       "buckets_footnote": "The four buckets are mutually exclusive and sum to {totalHours}h — nothing in scope is silently excluded. Opening Balances ({openingHours}h) sit outside the bar and are reported separately.",
+      "coverage_buckets_footnote": "The five hour segments are mutually exclusive and sum to {totalHours}h. Opening Balances ({openingHours}h) sit outside the bar and are reported separately.",
       "segment_aria": "{label} {hours} hours, {share}",
-      "segment_title": "{label}: {hours}h ({share})"
+      "segment_aria_tickets": "{label} {count} Tickets, {share}",
+      "segment_title": "{label}: {hours}h ({share})",
+      "ticket_value": "{count} Tickets ({share})",
+      "basis_toggle_aria": "Share basis",
+      "basis_hours": "Hours share",
+      "basis_tickets": "Ticket share",
+      "show_as_table": "Show as table",
+      "table_bucket": "Bucket",
+      "table_tickets": "Tickets",
+      "table_share": "Share",
+      "empty": "No in-scope Tickets in this Connector.",
+      "page_prev": "Previous",
+      "page_next": "Next",
+      "page_status": "Page {page} of {pages}",
+      "hour_segments": {
+        "mapped-baselined": "Mapped to baselined WPs",
+        "mapped-non-baselined": "Mapped to non-baselined WPs",
+        "catch-all": "Catch-all (within Baseline)",
+        "catch-all-overflow": "Catch-all overflow",
+        "unmapped": "Unmapped Work"
+      },
+      "ticket_segments": {
+        "mapped": "Mapped (excluding Catch-all)",
+        "catch-all": "Catch-all",
+        "unmapped": "Unmapped"
+      },
+      "unavailable": {
+        "tracker_provides_no_hours": "unavailable — tracker provides no hours",
+        "project_younger_than_14_days": "unavailable — Project younger than 14 days",
+        "no_project_start": "unavailable — Project start not set"
+      }
     },
     "coverage_summary": "{hourShare} of hours mapped · {ticketShare} of Tickets mapped · {unmappedTickets} Unmapped Tickets. The share of Tickets and the share of hours are reported separately on purpose.",
+    "coverage_summary_v2": "{hourShare} of hours mapped (excluding Catch-all) · {ticketShare} of Tickets mapped · {catchAllTickets} in Catch-all · {unmappedTickets} Unmapped. Ticket share and hour share are reported separately.",
+    "coverage_summary_count_basis": "{ticketShare} of Tickets mapped · {catchAllTickets} in Catch-all · {unmappedTickets} Unmapped · hour share {hourReason}",
+    "coverage_sm5": "SM-5 mapped-excluding-Catch-all hour share: {share} (target ≥ {target})",
+    "coverage_project_total": "Project total",
+    "coverage_connectors_aria": "Coverage by Connector",
+    "coverage_filter_hint": "Activate a bar segment to list every Ticket in that bucket. Arrow keys move between segments.",
+    "coverage_filtered_tickets": "Tickets in “{segment}” ({total})",
     "rules_editor": {
       "new_rule": "New rule",
       "actions": "Actions",

@@ -1,5 +1,16 @@
 import { PROJECT_REACH, type RoleDeclaration } from '../authz/authorize';
-import { compareBigint, mappingHead, type MappingEvent, type Mh, type ReviewResult } from '@momo/domain';
+import {
+  compareBigint,
+  hourBucketForTicket,
+  mappingHead,
+  ticketShareBucketFor,
+  type CoverageResult,
+  type HourShareSegment,
+  type MappingEvent,
+  type Mh,
+  type ReviewResult,
+  type TicketShareBucket,
+} from '@momo/domain';
 import type { Result } from '../result';
 import type { ProjectReadDeps, ProjectReview } from '../ports/project-read';
 import type { RequestContext } from '../authz/request-context';
@@ -7,6 +18,9 @@ import { runProjectRead, type ProjectInput } from './project-input';
 
 /** How many Tickets the Mapping surface lists: the ones carrying the most hours. */
 export const MAPPING_TICKET_LIMIT = 60;
+
+/** Page size when a Scope Ledger segment filters the Tickets list (story 5.11). */
+export const MAPPING_BUCKET_PAGE_SIZE = 50;
 
 /** A leaf, non-milestone Work Package a Ticket can be mapped to. */
 export interface MappingWorkPackage {
@@ -48,25 +62,147 @@ export interface MappingTicketRow {
   readonly wpLabel: string | null;
   /** Where the current Mapping came from; `none` for a Ticket that was never mapped. */
   readonly source: MappingEvent['source'] | 'none';
+  /** Owning Connector (story 5.11). */
+  readonly ownerConnectorId: string;
+  /** Ticket-share bucket for segment filter (story 5.11). */
+  readonly ticketShareBucket: TicketShareBucket;
+  /**
+   * Hours-bar membership for segment filter. Catch-all overflow shares Catch-all Tickets;
+   * `inCatchAllOverflow` marks Tickets that also contributed overflow hours.
+   */
+  readonly hourShareBucket: HourShareSegment;
+  readonly inCatchAllOverflow: boolean;
+}
+
+/** Optional Scope Ledger segment filter (story 5.11). */
+export interface MappingTicketFilter {
+  readonly connectorId: string | 'project-total';
+  readonly basis: 'hours' | 'tickets';
+  readonly segmentKey: string;
+  readonly page: number;
 }
 
 /** Everything the Mapping surface renders (FR-21–FR-24), joined and ordered. */
 export interface ProjectMapping {
+  /** Review Unplanned Scope Ledger (FR-20 hours) — kept for compatibility. */
   readonly scopeLedger: ReviewResult['scopeLedger'];
   readonly openingBalanceMh: Mh;
   /** All attributed hours, cumulative — the Scope Ledger bar's whole. */
   readonly totalMh: Mh;
+  /** Legacy Project-wide coverage (mapped includes Catch-all). */
   readonly coverage: ReviewResult['coverage'];
+  /** Story 5.11: per-Connector + Project total + SM-5. */
+  readonly coverageByConnector: CoverageResult;
   readonly leafWps: readonly MappingWorkPackage[];
   /** In the order the Project's rules are read (priority order). */
   readonly rules: readonly MappingRuleRow[];
   /** The `MAPPING_TICKET_LIMIT` Tickets carrying the most hours, most first; ties keep snapshot order. */
   readonly tickets: readonly MappingTicketRow[];
+  /**
+   * Every in-scope Ticket with bucket tags — client segment filter pages over this
+   * (top-60 remains the unfiltered default in `tickets`).
+   */
+  readonly allTickets: readonly MappingTicketRow[];
+}
+
+function activeBaselineWpIds(bundle: ProjectReview['bundle']): Set<string> {
+  const seq = bundle.input.activeBaselineSeq;
+  if (seq === null) return new Set();
+  const bl = bundle.input.baselineVersions.find((b) => b.seq === seq);
+  if (!bl) return new Set();
+  return new Set(bl.wps.filter((w) => w.baselineMh > 0n).map((w) => w.wpId));
+}
+
+function catchAllOverflowTicketIds(
+  review: ReviewResult,
+  head: ReturnType<typeof mappingHead>,
+  wps: ProjectReview['bundle']['wps'],
+): Set<string> {
+  // Without per-Ticket overflow split, every Catch-all Ticket is in the overflow segment
+  // when the Project has any Catch-all overflow hours (FR-20 filter membership).
+  const overflow = review.attribution.cumulative.catchAllOverflowMh;
+  if (overflow === 0n) return new Set();
+  const wpById = new Map(wps.map((w) => [w.id, w]));
+  const ids = new Set<string>();
+  for (const ticketId of review.attribution.hoursByTicket.keys()) {
+    const m = head.get(ticketId);
+    if (!m?.wpId) continue;
+    if (wpById.get(m.wpId)?.isCatchAll) ids.add(ticketId);
+  }
+  return ids;
+}
+
+function toTicketRows({ bundle, review }: ProjectReview): MappingTicketRow[] {
+  const head = mappingHead(bundle.input.mappingEvents);
+  const leafWps = bundle.wps
+    .filter((w) => w.isLeaf && !w.isMilestone)
+    .map((w) => ({ id: w.id, wbsCode: w.wbsCode, name: w.name, label: `${w.wbsCode} ${w.name}` }));
+  const labelOf = new Map(leafWps.map((w) => [w.id, w.label]));
+  const baselineWpIds = activeBaselineWpIds(bundle);
+  const overflowIds = catchAllOverflowTicketIds(review, head, bundle.wps);
+  const ownerByTicket = bundle.input.ownerConnectorByTicket ?? new Map<string, string>();
+  const leftScope = bundle.input.leftScopeTicketIds ?? new Set<string>();
+
+  return bundle.input.pinnedSnapshot.tickets
+    .filter((t) => !leftScope.has(t.trackerIssueId))
+    .map((t) => {
+      const mapping = head.get(t.trackerIssueId);
+      const wpId = mapping?.wpId ?? null;
+      const hourShareBucket = hourBucketForTicket(
+        t.trackerIssueId,
+        head,
+        new Map(bundle.wps.map((w) => [w.id, w])),
+        baselineWpIds,
+      );
+      // Align with computeCoverage: never invent an owner. Missing map entry → '' so a
+      // Connector filter cannot list Tickets that coverage did not count there.
+      const ownerConnectorId = ownerByTicket.get(t.trackerIssueId) ?? '';
+      return {
+        trackerIssueId: t.trackerIssueId,
+        key: t.key,
+        title: t.title,
+        categoryIds: t.attributes.filter((a) => a.kind === 'category').map((a) => a.id),
+        statusId: t.statusId,
+        mh: review.attribution.hoursByTicket.get(t.trackerIssueId) ?? 0n,
+        wpId,
+        wpLabel: wpId ? (labelOf.get(wpId) ?? wpId) : null,
+        source: mapping?.source ?? ('none' as const),
+        ownerConnectorId,
+        ticketShareBucket: ticketShareBucketFor(t.trackerIssueId, head, bundle.wps),
+        hourShareBucket,
+        inCatchAllOverflow: overflowIds.has(t.trackerIssueId),
+      };
+    })
+    .sort((a, b) => compareBigint(b.mh, a.mh));
+}
+
+/** Pure: filter + page Tickets for a Scope Ledger segment (story 5.11). */
+export function ticketsInBucket(
+  allTickets: readonly MappingTicketRow[],
+  filter: MappingTicketFilter,
+): { readonly tickets: readonly MappingTicketRow[]; readonly total: number } {
+  const filtered = allTickets.filter((t) => {
+    if (filter.connectorId !== 'project-total' && t.ownerConnectorId !== filter.connectorId) {
+      return false;
+    }
+    if (filter.basis === 'tickets') {
+      return t.ticketShareBucket === filter.segmentKey;
+    }
+    if (filter.segmentKey === 'catch-all-overflow') {
+      return t.inCatchAllOverflow;
+    }
+    return t.hourShareBucket === filter.segmentKey;
+  });
+  const page = Math.max(0, filter.page);
+  const start = page * MAPPING_BUCKET_PAGE_SIZE;
+  return {
+    tickets: filtered.slice(start, start + MAPPING_BUCKET_PAGE_SIZE),
+    total: filtered.length,
+  };
 }
 
 /** The join, pure: a Review in, the Mapping surface's rows out. */
 export function toProjectMapping({ bundle, review }: ProjectReview): ProjectMapping {
-  const head = mappingHead(bundle.input.mappingEvents);
   const leafWps = bundle.wps
     .filter((w) => w.isLeaf && !w.isMilestone)
     .map((w) => ({ id: w.id, wbsCode: w.wbsCode, name: w.name, label: `${w.wbsCode} ${w.name}` }));
@@ -84,33 +220,19 @@ export function toProjectMapping({ bundle, review }: ProjectReview): ProjectMapp
     currentlyMapped: rule.currentlyMapped,
   }));
 
-  const tickets = bundle.input.pinnedSnapshot.tickets
-    .map((t) => {
-      const mapping = head.get(t.trackerIssueId);
-      const wpId = mapping?.wpId ?? null;
-      return {
-        trackerIssueId: t.trackerIssueId,
-        key: t.key,
-        title: t.title,
-        categoryIds: t.attributes.filter((a) => a.kind === 'category').map((a) => a.id),
-        statusId: t.statusId,
-        mh: review.attribution.hoursByTicket.get(t.trackerIssueId) ?? 0n,
-        wpId,
-        wpLabel: wpId ? (labelOf.get(wpId) ?? wpId) : null,
-        source: mapping?.source ?? ('none' as const),
-      };
-    })
-    .sort((a, b) => compareBigint(b.mh, a.mh))
-    .slice(0, MAPPING_TICKET_LIMIT);
+  const allTickets = toTicketRows({ bundle, review });
+  const tickets = allTickets.slice(0, MAPPING_TICKET_LIMIT);
 
   return {
     scopeLedger: review.scopeLedger,
     openingBalanceMh: review.openingBalanceMh,
     totalMh: review.attribution.cumulative.totalMh,
     coverage: review.coverage,
+    coverageByConnector: review.coverage.perConnector,
     leafWps,
     rules,
     tickets,
+    allTickets,
   };
 }
 
