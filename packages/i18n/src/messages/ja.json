@@ -291,12 +291,38 @@
       "keyboard_map_cancel": "キャンセル"
     },
     "ledger": {
-      "scope_ledger_every_hour_in_the_connector_apos_s_": "Scope ledger — every hour in the Connector's scope, in one of four buckets",
-      "buckets_footnote": "The four buckets are mutually exclusive and sum to {totalHours}h — nothing in scope is silently excluded. Opening Balances ({openingHours}h) sit outside the bar and are reported separately.",
-      "segment_aria": "{label} {hours} hours, {share}",
-      "segment_title": "{label}: {hours}h ({share})"
+      "scope_ledger_every_hour_in_the_connector_apos_s_": "スコープ台帳 — コネクタの範囲内のすべての時間が、四つの区分のいずれかに入ります",
+      "coverage_bar_title": "カバレッジ — マップ済み・キャッチオール・未マップを、チケット数と時間で",
+      "buckets_footnote": "四つの区分は互いに排他で、合計は {totalHours}h です。範囲内のものは黙って除外されません。期首残高（{openingHours}h）はバーの外に別掲します。",
+      "segment_aria": "{label} {hours} 時間、{share}",
+      "segment_aria_tickets": "{label} {count} チケット、{share}",
+      "segment_title": "{label}: {hours}h（{share}）",
+      "ticket_value": "{count} チケット（{share}）",
+      "basis_toggle_aria": "割合の基準",
+      "basis_hours": "時間の割合",
+      "basis_tickets": "チケットの割合",
+      "show_as_table": "表で表示",
+      "table_bucket": "区分",
+      "table_tickets": "チケット",
+      "table_share": "割合",
+      "empty": "このコネクタに範囲内のチケットはありません。",
+      "page_prev": "前へ",
+      "page_next": "次へ",
+      "page_status": "{pages} ページ中 {page} ページ目",
+      "unavailable": {
+        "tracker_provides_no_hours": "利用不可 — トラッカーが時間を提供していません",
+        "project_younger_than_14_days": "利用不可 — プロジェクト開始から14日未満です",
+        "no_project_start": "利用不可 — プロジェクト開始日が未設定です"
+      }
     },
     "coverage_summary": "{hourShare} of hours mapped · {ticketShare} of Tickets mapped · {unmappedTickets} Unmapped Tickets. The share of Tickets and the share of hours are reported separately on purpose.",
+    "coverage_summary_v2": "マップ済み（キャッチオール除く）時間 {hourShare} · マップ済みチケット {ticketShare} · キャッチオール {catchAllTickets} · 未マップ {unmappedTickets}。チケット割合と時間割合は分けて報告します。",
+    "coverage_summary_count_basis": "マップ済みチケット {ticketShare} · キャッチオール {catchAllTickets} · 未マップ {unmappedTickets} · 時間の割合は {hourReason}",
+    "coverage_sm5": "SM-5 マップ済み（キャッチオール除く）時間の割合: {share}（目標 ≥ {target}）",
+    "coverage_project_total": "プロジェクト合計",
+    "coverage_connectors_aria": "コネクタ別カバレッジ",
+    "coverage_filter_hint": "バーの区分を選ぶとその区分のチケット一覧を表示します。矢印キーで区分を移動できます。",
+    "coverage_filtered_tickets": "「{segment}」のチケット（{total}）",
     "rules_editor": {
       "new_rule": "ルールを追加",
       "actions": "操作",

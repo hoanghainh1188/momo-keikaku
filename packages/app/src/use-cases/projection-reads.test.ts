@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ratio } from '@momo/domain';
 import type { ProjectReadDeps, ProjectReview } from '../ports/project-read';
 import { getProjectMapping } from '.';
-import { MAPPING_TICKET_LIMIT } from './get-project-mapping';
+import { MAPPING_TICKET_LIMIT, ticketsInBucket, type MappingTicketRow } from './get-project-mapping';
 import type { RequestContext } from '../authz/request-context';
 
 /** A signed-in caller in `tenantId` that reaches `prj-1` (story 1.5). */
@@ -47,13 +47,31 @@ const ticket = (trackerIssueId: string, categoryIds: string[] = []) => ({
  * Work Package the surface does not list (a parent), so its id stands in for a label; `t-5`
  * was never mapped.
  */
+const PER_CONNECTOR = {
+  connectors: [],
+  projectTotal: {
+    connectorId: 'project-total',
+    label: 'Project total',
+    measurementBasis: 'hours',
+    ticketShare: {
+      counts: { mapped: 0, catchAll: 0, unmapped: 0, total: 0 },
+      mapped: ratio(0n, 1n),
+      catchAll: ratio(0n, 1n),
+      unmapped: ratio(0n, 1n),
+      segments: [],
+    },
+    hourShare: { kind: 'unavailable', reasonCode: 'tracker_provides_no_hours' },
+  },
+  sm5: { kind: 'unavailable', reasonCode: 'project_younger_than_14_days' },
+};
+
 const REVIEW = {
   bundle: {
     wps: [
-      wp('wp-1', '1.1', 'Design'),
-      wp('wp-2', '1.2', 'Build'),
-      wp('wp-p', '1', 'Parent', { isLeaf: false }),
-      wp('wp-m', '1.9', 'Go-live', { isMilestone: true }),
+      wp('wp-1', '1.1', 'Design', { isCatchAll: false }),
+      wp('wp-2', '1.2', 'Build', { isCatchAll: false }),
+      wp('wp-p', '1', 'Parent', { isLeaf: false, isCatchAll: false }),
+      wp('wp-m', '1.9', 'Go-live', { isMilestone: true, isCatchAll: false }),
     ],
     rules: [
       { id: 'r-2', priority: 2, name: 'Second', wpId: 'wp-p', match: { field: 'category', value: 'c' }, currentlyMapped: 0, parentKey: null },
@@ -71,11 +89,21 @@ const REVIEW = {
       pinnedSnapshot: {
         tickets: [ticket('t-1'), ticket('t-2', ['c', 'd']), ticket('t-3'), ticket('t-4'), ticket('t-5')],
       },
+      activeBaselineSeq: null,
+      baselineVersions: [],
+      ownerConnectorByTicket: new Map([
+        ['t-1', 'con-a'],
+        ['t-2', 'con-a'],
+        ['t-3', 'con-a'],
+        ['t-4', 'con-a'],
+        ['t-5', 'con-a'],
+      ]),
+      connectorsForCoverage: [{ id: 'con-a', label: 'Space A', measurementBasis: 'hours' }],
     },
   },
   review: {
     attribution: {
-      cumulative: { totalMh: 99_000n },
+      cumulative: { totalMh: 99_000n, catchAllOverflowMh: 0n },
       hoursByTicket: new Map([
         ['t-1', 5_000n],
         ['t-2', 5_000n],
@@ -84,7 +112,12 @@ const REVIEW = {
       ]),
     },
     scopeLedger: [{ key: 'unmapped', label: 'Unmapped Work', mh: 1n, share: ratio(1n, 1n) }],
-    coverage: { mappedTicketShare: ratio(2n, 5n), mappedHourShare: ratio(1n, 2n), unmappedTickets: 3 },
+    coverage: {
+      mappedTicketShare: ratio(2n, 5n),
+      mappedHourShare: ratio(1n, 2n),
+      unmappedTickets: 3,
+      perConnector: PER_CONNECTOR,
+    },
     openingBalanceMh: 7_000n,
   },
 } as unknown as ProjectReview;
@@ -158,7 +191,14 @@ describe('getProjectMapping', () => {
     expect(m.totalMh).toBe(99_000n);
     expect(m.openingBalanceMh).toBe(7_000n);
     expect(m.coverage).toBe(REVIEW.review.coverage);
+    expect(m.coverageByConnector).toBe(REVIEW.review.coverage.perConnector);
     expect(m.scopeLedger).toBe(REVIEW.review.scopeLedger);
+    expect(m.allTickets).toHaveLength(5);
+    expect(m.tickets[0]).toMatchObject({
+      ownerConnectorId: 'con-a',
+      ticketShareBucket: 'mapped',
+      hourShareBucket: 'mapped-non-baselined',
+    });
   });
 
   it(`lists at most ${MAPPING_TICKET_LIMIT} Tickets, the ones carrying the most hours`, async () => {
@@ -175,6 +215,40 @@ describe('getProjectMapping', () => {
     expect(result.value.tickets).toHaveLength(MAPPING_TICKET_LIMIT);
     expect(result.value.tickets[0]?.trackerIssueId).toBe(`n-${MAPPING_TICKET_LIMIT + 4}`);
     expect(result.value.tickets.at(-1)?.trackerIssueId).toBe('n-5');
+    expect(result.value.allTickets).toHaveLength(MAPPING_TICKET_LIMIT + 5);
+  });
+
+  it('pages every Ticket in a segment bucket, not only the top-60 list', () => {
+    const rows = Array.from({ length: 55 }, (_, i) => ({
+      trackerIssueId: `u-${i}`,
+      key: `K-${i}`,
+      title: `T-${i}`,
+      categoryIds: [],
+      statusId: 'open',
+      mh: 1n,
+      wpId: null,
+      wpLabel: null,
+      source: 'none',
+      ownerConnectorId: 'con-a',
+      ticketShareBucket: 'unmapped' as const,
+      hourShareBucket: 'unmapped' as const,
+      inCatchAllOverflow: false,
+    })) satisfies MappingTicketRow[];
+    const page0 = ticketsInBucket(rows, {
+      connectorId: 'con-a',
+      basis: 'tickets',
+      segmentKey: 'unmapped',
+      page: 0,
+    });
+    expect(page0.total).toBe(55);
+    expect(page0.tickets).toHaveLength(50);
+    const page1 = ticketsInBucket(rows, {
+      connectorId: 'con-a',
+      basis: 'tickets',
+      segmentKey: 'unmapped',
+      page: 1,
+    });
+    expect(page1.tickets).toHaveLength(5);
   });
 });
 

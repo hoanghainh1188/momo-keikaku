@@ -48,11 +48,11 @@ const emptyBuckets = (): Buckets => ({
 });
 
 export interface AttributionInput {
-  entries: LedgerEntry[];
-  head: Map<string, MappingHeadEntry>;
-  wps: WorkPackage[];
-  baselineVersions: BaselineVersion[];
-  resources: Resource[];
+  entries: readonly LedgerEntry[];
+  head: ReadonlyMap<string, MappingHeadEntry>;
+  wps: readonly WorkPackage[];
+  baselineVersions: readonly BaselineVersion[];
+  resources: readonly Resource[];
   project: ProjectConfig;
   period: ReportingPeriod;
   /**
@@ -112,7 +112,7 @@ function projectDefaultOnDate(
 }
 
 function rateFor(
-  resources: Resource[],
+  resources: readonly Resource[],
   accountId: string | null,
   onDate: string,
   project: ProjectConfig,

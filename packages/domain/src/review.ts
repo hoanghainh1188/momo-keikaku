@@ -1,6 +1,11 @@
 import { attribute, periodUnplannedTicketCount, type AttributionResult, type Buckets } from './attribution';
 import type { MeasurementBasis } from './basis';
 import type { HolidayCalendar, IsoDate, ReportingPeriod } from './calendar';
+import {
+  computeCoverage,
+  type CoverageConnectorInput,
+  type CoverageResult,
+} from './coverage';
 import { computeEvm, FORMULA_VERSION, type EvmResult, type WpMeasure } from './evm';
 import { computeForecast, type ForecastResult } from './forecast';
 import { computeHealth, isBehindPlan, type HealthColour, type HealthIndicator } from './health';
@@ -96,6 +101,17 @@ export interface ReviewInput {
    * a Ticket a since-deleted rule moved to Unmapped still names it.
    */
   ruleNamesById?: ReadonlyMap<string, string>;
+  /**
+   * Story 5.11: Connectors for per-Connector coverage. When omitted, coverage still returns a
+   * Project total from every pinned Ticket under the Project measurement basis.
+   */
+  connectorsForCoverage?: readonly CoverageConnectorInput[];
+  /** trackerIssueId → owning Connector id (story 5.11). */
+  ownerConnectorByTicket?: ReadonlyMap<string, string>;
+  /** left_scope Tickets — excluded from FR-23 shares (5.13 owns captions). */
+  leftScopeTicketIds?: ReadonlySet<string>;
+  /** Project start for SM-5's 14-day window; null → SM-5 unavailable. */
+  projectStart?: IsoDate | null;
 }
 
 /**
@@ -202,7 +218,17 @@ export interface ReviewResult {
   milestones: MilestoneRow[] | null;
   /** Null while the Project has no Baseline. */
   divergence: DivergenceRow[] | null;
-  coverage: { mappedTicketShare: Ratio; mappedHourShare: Ratio; unmappedTickets: number };
+  /**
+   * Legacy Project-wide FR-23 figures (mapped includes Catch-all) — Review captions.
+   * Story 5.11 adds `perConnector` (mapped excludes Catch-all) for Mapping › Coverage.
+   */
+  coverage: {
+    mappedTicketShare: Ratio;
+    mappedHourShare: Ratio;
+    unmappedTickets: number;
+    /** Story 5.11: per-Connector + Project total + SM-5. */
+    perConnector: CoverageResult;
+  };
   dispositions: DispositionEvent[];
   explainNotes: { note: string; ticketCount: number; mh: Mh }[];
   openingBalanceMh: Mh;
@@ -376,11 +402,39 @@ export function computeReview(input: ReviewInput): ReviewResult {
       ? null
       : divergenceRows(baseline, evm, input.wps, attribution.acByWp);
 
-  // --- FR-23 coverage
+  // --- FR-23 coverage (legacy Project-wide: mapped includes Catch-all, for Review captions)
   const totalTickets = input.pinnedSnapshot.tickets.length;
   const unmappedTickets = input.pinnedSnapshot.tickets.filter(
     (t) => !head.get(t.trackerIssueId)?.wpId,
   ).length;
+  const connectorsForCoverage: CoverageConnectorInput[] =
+    input.connectorsForCoverage && input.connectorsForCoverage.length > 0
+      ? [...input.connectorsForCoverage]
+      : [
+          {
+            id: 'project',
+            label: 'Project',
+            measurementBasis,
+          },
+        ];
+  const ownerConnectorByTicket =
+    input.ownerConnectorByTicket ??
+    new Map(input.pinnedSnapshot.tickets.map((t) => [t.trackerIssueId, connectorsForCoverage[0]!.id]));
+  const perConnector = computeCoverage({
+    tickets: input.pinnedSnapshot.tickets,
+    head,
+    wps: input.wps,
+    ledger: input.ledger,
+    baselineVersions: input.baselineVersions,
+    resources: input.resources,
+    project: input.project,
+    period: input.period,
+    connectors: connectorsForCoverage,
+    ownerConnectorByTicket,
+    leftScopeTicketIds: input.leftScopeTicketIds,
+    projectStart: input.projectStart ?? null,
+    asOf: input.asOf,
+  });
   const coverage = {
     mappedTicketShare:
       totalTickets === 0
@@ -394,6 +448,7 @@ export function computeReview(input: ReviewInput): ReviewResult {
             attribution.cumulative.totalMh,
           ),
     unmappedTickets,
+    perConnector,
   };
 
   const c = attribution.cumulative;
