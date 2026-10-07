@@ -1,5 +1,15 @@
-import { defineConfig } from 'vitest/config';
+import { configDefaults, defineConfig } from 'vitest/config';
 import { fileURLToPath } from 'node:url';
+
+/**
+ * Wall-clock gates that measure a percentile, and so need a quiet machine. Run inside the main
+ * group they share the CPU with every other worker (one per core, less one), and on a 12-core
+ * laptop fence-nfr-p1's p95 read 347 ms against a 300 ms budget while its uncontended samples sat
+ * near 100 ms: the gate was measuring the run, not the fence. They run in a second group that
+ * starts only after the first has finished, one file at a time. Still one `pnpm test`, so CI keeps
+ * running them.
+ */
+const QUIET_TIMING_GATES = ['tests/schedule/fence-nfr-p1.test.ts'];
 
 export default defineConfig({
   resolve: {
@@ -33,12 +43,35 @@ export default defineConfig({
   // `packages/db`, because it now wires `packages/app`'s use cases to `packages/db`'s
   // repository — a composition root of its own, and a suite spanning layers belongs to none
   // of them. Drop this entry and NFR-S1's harness silently stops running.
+  //
+  // The list lives on the `main` project, not on `test` itself: `extends: true` CONCATENATES a
+  // root `include` with a project's own, which would put every file in the quiet group too.
   test: {
-    include: [
-      'packages/**/*.test.ts',
-      'apps/**/*.test.ts',
-      'scripts/**/*.test.ts',
-      'tests/**/*.test.ts',
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: 'main',
+          include: [
+            'packages/**/*.test.ts',
+            'apps/**/*.test.ts',
+            'scripts/**/*.test.ts',
+            'tests/**/*.test.ts',
+          ],
+          // Spread the defaults: a bare `exclude` replaces them, node_modules included.
+          exclude: [...configDefaults.exclude, ...QUIET_TIMING_GATES],
+          sequence: { groupOrder: 0 },
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'quiet-timing',
+          include: QUIET_TIMING_GATES,
+          fileParallelism: false,
+          sequence: { groupOrder: 1 },
+        },
+      },
     ],
     environment: 'node',
     // AD-17: vitest is one of the three local suppliers of DEPLOYMENT=local (alongside

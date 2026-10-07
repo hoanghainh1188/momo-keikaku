@@ -191,5 +191,7 @@ describe.skipIf(!live)('NFR-P1 writeIngestSnapshot (story 5.5, REQUIRE_DB)', () 
       // First snapshot: one opening_balance per ticket with non-zero hours (all NFR tickets).
       expect(ledger).toHaveLength(TICKET_COUNT);
     });
-  });
+    // The budget assertion above is the gate; vitest's 5 s default would otherwise kill a slow
+    // write first and report a timeout instead of the elapsed time. The margin covers the reads.
+  }, BUDGET_MS + 60_000);
 });
