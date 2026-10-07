@@ -2,7 +2,7 @@
  * Story 5.11 — matrix rows: Toggle basis, Show as table, Segment activate (paging).
  */
 import { describe, expect, it } from 'vitest';
-import { ratio } from '@momo/domain';
+import type { Ratio } from '@momo/domain/present';
 import {
   adjacentSegmentKeys,
   BUCKET_PAGE_SIZE,
@@ -13,7 +13,8 @@ import {
   type CoverageTicket,
 } from './mapping-coverage-model';
 
-const r = (n: bigint, d: bigint) => ratio(n, d);
+/** Fixture Ratio — web may only import `@momo/domain/present` (AD-1 fence). */
+const r = (n: bigint, d: bigint): Ratio => ({ num: n, den: d });
 
 function hoursRow(overrides: Partial<CoverageConnectorView> = {}): CoverageConnectorView {
   return {
