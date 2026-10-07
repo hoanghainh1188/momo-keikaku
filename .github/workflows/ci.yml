@@ -231,12 +231,22 @@
 #     out in-package `*.test.ts`, which is not application source. The findings are in
 #     spec-1-4-password-reset.md.
 
-# THESE GATES REPORT; THEY DO NOT BLOCK. The repository is private on a free plan, so
-# GitHub refuses branch protection ("Upgrade to GitHub Pro or make this repository
-# public"). Founder decision, 2026-09-20: stay private and keep the discipline in the
-# person rather than the platform — the alternatives were paying for Pro, or going
-# public with planning artifacts that carry a real client's name and contract type.
-# Revisit when a second person can merge.
+# THESE GATES REPORT; THEY DO NOT BLOCK — and that is now an open decision, not a platform
+# limit. The original reason was a limit: the repository was private on a free plan, so GitHub
+# refused branch protection ("Upgrade to GitHub Pro or make this repository public"), and the
+# founder decision of 2026-09-20 was to stay private and keep the discipline in the person
+# rather than the platform — the alternatives being Pro, or going public with planning
+# artifacts that carry a real client's name and contract type.
+#
+# THE REPOSITORY HAS SINCE BEEN MADE PUBLIC, DELIBERATELY (founder, confirmed 2026-10-07), which
+# removes that obstacle: branch protection and rulesets are free on a public repository. Measured
+# the same day — `main` has neither (`repos/.../branches/main/protection` answers 404 "Branch not
+# protected"; `repos/.../rulesets` is `[]`), and `delete_branch_on_merge` is off. So nothing here
+# blocks because nothing has been switched on, which is a different claim from the one this
+# paragraph used to make, and it wants an answer rather than an inherited one.
+#
+# Revisit when a second person can merge. For whoever picks it up: the question is WHICH of the
+# checks below become required, not whether protection is available.
 
 name: CI
 
