@@ -11,6 +11,7 @@
     "dev": "tsx scripts/dev.ts",
     "dev:web": "pnpm --filter @momo/web dev",
     "test": "vitest run",
+    "test:nfr": "vitest run --config vitest.nfr.config.ts",
     "lint": "eslint . --max-warnings 0",
     "typecheck": "tsc --noEmit -p tsconfig.json --pretty false",
     "depcruise": "depcruise apps packages --config .dependency-cruiser.cjs",

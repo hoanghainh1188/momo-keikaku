@@ -131,6 +131,8 @@ describe.skipIf(!live)('NFR-P1 writeIngestSnapshot (story 5.5, REQUIRE_DB)', () 
     }
   });
 
+  // vitest's default 5 s would cut the run off long before BUDGET_MS under load; the budget
+  // assertion below is the gate, so the timeout sits just above it.
   it(`writes ${TICKET_COUNT} tickets to the ledger within 5 minutes`, async () => {
     const db = getDb(APP_DATABASE_URL!);
     const tickets = Array.from({ length: TICKET_COUNT }, (_, i) => ticket(i));
@@ -191,5 +193,5 @@ describe.skipIf(!live)('NFR-P1 writeIngestSnapshot (story 5.5, REQUIRE_DB)', () 
       // First snapshot: one opening_balance per ticket with non-zero hours (all NFR tickets).
       expect(ledger).toHaveLength(TICKET_COUNT);
     });
-  });
+  }, BUDGET_MS + 60_000);
 });
