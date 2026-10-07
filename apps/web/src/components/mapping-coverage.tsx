@@ -3,47 +3,20 @@
 import { useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { share, type Mh, type Ratio } from '@momo/domain/present';
-import { ScopeLedgerBar, type ScopeLedgerSegment } from '@/components/scope-ledger-bar';
+import { ScopeLedgerBar } from '@/components/scope-ledger-bar';
 import { MappingTicketBoard } from '@/components/mapping-ticket-board';
+import {
+  BUCKET_PAGE_SIZE,
+  segmentsFor,
+  ticketsInBucket,
+  type CoverageConnectorView,
+  type CoverageTicket,
+} from '@/lib/mapping-coverage-model';
 
-/** Page size when a Scope Ledger segment filters the Tickets list (story 5.11). */
-const BUCKET_PAGE_SIZE = 50;
+export type { CoverageConnectorView, CoverageTicket };
+
+/** How many Tickets the unfiltered Mapping list still shows (story 5.9 default). */
 const UNFILTERED_LIMIT = 60;
-
-export type CoverageTicket = {
-  readonly trackerIssueId: string;
-  readonly key: string;
-  readonly title: string;
-  readonly categoryIds: readonly string[];
-  readonly statusId: string;
-  readonly mh: bigint;
-  readonly wpId: string | null;
-  readonly wpLabel: string | null;
-  readonly source: string;
-  readonly ownerConnectorId: string;
-  readonly ticketShareBucket: string;
-  readonly hourShareBucket: string;
-  readonly inCatchAllOverflow: boolean;
-};
-
-/** Serializable CoverageResult slice the server page passes in. */
-export type CoverageConnectorView = {
-  connectorId: string;
-  label: string;
-  measurementBasis: 'hours' | 'count';
-  ticketShare: {
-    counts: { mapped: number; catchAll: number; unmapped: number; total: number };
-    segments: { key: string; label: string; count: number; share: Ratio }[];
-  };
-  hourShare:
-    | {
-        kind: 'value';
-        segments: { key: string; label: string; mh: Mh; share: Ratio }[];
-        mappedExcludingCatchAll: Ratio;
-        totalMh: Mh;
-      }
-    | { kind: 'unavailable'; reasonCode: string };
-};
 
 export type CoverageView = {
   connectors: CoverageConnectorView[];
@@ -52,75 +25,6 @@ export type CoverageView = {
 };
 
 type LeafWp = { readonly id: string; readonly label: string };
-
-function ticketsInBucket(
-  allTickets: readonly CoverageTicket[],
-  filter: {
-    connectorId: string;
-    basis: 'hours' | 'tickets';
-    segmentKey: string;
-    page: number;
-  },
-): { tickets: CoverageTicket[]; total: number } {
-  const filtered = allTickets.filter((t) => {
-    if (filter.connectorId !== 'project-total' && t.ownerConnectorId !== filter.connectorId) {
-      return false;
-    }
-    if (filter.basis === 'tickets') {
-      return t.ticketShareBucket === filter.segmentKey;
-    }
-    if (filter.segmentKey === 'catch-all-overflow') {
-      return t.inCatchAllOverflow;
-    }
-    return t.hourShareBucket === filter.segmentKey;
-  });
-  const page = Math.max(0, filter.page);
-  const start = page * BUCKET_PAGE_SIZE;
-  return {
-    tickets: filtered.slice(start, start + BUCKET_PAGE_SIZE),
-    total: filtered.length,
-  };
-}
-
-function segmentsFor(
-  row: CoverageConnectorView,
-  basis: 'hours' | 'tickets',
-): {
-  segments: ScopeLedgerSegment[];
-  unavailableReason: string | null;
-  totalMh: Mh;
-} {
-  if (basis === 'tickets') {
-    return {
-      segments: row.ticketShare.segments.map((s) => ({
-        key: s.key,
-        label: s.label,
-        count: s.count,
-        mh: 0n,
-        share: s.share,
-      })),
-      unavailableReason: null,
-      totalMh: 0n,
-    };
-  }
-  if (row.hourShare.kind === 'unavailable') {
-    return {
-      segments: [],
-      unavailableReason: row.hourShare.reasonCode,
-      totalMh: 0n,
-    };
-  }
-  return {
-    segments: row.hourShare.segments.map((s) => ({
-      key: s.key,
-      label: s.label,
-      mh: s.mh,
-      share: s.share,
-    })),
-    unavailableReason: null,
-    totalMh: row.hourShare.totalMh,
-  };
-}
 
 /**
  * Mapping › Coverage: one interactive Scope Ledger Bar per Connector plus Project total,

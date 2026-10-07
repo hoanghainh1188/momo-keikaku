@@ -91,6 +91,7 @@ context:
 
 - 2026-10-07: Harry chose **Keep full spec** at the token gate (~2,300 tokens > 1,600).
 - 2026-10-07: Harry accepted recommended answers Q1–Q6 (A / A / A+unavailable / A / A / A). Open Questions cleared.
+- 2026-10-07: Matrix audit — extracted `apps/web/src/lib/mapping-coverage-model.ts` (+ tests) so Toggle basis / Show as table / Segment paging rows are covered by unit tests (repo has no React component test runtime).
 
 ## Spec Change Log
 

@@ -3,6 +3,7 @@
 import { useTranslations } from 'next-intl';
 import { useId, useRef, useState, type KeyboardEvent } from 'react';
 import { cssPercent, hours, share, type Mh, type Ratio } from '@momo/domain/present';
+import { ledgerTableRows } from '@/lib/mapping-coverage-model';
 
 /**
  * The signature element: one square-cornered bar split into FR-20 (hours) or FR-23
@@ -293,13 +294,15 @@ export function ScopeLedgerBar({
               </tr>
             </thead>
             <tbody>
-              {segments.map((s) => (
-                <tr key={s.key} data-testid={`scope-table-row-${s.key}`}>
-                  <td>{s.label}</td>
+              {ledgerTableRows(segments, basis).map((row) => (
+                <tr key={row.key} data-testid={`scope-table-row-${row.key}`}>
+                  <td>{row.label}</td>
                   <td className="num">
-                    {basis === 'tickets' ? (s.count ?? 0) : `${hours(s.mh ?? 0n)}h`}
+                    {basis === 'tickets'
+                      ? row.quantity
+                      : `${hours(typeof row.quantity === 'bigint' ? row.quantity : 0n)}h`}
                   </td>
-                  <td className="num">{share(s.share)}</td>
+                  <td className="num">{share(row.share)}</td>
                 </tr>
               ))}
             </tbody>
