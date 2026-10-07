@@ -13,6 +13,7 @@ import { closeAllPools, getDb } from '../packages/db/src/client';
 import {
   assertProbeTenantsDisjoint,
   buildProbeTenant,
+  PROBE_SEQ_BAND_WIDTH,
   removeProbeTenant,
 } from '../packages/db/src/probe-tenants';
 import * as schema from '../packages/db/src/schema';
@@ -38,9 +39,15 @@ const fixtureClock = { now: () => new Date(FIXTURE_CLOCK_NOW.getTime()) };
 /** The first replayed snapshot's fixture-relative seq: fixture value 1 plus the probe's band. */
 const expectedFirstSnapshotSeq = 1 + PROBE.writeOptions.seqOffset;
 
+/**
+ * Raises the snapshot counter to at least `past` — never lowers it. The counter is shared, and
+ * the probe suites' resyncs routinely carry it far past 99,000,000 (into the 961,000,000 band), so
+ * a bare `setval` here would rewind it under rows other Tenants still hold.
+ */
 async function advanceSnapshotIdentity(past: number): Promise<void> {
   await owner().execute(
-    sql`SELECT setval(pg_get_serial_sequence('tracker_snapshot', 'seq'), ${past}, true)`,
+    sql`SELECT setval(pg_get_serial_sequence('tracker_snapshot', 'seq'), ${past}, true)
+        WHERE COALESCE(pg_sequence_last_value(pg_get_serial_sequence('tracker_snapshot', 'seq')::regclass), 0) < ${past}`,
   );
 }
 
@@ -149,8 +156,10 @@ describe.skipIf(!reachable)('reseed seq stability without RESTART IDENTITY (stor
     const seqs = await probeSnapshotSeqs();
     expect(seqs.length).toBeGreaterThan(0);
     expect(seqs[0]).toBe(expectedFirstSnapshotSeq);
-    // Not the nextval that would follow setval(99_000_000) without OVERRIDING.
-    expect(seqs).not.toContain(99_000_001);
+    // Fixture-relative, inside this probe's own band — not a nextval from wherever the shared
+    // counter stands (at least 99_000_000, and usually far above it).
+    const band = PROBE.writeOptions.seqOffset;
+    expect(seqs.filter((seq) => seq < band || seq >= band + PROBE_SEQ_BAND_WIDTH)).toEqual([]);
 
     // Reseed after delete (sequences stay advanced — no RESTART IDENTITY).
     await advanceSnapshotIdentity(99_500_000);
