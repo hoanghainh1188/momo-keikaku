@@ -5,7 +5,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { eq, sql } from 'drizzle-orm';
 import pg from 'pg';
-import { getDb } from '../../client';
+import { closeAllPools, getDb } from '../../client';
+import { removeTenant } from '../../probe-tenants';
 import * as s from '../../schema';
 import { withTenant } from '../../with-tenant';
 import { acquireSeedSuiteLock, releaseSeedSuiteLock } from '../../seed-suite-lock';
@@ -55,8 +56,15 @@ if (live) {
   await acquireSeedSuiteLock(OWNER_DATABASE_URL!, 'shared');
 }
 
+// The Tenant goes BEFORE the lock does: a seed waiting on the exclusive lock must never see it.
 afterAll(async () => {
-  if (live) await releaseSeedSuiteLock();
+  if (!live) return;
+  try {
+    await removeTenant(getDb(OWNER_DATABASE_URL!), TENANT);
+  } finally {
+    await releaseSeedSuiteLock();
+    await closeAllPools();
+  }
 });
 
 const TENANT = 'ten-tracker-5-1';
