@@ -230,6 +230,14 @@ export const TABLE_REGISTRY: readonly TableEntry[] = [
     why: 'The single home of a WP\'s actual start and actual finish (AD-25). Each row restates the full actual state; the head is the latest seq. A correction is a new row.',
   },
   {
+    table: 'wp_flag_event',
+    class: 'append-only',
+    tenantColumn: 'tenant_id',
+    why:
+      'Catch-all flag history (story 5.12 / FR-24). Attribution reads the head at wp_flag_seq_max; ' +
+      'editing history would flip LOE / overflow retroactively. Live work_package.is_catch_all is a cache.',
+  },
+  {
     table: 'pct_override_event',
     class: 'append-only',
     tenantColumn: 'tenant_id',

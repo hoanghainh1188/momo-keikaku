@@ -148,6 +148,24 @@ export interface BaselineWp {
   finish: IsoDate;
   baselineMh: Mh;
   isMilestone: boolean;
+  /**
+   * FR-24 / story 5.12: Catch-all as pinned into the Baseline. PV/BAC/LOE read this copy —
+   * never the live `work_package.is_catch_all` cache (AR-22, AR-19).
+   */
+  isCatchAll: boolean;
+}
+
+/**
+ * Story 5.12 / FR-24: Catch-all flag history (append-only). Attribution judges an entry against
+ * the head at or below `wp_flag_seq_max`; the live `work_package.is_catch_all` column is a
+ * display/head cache only.
+ */
+export interface WpFlagEvent {
+  seq: number;
+  wpId: string;
+  isCatchAll: boolean;
+  actor: string;
+  at: string;
 }
 
 export interface BaselineVersion {

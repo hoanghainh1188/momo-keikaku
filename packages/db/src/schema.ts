@@ -533,6 +533,33 @@ export const wpStatusEvent = pgTable(
 );
 
 /**
+ * Story 5.12 / FR-24: Catch-all flag history (append-only). Attribution judges the head at
+ * `wp_flag_seq_max`; `work_package.is_catch_all` is a display/head cache dual-written with each
+ * append. Leaf non-milestone WPs only may be flagged (enforced in the writer, not here).
+ */
+export const wpFlagEvent = pgTable(
+  'wp_flag_event',
+  {
+    seq: bigint('seq', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+    tenantId: text('tenant_id').notNull(),
+    projectId: text('project_id').notNull(),
+    wpId: text('wp_id').notNull(),
+    isCatchAll: boolean('is_catch_all').notNull(),
+    actor: text('actor').notNull(),
+    at: timestamp('at', { withTimezone: true }).notNull(),
+  },
+  (t) => ({
+    tenantKey: unique('wp_flag_event_tenant_seq_key').on(t.tenantId, t.seq),
+    byWp: index('wp_flag_event_wp_idx').on(t.tenantId, t.projectId, t.wpId, t.seq),
+    workPackage: foreignKey({
+      name: 'wp_flag_event_work_package_fk',
+      columns: [t.tenantId, t.projectId, t.wpId],
+      foreignColumns: [workPackage.tenantId, workPackage.projectId, workPackage.id],
+    }),
+  }),
+);
+
+/**
  * Recorded Percent Complete (AD-25 / FR-6b / story 2.10). Append-only; the head (max `seq` per
  * WP) is the value `resolveScheduleInputs` feeds the engine. FR-30's mandatory-reason ceremony
  * is Epic 6 — this table is the ordinary Plan-grid writer path.
@@ -1566,6 +1593,7 @@ export const schemaTables = {
   workPackage,
   wpDependency,
   wpStatusEvent,
+  wpFlagEvent,
   pctOverrideEvent,
   customFieldDefinition,
   customFieldValue,

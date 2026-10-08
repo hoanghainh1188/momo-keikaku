@@ -109,6 +109,7 @@ const REASONS: Record<string, string> = {
   no_planned_value_yet: 'unavailable — no planned value yet',
   no_cpi_yet: 'unavailable — CPI not computable yet',
   bac_exhausted: 'BAC exhausted',
+  no_hours: 'unavailable — no hours',
   project_younger_than_14_days: 'unavailable — Project younger than 14 days',
   no_project_start: 'unavailable — Project start not set',
 };

@@ -84,6 +84,16 @@ CREATE TRIGGER "append_only_truncate_guard"
   BEFORE TRUNCATE ON public."wp_status_event"
   FOR EACH STATEMENT EXECUTE FUNCTION public."momo_append_only_truncate_guard"();
 
+-- wp_flag_event: Catch-all flag history (story 5.12 / FR-24). Attribution reads the head at wp_flag_seq_max; editing history would flip LOE / overflow retroactively. Live work_package.is_catch_all is a cache.
+DROP TRIGGER IF EXISTS "append_only_guard" ON public."wp_flag_event";
+CREATE TRIGGER "append_only_guard"
+  BEFORE UPDATE OR DELETE ON public."wp_flag_event"
+  FOR EACH ROW EXECUTE FUNCTION public."momo_append_only_guard"();
+DROP TRIGGER IF EXISTS "append_only_truncate_guard" ON public."wp_flag_event";
+CREATE TRIGGER "append_only_truncate_guard"
+  BEFORE TRUNCATE ON public."wp_flag_event"
+  FOR EACH STATEMENT EXECUTE FUNCTION public."momo_append_only_truncate_guard"();
+
 -- pct_override_event: Recorded Percent Complete for Plan-grid edits (story 2.10, AD-25). Append-only; the head feeds schedule_run.inputs. FR-30's audited override ceremony is Epic 6.
 DROP TRIGGER IF EXISTS "append_only_guard" ON public."pct_override_event";
 CREATE TRIGGER "append_only_guard"

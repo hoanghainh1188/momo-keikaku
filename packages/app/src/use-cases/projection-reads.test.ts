@@ -110,6 +110,7 @@ const REVIEW = {
         ['t-3', 9_000n],
         ['t-4', 1_000n],
       ]),
+      overflowMhByTicket: new Map<string, bigint>(),
     },
     scopeLedger: [{ key: 'unmapped', label: 'Unmapped Work', mh: 1n, share: ratio(1n, 1n) }],
     coverage: {
@@ -249,6 +250,47 @@ describe('getProjectMapping', () => {
       page: 1,
     });
     expect(page1.tickets).toHaveLength(5);
+  });
+
+  it('sets inCatchAllOverflow only for Tickets with overflowMhByTicket > 0', async () => {
+    const review = {
+      bundle: {
+        ...REVIEW.bundle,
+        wps: [
+          ...REVIEW.bundle.wps,
+          wp('wp-ca', '1.8', 'Misc', { isCatchAll: true }),
+        ],
+        input: {
+          ...REVIEW.bundle.input,
+          mappingEvents: [
+            ...REVIEW.bundle.input.mappingEvents,
+            { seq: 5, ticketId: 't-3', wpId: 'wp-ca', source: 'manual', at: '', actor: 'a' },
+            { seq: 6, ticketId: 't-4', wpId: 'wp-ca', source: 'manual', at: '', actor: 'a' },
+          ],
+          wpFlagEvents: [{ seq: 1, wpId: 'wp-ca', isCatchAll: true, actor: 'a', at: '' }],
+          wpFlagSeqMax: 1,
+        },
+      },
+      review: {
+        ...REVIEW.review,
+        attribution: {
+          ...REVIEW.review.attribution,
+          cumulative: { totalMh: 99_000n, catchAllOverflowMh: 3_000n },
+          // Only t-3 has positive overflow; t-4 is Catch-all within-cap.
+          overflowMhByTicket: new Map<string, bigint>([
+            ['t-3', 3_000n],
+            ['t-4', 0n],
+          ]),
+        },
+      },
+    } as unknown as ProjectReview;
+    const { deps } = fakeDeps(() => review);
+    const result = await getProjectMapping(deps, ctxOf('ten-a'), { projectId: 'prj-1' });
+    if (!result.ok) throw new Error(`answered ${result.error.code}`);
+    const byId = new Map(result.value.allTickets.map((t) => [t.trackerIssueId, t]));
+    expect(byId.get('t-3')?.inCatchAllOverflow).toBe(true);
+    expect(byId.get('t-4')?.inCatchAllOverflow).toBe(false);
+    expect(byId.get('t-1')?.inCatchAllOverflow).toBe(false);
   });
 
   it('omits left-scope Tickets from allTickets', async () => {

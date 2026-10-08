@@ -133,6 +133,7 @@ export function generateLoadFixture(seed: number = LOAD_FIXTURE_SEED): LoadFixtu
           finish,
           baselineMh: plannedMh,
           isMilestone: false,
+          isCatchAll: leaf === LEAVES_PER_PHASE && phase === PHASE_COUNT,
         });
       }
     }

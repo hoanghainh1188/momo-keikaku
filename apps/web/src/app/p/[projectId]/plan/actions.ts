@@ -183,6 +183,20 @@ export async function patchWpNameAction(input: {
   });
 }
 
+/** Story 5.12 / Q1→A: Plan-grid Catch-all toggle — appends wp_flag_event + dual-writes live column. */
+export async function patchWpCatchAllAction(input: {
+  readonly projectId: string;
+  readonly wpId: string;
+  readonly isCatchAll: boolean;
+}): Promise<PlanWriteOutcome> {
+  return fenceMutation(input.projectId, {
+    kind: 'patch_catch_all',
+    projectId: input.projectId,
+    wpId: input.wpId,
+    isCatchAll: input.isCatchAll,
+  });
+}
+
 /** Inline duration edit (story 2.13 / Q2→B). */
 export async function patchWpDurationAction(input: {
   readonly projectId: string;

@@ -46,7 +46,7 @@ const input: ReviewInput = {
       recordedAt: '2026-06-01T00:00:00.000Z',
       actor: 'user:pm',
       wps: [
-        { wpId: 'WP-B', start: '2026-06-01', finish: '2026-12-01', baselineMh: hoursToMh(200), isMilestone: false },
+        { wpId: 'WP-B', start: '2026-06-01', finish: '2026-12-01', baselineMh: hoursToMh(200), isMilestone: false, isCatchAll: false },
       ],
     },
   ],
@@ -109,6 +109,83 @@ describe('computeReview with no Unplanned Work', () => {
     expect(r.unplanned.cumulative.unplannedMh).toBe(0n);
     expect(r.unplanned.components).toHaveLength(3);
     expect(r.unplanned.components.map((c) => c.share)).toEqual([null, null, null]);
+  });
+
+  it('reports SM-C1 Catch-all share (never 0 when unavailable)', () => {
+    const r = computeReview(input);
+    // No Catch-all hours in the base fixture → share 0/total is a value, not unavailable.
+    expect(r.catchAllShare).toEqual({
+      kind: 'value',
+      value: { num: 0n, den: hoursToMh(30) },
+      unit: 'ratio',
+      coverage: null,
+    });
+    const empty = computeReview({ ...input, ledger: [] });
+    expect(empty.catchAllShare).toEqual({ kind: 'unavailable', reasonCode: 'no_hours' });
+  });
+
+  it('reports non-zero SM-C1 as (catchAllMh + overflow) / totalMh', () => {
+    const catchWp: WorkPackage = { ...wp, id: 'WP-C', wbsCode: '1.9', name: 'Misc', isCatchAll: true };
+    const withCatchAll = computeReview({
+      ...input,
+      wps: [wp, catchWp],
+      baselineVersions: [
+        {
+          ...input.baselineVersions[0]!,
+          wps: [
+            ...input.baselineVersions[0]!.wps,
+            {
+              wpId: 'WP-C',
+              start: '2026-06-01',
+              finish: '2026-12-01',
+              baselineMh: hoursToMh(10),
+              isMilestone: false,
+              isCatchAll: true,
+            },
+          ],
+        },
+      ],
+      mappingEvents: [
+        ...input.mappingEvents,
+        { seq: 2, ticketId: 'tc', wpId: 'WP-C', source: 'rule', at: 'x', actor: 'sys' },
+      ],
+      ledger: [
+        ...input.ledger,
+        {
+          seq: 2,
+          ticketId: 'tc',
+          kind: 'delta',
+          deltaMh: hoursToMh(25),
+          windowStart: null,
+          windowEnd: '2026-09-15T09:00:00.000Z',
+          assigneeAccountId: 'acct-1',
+          activeBaselineVersionSeq: 1,
+        },
+      ],
+      pinnedSnapshot: {
+        ...input.pinnedSnapshot,
+        tickets: [
+          ...input.pinnedSnapshot.tickets,
+          {
+            ...input.pinnedSnapshot.tickets[0]!,
+            trackerIssueId: 'tc',
+            key: 'tc',
+            title: 'tc',
+            actualMh: hoursToMh(25),
+          },
+        ],
+      },
+      wpFlagEvents: [{ seq: 1, wpId: 'WP-C', isCatchAll: true, actor: 'pm', at: 'x' }],
+      wpFlagSeqMax: 1,
+    });
+    const c = withCatchAll.attribution.cumulative;
+    expect(c.catchAllMh + c.catchAllOverflowMh).toBe(hoursToMh(25));
+    expect(withCatchAll.catchAllShare).toEqual({
+      kind: 'value',
+      value: { num: hoursToMh(25), den: c.totalMh },
+      unit: 'ratio',
+      coverage: null,
+    });
   });
 });
 
@@ -194,7 +271,7 @@ describe('computeReview milestones read the head actual finish', () => {
         ...input.baselineVersions[0]!,
         wps: [
           ...input.baselineVersions[0]!.wps,
-          { wpId: 'WP-M', start: '2026-09-01', finish: '2026-09-01', baselineMh: 0n, isMilestone: true },
+          { wpId: 'WP-M', start: '2026-09-01', finish: '2026-09-01', baselineMh: 0n, isMilestone: true, isCatchAll: false },
         ],
       },
     ],
@@ -256,6 +333,7 @@ describe('computeReview orders milestone and Divergence rows by compareWp', () =
             finish: '2026-09-01',
             baselineMh: w.isMilestone ? 0n : hoursToMh(200),
             isMilestone: w.isMilestone,
+            isCatchAll: w.isCatchAll,
           })),
         },
       ],

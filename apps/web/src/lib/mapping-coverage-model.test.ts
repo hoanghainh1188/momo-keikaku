@@ -159,9 +159,8 @@ describe('ticketsInBucket (Segment activate)', () => {
     expect(result.tickets.map((t) => t.trackerIssueId)).toEqual(['a', 'c']);
   });
 
-  it('catch-all-overflow uses inCatchAllOverflow (approximate membership documented)', () => {
-    // Approximate: every Catch-all Ticket is flagged when the Project has any overflow hours;
-    // membership is the flag, not a per-Ticket overflow split.
+  it('catch-all-overflow uses inCatchAllOverflow from attribution overflowMhByTicket', () => {
+    // Story 5.12: honest per-Ticket overflow membership (closes 5.11 approximate deferral).
     const rows = [
       ticket({
         trackerIssueId: 'ca-over',

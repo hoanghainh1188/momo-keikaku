@@ -11,8 +11,10 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from 'react';
+import { useTranslations } from 'next-intl';
 import {
   applyPredecessorsAction,
+  patchWpCatchAllAction,
   patchWpConstraintAction,
   patchWpDurationAction,
   patchWpNameAction,
@@ -727,6 +729,7 @@ export function PlanTreeGrid({
   /** Deep-link from Review/Baselines: open the exceptions drawer on mount. */
   readonly openExceptionsOnMount?: boolean;
 }) {
+  const t = useTranslations();
   const gridId = useId();
   const [preset, setPreset] = useState<PlanPreset>('schedule');
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => {
@@ -744,6 +747,12 @@ export function PlanTreeGrid({
   const [politeAnnounce, setPoliteAnnounce] = useState('');
   const [pending, startTransition] = useTransition();
   const [stripPending, setStripPending] = useState(false);
+  /** Story 5.12: PlanWriteSuccess does not re-ship rows — keep Catch-all checkbox in sync. */
+  const [catchAllOverride, setCatchAllOverride] = useState<ReadonlyMap<string, boolean>>(
+    () => new Map(),
+  );
+  /** Per-WP generation so overlapping toggles ignore stale responses. */
+  const catchAllGenRef = useRef<Map<string, number>>(new Map());
   const [whatMoved, setWhatMoved] = useState<WhatMovedBandView | null>(model.whatMoved);
   const [exceptions, setExceptions] = useState(model.exceptions);
   const [scheduleStale, setScheduleStale] = useState(model.scheduleStale);
@@ -1041,6 +1050,37 @@ export function PlanTreeGrid({
         resolve(settleOrRefuse(outcome));
       });
     });
+
+  const patchCatchAll = (wpId: string, isCatchAll: boolean) => {
+    const gen = (catchAllGenRef.current.get(wpId) ?? 0) + 1;
+    catchAllGenRef.current.set(wpId, gen);
+    const prior = catchAllOverride.get(wpId);
+    setCatchAllOverride((prev) => new Map(prev).set(wpId, isCatchAll));
+    const rollback = () => {
+      if (catchAllGenRef.current.get(wpId) !== gen) return;
+      setCatchAllOverride((prev) => {
+        const next = new Map(prev);
+        if (prior === undefined) next.delete(wpId);
+        else next.set(wpId, prior);
+        return next;
+      });
+    };
+    startTransition(async () => {
+      try {
+        const outcome = await patchWpCatchAllAction({
+          projectId: model.projectId,
+          wpId,
+          isCatchAll,
+        });
+        if (catchAllGenRef.current.get(wpId) !== gen) return;
+        settleOrRefuse(outcome);
+        // Write already landed on read_after_write — keep the override.
+        if (!outcome.ok && outcome.code !== 'read_after_write') rollback();
+      } catch {
+        rollback();
+      }
+    });
+  };
 
   const patchDuration = (wpId: string, durationDays: number | null) =>
     new Promise<string | null>((resolve) => {
@@ -1636,7 +1676,29 @@ export function PlanTreeGrid({
                         ariaLabel={`Name for ${row.wbsCode}`}
                         onCommit={(next) => patchName(row.wpId, next)}
                       />
-                      {row.isCatchAll ? <span className="tag">Catch-all</span> : null}
+                      {row.isLeaf && !row.isMilestone ? (
+                        <label className="tag" style={{ cursor: 'pointer', userSelect: 'none' }}>
+                          <input
+                            type="checkbox"
+                            checked={catchAllOverride.get(row.wpId) ?? row.isCatchAll}
+                            disabled={pending}
+                            aria-label={t('plan.catch_all_toggle_aria', { wbs: row.wbsCode })}
+                            title={
+                              (catchAllOverride.get(row.wpId) ?? row.isCatchAll)
+                                ? t('plan.catch_all_toggle_off')
+                                : t('plan.catch_all_toggle_on')
+                            }
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              patchCatchAll(row.wpId, e.target.checked);
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                          />{' '}
+                          {t('plan.catch_all_tag')}
+                        </label>
+                      ) : (catchAllOverride.get(row.wpId) ?? row.isCatchAll) ? (
+                        <span className="tag">{t('plan.catch_all_tag')}</span>
+                      ) : null}
                       {row.isMilestone ? <span className="tag">Milestone</span> : null}
                     </td>
                     <td className="plan-fz3">

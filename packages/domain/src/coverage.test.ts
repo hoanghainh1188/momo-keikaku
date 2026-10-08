@@ -75,14 +75,14 @@ function baseInput(overrides: Partial<CoverageInput> = {}): CoverageInput {
             start: '2026-06-01',
             finish: '2026-12-01',
             baselineMh: hoursToMh(100),
-            isMilestone: false,
+            isMilestone: false, isCatchAll: false,
           },
           {
             wpId: 'WP-CA',
             start: '2026-06-01',
             finish: '2026-12-01',
             baselineMh: hoursToMh(20),
-            isMilestone: false,
+            isMilestone: false, isCatchAll: true,
           },
         ],
       },
@@ -147,6 +147,21 @@ describe('ticketBucket vs hourBucketForTicket', () => {
     ]);
     expect(ticketShareBucketFor('t1', head, [])).toBe('unmapped');
     expect(hourBucketForTicket('t1', head, new Map(), new Set())).toBe('unmapped');
+  });
+
+  it('uses flag-at-seq: live Catch-all true + flag cleared at pin → mapped, not catch-all', () => {
+    const head = mappingHead([
+      { seq: 1, ticketId: 't-ca', wpId: 'WP-CA', source: 'manual', at: 'x', actor: 'pm' },
+    ]);
+    const flags = [
+      { seq: 1, wpId: 'WP-CA', isCatchAll: true, actor: 'pm', at: 'x' },
+      { seq: 2, wpId: 'WP-CA', isCatchAll: false, actor: 'pm', at: 'y' },
+    ];
+    // Live WP cache still true.
+    expect(ticketShareBucketFor('t-ca', head, [wpCatchAll], flags, 2)).toBe('mapped');
+    expect(
+      hourBucketForTicket('t-ca', head, new Map([['WP-CA', wpCatchAll]]), new Set(['WP-CA']), flags, 2),
+    ).toBe('mapped-baselined');
   });
 
   it('keeps segment labels as stable keys for the UI to translate', () => {
