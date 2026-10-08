@@ -171,17 +171,17 @@ export default async function ConnectorsPage({
                       })}
                     </td>
                   </tr>
-                  {connectorOpeningBalance ? (
-                    <tr data-testid="connector-opening-balance">
-                      <td className="label">{t('connectors.opening_balance')}</td>
-                      <td>
-                        {t('connectors.opening_balance_caption', {
-                          hours: hours(connectorOpeningBalance.mh),
-                        })}
-                      </td>
-                    </tr>
-                  ) : null}
                 </>
+              ) : null}
+              {connectorOpeningBalance ? (
+                <tr data-testid="connector-opening-balance">
+                  <td className="label">{t('connectors.opening_balance')}</td>
+                  <td>
+                    {t('connectors.opening_balance_caption', {
+                      hours: hours(connectorOpeningBalance.mh),
+                    })}
+                  </td>
+                </tr>
               ) : null}
             </tbody>
           </table>

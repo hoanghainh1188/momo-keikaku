@@ -523,6 +523,24 @@ describe('computeReview scope honesty (story 5.13 / FR-20)', () => {
     expect(r.coverage.unmappedTickets).toBe(0);
   });
 
+  it('keeps snapshot.ticketCount as the full pin while coverage stays in-scope only', () => {
+    const r = computeReview({
+      ...input,
+      mappingEvents: [],
+      leftScopeTicketIds: new Set(['tb']),
+      pinnedSnapshot: {
+        ...input.pinnedSnapshot,
+        tickets: [
+          ticket('tb', { actualMh: hoursToMh(30) }),
+          ticket('still-in', { actualMh: 0n }),
+        ],
+      },
+    });
+    expect(r.snapshot.ticketCount).toBe(2);
+    expect(r.coverage.unmappedTickets).toBe(1);
+    expect(r.coverage.mappedTicketShare).toEqual({ num: 0n, den: 1n });
+  });
+
   it('exposes per-Connector Opening Balances and omits the caption when there is no OB', () => {
     const withOb = computeReview({
       ...input,

@@ -648,6 +648,33 @@ describe('attribution (FR-20, FR-21, FR-24)', () => {
     ).toThrow(/no connector id/);
   });
 
+  it('groups Opening Balances via ownerConnectorByTicket when connectorId is absent (story 5.13)', () => {
+    const viaMap = attribute({
+      entries: [{ ...entry(1, 'tb', 40, OUT, 'opening_balance'), connectorId: null }],
+      head: mappingHead(events),
+      wps,
+      baselineVersions,
+      resources,
+      project,
+      period,
+      ownerConnectorByTicket: new Map([['tb', 'con-from-map']]),
+    });
+    expect(viaMap.openingBalanceMhByConnector.get('con-from-map')).toBe(hoursToMh(40));
+
+    expect(() =>
+      attribute({
+        entries: [{ ...entry(1, 'tb', 10, OUT, 'opening_balance'), connectorId: null }],
+        head: mappingHead(events),
+        wps,
+        baselineVersions,
+        resources,
+        project,
+        period,
+        ownerConnectorByTicket: new Map([['other', 'con-x']]),
+      }),
+    ).toThrow(/no connector id/);
+  });
+
   it('returns an empty per-Connector OB map when there are no opening_balance rows (story 5.13)', () => {
     const r = run([entry(1, 'tb', 20, IN)]);
     expect(r.openingBalanceMh).toBe(0n);

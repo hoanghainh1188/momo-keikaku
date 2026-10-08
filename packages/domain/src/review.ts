@@ -612,7 +612,8 @@ export function computeReview(input: ReviewInput): ReviewResult {
     snapshot: {
       id: input.pinnedSnapshot.snapshotId,
       observedAt: input.pinnedSnapshot.observedAt,
-      ticketCount: totalTickets,
+      // Full pin length — left-scope Tickets stay in the snapshot chrome; coverage uses in-scope only.
+      ticketCount: input.pinnedSnapshot.tickets.length,
     },
     measurementBasis,
     evm,

@@ -150,6 +150,45 @@ describe.skipIf(!reachable)('persistence round trip — the database reproduces 
     });
   });
 
+  it('wires story 5.13 scope events, per-Connector OB, and latest scope change from the seed', async () => {
+    const { bundle, review } = await loadReview(db(), DEMO_TENANT_ID);
+    expect(bundle.input.connectorScopeEvents!.length).toBeGreaterThanOrEqual(2);
+    expect(bundle.input.connectorScopeEvents!.map((e) => e.connectorId)).toEqual([
+      'con-fixture-ec2',
+      'con-fixture-ec2',
+    ]);
+    expect(bundle.input.connectorScopeEvents![0]!.scope).toBe('project key EC2 (all issue types)');
+    expect(bundle.input.connectorScopeEvents![1]!.scope).toBe('project key EC2 (widened)');
+    expect(Array.isArray(bundle.input.leftScopeTicketDetails)).toBe(true);
+    for (const row of bundle.input.leftScopeTicketDetails ?? []) {
+      expect(row).toEqual(
+        expect.objectContaining({
+          trackerIssueId: expect.any(String),
+          key: expect.any(String),
+          ownerConnectorId: expect.any(String),
+          hoursMh: expect.any(BigInt),
+        }),
+      );
+    }
+    expect(review.openingBalanceByConnector).toEqual([
+      {
+        connectorId: 'con-fixture-ec2',
+        label: 'osaka-retail.backlog.jp (fixture replay)',
+        mh: 900_228n,
+      },
+    ]);
+    expect(review.latestScopeChanges).toEqual([
+      {
+        connectorId: 'con-fixture-ec2',
+        label: 'osaka-retail.backlog.jp (fixture replay)',
+        previousScope: 'project key EC2 (all issue types)',
+        newScope: 'project key EC2 (widened)',
+        at: expect.any(String),
+        leftScopeTickets: expect.any(Array),
+      },
+    ]);
+  });
+
   it('splits Unplanned Work with every mapped hour non-baselined', async () => {
     // Every ledger entry was ingested with no Baseline active, so a mapped hour is judged
     // against no Baseline at all: an hour on an ordinary WP is non-baselined Unplanned Work, and

@@ -34,7 +34,7 @@
  * because `packages/db` may not read the environment.
  */
 import { encode, INITIAL_BASIS_LATCH, replayBasisLatch, resolveCalendarVersion } from '@momo/domain';
-import { sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import type { Db } from './client';
 import { actorOf, DEMO_USERS } from './demo-identities';
 import { buildDemoState, type DemoState } from './fixtures';
@@ -433,6 +433,24 @@ export async function writeTenantRows(
     })
     .returning({ seq: s.connectorScopeEvent.seq });
   const fixtureScopeSeq = scopeEvent!.seq;
+  // Story 5.13: a second scope event so Review can surface prev → new (Q2→A).
+  const connectorScopeNext = own(
+    projectOnly
+      ? `project key ${f.project.id} (widened)`
+      : 'project key EC2 (widened)',
+  );
+  await tx.insert(s.connectorScopeEvent).values({
+    tenantId,
+    connectorId,
+    projectId: f.project.id,
+    scope: connectorScopeNext,
+    actor: 'system:seed',
+    at: new Date(stamp.getTime() + 60_000),
+  });
+  await tx
+    .update(s.connector)
+    .set({ scope: connectorScopeNext })
+    .where(and(eq(s.connector.tenantId, tenantId), eq(s.connector.id, connectorId)));
 
   // Story 5.7: seed Resolved `{Closed}`; latch basis after snapshots (below).
   await tx.insert(s.connectorSettingEvent).values({
