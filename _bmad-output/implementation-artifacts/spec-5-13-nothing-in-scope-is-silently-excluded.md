@@ -89,6 +89,7 @@ context:
 - Unmapped census: null/absent/orphan head + 0h in-scope Tickets listed; left-scope excluded.
 - Review DTO: `openingBalanceByConnector`, `latestScopeChanges` (prev→new when ≥2 scope events). Connectors page uses per-Connector UX-DR23 caption only.
 - Verified: `pnpm lint`, `typecheck`, `depcruise`, `pnpm test` (1437 passed), `pnpm db:sql` (no migration).
+- Review patches: ja UX-DR23 OB copy; Connectors OB outside `hasSnapshot`; `snapshot.ticketCount` full pin; `ownerConnectorByTicket` OB fallback test; demo-golden Period/OB-by-connector pins; seed second scope event + db-round-trip wiring asserts. Deferred: multi-card Connectors list; page HTML tests.
 
 ## Spec Change Log
 
