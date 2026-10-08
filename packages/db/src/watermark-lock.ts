@@ -43,7 +43,8 @@ import type { Tx } from './with-tenant';
  * already holds, and takes the Tenant key only when it holds none (founder decision D2).
  *
  * WHO CALLS IT (D2). Project key: `mapping_event`, `disposition_event`,
- * `project_default_rate_entry`. Tenant key: `rate_entry`. `audit_log` rides on the held key.
+ * `project_default_rate_entry`, `wp_flag_event` (story 5.12). Tenant key: `rate_entry`.
+ * `audit_log` rides on the held key.
  * `identity_event` is global — it has no Tenant or Project to key on — and takes none. The Epic 2/5
  * writers (2.9, 2.10, 5.5) call this when they land; the future `ComputationInputs` capture takes
  * `lockWatermarkShared`.

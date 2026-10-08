@@ -22,18 +22,22 @@ import {
   type SnapshotRead,
   type TicketObservation,
   type WorkPackage,
+  type WpFlagEvent,
 } from './types';
 import {
   compareBigint,
   costOf,
   mhAmountOrZero,
   ratio,
+  ratioValue,
+  unavailable,
   sum,
   ZERO,
   type Jpy,
   type Mh,
   type MetricCoverage,
   type Ratio,
+  type RatioMetric,
 } from './units';
 
 export type DispositionKind = 'map' | 'plan' | 'cr_candidate' | 'explain';
@@ -112,6 +116,12 @@ export interface ReviewInput {
   leftScopeTicketIds?: ReadonlySet<string>;
   /** Project start for SM-5's 14-day window; null → SM-5 unavailable. */
   projectStart?: IsoDate | null;
+  /**
+   * Story 5.12: Catch-all flag events. Attribution / coverage judge at `wpFlagSeqMax`.
+   */
+  wpFlagEvents?: readonly WpFlagEvent[];
+  /** Pin ceiling for `wp_flag_event` (ComputationInputs). */
+  wpFlagSeqMax?: number | null;
 }
 
 /**
@@ -229,6 +239,11 @@ export interface ReviewResult {
     /** Story 5.11: per-Connector + Project total + SM-5. */
     perConnector: CoverageResult;
   };
+  /**
+   * SM-C1: Catch-all share of total hours — `(catchAllMh + catchAllOverflowMh) / totalMh`.
+   * Unavailable when total hours are zero (never rendered as 0).
+   */
+  catchAllShare: RatioMetric;
   dispositions: DispositionEvent[];
   explainNotes: { note: string; ticketCount: number; mh: Mh }[];
   openingBalanceMh: Mh;
@@ -252,6 +267,8 @@ export function computeReview(input: ReviewInput): ReviewResult {
     resources: input.resources,
     project: input.project,
     period: input.period,
+    wpFlagEvents: input.wpFlagEvents,
+    wpFlagSeqMax: input.wpFlagSeqMax,
   });
 
   // Story 5.7: latched basis at basis_seq_max — never snapshot hoursFieldPresent.
@@ -434,6 +451,8 @@ export function computeReview(input: ReviewInput): ReviewResult {
     leftScopeTicketIds: input.leftScopeTicketIds,
     projectStart: input.projectStart ?? null,
     asOf: input.asOf,
+    wpFlagEvents: input.wpFlagEvents,
+    wpFlagSeqMax: input.wpFlagSeqMax,
   });
   const coverage = {
     mappedTicketShare:
@@ -452,6 +471,11 @@ export function computeReview(input: ReviewInput): ReviewResult {
   };
 
   const c = attribution.cumulative;
+  // SM-C1: Catch-all share of total hours — never 0 when unavailable.
+  const catchAllShare: RatioMetric =
+    c.totalMh === 0n
+      ? unavailable('no_hours')
+      : ratioValue(ratio(c.catchAllMh + c.catchAllOverflowMh, c.totalMh));
   const scopeTotal = c.totalMh === 0n ? 1n : c.totalMh;
   // `label` is the stable key — ScopeLedgerBar translates via next-intl (story 5.11).
   const scopeLedger = [
@@ -522,6 +546,7 @@ export function computeReview(input: ReviewInput): ReviewResult {
     milestones,
     divergence,
     coverage,
+    catchAllShare,
     dispositions: input.dispositions,
     explainNotes,
     openingBalanceMh: attribution.openingBalanceMh,
@@ -594,7 +619,8 @@ function divergenceRows(
         pctComplete: m?.pctComplete ?? ZERO,
         pctBasis: m?.pctBasis ?? 'no-evidence',
         lowEvidence: m?.lowEvidence ?? true,
-        isCatchAll: w.isCatchAll,
+        // Story 5.12: show the Baseline pin when present; else the live cache (display only).
+        isCatchAll: b?.isCatchAll ?? w.isCatchAll,
         nonBaselined: !b,
       };
     })

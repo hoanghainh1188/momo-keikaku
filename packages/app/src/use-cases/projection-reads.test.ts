@@ -110,6 +110,7 @@ const REVIEW = {
         ['t-3', 9_000n],
         ['t-4', 1_000n],
       ]),
+      overflowMhByTicket: new Map<string, bigint>(),
     },
     scopeLedger: [{ key: 'unmapped', label: 'Unmapped Work', mh: 1n, share: ratio(1n, 1n) }],
     coverage: {

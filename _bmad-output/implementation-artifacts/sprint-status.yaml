@@ -32,7 +32,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 09-20-2026 16:55
-last_updated: 10-07-2026 13:32
+last_updated: 10-08-2026 04:50
 project: momo-keikaku
 project_key: NOKEY
 tracking_system: file-system
@@ -99,9 +99,9 @@ development_status:
   5-7-a-connector-with-no-hours-says-so-and-stays-saying-it: done
   5-8-tracker-accounts-become-people-retroactively: done
   5-9-map-a-ticket-to-a-work-package-and-never-move-the-plan: done
-  5-10-rules-keep-new-tickets-mapped-and-still-never-move-the-plan: review
-  5-11-coverage-per-connector-in-tickets-and-in-hours: review
-  5-12-catch-all-work-packages-counted-once: backlog
+  5-10-rules-keep-new-tickets-mapped-and-still-never-move-the-plan: done
+  5-11-coverage-per-connector-in-tickets-and-in-hours: done
+  5-12-catch-all-work-packages-counted-once: in-progress
   5-13-nothing-in-scope-is-silently-excluded: backlog
   5-14-approximate-figures-say-they-are-approximate: backlog
   5-15-the-ticket-half-of-the-load-fixture: backlog

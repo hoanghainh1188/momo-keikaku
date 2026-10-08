@@ -144,6 +144,20 @@ CREATE POLICY "maintenance_bypass" ON public."wp_status_event"
   USING (true)
   WITH CHECK (true);
 
+-- wp_flag_event (append-only): Catch-all flag history (story 5.12 / FR-24). Attribution reads the head at wp_flag_seq_max; editing history would flip LOE / overflow retroactively. Live work_package.is_catch_all is a cache.
+ALTER TABLE public."wp_flag_event" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public."wp_flag_event" FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "tenant_isolation" ON public."wp_flag_event";
+CREATE POLICY "tenant_isolation" ON public."wp_flag_event"
+  FOR ALL
+  USING ("tenant_id" = NULLIF(current_setting('app.tenant_id', true), ''))
+  WITH CHECK ("tenant_id" = NULLIF(current_setting('app.tenant_id', true), ''));
+DROP POLICY IF EXISTS "maintenance_bypass" ON public."wp_flag_event";
+CREATE POLICY "maintenance_bypass" ON public."wp_flag_event"
+  FOR ALL TO "momo_maintenance"
+  USING (true)
+  WITH CHECK (true);
+
 -- pct_override_event (append-only): Recorded Percent Complete for Plan-grid edits (story 2.10, AD-25). Append-only; the head feeds schedule_run.inputs. FR-30's audited override ceremony is Epic 6.
 ALTER TABLE public."pct_override_event" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public."pct_override_event" FORCE ROW LEVEL SECURITY;

@@ -113,21 +113,11 @@ function activeBaselineWpIds(bundle: ProjectReview['bundle']): Set<string> {
   return new Set(bl.wps.filter((w) => w.baselineMh > 0n).map((w) => w.wpId));
 }
 
-function catchAllOverflowTicketIds(
-  review: ReviewResult,
-  head: ReturnType<typeof mappingHead>,
-  wps: ProjectReview['bundle']['wps'],
-): Set<string> {
-  // Without per-Ticket overflow split, every Catch-all Ticket is in the overflow segment
-  // when the Project has any Catch-all overflow hours (FR-20 filter membership).
-  const overflow = review.attribution.cumulative.catchAllOverflowMh;
-  if (overflow === 0n) return new Set();
-  const wpById = new Map(wps.map((w) => [w.id, w]));
+function catchAllOverflowTicketIds(review: ReviewResult): Set<string> {
+  // Story 5.12: honest per-Ticket overflow from attribution (closes 5.11 deferral).
   const ids = new Set<string>();
-  for (const ticketId of review.attribution.hoursByTicket.keys()) {
-    const m = head.get(ticketId);
-    if (!m?.wpId) continue;
-    if (wpById.get(m.wpId)?.isCatchAll) ids.add(ticketId);
+  for (const [ticketId, mh] of review.attribution.overflowMhByTicket) {
+    if (mh > 0n) ids.add(ticketId);
   }
   return ids;
 }
@@ -139,7 +129,7 @@ function toTicketRows({ bundle, review }: ProjectReview): MappingTicketRow[] {
     .map((w) => ({ id: w.id, wbsCode: w.wbsCode, name: w.name, label: `${w.wbsCode} ${w.name}` }));
   const labelOf = new Map(leafWps.map((w) => [w.id, w.label]));
   const baselineWpIds = activeBaselineWpIds(bundle);
-  const overflowIds = catchAllOverflowTicketIds(review, head, bundle.wps);
+  const overflowIds = catchAllOverflowTicketIds(review);
   const ownerByTicket = bundle.input.ownerConnectorByTicket ?? new Map<string, string>();
   const leftScope = bundle.input.leftScopeTicketIds ?? new Set<string>();
 
@@ -153,6 +143,8 @@ function toTicketRows({ bundle, review }: ProjectReview): MappingTicketRow[] {
         head,
         new Map(bundle.wps.map((w) => [w.id, w])),
         baselineWpIds,
+        bundle.input.wpFlagEvents,
+        bundle.input.wpFlagSeqMax,
       );
       // Align with computeCoverage: never invent an owner. Missing map entry → '' so a
       // Connector filter cannot list Tickets that coverage did not count there.
@@ -168,7 +160,13 @@ function toTicketRows({ bundle, review }: ProjectReview): MappingTicketRow[] {
         wpLabel: wpId ? (labelOf.get(wpId) ?? wpId) : null,
         source: mapping?.source ?? ('none' as const),
         ownerConnectorId,
-        ticketShareBucket: ticketShareBucketFor(t.trackerIssueId, head, bundle.wps),
+        ticketShareBucket: ticketShareBucketFor(
+          t.trackerIssueId,
+          head,
+          bundle.wps,
+          bundle.input.wpFlagEvents,
+          bundle.input.wpFlagSeqMax,
+        ),
         hourShareBucket,
         inCatchAllOverflow: overflowIds.has(t.trackerIssueId),
       };

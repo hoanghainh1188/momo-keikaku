@@ -86,8 +86,9 @@ describe('the table-class registry is the single source', () => {
     // Story 5.7 adds `measurement_basis_event`, `connector_setting_event` (append-only).
     // Story 5.8 adds `tracker_account_link_event` (append-only).
     // Story 5.9 adds `mapping_head` (derived).
-    expect(TABLE_REGISTRY).toHaveLength(45);
-    expect(TENANT_OWNED).toHaveLength(38);
+    // Story 5.12 adds `wp_flag_event` (append-only).
+    expect(TABLE_REGISTRY).toHaveLength(46);
+    expect(TENANT_OWNED).toHaveLength(39);
     expect(TABLE_REGISTRY.filter((e) => e.tenantColumn === null).map((e) => e.table)).toEqual([
       'tenant',
       'auth_user',
@@ -110,7 +111,7 @@ describe('the table-class registry is the single source', () => {
     expect(TENANT_BRIDGES[0]!.tenantColumn).toBeNull();
   });
 
-  it('classes the twenty-two insert-only tables append-only', () => {
+  it('classes the twenty-three insert-only tables append-only', () => {
     expect(APPEND_ONLY.map((e) => e.table).sort()).toEqual(
       [
         'actuals_ledger_entry',
@@ -134,6 +135,7 @@ describe('the table-class registry is the single source', () => {
         'tracker_account_link_event',
         'tracker_snapshot',
         'tracker_snapshot_attempt',
+        'wp_flag_event',
         'wp_status_event',
       ].sort(),
     );

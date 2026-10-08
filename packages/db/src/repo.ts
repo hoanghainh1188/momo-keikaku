@@ -18,6 +18,7 @@ import {
   type ReviewResult,
   type SnapshotRead,
   type WorkPackage,
+  type WpFlagEvent,
 } from '@momo/domain';
 import type { Db } from './client';
 import { projectNotFound } from './project-not-found';
@@ -184,6 +185,8 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
         finish: x.finish,
         baselineMh: x.baselineMh,
         isMilestone: x.isMilestone,
+        // Story 5.12: stop stripping baseline_wp.is_catch_all (AR-22 LOE gate).
+        isCatchAll: x.isCatchAll,
       })),
   }));
   // The active Baseline is the latest committed version BY SEQUENCE (AD-7); null when there is
@@ -216,6 +219,28 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
     .orderBy(asc(s.trackerAccountLinkEvent.seq));
   const linkSeqMax =
     linkEventRows.length > 0 ? linkEventRows[linkEventRows.length - 1]!.seq : null;
+
+  // Story 5.12: Catch-all flag events + pin (watermark lock pattern — live = head).
+  const flagEventRows = await tx
+    .select({
+      seq: s.wpFlagEvent.seq,
+      wpId: s.wpFlagEvent.wpId,
+      isCatchAll: s.wpFlagEvent.isCatchAll,
+      actor: s.wpFlagEvent.actor,
+      at: s.wpFlagEvent.at,
+    })
+    .from(s.wpFlagEvent)
+    .where(eq(s.wpFlagEvent.projectId, projectId))
+    .orderBy(asc(s.wpFlagEvent.seq));
+  const wpFlagEvents: WpFlagEvent[] = flagEventRows.map((e) => ({
+    seq: e.seq,
+    wpId: e.wpId,
+    isCatchAll: e.isCatchAll,
+    actor: e.actor,
+    at: e.at.toISOString(),
+  }));
+  const wpFlagSeqMax =
+    wpFlagEvents.length > 0 ? wpFlagEvents[wpFlagEvents.length - 1]!.seq : null;
   const accountIdByInternalId = new Map(accountRows.map((a) => [a.id, a.accountId]));
   // Story 5.8: events are SoT for compute; rebuild trackerAccountIds at link_seq_max (live = head).
   const idsByResource = trackerAccountIdsFromLinkHeads({
@@ -561,6 +586,8 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
     ruleNamesById,
     mappingSeqMax,
     linkSeqMax,
+    wpFlagEvents,
+    wpFlagSeqMax,
     resolvedStatusIds,
     acCoverage,
     firstObservedAtByTicket,

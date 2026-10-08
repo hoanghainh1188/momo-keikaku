@@ -2,7 +2,7 @@
 title: 'Story 5.12 — Catch-all Work Packages, counted once'
 type: 'feature'
 created: '2026-10-07'
-status: 'draft'
+status: 'in-review'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '5072d9ae2b71aec6a1a68baabd5573902e8f3f6c'
@@ -54,11 +54,11 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `packages/db` — `wp_flag_event` schema + 0013 migration + registry/RLS/seed/fixtures dual-write.
-- [ ] `packages/domain` — flag-at-seq attribution; `(window_end, seq)` + prorate/LIFO goldens; Baseline LOE gate; SM-C1 metric; per-Ticket overflow; I/O matrix tests.
-- [ ] `packages/db` + `packages/app` — load pins/events; set/clear Catch-all use case under lock; baseline copy; mapping/review DTOs.
-- [ ] `apps/web` + `packages/i18n` — Plan-grid Catch-all toggle (Q1→A) + Review SM-C1 caption (Q2→A); no 5.11 Coverage redesign.
-- [ ] `tests/` + `sprint-status.yaml` — fence green; 5.1–5.11 → done if lagging; 5.12 → in-progress; close or keep overflow-Ticket deferral note honestly.
+- [x] `packages/db` — `wp_flag_event` schema + 0013 migration + registry/RLS/seed/fixtures dual-write.
+- [x] `packages/domain` — flag-at-seq attribution; `(window_end, seq)` + prorate/LIFO goldens; Baseline LOE gate; SM-C1 metric; per-Ticket overflow; I/O matrix tests.
+- [x] `packages/db` + `packages/app` — load pins/events; set/clear Catch-all use case under lock; baseline copy; mapping/review DTOs.
+- [x] `apps/web` + `packages/i18n` — Plan-grid Catch-all toggle (Q1→A) + Review SM-C1 caption (Q2→A); no 5.11 Coverage redesign.
+- [x] `tests/` + `sprint-status.yaml` — fence green; 5.1–5.11 → done if lagging; 5.12 → in-progress; close or keep overflow-Ticket deferral note honestly.
 
 **Acceptance Criteria:**
 - Given a WP flagged Catch-all, when recorded, then a `wp_flag_event` row is appended and attribution judges at `wp_flag_seq_max` while PV/BAC read `baseline_wp.is_catch_all` (FR-24, AR-22, AR-19).
@@ -69,6 +69,12 @@ context:
 - Given SM-C1, when watched, then Catch-all share of total hours is reported (SM-C1).
 
 ## Implementation Notes
+
+- `wp_flag_event` (0013) + registry `append-only`; seed/fixtures dual-write initial events for Catch-all leaves so head ≡ `work_package.is_catch_all`.
+- Attribution: order `(windowEnd, seq)`; Catch-all via flag head ≤ `wpFlagSeqMax`; LIFO overflow stack with per-Ticket `overflowMhByTicket`; EVM LOE reads `baselineWp.isCatchAll`.
+- Plan-grid `patch_catch_all` through `applyPlanChange` (append event + dual-write; refuse summary/milestone). Review shows SM-C1 near Scope Ledger.
+- Closed 5.11 overflow-Ticket deferral in `deferred-work.md` (honest `overflowMhByTicket` membership).
+- Verified: `pnpm lint`, `pnpm typecheck`, `pnpm depcruise`, `pnpm test` (1422 passed; REQUIRE_DB skipped — no DATABASE_URL in this environment), `pnpm db:sql`.
 
 ## Spec Change Log
 

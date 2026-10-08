@@ -65,6 +65,10 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON public."wp_dependency" TO "momo_app";
 GRANT SELECT, INSERT ON public."wp_status_event" TO "momo_app";
 GRANT SELECT, UPDATE, DELETE ON public."wp_status_event" TO "momo_maintenance";
 
+-- wp_flag_event (append-only)
+GRANT SELECT, INSERT ON public."wp_flag_event" TO "momo_app";
+GRANT SELECT, UPDATE, DELETE ON public."wp_flag_event" TO "momo_maintenance";
+
 -- pct_override_event (append-only)
 GRANT SELECT, INSERT ON public."pct_override_event" TO "momo_app";
 GRANT SELECT, UPDATE, DELETE ON public."pct_override_event" TO "momo_maintenance";

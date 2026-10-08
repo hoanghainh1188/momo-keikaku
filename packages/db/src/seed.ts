@@ -80,6 +80,7 @@ export const TRUNCATE_ORDER: readonly string[] = [
   'custom_field_value',
   'custom_field_definition',
   'pct_override_event',
+  'wp_flag_event',
   'wp_status_event',
   'wp_dependency',
   'work_package',
@@ -378,6 +379,21 @@ export async function writeTenantRows(
   );
   if (statusEvents.length > 0) {
     await tx.insert(s.wpStatusEvent).values(statusEvents);
+  }
+
+  // Story 5.12: dual-write — every Catch-all leaf gets an initial wp_flag_event so head ≡ column.
+  const flagEvents = state.wps
+    .filter((w) => w.isCatchAll)
+    .map((w) => ({
+      tenantId,
+      projectId: f.project.id,
+      wpId: w.id,
+      isCatchAll: true as const,
+      actor: actorOf(own(DEMO_USERS.linh.id)),
+      at: stamp,
+    }));
+  if (flagEvents.length > 0) {
+    await tx.insert(s.wpFlagEvent).values(flagEvents);
   }
 
   const connectorId = own(projectOnly ? `con-fixture-${f.project.id}` : 'con-fixture-ec2');

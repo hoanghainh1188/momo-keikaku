@@ -13,6 +13,7 @@ import {
 } from 'react';
 import {
   applyPredecessorsAction,
+  patchWpCatchAllAction,
   patchWpConstraintAction,
   patchWpDurationAction,
   patchWpNameAction,
@@ -744,6 +745,10 @@ export function PlanTreeGrid({
   const [politeAnnounce, setPoliteAnnounce] = useState('');
   const [pending, startTransition] = useTransition();
   const [stripPending, setStripPending] = useState(false);
+  /** Story 5.12: PlanWriteSuccess does not re-ship rows — keep Catch-all checkbox in sync. */
+  const [catchAllOverride, setCatchAllOverride] = useState<ReadonlyMap<string, boolean>>(
+    () => new Map(),
+  );
   const [whatMoved, setWhatMoved] = useState<WhatMovedBandView | null>(model.whatMoved);
   const [exceptions, setExceptions] = useState(model.exceptions);
   const [scheduleStale, setScheduleStale] = useState(model.scheduleStale);
@@ -1041,6 +1046,27 @@ export function PlanTreeGrid({
         resolve(settleOrRefuse(outcome));
       });
     });
+
+  const patchCatchAll = (wpId: string, isCatchAll: boolean) => {
+    const prior = catchAllOverride.get(wpId);
+    setCatchAllOverride((prev) => new Map(prev).set(wpId, isCatchAll));
+    startTransition(async () => {
+      const outcome = await patchWpCatchAllAction({
+        projectId: model.projectId,
+        wpId,
+        isCatchAll,
+      });
+      const refuse = settleOrRefuse(outcome);
+      if (refuse !== null) {
+        setCatchAllOverride((prev) => {
+          const next = new Map(prev);
+          if (prior === undefined) next.delete(wpId);
+          else next.set(wpId, prior);
+          return next;
+        });
+      }
+    });
+  };
 
   const patchDuration = (wpId: string, durationDays: number | null) =>
     new Promise<string | null>((resolve) => {
@@ -1636,7 +1662,24 @@ export function PlanTreeGrid({
                         ariaLabel={`Name for ${row.wbsCode}`}
                         onCommit={(next) => patchName(row.wpId, next)}
                       />
-                      {row.isCatchAll ? <span className="tag">Catch-all</span> : null}
+                      {row.isLeaf && !row.isMilestone ? (
+                        <label className="tag" style={{ cursor: 'pointer', userSelect: 'none' }}>
+                          <input
+                            type="checkbox"
+                            checked={catchAllOverride.get(row.wpId) ?? row.isCatchAll}
+                            disabled={pending}
+                            aria-label={`Catch-all for ${row.wbsCode}`}
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              patchCatchAll(row.wpId, e.target.checked);
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                          />{' '}
+                          Catch-all
+                        </label>
+                      ) : (catchAllOverride.get(row.wpId) ?? row.isCatchAll) ? (
+                        <span className="tag">Catch-all</span>
+                      ) : null}
                       {row.isMilestone ? <span className="tag">Milestone</span> : null}
                     </td>
                     <td className="plan-fz3">

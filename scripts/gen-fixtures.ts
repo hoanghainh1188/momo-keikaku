@@ -550,6 +550,7 @@ const project = {
         finish: w.isMilestone ? w.start! : w.finish!,
         baselineMh: w.baselineMh,
         isMilestone: w.isMilestone,
+        isCatchAll: w.isCatchAll,
       })),
   },
   mappingRules: [

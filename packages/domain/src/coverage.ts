@@ -1,4 +1,9 @@
-import { attribute, type AttributionInput, type Buckets } from './attribution';
+import {
+  attribute,
+  isCatchAllAtPin,
+  type AttributionInput,
+  type Buckets,
+} from './attribution';
 import type { MeasurementBasis } from './basis';
 import { addDays, type IsoDate } from './calendar';
 import type { MappingHeadEntry } from './mapping';
@@ -9,6 +14,7 @@ import type {
   Resource,
   TicketObservation,
   WorkPackage,
+  WpFlagEvent,
 } from './types';
 import {
   ratio,
@@ -137,36 +143,43 @@ export interface CoverageInput {
   projectStart: IsoDate | null;
   /** as-of date for SM-5 age (Project-local calendar date). */
   asOf: IsoDate;
+  /** Story 5.12: flag-at-seq for Catch-all membership (thin consumption). */
+  wpFlagEvents?: readonly WpFlagEvent[];
+  wpFlagSeqMax?: number | null;
 }
 
 function ticketBucket(
   ticketId: string,
   head: ReadonlyMap<string, MappingHeadEntry>,
   wpById: ReadonlyMap<string, WorkPackage>,
+  flagEvents?: readonly WpFlagEvent[],
+  wpFlagSeqMax?: number | null,
 ): TicketShareBucket {
   const m = head.get(ticketId);
   if (!m?.wpId) return 'unmapped';
   const wp = wpById.get(m.wpId);
   if (!wp) return 'unmapped';
-  if (wp.isCatchAll) return 'catch-all';
+  if (isCatchAllAtPin(m.wpId, wp, flagEvents, wpFlagSeqMax)) return 'catch-all';
   return 'mapped';
 }
 
 /**
- * Hour-bar ticket membership for segment filter. Catch-all overflow shares membership with
- * Catch-all (same Tickets); the hours split is on the bar, not a distinct Ticket set.
+ * Hour-bar ticket membership for segment filter. Catch-all hours land in `catch-all`;
+ * overflow Ticket membership is separate (`inCatchAllOverflow` from attribution).
  */
 export function hourBucketForTicket(
   ticketId: string,
   head: ReadonlyMap<string, MappingHeadEntry>,
   wpById: ReadonlyMap<string, WorkPackage>,
   activeBaselineWpIds: ReadonlySet<string>,
+  flagEvents?: readonly WpFlagEvent[],
+  wpFlagSeqMax?: number | null,
 ): HourShareSegment {
   const m = head.get(ticketId);
   if (!m?.wpId) return 'unmapped';
   const wp = wpById.get(m.wpId);
   if (!wp) return 'unmapped';
-  if (wp.isCatchAll) return 'catch-all';
+  if (isCatchAllAtPin(m.wpId, wp, flagEvents, wpFlagSeqMax)) return 'catch-all';
   if (activeBaselineWpIds.has(wp.id)) return 'mapped-baselined';
   return 'mapped-non-baselined';
 }
@@ -319,7 +332,13 @@ export function computeCoverage(input: CoverageInput): CoverageResult {
     const ownedIds = new Set(owned.map((t) => t.trackerIssueId));
     const ticketRows = owned.map((t) => ({
       id: t.trackerIssueId,
-      bucket: ticketBucket(t.trackerIssueId, input.head, wpById),
+      bucket: ticketBucket(
+        t.trackerIssueId,
+        input.head,
+        wpById,
+        input.wpFlagEvents,
+        input.wpFlagSeqMax,
+      ),
     }));
     const ticketShare = ticketShareFigure(ticketRows);
 
@@ -340,6 +359,8 @@ export function computeCoverage(input: CoverageInput): CoverageResult {
           resources: input.resources,
           project: input.project,
           period: input.period,
+          wpFlagEvents: input.wpFlagEvents,
+          wpFlagSeqMax: input.wpFlagSeqMax,
         });
         hoursBucketsForTotal.push(attr.cumulative);
         hourShare = hourShareFromBuckets(attr.cumulative, 'hours');
@@ -357,7 +378,13 @@ export function computeCoverage(input: CoverageInput): CoverageResult {
 
   const allTicketRows = inScopeTickets.map((t) => ({
     id: t.trackerIssueId,
-    bucket: ticketBucket(t.trackerIssueId, input.head, wpById),
+    bucket: ticketBucket(
+      t.trackerIssueId,
+      input.head,
+      wpById,
+      input.wpFlagEvents,
+      input.wpFlagSeqMax,
+    ),
   }));
   const totalTicketShare = ticketShareFigure(allTicketRows);
 
@@ -385,6 +412,14 @@ export function ticketShareBucketFor(
   ticketId: string,
   head: ReadonlyMap<string, MappingHeadEntry>,
   wps: readonly WorkPackage[],
+  flagEvents?: readonly WpFlagEvent[],
+  wpFlagSeqMax?: number | null,
 ): TicketShareBucket {
-  return ticketBucket(ticketId, head, new Map(wps.map((w) => [w.id, w])));
+  return ticketBucket(
+    ticketId,
+    head,
+    new Map(wps.map((w) => [w.id, w])),
+    flagEvents,
+    wpFlagSeqMax,
+  );
 }

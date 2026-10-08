@@ -114,6 +114,15 @@ export interface PatchMilestoneCommand {
   readonly isMilestone: boolean;
 }
 
+/** Story 5.12: set/clear Catch-all via append-only flag event + live column dual-write. */
+export interface SetCatchAllCommand {
+  readonly projectId: string;
+  readonly wpId: string;
+  readonly isCatchAll: boolean;
+  readonly actor: string;
+  readonly at: Date;
+}
+
 export interface AppendStatusEventCommand {
   readonly projectId: string;
   readonly wpId: string;
@@ -752,6 +761,36 @@ export function planInputRepositoryOn(bound: Bound) {
               ? { isMilestone: false, durationDays: null }
               : { isMilestone: false },
         )
+        .where(
+          and(
+            eq(s.workPackage.tenantId, tenantId),
+            eq(s.workPackage.projectId, command.projectId),
+            eq(s.workPackage.id, command.wpId),
+          ),
+        )
+        .returning({ id: s.workPackage.id });
+      if (updated.length === 0) throw projectNotFound(command.projectId);
+    },
+
+    /**
+     * Story 5.12: append `wp_flag_event` under the Project watermark and dual-write
+     * `work_package.is_catch_all` (display/head cache). Caller refuses summary/milestone.
+     */
+    async setCatchAll(command: SetCatchAllCommand): Promise<void> {
+      await requireProject(bound, command.projectId);
+      await requireActiveWp(bound, command.projectId, command.wpId);
+      await lockWatermark(bound, { kind: 'project', projectId: command.projectId });
+      await tx.insert(s.wpFlagEvent).values({
+        tenantId,
+        projectId: command.projectId,
+        wpId: command.wpId,
+        isCatchAll: command.isCatchAll,
+        actor: command.actor,
+        at: command.at,
+      });
+      const updated = await tx
+        .update(s.workPackage)
+        .set({ isCatchAll: command.isCatchAll })
         .where(
           and(
             eq(s.workPackage.tenantId, tenantId),

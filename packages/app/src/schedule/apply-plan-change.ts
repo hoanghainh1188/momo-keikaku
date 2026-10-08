@@ -132,6 +132,12 @@ const planMutationBase = z.discriminatedUnion('kind', [
     isMilestone: z.boolean(),
   }),
   z.object({
+    kind: z.literal('patch_catch_all'),
+    projectId: id,
+    wpId: id,
+    isCatchAll: z.boolean(),
+  }),
+  z.object({
     kind: z.literal('patch_actual_dates'),
     projectId: id,
     wpId: id,
@@ -294,6 +300,7 @@ function runCause(mutation: PlanMutation): ScheduleRunCause {
     case 'patch_effort':
     case 'patch_resources':
     case 'patch_milestone':
+    case 'patch_catch_all':
     case 'create_custom_field_definition':
     case 'set_custom_field_value':
       return 'plan_edit';
@@ -479,6 +486,39 @@ async function applyMutation(
       // F21 / Q1→C: true coerces duration to 0; false clears duration to null (repo write).
       await planInput.patchMilestone(mutation);
       return warnings;
+    case 'patch_catch_all': {
+      // Story 5.12 / Q1→A: append wp_flag_event + dual-write live column (leaf non-milestone only).
+      const [wp] = await bound.tx
+        .select({
+          isLeaf: s.workPackage.isLeaf,
+          isMilestone: s.workPackage.isMilestone,
+          deletedAt: s.workPackage.deletedAt,
+        })
+        .from(s.workPackage)
+        .where(
+          and(
+            eq(s.workPackage.tenantId, bound.tenantId),
+            eq(s.workPackage.projectId, mutation.projectId),
+            eq(s.workPackage.id, mutation.wpId),
+          ),
+        );
+      if (wp === undefined || wp.deletedAt !== null) {
+        refuse('not_found');
+      }
+      if (!wp.isLeaf || wp.isMilestone) {
+        refuse('invalid_input', {
+          isCatchAll: [!wp.isLeaf ? 'leaf_only' : 'not_milestone'],
+        });
+      }
+      await planInput.setCatchAll({
+        projectId: mutation.projectId,
+        wpId: mutation.wpId,
+        isCatchAll: mutation.isCatchAll,
+        actor: stamp.actor,
+        at: stamp.at,
+      });
+      return warnings;
+    }
     case 'patch_actual_dates': {
       const schedule = scheduleRepositoryOn(bound);
       const plan = await schedule.loadPlanRows(mutation.projectId);

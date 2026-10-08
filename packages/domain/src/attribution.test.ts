@@ -520,8 +520,8 @@ describe('attribution (FR-20, FR-21, FR-24)', () => {
       recordedAt: '2026-06-01T00:00:00.000Z',
       actor: 'user:pm',
       wps: [
-        { wpId: 'WP-B', start: '2026-06-01', finish: '2026-12-01', baselineMh: hoursToMh(200), isMilestone: false },
-        { wpId: 'WP-C', start: '2026-06-01', finish: '2026-12-01', baselineMh: hoursToMh(10), isMilestone: false },
+        { wpId: 'WP-B', start: '2026-06-01', finish: '2026-12-01', baselineMh: hoursToMh(200), isMilestone: false, isCatchAll: false },
+        { wpId: 'WP-C', start: '2026-06-01', finish: '2026-12-01', baselineMh: hoursToMh(10), isMilestone: false, isCatchAll: true },
       ],
     },
   ];
@@ -652,6 +652,7 @@ describe('attribution (FR-20, FR-21, FR-24)', () => {
             finish: '2026-12-01',
             baselineMh: hoursToMh(50),
             isMilestone: false,
+            isCatchAll: false,
           },
         ],
       },
@@ -1019,5 +1020,162 @@ describe('story 5.8 Tracker Account links (FR-13)', () => {
       period,
     });
     expect(after.cumulative.totalJpy).toBe(9000n);
+  });
+});
+
+describe('attribution Catch-all overflow (FR-24, AR-18 / story 5.12)', () => {
+  const period = periodOf('2026-09-16T09:00:00.000Z', 540, 4);
+  const resources: Resource[] = [
+    {
+      id: 'r1',
+      name: 'R',
+      departmentId: 'd',
+      trackerAccountIds: ['acct-1'],
+      rates: [{ seq: 1, effectiveFrom: '2026-01-01', yenPerHour: 5000n }],
+    },
+  ];
+  const catchWp = wp({ id: 'WP-C', isCatchAll: true });
+  const baselineVersions = [
+    {
+      seq: 1,
+      id: 'bl-1',
+      reason: 'x',
+      recordedAt: '2026-06-01T00:00:00.000Z',
+      actor: 'user:pm',
+      wps: [
+        {
+          wpId: 'WP-C',
+          start: '2026-06-01',
+          finish: '2026-12-01',
+          baselineMh: hoursToMh(10),
+          isMilestone: false,
+          isCatchAll: true,
+        },
+      ],
+    },
+  ];
+  const head = mappingHead([
+    { seq: 1, ticketId: 'tc', wpId: 'WP-C', source: 'rule' as const, at: 'x', actor: 'sys' },
+  ]);
+  const flags = [
+    { seq: 1, wpId: 'WP-C', isCatchAll: true, actor: 'pm', at: 'x' },
+  ];
+  const entry = (
+    seq: number,
+    h: number,
+    windowEnd: string,
+    ticketId = 'tc',
+  ): LedgerEntry => ({
+    seq,
+    ticketId,
+    kind: 'delta',
+    deltaMh: hoursToMh(h),
+    windowStart: null,
+    windowEnd,
+    assigneeAccountId: 'acct-1',
+    activeBaselineVersionSeq: 1,
+  });
+
+  const run = (entries: LedgerEntry[], opts?: { flagSeqMax?: number; noBaseline?: boolean }) =>
+    attribute({
+      entries,
+      head,
+      wps: [catchWp],
+      baselineVersions: opts?.noBaseline
+        ? [
+            {
+              ...baselineVersions[0]!,
+              wps: [{ ...baselineVersions[0]!.wps[0]!, baselineMh: 0n }],
+            },
+          ]
+        : baselineVersions,
+      resources,
+      project,
+      period,
+      wpFlagEvents: flags,
+      wpFlagSeqMax: opts?.flagSeqMax ?? 1,
+    });
+
+  it('golden: crossing entry prorates within + overflow at the same Rate (cap 10h)', () => {
+    // +8 → within 8; +5 → within 2 + overflow 3
+    const r = run([
+      entry(1, 8, '2026-09-10T09:00:00.000Z'),
+      entry(2, 5, '2026-09-11T09:00:00.000Z'),
+    ]);
+    expect(r.cumulative.catchAllMh).toBe(hoursToMh(10));
+    expect(r.cumulative.catchAllOverflowMh).toBe(hoursToMh(3));
+    expect(r.cumulative.unplannedMh).toBe(hoursToMh(3));
+    expect(r.acByWp.get('WP-C')).toBe(hoursToMh(10));
+    expect(r.overflowMhByTicket.get('tc')).toBe(hoursToMh(3));
+    // Both parts of the crossing entry costed at 5000 ¥/h
+    expect(r.cumulative.totalJpy).toBe(13n * 5000n);
+  });
+
+  it('golden: negative delta straddling the cap LIFO-clears overflow then within', () => {
+    // Cap 10: +8 within; +5 → +2 within +3 over; −4 LIFO → clears 3 over then −1 within
+    const r = run([
+      entry(1, 8, '2026-09-10T09:00:00.000Z'),
+      entry(2, 5, '2026-09-11T09:00:00.000Z'),
+      entry(3, -4, '2026-09-12T09:00:00.000Z'),
+    ]);
+    expect(r.cumulative.catchAllMh).toBe(hoursToMh(9));
+    expect(r.cumulative.catchAllOverflowMh).toBe(0n);
+    expect(r.cumulative.unplannedMh).toBe(0n);
+    expect(r.overflowMhByTicket.get('tc') ?? 0n).toBe(0n);
+  });
+
+  it('orders by (window_end, seq), not seq alone', () => {
+    // Higher seq but earlier window_end must process first.
+    const r = run([
+      entry(2, 8, '2026-09-10T09:00:00.000Z'),
+      entry(1, 5, '2026-09-11T09:00:00.000Z'),
+    ]);
+    expect(r.cumulative.catchAllMh).toBe(hoursToMh(10));
+    expect(r.cumulative.catchAllOverflowMh).toBe(hoursToMh(3));
+  });
+
+  it('treats Catch-all without Baseline hours as all Unplanned', () => {
+    const r = run([entry(1, 12, '2026-09-15T09:00:00.000Z')], { noBaseline: true });
+    expect(r.cumulative.catchAllMh).toBe(0n);
+    expect(r.cumulative.catchAllOverflowMh).toBe(hoursToMh(12));
+    expect(r.cumulative.unplannedMh).toBe(hoursToMh(12));
+  });
+
+  it('judges Catch-all at wp_flag_seq_max, not the live WP column', () => {
+    // Live WP still isCatchAll, but flag cleared at seq 2 — pin ≥ 2 → non-Catch-all buckets.
+    const cleared = [
+      ...flags,
+      { seq: 2, wpId: 'WP-C', isCatchAll: false, actor: 'pm', at: 'y' },
+    ];
+    const entries = [entry(1, 12, '2026-09-15T09:00:00.000Z')];
+    const stillCatchAll = attribute({
+      entries,
+      head,
+      wps: [catchWp],
+      baselineVersions,
+      resources,
+      project,
+      period,
+      wpFlagEvents: cleared,
+      wpFlagSeqMax: 1,
+    });
+    expect(stillCatchAll.cumulative.catchAllMh).toBe(hoursToMh(10));
+    expect(stillCatchAll.cumulative.catchAllOverflowMh).toBe(hoursToMh(2));
+
+    const clearedAtPin = attribute({
+      entries,
+      head,
+      wps: [catchWp],
+      baselineVersions,
+      resources,
+      project,
+      period,
+      wpFlagEvents: cleared,
+      wpFlagSeqMax: 2,
+    });
+    // Non-Catch-all with Baseline hours → mapped baselined (not Catch-all buckets).
+    expect(clearedAtPin.cumulative.catchAllMh).toBe(0n);
+    expect(clearedAtPin.cumulative.catchAllOverflowMh).toBe(0n);
+    expect(clearedAtPin.cumulative.mappedBaselinedMh).toBe(hoursToMh(12));
   });
 });

@@ -1473,3 +1473,4 @@ above can see where it went.
 - source_spec: `_bmad-output/implementation-artifacts/spec-5-11-coverage-per-connector-in-tickets-and-in-hours.md`
   summary: Catch-all overflow Ticket filter membership is approximate — every Catch-all Ticket is listed when any Catch-all overflow hours exist, because attribution has no per-Ticket overflow split.
   evidence: 2026-10-07 story 5.11 review (blind-hunter / verification-gap). Hours bar correctly splits catchAllMh vs catchAllOverflowMh; Ticket membership cannot be mutually exclusive until attribution (or 5.12+) exposes a per-Ticket overflow share. Documented in coverage.ts / get-project-mapping catchAllOverflowTicketIds; deferred rather than inventing a false distinct Ticket set.
+  resolved: YES, 2026-10-08 by story 5.12 — `attribute()` exposes `overflowMhByTicket`; Mapping Coverage's catch-all-overflow Ticket set is every Ticket with positive overflow mh (no invented distinct set).

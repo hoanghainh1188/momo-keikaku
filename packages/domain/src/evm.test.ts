@@ -115,8 +115,8 @@ describe('computeEvm — an actual finish lifts the 99% cap only on a non-milest
     recordedAt: '2026-06-01T00:00:00.000Z',
     actor: 'user:pm',
     wps: [
-      { wpId: 'WP-1', start: '2026-06-01', finish: '2026-06-12', baselineMh: hoursToMh(100), isMilestone: false },
-      { wpId: 'WP-M', start: '2026-06-12', finish: '2026-06-12', baselineMh: hoursToMh(100), isMilestone: true },
+      { wpId: 'WP-1', start: '2026-06-01', finish: '2026-06-12', baselineMh: hoursToMh(100), isMilestone: false, isCatchAll: false },
+      { wpId: 'WP-M', start: '2026-06-12', finish: '2026-06-12', baselineMh: hoursToMh(100), isMilestone: true, isCatchAll: false },
     ],
   };
   const allResolved = (prefix: string) =>
@@ -154,6 +154,46 @@ describe('computeEvm — an actual finish lifts the 99% cap only on a non-milest
     expect(leaf!.evMh).toBe(hoursToMh(100));
     expect(milestone!.pctComplete).toEqual(ratio(99n, 100n));
     expect(milestone!.evMh).toBe(hoursToMh(99));
+  });
+});
+
+describe('computeEvm — Catch-all LOE reads baseline_wp.is_catch_all (story 5.12)', () => {
+  it('uses LOE when the Baseline pin is Catch-all even if the live WP cache is false', () => {
+    const baseline: BaselineVersion = {
+      seq: 1,
+      id: 'bl-1',
+      reason: 'loe',
+      recordedAt: '2026-06-01T00:00:00.000Z',
+      actor: 'user:pm',
+      wps: [
+        {
+          wpId: 'WP-C',
+          start: '2026-06-01',
+          finish: '2026-06-12',
+          baselineMh: hoursToMh(100),
+          isMilestone: false,
+          isCatchAll: true,
+        },
+      ],
+    };
+    const r = computeEvm({
+      asOf: '2026-06-05',
+      calendar: cal,
+      baseline,
+      // Live cache false — must not win over the Baseline pin.
+      wps: [wp({ id: 'WP-C', isCatchAll: false })],
+      mappedTicketsByWp: new Map([['WP-C', [ticket('t1', 25, true)]]]),
+      acByWp: new Map([['WP-C', hoursToMh(10)]]),
+      unplannedAcMh: 0n,
+      totalAcMh: hoursToMh(10),
+      plannedScopeAcMh: hoursToMh(10),
+      measurementBasis: 'hours',
+    });
+    const row = r.perWp[0]!;
+    expect(row.pctBasis).toBe('loe');
+    // as-of mid-span: PV = 50h of 100h → LOE pct = PV/BAC
+    expect(row.pctComplete).toEqual(ratio(hoursToMh(50), hoursToMh(100)));
+    expect(row.evMh).toBe(hoursToMh(50));
   });
 });
 
@@ -199,8 +239,8 @@ describe('computeEvm — golden case', () => {
     recordedAt: '2026-06-01T00:00:00.000Z',
     actor: 'user:pm',
     wps: [
-      { wpId: 'WP-1', start: '2026-06-01', finish: '2026-06-12', baselineMh: hoursToMh(100), isMilestone: false },
-      { wpId: 'WP-2', start: '2026-06-01', finish: '2026-06-12', baselineMh: hoursToMh(100), isMilestone: false },
+      { wpId: 'WP-1', start: '2026-06-01', finish: '2026-06-12', baselineMh: hoursToMh(100), isMilestone: false, isCatchAll: false },
+      { wpId: 'WP-2', start: '2026-06-01', finish: '2026-06-12', baselineMh: hoursToMh(100), isMilestone: false, isCatchAll: false },
     ],
   };
   const wps = [wp({ id: 'WP-1' }), wp({ id: 'WP-2' })];
@@ -274,7 +314,7 @@ describe('FR-27 Ticket-Count Mode', () => {
       recordedAt: '2026-06-01T00:00:00.000Z',
       actor: 'user:pm',
       wps: [
-        { wpId: 'WP-1', start: '2026-06-01', finish: '2026-06-12', baselineMh: hoursToMh(100), isMilestone: false },
+        { wpId: 'WP-1', start: '2026-06-01', finish: '2026-06-12', baselineMh: hoursToMh(100), isMilestone: false, isCatchAll: false },
       ],
     };
     const evm = computeEvm({
@@ -317,7 +357,7 @@ describe('FR-27 Ticket-Count Mode', () => {
       recordedAt: '2026-06-01T00:00:00.000Z',
       actor: 'user:pm',
       wps: [
-        { wpId: 'WP-1', start: '2026-06-01', finish: '2026-06-12', baselineMh: hoursToMh(100), isMilestone: false },
+        { wpId: 'WP-1', start: '2026-06-01', finish: '2026-06-12', baselineMh: hoursToMh(100), isMilestone: false, isCatchAll: false },
       ],
     };
     const caption = 'hours Connectors only (1 of 2)';
@@ -346,7 +386,7 @@ describe('FR-27 Ticket-Count Mode', () => {
       recordedAt: '2026-06-01T00:00:00.000Z',
       actor: 'user:pm',
       wps: [
-        { wpId: 'WP-1', start: '2026-06-01', finish: '2026-06-12', baselineMh: hoursToMh(100), isMilestone: false },
+        { wpId: 'WP-1', start: '2026-06-01', finish: '2026-06-12', baselineMh: hoursToMh(100), isMilestone: false, isCatchAll: false },
       ],
     };
     const evm = computeEvm({

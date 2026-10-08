@@ -175,8 +175,9 @@ export function computeEvm(input: EvmInput): EvmResult {
     const pv = plannedValue(b.baselineMh, b.start, b.finish, input.asOf, input.calendar);
     // Glossary: a Catch-all WP with Baseline hours is measured as Level of Effort,
     // so EV equals PV. Its hours beyond the Baseline are Unplanned Work (FR-24).
+    // Story 5.12: LOE gate reads baseline_wp.is_catch_all — never the live WP cache (AR-22).
     const { pct, basis, lowEvidence } =
-      wp.isCatchAll && b.baselineMh > 0n
+      b.isCatchAll && b.baselineMh > 0n
         ? {
             pct: ratio(pv, b.baselineMh),
             basis: 'loe' as const,

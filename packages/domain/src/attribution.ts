@@ -9,8 +9,41 @@ import type {
   RatePins,
   Resource,
   WorkPackage,
+  WpFlagEvent,
 } from './types';
 import { costOf, countValue, minBigint, type CountMetric, type Jpy, type Mh } from './units';
+
+/**
+ * Story 5.12: Catch-all at the flag head ≤ `wpFlagSeqMax`. When events are omitted (legacy
+ * unit fixtures), fall back to the live WP cache so existing tests keep working.
+ */
+export function isCatchAllAtPin(
+  wpId: string,
+  wp: WorkPackage | undefined,
+  flagEvents: readonly WpFlagEvent[] | undefined,
+  wpFlagSeqMax: number | null | undefined,
+): boolean {
+  if (flagEvents === undefined) return wp?.isCatchAll ?? false;
+  let head = false;
+  for (const e of flagEvents) {
+    if (wpFlagSeqMax !== undefined && wpFlagSeqMax !== null && e.seq > wpFlagSeqMax) continue;
+    if (e.wpId === wpId) head = e.isCatchAll;
+  }
+  return head;
+}
+
+/** One overflow slice on the LIFO stack — hours costed at the entry Rate that produced them. */
+interface OverflowSlice {
+  mh: Mh;
+  yenPerHour: Jpy;
+  ticketId: string;
+}
+
+interface CatchAllState {
+  /** Cumulative hours on this Catch-all WP (within + overflow). */
+  already: Mh;
+  overflowStack: OverflowSlice[];
+}
 
 /**
  * AD-9: attribution is computed here at query time from the ledger and the Mapping
@@ -66,6 +99,13 @@ export interface AttributionInput {
    * `pins.projectDefaultRateSeqMax` is set.
    */
   projectDefaultRates?: RateEntry[];
+  /**
+   * Story 5.12: Catch-all flag events. When provided, membership is judged at
+   * `wpFlagSeqMax` (live column ignored for compute).
+   */
+  wpFlagEvents?: readonly WpFlagEvent[];
+  /** Pin ceiling for `wp_flag_event` (ComputationInputs). */
+  wpFlagSeqMax?: number | null;
 }
 
 export interface AttributionResult {
@@ -77,6 +117,11 @@ export interface AttributionResult {
   openingBalanceMh: Mh;
   /** cumulative hours per Ticket (for drill-down) */
   hoursByTicket: Map<string, Mh>;
+  /**
+   * Story 5.12: net Catch-all overflow milli-hours per Ticket. Coverage's catch-all-overflow
+   * Ticket set is every Ticket with a positive value here (honest; no invented distinct set).
+   */
+  overflowMhByTicket: Map<string, Mh>;
 }
 
 /**
@@ -129,6 +174,76 @@ function rateFor(
   return rateOnDate(r.rates, onDate, pins?.rateSeqMax) ?? fallback();
 }
 
+/**
+ * FR-24 / AR-18: split a Catch-all entry against the water-level cap. Positive deltas prorate
+ * the crossing entry at one Rate; negatives LIFO-unwind the overflow stack first (costed at
+ * each slice's original Rate), then reduce within at the current entry Rate.
+ *
+ * `overflowTicketDeltas` is the per-Ticket overflow mh change for this entry (positive when
+ * this Ticket contributed overflow; negative when LIFO cleared a Ticket's prior overflow).
+ */
+function splitCatchAllEntry(
+  state: CatchAllState,
+  deltaMh: Mh,
+  yen: Jpy,
+  cap: Mh,
+  ticketId: string,
+): {
+  within: Mh;
+  over: Mh;
+  withinJpy: Jpy;
+  overJpy: Jpy;
+  overflowTicketDeltas: ReadonlyArray<{ ticketId: string; mh: Mh }>;
+} {
+  if (deltaMh >= 0n) {
+    const already = state.already;
+    const after = already + deltaMh;
+    state.already = after;
+    const withinBefore = minBigint(already, cap);
+    const withinAfter = minBigint(after, cap);
+    const within = withinAfter - withinBefore;
+    const over = deltaMh - within;
+    const overflowTicketDeltas: { ticketId: string; mh: Mh }[] = [];
+    if (over > 0n) {
+      state.overflowStack.push({ mh: over, yenPerHour: yen, ticketId });
+      overflowTicketDeltas.push({ ticketId, mh: over });
+    }
+    return {
+      within,
+      over,
+      withinJpy: costOf(within, yen),
+      overJpy: costOf(over, yen),
+      overflowTicketDeltas,
+    };
+  }
+
+  // Negative: LIFO from overflow, then within.
+  let remaining = -deltaMh;
+  let overCleared = 0n;
+  let overJpyCleared = 0n;
+  const overflowTicketDeltas: { ticketId: string; mh: Mh }[] = [];
+  while (remaining > 0n && state.overflowStack.length > 0) {
+    const top = state.overflowStack[state.overflowStack.length - 1]!;
+    const take = minBigint(top.mh, remaining);
+    overCleared += take;
+    overJpyCleared += costOf(take, top.yenPerHour);
+    overflowTicketDeltas.push({ ticketId: top.ticketId, mh: -take });
+    top.mh -= take;
+    remaining -= take;
+    if (top.mh === 0n) state.overflowStack.pop();
+  }
+  const withinCleared = remaining;
+  const withinJpyCleared = costOf(withinCleared, yen);
+  state.already += deltaMh;
+  return {
+    within: -withinCleared,
+    over: -overCleared,
+    withinJpy: -withinJpyCleared,
+    overJpy: -overJpyCleared,
+    overflowTicketDeltas,
+  };
+}
+
 export function attribute(input: AttributionInput): AttributionResult {
   const {
     entries,
@@ -140,6 +255,8 @@ export function attribute(input: AttributionInput): AttributionResult {
     period,
     pins,
     projectDefaultRates,
+    wpFlagEvents,
+    wpFlagSeqMax,
   } = input;
 
   const wpById = new Map(wps.map((w) => [w.id, w]));
@@ -152,11 +269,19 @@ export function attribute(input: AttributionInput): AttributionResult {
   const periodB = emptyBuckets();
   const acByWp = new Map<string, Mh>();
   const hoursByTicket = new Map<string, Mh>();
-  /** running cumulative hours per Catch-all WP, to split at its Baseline hours */
-  const catchAllRunning = new Map<string, Mh>();
+  const overflowMhByTicket = new Map<string, Mh>();
+  /** Catch-all running state per WP (water-level + LIFO overflow stack). */
+  const catchAllState = new Map<string, CatchAllState>();
   let openingBalanceMh: Mh = 0n;
 
-  const ordered = [...entries].sort((a, b) => a.seq - b.seq);
+  // AR-18: cumulative order is (window_end, seq), not seq alone.
+  const ordered = [...entries].sort((a, b) =>
+    a.windowEnd !== b.windowEnd
+      ? a.windowEnd < b.windowEnd
+        ? -1
+        : 1
+      : a.seq - b.seq,
+  );
 
   for (const e of ordered) {
     const onDate = projectDate(e.windowEnd, project.tzOffsetMinutes);
@@ -208,26 +333,38 @@ export function attribute(input: AttributionInput): AttributionResult {
       }
     };
 
-    if (!wp) {
+    if (!wp || !mapped?.wpId) {
       push('unmappedMh', e.deltaMh, money, true);
       continue;
     }
 
-    if (wp.isCatchAll) {
+    const catchAll = isCatchAllAtPin(mapped.wpId, wp, wpFlagEvents, wpFlagSeqMax);
+
+    if (catchAll) {
       // FR-24: LOE. AC counts only up to Baseline hours; the rest is Unplanned Work.
-      const already = catchAllRunning.get(wp.id) ?? 0n;
-      const after = already + e.deltaMh;
-      catchAllRunning.set(wp.id, after);
-      const cap = baselineMh;
-      const withinBefore = minBigint(already, cap);
-      const withinAfter = minBigint(after, cap);
-      const within = withinAfter - withinBefore;
-      const over = e.deltaMh - within;
+      // Cap 0 (no Baseline hours) → all hours overflow/Unplanned.
+      let state = catchAllState.get(wp.id);
+      if (!state) {
+        state = { already: 0n, overflowStack: [] };
+        catchAllState.set(wp.id, state);
+      }
+      const { within, over, withinJpy, overJpy, overflowTicketDeltas } = splitCatchAllEntry(
+        state,
+        e.deltaMh,
+        yen,
+        baselineMh,
+        e.ticketId,
+      );
       if (within !== 0n) {
-        push('catchAllMh', within, costOf(within, yen), false);
+        push('catchAllMh', within, withinJpy, false);
         acByWp.set(wp.id, (acByWp.get(wp.id) ?? 0n) + within);
       }
-      if (over !== 0n) push('catchAllOverflowMh', over, costOf(over, yen), true);
+      if (over !== 0n) {
+        push('catchAllOverflowMh', over, overJpy, true);
+      }
+      for (const d of overflowTicketDeltas) {
+        overflowMhByTicket.set(d.ticketId, (overflowMhByTicket.get(d.ticketId) ?? 0n) + d.mh);
+      }
       continue;
     }
 
@@ -241,7 +378,14 @@ export function attribute(input: AttributionInput): AttributionResult {
     }
   }
 
-  return { cumulative, period: periodB, acByWp, openingBalanceMh, hoursByTicket };
+  return {
+    cumulative,
+    period: periodB,
+    acByWp,
+    openingBalanceMh,
+    hoursByTicket,
+    overflowMhByTicket,
+  };
 }
 
 /**
