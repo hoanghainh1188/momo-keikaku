@@ -17,7 +17,7 @@ context:
 
 **Problem:** Catch-all is only a live `work_package.is_catch_all` bit: there is no `wp_flag_event` / `wp_flag_seq_max`, attribution sorts by `seq` alone (not `(window_end, seq)`), EVM LOE still keys off the live flag instead of the Baseline copy, AR-18 golden tests for crossing prorate / negative-delta LIFO are thin, and SM-C1's Catch-all share of total hours is not reported — so overflow can be mis-ordered, double-counted, or hide while Unplanned falls (FR-24, FR-30, AR-18/19/22, SM-C1).
 
-**Approach:** Create append-only `wp_flag_event` (this story owns the table); pin `wp_flag_seq_max` into ComputationInputs; attribution judges Catch-all at the flag head ≤ pin while PV/BAC/LOE read `baseline_wp.is_catch_all`; harden overflow to cumulative `(window_end, seq)` with prorate + LIFO negatives and golden tests; expose SM-C1 Catch-all share; give the PM a path that records set/clear via events (not a live-only flip).
+**Approach:** Create append-only `wp_flag_event` (this story owns the table); pin `wp_flag_seq_max` into ComputationInputs; attribution judges Catch-all at the flag head ≤ pin while PV/BAC/LOE read `baseline_wp.is_catch_all`; harden overflow to cumulative `(window_end, seq)` with prorate + LIFO negatives and golden tests; report SM-C1 Catch-all share on Review; let the PM set/clear Catch-all from the Plan grid via events (not a live-only flip).
 
 **Decisions (agent, recorded — not user-visible):**
 - Dual-write: append `wp_flag_event` and update `work_package.is_catch_all` as a display/head cache (Plan grid tag). Attribution never trusts the live column for compute — only flag-at-`wp_flag_seq_max`.
@@ -29,13 +29,11 @@ context:
 - Migration `0013_wp_flag_event.sql`; registry `append-only`; seed/fixtures append an initial event for existing Catch-all WPs.
 - Do not rework 5.11 Coverage UI beyond thin consumption of flag-at-seq / overflow Ticket ids; do not implement 5.13–5.15 or Epic 6.
 
+**Decisions (Harry, 2026-10-08):**
+- Q1→**A**: Plan-grid toggle (checkbox/tag action) appends `wp_flag_event` and dual-writes the live column — Catch-all is a WP attribute on the plan, not a Mapping/Coverage control.
+- Q2→**A**: Review shows SM-C1 Catch-all share of total hours near Unplanned / Scope Ledger — counter-metric for honesty, not co-located with SM-5 coverage quality.
+
 </frozen-after-approval>
-
-## Open Questions
-
-- Q1 — PM write surface for set/clear Catch-all: **A** Plan-grid toggle (checkbox/tag action) that calls a use case appending `wp_flag_event` + dual-write live column / **B** Use-case + server action only this story (no new Plan-grid control; fixtures/seed + API; UI later) / **C** Mapping page control beside Coverage. Consequence: A is the visible PM path on the plan; B ships spine correctness without UI; C puts the flag next to coverage but away from the WP tree.
-
-- Q2 — SM-C1 surface: **A** Review shows Catch-all share of total hours (counter-metric caption near Unplanned / Scope Ledger) / **B** Mapping › Coverage shows it as a counter beside per-Connector figures / **C** Domain + Review DTO only (no dedicated UI chrome beyond an existing figure that already can present the ratio). Consequence: A matches Review as the honesty surface; B co-locates with SM-5; C minimises UI but may leave the counter hard to see.
 
 ## Code Map
 
@@ -46,10 +44,11 @@ context:
 - `packages/domain/src/review.ts` `ReviewInput` — `wpFlagEvents`, `wpFlagSeqMax`; SM-C1 = `(catchAllMh + catchAllOverflowMh) / totalMh` on cumulative (and period if useful); present via existing ratio helpers (never as 0 when unavailable).
 - `packages/domain/src/coverage.ts` / `get-project-mapping` — consume honest overflow Ticket ids from attribution; thin flag-at-seq if coverage still needs Catch-all membership at pin (do not redesign 5.11 UI).
 - `packages/db/src/repo.ts` — stop stripping `baseline_wp.is_catch_all`; load flag events; pin `wp_flag_seq_max` in review/mapping load paths (watermark lock pattern).
-- `packages/app` — use case `set-wp-catch-all` (or plan-input sibling): under project lock, append event, dual-write live column, audit; refuse non-leaf/milestone; roles/audit declarations. Wire PM surface per Q1.
+- `packages/app` — use case `set-wp-catch-all` (or plan-input sibling): under project lock, append event, dual-write live column, audit; refuse non-leaf/milestone; roles/audit declarations. Wire Plan-grid toggle (Q1→A).
 - `packages/app/src/baseline/append-baseline-version.ts:79` — copy Catch-all from event head / live cache into `baseline_wp`.
 - Seed / `scripts/gen-fixtures.ts` / load-gen — for Catch-all leaves, append matching `wp_flag_event` so head ≡ column.
-- `packages/i18n` en+ja — SM-C1 + flag toggle strings as needed.
+- `apps/web` Plan tree grid — Catch-all toggle/action on leaf rows; Review — SM-C1 caption near Unplanned / Scope Ledger (Q2→A).
+- `packages/i18n` en+ja — SM-C1 + Plan-grid flag toggle strings.
 - Do not change: schedule engine; 5.9 DnD; 5.10 rules; 5.11 Coverage chrome (except thin reads); 5.13 exclusion UI; approximate labels; Ticket load fixture.
 
 ## Tasks & Acceptance
@@ -58,7 +57,7 @@ context:
 - [ ] `packages/db` — `wp_flag_event` schema + 0013 migration + registry/RLS/seed/fixtures dual-write.
 - [ ] `packages/domain` — flag-at-seq attribution; `(window_end, seq)` + prorate/LIFO goldens; Baseline LOE gate; SM-C1 metric; per-Ticket overflow; I/O matrix tests.
 - [ ] `packages/db` + `packages/app` — load pins/events; set/clear Catch-all use case under lock; baseline copy; mapping/review DTOs.
-- [ ] `apps/web` + `packages/i18n` — PM write surface (Q1) + SM-C1 surface (Q2); no 5.11 Coverage redesign.
+- [ ] `apps/web` + `packages/i18n` — Plan-grid Catch-all toggle (Q1→A) + Review SM-C1 caption (Q2→A); no 5.11 Coverage redesign.
 - [ ] `tests/` + `sprint-status.yaml` — fence green; 5.1–5.11 → done if lagging; 5.12 → in-progress; close or keep overflow-Ticket deferral note honestly.
 
 **Acceptance Criteria:**
