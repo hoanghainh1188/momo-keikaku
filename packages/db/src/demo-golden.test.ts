@@ -7,7 +7,12 @@ import {
   share,
   sum,
 } from '@momo/domain';
-import { asOfDate, buildDemoState, currentPeriod } from './fixtures';
+import {
+  asOfDate,
+  buildDemoState,
+  currentPeriod,
+  stampDemoLedgerConnectorId,
+} from './fixtures';
 
 /**
  * Golden numbers for the demo dataset.
@@ -36,7 +41,7 @@ function review() {
       wps: state.wps,
       baselineVersions: state.baselineVersions,
       activeBaselineSeq: state.activeBaselineSeq,
-      ledger: state.ledger,
+      ledger: stampDemoLedgerConnectorId(state.ledger),
       mappingEvents: state.mappingEvents,
       pinnedSnapshot: state.snapshots[state.snapshots.length - 1]!,
       resources: state.resources,

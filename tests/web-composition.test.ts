@@ -2,7 +2,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { computeReview } from '@momo/domain';
 import type { ProjectReview } from '../packages/app/src/ports/project-read';
 import { MAPPING_TICKET_LIMIT } from '../packages/app/src/use-cases/get-project-mapping';
-import { asOfDate, buildDemoState, currentPeriod } from '../packages/db/src/fixtures';
+import {
+  asOfDate,
+  buildDemoState,
+  currentPeriod,
+  stampDemoLedgerConnectorId,
+} from '../packages/db/src/fixtures';
 
 /**
  * The composition root's bindings — the five project writes, the eight organisation writes (story
@@ -733,7 +738,7 @@ function demoReview(): ProjectReview {
     wps: state.wps,
     baselineVersions: state.baselineVersions,
     activeBaselineSeq: state.activeBaselineSeq,
-    ledger: state.ledger,
+    ledger: stampDemoLedgerConnectorId(state.ledger),
     mappingEvents: state.mappingEvents,
     pinnedSnapshot,
     resources: state.resources,
