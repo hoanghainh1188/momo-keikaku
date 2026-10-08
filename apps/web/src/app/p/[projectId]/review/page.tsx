@@ -246,7 +246,7 @@ export default async function ReviewPage({
           <p className="caption" style={{ marginTop: 12 }} data-testid="sm-c1-catch-all-share">
             {r.catchAllShare.kind === 'unavailable'
               ? t('review.sm_c1_catch_all_share_unavailable', {
-                  reason: present(r.catchAllShare).unavailableReason ?? r.catchAllShare.reasonCode,
+                  reason: r.catchAllShare.reasonCode,
                 })
               : t('review.sm_c1_catch_all_share', {
                   share: share(r.catchAllShare.value),

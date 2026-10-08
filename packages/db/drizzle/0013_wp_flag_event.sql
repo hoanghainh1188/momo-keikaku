@@ -13,3 +13,9 @@ CREATE TABLE "wp_flag_event" (
 --> statement-breakpoint
 ALTER TABLE "wp_flag_event" ADD CONSTRAINT "wp_flag_event_work_package_fk" FOREIGN KEY ("tenant_id","project_id","wp_id") REFERENCES "public"."work_package"("tenant_id","project_id","id") MATCH FULL ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "wp_flag_event_wp_idx" ON "wp_flag_event" USING btree ("tenant_id","project_id","wp_id","seq");
+--> statement-breakpoint
+-- Backfill: existing Catch-all WPs need a flag event so flag-at-seq matches the live column.
+INSERT INTO "wp_flag_event" ("tenant_id", "project_id", "wp_id", "is_catch_all", "actor", "at")
+SELECT "tenant_id", "project_id", "id", true, 'system:migration', now()
+FROM "work_package"
+WHERE "is_catch_all" = true AND "deleted_at" IS NULL;

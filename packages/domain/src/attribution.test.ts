@@ -1178,4 +1178,84 @@ describe('attribution Catch-all overflow (FR-24, AR-18 / story 5.12)', () => {
     expect(clearedAtPin.cumulative.catchAllOverflowMh).toBe(0n);
     expect(clearedAtPin.cumulative.mappedBaselinedMh).toBe(hoursToMh(12));
   });
+
+  it('golden: multi-Ticket LIFO clear updates overflowMhByTicket for the other Ticket', () => {
+    // Cap 10: tc fills to cap + 3 overflow; td adds 4 overflow; te −5 LIFO clears td's 4 then 1 of tc.
+    const multiHead = mappingHead([
+      { seq: 1, ticketId: 'tc', wpId: 'WP-C', source: 'rule' as const, at: 'x', actor: 'sys' },
+      { seq: 2, ticketId: 'td', wpId: 'WP-C', source: 'rule' as const, at: 'x', actor: 'sys' },
+      { seq: 3, ticketId: 'te', wpId: 'WP-C', source: 'rule' as const, at: 'x', actor: 'sys' },
+    ]);
+    const r = attribute({
+      entries: [
+        entry(1, 13, '2026-09-10T09:00:00.000Z', 'tc'), // within 10 + over 3
+        entry(2, 4, '2026-09-11T09:00:00.000Z', 'td'), // over 4
+        entry(3, -5, '2026-09-12T09:00:00.000Z', 'te'), // LIFO: −4 td, −1 tc
+      ],
+      head: multiHead,
+      wps: [catchWp],
+      baselineVersions,
+      resources,
+      project,
+      period,
+      wpFlagEvents: flags,
+      wpFlagSeqMax: 1,
+    });
+    expect(r.overflowMhByTicket.get('td') ?? 0n).toBe(0n);
+    expect(r.overflowMhByTicket.get('tc')).toBe(hoursToMh(2));
+    expect(r.cumulative.catchAllOverflowMh).toBe(hoursToMh(2));
+  });
+
+  it('golden: overflow slices at different Rates cost LIFO unplannedJpy at each slice Rate', () => {
+    // Cap 10. First overflow at 5000 ¥/h; second at 9000 ¥/h; negative clears 9000 first.
+    const dualRates: Resource[] = [
+      {
+        id: 'r-lo',
+        name: 'Lo',
+        departmentId: 'd',
+        trackerAccountIds: ['acct-lo'],
+        rates: [{ seq: 1, effectiveFrom: '2026-01-01', yenPerHour: 5000n }],
+      },
+      {
+        id: 'r-hi',
+        name: 'Hi',
+        departmentId: 'd',
+        trackerAccountIds: ['acct-hi'],
+        rates: [{ seq: 1, effectiveFrom: '2026-01-01', yenPerHour: 9000n }],
+      },
+    ];
+    const priced = (seq: number, h: number, windowEnd: string, accountId: string): LedgerEntry => ({
+      ...entry(seq, h, windowEnd),
+      assigneeAccountId: accountId,
+    });
+    const r = attribute({
+      entries: [
+        priced(1, 12, '2026-09-10T09:00:00.000Z', 'acct-lo'), // within 10 + over 2 @ 5000
+        priced(2, 3, '2026-09-12T09:00:00.000Z', 'acct-hi'), // over 3 @ 9000
+        priced(3, -4, '2026-09-13T09:00:00.000Z', 'acct-lo'), // LIFO −3 @ 9000, −1 @ 5000
+      ],
+      head,
+      wps: [catchWp],
+      baselineVersions,
+      resources: dualRates,
+      project,
+      period,
+      wpFlagEvents: flags,
+      wpFlagSeqMax: 1,
+    });
+    // Remaining overflow: 1h @ 5000 from the first slice.
+    expect(r.cumulative.catchAllOverflowMh).toBe(hoursToMh(1));
+    // unplannedJpy = +2*5000 + 3*9000 − 3*9000 − 1*5000 = 5000
+    expect(r.cumulative.unplannedJpy).toBe(5000n);
+  });
+
+  it('clamps a negative delta that exceeds cumulative so catchAllMh cannot go negative', () => {
+    const r = run([
+      entry(1, 5, '2026-09-10T09:00:00.000Z'),
+      entry(2, -20, '2026-09-11T09:00:00.000Z'),
+    ]);
+    expect(r.cumulative.catchAllMh).toBe(0n);
+    expect(r.cumulative.catchAllOverflowMh).toBe(0n);
+    expect(r.acByWp.get('WP-C') ?? 0n).toBe(0n);
+  });
 });

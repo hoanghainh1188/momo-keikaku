@@ -507,7 +507,7 @@ async function applyMutation(
       }
       if (!wp.isLeaf || wp.isMilestone) {
         refuse('invalid_input', {
-          isCatchAll: [!wp.isLeaf ? 'leaf_only' : 'not_milestone'],
+          isCatchAll: [!wp.isLeaf ? 'leaf_only' : 'milestone_not_allowed'],
         });
       }
       await planInput.setCatchAll({

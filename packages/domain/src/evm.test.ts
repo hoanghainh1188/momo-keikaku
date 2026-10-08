@@ -195,6 +195,39 @@ describe('computeEvm — Catch-all LOE reads baseline_wp.is_catch_all (story 5.1
     expect(row.pctComplete).toEqual(ratio(hoursToMh(50), hoursToMh(100)));
     expect(row.evMh).toBe(hoursToMh(50));
   });
+
+  it('does not use LOE when the Baseline pin is false even if the live WP cache is Catch-all', () => {
+    const baseline: BaselineVersion = {
+      seq: 1,
+      id: 'bl-1',
+      reason: 'not-loe',
+      recordedAt: '2026-06-01T00:00:00.000Z',
+      actor: 'user:pm',
+      wps: [
+        {
+          wpId: 'WP-C',
+          start: '2026-06-01',
+          finish: '2026-06-12',
+          baselineMh: hoursToMh(100),
+          isMilestone: false,
+          isCatchAll: false,
+        },
+      ],
+    };
+    const r = computeEvm({
+      asOf: '2026-06-05',
+      calendar: cal,
+      baseline,
+      wps: [wp({ id: 'WP-C', isCatchAll: true })],
+      mappedTicketsByWp: new Map([['WP-C', [ticket('t1', 25, true), ticket('t2', 25, false)]]]),
+      acByWp: new Map([['WP-C', hoursToMh(10)]]),
+      unplannedAcMh: 0n,
+      totalAcMh: hoursToMh(10),
+      plannedScopeAcMh: hoursToMh(10),
+      measurementBasis: 'hours',
+    });
+    expect(r.perWp[0]!.pctBasis).not.toBe('loe');
+  });
 });
 
 describe('isMarkedComplete (story 2.2: read off the head actual finish)', () => {

@@ -123,6 +123,70 @@ describe('computeReview with no Unplanned Work', () => {
     const empty = computeReview({ ...input, ledger: [] });
     expect(empty.catchAllShare).toEqual({ kind: 'unavailable', reasonCode: 'no_hours' });
   });
+
+  it('reports non-zero SM-C1 as (catchAllMh + overflow) / totalMh', () => {
+    const catchWp: WorkPackage = { ...wp, id: 'WP-C', wbsCode: '1.9', name: 'Misc', isCatchAll: true };
+    const withCatchAll = computeReview({
+      ...input,
+      wps: [wp, catchWp],
+      baselineVersions: [
+        {
+          ...input.baselineVersions[0]!,
+          wps: [
+            ...input.baselineVersions[0]!.wps,
+            {
+              wpId: 'WP-C',
+              start: '2026-06-01',
+              finish: '2026-12-01',
+              baselineMh: hoursToMh(10),
+              isMilestone: false,
+              isCatchAll: true,
+            },
+          ],
+        },
+      ],
+      mappingEvents: [
+        ...input.mappingEvents,
+        { seq: 2, ticketId: 'tc', wpId: 'WP-C', source: 'rule', at: 'x', actor: 'sys' },
+      ],
+      ledger: [
+        ...input.ledger,
+        {
+          seq: 2,
+          ticketId: 'tc',
+          kind: 'delta',
+          deltaMh: hoursToMh(25),
+          windowStart: null,
+          windowEnd: '2026-09-15T09:00:00.000Z',
+          assigneeAccountId: 'acct-1',
+          activeBaselineVersionSeq: 1,
+        },
+      ],
+      pinnedSnapshot: {
+        ...input.pinnedSnapshot,
+        tickets: [
+          ...input.pinnedSnapshot.tickets,
+          {
+            ...input.pinnedSnapshot.tickets[0]!,
+            trackerIssueId: 'tc',
+            key: 'tc',
+            title: 'tc',
+            actualMh: hoursToMh(25),
+          },
+        ],
+      },
+      wpFlagEvents: [{ seq: 1, wpId: 'WP-C', isCatchAll: true, actor: 'pm', at: 'x' }],
+      wpFlagSeqMax: 1,
+    });
+    const c = withCatchAll.attribution.cumulative;
+    expect(c.catchAllMh + c.catchAllOverflowMh).toBe(hoursToMh(25));
+    expect(withCatchAll.catchAllShare).toEqual({
+      kind: 'value',
+      value: { num: hoursToMh(25), den: c.totalMh },
+      unit: 'ratio',
+      coverage: null,
+    });
+  });
 });
 
 describe('computeReview with no Baseline (story 2.2, decision Q1-A)', () => {

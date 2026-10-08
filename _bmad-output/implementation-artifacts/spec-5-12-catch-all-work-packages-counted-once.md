@@ -74,11 +74,33 @@ context:
 - Attribution: order `(windowEnd, seq)`; Catch-all via flag head ≤ `wpFlagSeqMax`; LIFO overflow stack with per-Ticket `overflowMhByTicket`; EVM LOE reads `baselineWp.isCatchAll`.
 - Plan-grid `patch_catch_all` through `applyPlanChange` (append event + dual-write; refuse summary/milestone). Review shows SM-C1 near Scope Ledger.
 - Closed 5.11 overflow-Ticket deferral in `deferred-work.md` (honest `overflowMhByTicket` membership).
-- Verified: `pnpm lint`, `pnpm typecheck`, `pnpm depcruise`, `pnpm test` (1422 passed; REQUIRE_DB skipped — no DATABASE_URL in this environment), `pnpm db:sql`.
+- Verified: `pnpm lint`, `pnpm typecheck`, `pnpm depcruise`; focused tests 124 passed (fence-5-12 REQUIRE_DB skipped — no Docker/DATABASE_URL); `pnpm db:sql`.
+- Review patches: 0013 backfill; Plan-grid i18n + optimistic guards; SM-C1 reasonCode; LIFO clamp + multi-Ticket/Rate goldens; inverse EVM LOE; non-zero SM-C1; coverage flag-at-pin; mapping overflow membership; fence-5-12 skeleton; `milestone_not_allowed`.
 
 ## Spec Change Log
 
 ## Review Triage Log
+
+- `high` → patch — migration 0013 creates `wp_flag_event` with no backfill; repo always passes `wpFlagEvents: []` when empty; `isCatchAllAtPin` then returns false for live Catch-all WPs (post-upgrade mis-bucket).
+- `false` — empty-array “legacy fallback” missing: intentional — attribution must not trust the live column when events are present-as-empty; fix is backfill, not live fallback (`attribution.ts:26-32`).
+- `medium` → patch — Plan-grid hardcodes English `"Catch-all"` / aria-label despite en+ja keys (`plan-tree-grid.tsx:1666-1681`).
+- `medium` → patch — SM-C1 unavailable double-wraps `present().unavailableReason` already prefixed with “unavailable —” into `unavailable ({reason})` (`review/page.tsx:247-250`).
+- `medium` → patch — attribution goldens lack multi-Ticket LIFO clear of `overflowMhByTicket` and multi-Rate `overJpy` (AR-18 stack rewrite).
+- `medium` → patch — EVM LOE lacks inverse case (Baseline `isCatchAll: false`, live true → not LOE).
+- `medium` → patch — `review.test` never asserts non-zero SM-C1 `(catchAllMh+overflow)/totalMh`.
+- `medium` → patch — no test for `patch_catch_all` / `setCatchAll` happy path or leaf/milestone refuse.
+- `false` — sprint 5.10/5.11 → done: authorized by handoff (PRs already merged on main).
+- `false` — gen-fixtures omits `wp_flag_event` rows: seed `writeTenantRows` dual-writes from `state.wps.isCatchAll` (`seed.ts:384-396`).
+- `low` → reject — noop `setCatchAll` still appends: append-only history is intentional; skip-if-unchanged adds writer complexity for rare re-clicks.
+- `low` → patch — refuse detail `not_milestone` for milestone WPs is inverted English (`apply-plan-change.ts:508-511`).
+- `false` — spec `in-review` vs sprint `in-progress`: correct BMAD vs sprint-status roles.
+- `medium` → patch — overlapping Catch-all toggles can restore a stale optimistic override (no generation guard).
+- `medium` → patch — `read_after_write` refuse (`ok: false`) rolls back checkbox after a successful write (`plan-tree-grid.tsx:1059-1067` + `successFromGrid`).
+- `medium` → patch — `patchCatchAll` has no try/catch; thrown action leaves optimistic checkbox stuck.
+- `medium` → patch — negative Catch-all delta larger than cumulative `already` can drive `catchAllMh`/`already` negative (`splitCatchAllEntry` withinCleared unclamped).
+- `false` — claim “callers omitting events still use live cache”: intentional unit-fixture bridge when `flagEvents === undefined` only.
+- `medium` → patch (VG) — Mapping `inCatchAllOverflow` never asserted via `getProjectMapping` / `overflowMhByTicket`.
+- `medium` → patch (VG) — coverage Ticket/hour buckets never tested when flag-at-pin diverges from live `isCatchAll`.
 
 ## Design Notes
 

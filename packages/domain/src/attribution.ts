@@ -217,7 +217,7 @@ function splitCatchAllEntry(
     };
   }
 
-  // Negative: LIFO from overflow, then within.
+  // Negative: LIFO from overflow, then within. Clamp so cumulative cannot go negative.
   let remaining = -deltaMh;
   let overCleared = 0n;
   let overJpyCleared = 0n;
@@ -232,9 +232,10 @@ function splitCatchAllEntry(
     remaining -= take;
     if (top.mh === 0n) state.overflowStack.pop();
   }
-  const withinCleared = remaining;
+  const withinAvailable = state.already - overCleared;
+  const withinCleared = minBigint(remaining, withinAvailable < 0n ? 0n : withinAvailable);
   const withinJpyCleared = costOf(withinCleared, yen);
-  state.already += deltaMh;
+  state.already -= overCleared + withinCleared;
   return {
     within: -withinCleared,
     over: -overCleared,
