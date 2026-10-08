@@ -24,6 +24,10 @@ export default async function ConnectorsPage({
   const hasSnapshot = review.snapshot.id.length > 0;
   const overlaps = bundle.meta.overlaps;
   const leftScopeTickets = bundle.meta.leftScopeTickets;
+  // Story 5.13 / Q1→B: per-Connector OB caption (omit when this Connector has none).
+  const connectorOpeningBalance = review.openingBalanceByConnector.find(
+    (row) => row.connectorId === c.id,
+  );
   const linkSuggestions = suggestTrackerAccountLinks({
     accounts: bundle.meta.trackerAccounts.map((a) => ({
       id: a.id,
@@ -167,14 +171,16 @@ export default async function ConnectorsPage({
                       })}
                     </td>
                   </tr>
-                  <tr>
-                    <td className="label">{t('connectors.opening_balance')}</td>
-                    <td>
-                      {t('connectors.opening_balance_row', {
-                        hours: hours(review.openingBalanceMh),
-                      })}
-                    </td>
-                  </tr>
+                  {connectorOpeningBalance ? (
+                    <tr data-testid="connector-opening-balance">
+                      <td className="label">{t('connectors.opening_balance')}</td>
+                      <td>
+                        {t('connectors.opening_balance_caption', {
+                          hours: hours(connectorOpeningBalance.mh),
+                        })}
+                      </td>
+                    </tr>
+                  ) : null}
                 </>
               ) : null}
             </tbody>

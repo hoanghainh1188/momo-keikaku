@@ -123,6 +123,39 @@ export default async function ReviewPage({
           </div>
         ) : null}
 
+        {r.latestScopeChanges.length > 0 ? (
+          <details data-testid="review-scope-changes" style={{ marginBottom: 16 }} open>
+            <summary>
+              <strong>{t('review.scope_change_title')}</strong>
+              {' — '}
+              {t('review.scope_change_intro')}
+            </summary>
+            <ul>
+              {r.latestScopeChanges.map((change) => (
+                <li key={change.connectorId} data-testid={`scope-change-${change.connectorId}`}>
+                  {t('review.scope_change_row', {
+                    label: change.label,
+                    previous: change.previousScope,
+                    next: change.newScope,
+                  })}
+                  {change.leftScopeTickets.length > 0 ? (
+                    <ul>
+                      {change.leftScopeTickets.map((ticket) => (
+                        <li key={ticket.ticketId}>
+                          {t('review.scope_change_left_ticket', {
+                            key: ticket.key,
+                            hours: hours(ticket.hoursMh),
+                          })}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          </details>
+        ) : null}
+
         {leftScopeTickets.length > 0 ? (
           <details data-testid="review-left-scope-list" style={{ marginBottom: 16 }}>
             <summary>
@@ -296,9 +329,22 @@ export default async function ReviewPage({
             </tbody>
           </table>
 
-          <p className="caption" style={{ marginTop: 8 }}>
-            {t('review.unplanned.opening_balance_footnote', { hours: hours(r.openingBalanceMh) })}
-          </p>
+          {r.openingBalanceByConnector.length > 0 ? (
+            <ul
+              className="caption"
+              style={{ marginTop: 8, paddingLeft: 18 }}
+              data-testid="review-opening-balance-by-connector"
+            >
+              {r.openingBalanceByConnector.map((row) => (
+                <li key={row.connectorId}>
+                  {t('review.unplanned.opening_balance_connector', {
+                    label: row.label,
+                    hours: hours(row.mh),
+                  })}
+                </li>
+              ))}
+            </ul>
+          ) : null}
 
           <h3 className="label" style={{ marginTop: 32 }}>{t('review.unmapped_work_by_tracker_attribute_expand_to_tic')}</h3>
           <table className="ledger" data-testid="unmapped-groups">

@@ -266,6 +266,9 @@ export function buildDemoState(anchorIso?: string): DemoState {
   }));
 
   // --- replay the Connector
+  // Story 5.13: stamp the same Connector id seed writes (`con-fixture-ec2`) so in-memory
+  // Reviews can group Opening Balances per Connector without a DB round-trip.
+  const demoConnectorId = 'con-fixture-ec2';
   let ledgerSeq = 1;
   const ledger: LedgerEntry[] = [];
   const leftScope: { ticketId: string; key: string }[] = [];
@@ -283,7 +286,7 @@ export function buildDemoState(anchorIso?: string): DemoState {
       seqFrom: ledgerSeq,
       approvalRecordedAt: '2026-09-01T00:00:00.000Z',
     });
-    ledger.push(...res.entries);
+    ledger.push(...res.entries.map((e) => ({ ...e, connectorId: demoConnectorId })));
     leftScope.push(...res.leftScope);
     ledgerSeq = res.nextSeq;
     basis = res.measurementBasis;

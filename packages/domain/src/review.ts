@@ -114,6 +114,26 @@ export interface ReviewInput {
   ownerConnectorByTicket?: ReadonlyMap<string, string>;
   /** left_scope Tickets — excluded from FR-23 shares (5.13 owns captions). */
   leftScopeTicketIds?: ReadonlySet<string>;
+  /**
+   * Story 5.13: left_scope Tickets with key + hours for scope-change nesting.
+   * Identity may be absent from the pinned snapshot.
+   */
+  leftScopeTicketDetails?: readonly {
+    trackerIssueId: string;
+    key: string;
+    ownerConnectorId: string;
+    hoursMh: Mh;
+  }[];
+  /**
+   * Story 5.13: append-only `connector_scope_event` rows (read-only). Latest per
+   * Connector with a predecessor becomes the Review scope-change surface.
+   */
+  connectorScopeEvents?: readonly {
+    seq: number;
+    connectorId: string;
+    scope: string;
+    at: string;
+  }[];
   /** Project start for SM-5's 14-day window; null → SM-5 unavailable. */
   projectStart?: IsoDate | null;
   /**
@@ -122,6 +142,30 @@ export interface ReviewInput {
   wpFlagEvents?: readonly WpFlagEvent[];
   /** Pin ceiling for `wp_flag_event` (ComputationInputs). */
   wpFlagSeqMax?: number | null;
+}
+
+/** Story 5.13 / UX-DR23: Opening Balance hours for one Connector. */
+export interface OpeningBalanceByConnector {
+  connectorId: string;
+  label: string;
+  mh: Mh;
+}
+
+/**
+ * Story 5.13 / Q2→A: latest scope change per Connector (prev → new) with nested
+ * left-scope Tickets and retained hours for that Connector.
+ */
+export interface ConnectorScopeChangeRow {
+  connectorId: string;
+  label: string;
+  previousScope: string;
+  newScope: string;
+  at: string;
+  leftScopeTickets: readonly {
+    ticketId: string;
+    key: string;
+    hoursMh: Mh;
+  }[];
 }
 
 /**
@@ -247,6 +291,13 @@ export interface ReviewResult {
   dispositions: DispositionEvent[];
   explainNotes: { note: string; ticketCount: number; mh: Mh }[];
   openingBalanceMh: Mh;
+  /**
+   * Story 5.13 / UX-DR23: Opening Balances per Connector (hours > 0 only).
+   * Empty when no OB rows — never a misleading 0h claim.
+   */
+  openingBalanceByConnector: OpeningBalanceByConnector[];
+  /** Story 5.13 / Q2→A: latest prev→new scope change per Connector. */
+  latestScopeChanges: ConnectorScopeChangeRow[];
 }
 
 export function computeReview(input: ReviewInput): ReviewResult {
@@ -269,7 +320,12 @@ export function computeReview(input: ReviewInput): ReviewResult {
     period: input.period,
     wpFlagEvents: input.wpFlagEvents,
     wpFlagSeqMax: input.wpFlagSeqMax,
+    ownerConnectorByTicket: input.ownerConnectorByTicket,
   });
+  const wpById = new Map(input.wps.map((w) => [w.id, w]));
+  const leftScope = input.leftScopeTicketIds ?? new Set<string>();
+  const connectorLabel = (id: string): string =>
+    input.connectorsForCoverage?.find((c) => c.id === id)?.label ?? id;
 
   // Story 5.7: latched basis at basis_seq_max — never snapshot hoursFieldPresent.
   const measurementBasis: MeasurementBasis = input.measurementBasis ?? 'count';
@@ -351,17 +407,22 @@ export function computeReview(input: ReviewInput): ReviewResult {
       ? null
       : computeForecast(evm, baseline, input.asOf, input.calendar);
 
-  // --- FR-28: Unmapped Work grouped by Tracker attribute, expandable to Tickets
+  // --- FR-28 / Story 5.13: every in-scope Ticket is mapped or listed unmapped
+  // (null/absent/orphan head, including 0h). Left-scope stays out of this census.
   const dispositionByTicket = new Map<string, DispositionKind>();
   for (const d of [...input.dispositions].sort((a, b) => a.seq - b.seq))
     for (const t of d.ticketIds) dispositionByTicket.set(t, d.kind);
 
+  const isMappedLeaf = (ticketId: string): boolean => {
+    const m = head.get(ticketId);
+    return Boolean(m?.wpId && wpById.has(m.wpId));
+  };
+
   const groups = new Map<string, UnmappedGroup>();
   for (const t of input.pinnedSnapshot.tickets) {
-    const m = head.get(t.trackerIssueId);
-    if (m?.wpId) continue;
+    if (leftScope.has(t.trackerIssueId)) continue;
+    if (isMappedLeaf(t.trackerIssueId)) continue;
     const mh = attribution.hoursByTicket.get(t.trackerIssueId) ?? 0n;
-    if (mh === 0n) continue;
     const categoryId = t.attributes.find((a) => a.kind === 'category')?.id;
     const attr = categoryId ?? t.issueTypeId;
     const g = groups.get(attr) ?? {
@@ -420,10 +481,11 @@ export function computeReview(input: ReviewInput): ReviewResult {
       : divergenceRows(baseline, evm, input.wps, attribution.acByWp);
 
   // --- FR-23 coverage (legacy Project-wide: mapped includes Catch-all, for Review captions)
-  const totalTickets = input.pinnedSnapshot.tickets.length;
-  const unmappedTickets = input.pinnedSnapshot.tickets.filter(
-    (t) => !head.get(t.trackerIssueId)?.wpId,
-  ).length;
+  const inScopePinned = input.pinnedSnapshot.tickets.filter(
+    (t) => !leftScope.has(t.trackerIssueId),
+  );
+  const totalTickets = inScopePinned.length;
+  const unmappedTickets = inScopePinned.filter((t) => !isMappedLeaf(t.trackerIssueId)).length;
   const connectorsForCoverage: CoverageConnectorInput[] =
     input.connectorsForCoverage && input.connectorsForCoverage.length > 0
       ? [...input.connectorsForCoverage]
@@ -494,6 +556,57 @@ export function computeReview(input: ReviewInput): ReviewResult {
       mh: sum(d.ticketIds.map((t) => attribution.hoursByTicket.get(t) ?? 0n)),
     }));
 
+  // Story 5.13 / UX-DR23: per-Connector OB (omit zero / empty — never a misleading 0h claim).
+  const openingBalanceByConnector: OpeningBalanceByConnector[] = [
+    ...attribution.openingBalanceMhByConnector.entries(),
+  ]
+    .filter(([, mh]) => mh !== 0n)
+    .map(([connectorId, mh]) => ({
+      connectorId,
+      label: connectorLabel(connectorId),
+      mh,
+    }))
+    .sort((a, b) =>
+      a.connectorId < b.connectorId ? -1 : a.connectorId > b.connectorId ? 1 : 0,
+    );
+
+  // Story 5.13 / Q2→A: latest scope change per Connector (requires a predecessor).
+  const leftScopeDetails = input.leftScopeTicketDetails ?? [];
+  const eventsByConnector = new Map<
+    string,
+    { seq: number; connectorId: string; scope: string; at: string }[]
+  >();
+  for (const e of input.connectorScopeEvents ?? []) {
+    const list = eventsByConnector.get(e.connectorId) ?? [];
+    list.push(e);
+    eventsByConnector.set(e.connectorId, list);
+  }
+  const latestScopeChanges: ConnectorScopeChangeRow[] = [];
+  for (const [connectorId, events] of eventsByConnector) {
+    const ordered = [...events].sort((a, b) => a.seq - b.seq);
+    if (ordered.length < 2) continue;
+    const previous = ordered[ordered.length - 2]!;
+    const latest = ordered[ordered.length - 1]!;
+    latestScopeChanges.push({
+      connectorId,
+      label: connectorLabel(connectorId),
+      previousScope: previous.scope,
+      newScope: latest.scope,
+      at: latest.at,
+      leftScopeTickets: leftScopeDetails
+        .filter((t) => t.ownerConnectorId === connectorId)
+        .map((t) => ({
+          ticketId: t.trackerIssueId,
+          key: t.key,
+          hoursMh: t.hoursMh,
+        }))
+        .sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0)),
+    });
+  }
+  latestScopeChanges.sort((a, b) =>
+    a.connectorId < b.connectorId ? -1 : a.connectorId > b.connectorId ? 1 : 0,
+  );
+
   return {
     formulaVersion: input.formulaVersion ?? FORMULA_VERSION,
     snapshot: {
@@ -550,6 +663,8 @@ export function computeReview(input: ReviewInput): ReviewResult {
     dispositions: input.dispositions,
     explainNotes,
     openingBalanceMh: attribution.openingBalanceMh,
+    openingBalanceByConnector,
+    latestScopeChanges,
   };
 }
 

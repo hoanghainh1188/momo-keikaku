@@ -225,6 +225,7 @@ export function ingestWriteRepositoryOn(bound: Bound) {
           windowEnd: s.actualsLedgerEntry.windowEnd,
           assigneeAccountId: s.actualsLedgerEntry.assigneeAccountId,
           activeBaselineVersionSeq: s.actualsLedgerEntry.activeBaselineVersionSeq,
+          connectorId: s.actualsLedgerEntry.connectorId,
         })
         .from(s.actualsLedgerEntry)
         .where(
@@ -243,6 +244,7 @@ export function ingestWriteRepositoryOn(bound: Bound) {
           windowEnd: r.windowEnd.toISOString(),
           assigneeAccountId: r.assigneeAccountId,
           activeBaselineVersionSeq: r.activeBaselineVersionSeq,
+          connectorId: r.connectorId,
         });
       }
     });
