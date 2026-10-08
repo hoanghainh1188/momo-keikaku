@@ -2,7 +2,7 @@
 title: 'Story 5.12 — Catch-all Work Packages, counted once'
 type: 'feature'
 created: '2026-10-07'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '5072d9ae2b71aec6a1a68baabd5573902e8f3f6c'
