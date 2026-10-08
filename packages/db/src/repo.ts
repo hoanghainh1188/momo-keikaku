@@ -422,6 +422,8 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
     assigneeAccountId: e.assigneeAccountId,
     activeBaselineVersionSeq:
       e.activeBaselineVersionSeq === null ? null : Number(e.activeBaselineVersionSeq),
+    // Story 5.13: carry connector_id so Opening Balances group per Connector.
+    connectorId: e.connectorId,
   }));
 
   const mapRows = await tx
@@ -643,10 +645,47 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
     }
   }
 
-  // Story 5.11 inputs must be on ReviewInput before the return (computeReview reads them).
+  // Story 5.13: connector scope history (read-only) for Review scope-change surface.
+  const scopeEventRows =
+    connectorRows.length === 0
+      ? []
+      : await tx
+          .select({
+            seq: s.connectorScopeEvent.seq,
+            connectorId: s.connectorScopeEvent.connectorId,
+            scope: s.connectorScopeEvent.scope,
+            at: s.connectorScopeEvent.at,
+          })
+          .from(s.connectorScopeEvent)
+          .where(
+            and(
+              eq(s.connectorScopeEvent.tenantId, p.tenantId),
+              inArray(
+                s.connectorScopeEvent.connectorId,
+                connectorRows.map((c) => c.id),
+              ),
+            ),
+          )
+          .orderBy(asc(s.connectorScopeEvent.seq));
+
+  const leftScopeTicketDetails = leftScopeRows.map((r) => ({
+    trackerIssueId: r.trackerIssueId,
+    key: r.key,
+    ownerConnectorId: r.ownerConnectorId,
+    hoursMh: leftScopeHours.get(r.trackerIssueId) ?? 0n,
+  }));
+
+  // Story 5.11 / 5.13 inputs must be on ReviewInput before the return (computeReview reads them).
   input.connectorsForCoverage = connectorsForCoverage;
   input.ownerConnectorByTicket = ownerConnectorByTicket;
   input.leftScopeTicketIds = leftScopeTicketIds;
+  input.leftScopeTicketDetails = leftScopeTicketDetails;
+  input.connectorScopeEvents = scopeEventRows.map((e) => ({
+    seq: Number(e.seq),
+    connectorId: e.connectorId,
+    scope: e.scope,
+    at: e.at.toISOString(),
+  }));
   input.projectStart = p.projectStart;
 
   return {

@@ -266,6 +266,11 @@ export function buildDemoState(anchorIso?: string): DemoState {
   }));
 
   // --- replay the Connector
+  // Do NOT stamp `connectorId` onto DemoState.ledger: probe relabelling walks this
+  // graph, and seed invents the Connector id via `own('con-fixture-ec2')` (idPrefix),
+  // which is a different string than a fixture-relabelled id. Stamping here broke
+  // cross-tenant label completeness (story 5.13). In-memory Reviews that need OB
+  // grouping call `stampDemoLedgerConnectorId` at the computeReview boundary.
   let ledgerSeq = 1;
   const ledger: LedgerEntry[] = [];
   const leftScope: { ticketId: string; key: string }[] = [];
@@ -313,6 +318,20 @@ export function buildDemoState(anchorIso?: string): DemoState {
     leftScope,
     measurementBasis: basis,
   };
+}
+
+/** Connector id seed writes for the demo fixture Tenant (not projectOnly probes). */
+export const DEMO_CONNECTOR_ID = 'con-fixture-ec2';
+
+/**
+ * Story 5.13: stamp Connector id onto ledger entries for in-memory `attribute` /
+ * `computeReview` only — never onto `buildDemoState()` itself (probe relabel safety).
+ */
+export function stampDemoLedgerConnectorId(
+  ledger: readonly LedgerEntry[],
+  connectorId: string = DEMO_CONNECTOR_ID,
+): LedgerEntry[] {
+  return ledger.map((e) => ({ ...e, connectorId }));
 }
 
 /** The Reporting Period the Review lands on: the one containing the anchor. */

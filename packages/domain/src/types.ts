@@ -79,6 +79,12 @@ export interface LedgerEntry {
    * sequence, never by comparing timestamps against fixture `observedAt`.
    */
   activeBaselineVersionSeq: number | null;
+  /**
+   * Story 5.13: owning Connector id from `actuals_ledger_entry.connector_id`.
+   * Optional at the domain ingest boundary (writer stamps it on insert); required
+   * to group Opening Balances per Connector when reporting FR-20 / UX-DR23.
+   */
+  connectorId?: string | null;
 }
 
 export type MappingSource = 'manual' | 'rule' | 'disposition' | 'release';

@@ -526,7 +526,14 @@ describe('attribution (FR-20, FR-21, FR-24)', () => {
     },
   ];
 
-  const entry = (seq: number, ticketId: string, h: number, windowEnd: string, kind: LedgerEntry['kind'] = 'delta'): LedgerEntry => ({
+  const entry = (
+    seq: number,
+    ticketId: string,
+    h: number,
+    windowEnd: string,
+    kind: LedgerEntry['kind'] = 'delta',
+    connectorId: string | null = 'con-a',
+  ): LedgerEntry => ({
     seq,
     ticketId,
     kind,
@@ -535,6 +542,7 @@ describe('attribution (FR-20, FR-21, FR-24)', () => {
     windowEnd,
     assigneeAccountId: 'acct-1',
     activeBaselineVersionSeq: 1,
+    connectorId,
   });
 
   const IN = '2026-09-15T09:00:00.000Z'; // inside the period
@@ -557,6 +565,19 @@ describe('attribution (FR-20, FR-21, FR-24)', () => {
       period,
     });
 
+  /** FR-20 Period honesty: four collapsed buckets === period.totalMh (OB excluded). */
+  const periodFourBucketSum = (p: {
+    mappedBaselinedMh: bigint;
+    mappedNonBaselinedMh: bigint;
+    catchAllMh: bigint;
+    catchAllOverflowMh: bigint;
+    unmappedMh: bigint;
+  }) =>
+    p.mappedBaselinedMh +
+    p.mappedNonBaselinedMh +
+    (p.catchAllMh + p.catchAllOverflowMh) +
+    p.unmappedMh;
+
   it('splits hours into the four mutually exclusive FR-20 buckets that sum to the total', () => {
     const r = run([
       entry(1, 'tb', 30, IN),
@@ -577,6 +598,29 @@ describe('attribution (FR-20, FR-21, FR-24)', () => {
     expect(c.unplannedMh).toBe(hoursToMh(12 + 15 + 8));
   });
 
+  it('proves Period four-bucket sum equals period.totalMh on a fixture that includes OB (story 5.13)', () => {
+    // All four Period buckets + OB on two Connectors — OB must not enter Period.
+    const r = run([
+      entry(1, 'tb', 50, OUT, 'opening_balance', 'con-a'),
+      entry(2, 'tn', 30, OUT, 'opening_balance', 'con-b'),
+      entry(3, 'tb', 30, IN), // mapped baselined
+      entry(4, 'tn', 12, IN), // mapped non-baselined
+      entry(5, 'tc', 25, IN), // Catch-all: 10 within + 15 overflow
+      entry(6, 'tu', 8, IN), // unmapped
+    ]);
+    const p = r.period;
+    expect(p.mappedBaselinedMh).toBe(hoursToMh(30));
+    expect(p.mappedNonBaselinedMh).toBe(hoursToMh(12));
+    expect(p.catchAllMh).toBe(hoursToMh(10));
+    expect(p.catchAllOverflowMh).toBe(hoursToMh(15));
+    expect(p.unmappedMh).toBe(hoursToMh(8));
+    expect(periodFourBucketSum(p)).toBe(p.totalMh);
+    expect(p.totalMh).toBe(hoursToMh(30 + 12 + 10 + 15 + 8));
+    expect(r.openingBalanceMh).toBe(hoursToMh(80));
+    // OB is outside Period — cumulative carries OB + Period hours.
+    expect(r.cumulative.totalMh).toBe(hoursToMh(80 + 30 + 12 + 10 + 15 + 8));
+  });
+
   it('excludes Opening Balances from period metrics but counts them in cumulative AC', () => {
     const r = run([
       entry(1, 'tb', 100, OUT, 'opening_balance'),
@@ -585,6 +629,56 @@ describe('attribution (FR-20, FR-21, FR-24)', () => {
     expect(r.openingBalanceMh).toBe(hoursToMh(100));
     expect(r.cumulative.totalMh).toBe(hoursToMh(120));
     expect(r.period.totalMh).toBe(hoursToMh(20));
+    expect(periodFourBucketSum(r.period)).toBe(r.period.totalMh);
+  });
+
+  it('groups Opening Balances per Connector and refuses a row with no connector id (story 5.13)', () => {
+    const r = run([
+      entry(1, 'tb', 40, OUT, 'opening_balance', 'con-a'),
+      entry(2, 'tn', 25, OUT, 'opening_balance', 'con-b'),
+      entry(3, 'tb', 10, IN),
+    ]);
+    expect(r.openingBalanceMh).toBe(hoursToMh(65));
+    expect(r.openingBalanceMhByConnector.get('con-a')).toBe(hoursToMh(40));
+    expect(r.openingBalanceMhByConnector.get('con-b')).toBe(hoursToMh(25));
+    expect(r.openingBalanceMhByConnector.size).toBe(2);
+
+    expect(() =>
+      run([{ ...entry(1, 'tb', 10, OUT, 'opening_balance'), connectorId: null }]),
+    ).toThrow(/no connector id/);
+  });
+
+  it('groups Opening Balances via ownerConnectorByTicket when connectorId is absent (story 5.13)', () => {
+    const viaMap = attribute({
+      entries: [{ ...entry(1, 'tb', 40, OUT, 'opening_balance'), connectorId: null }],
+      head: mappingHead(events),
+      wps,
+      baselineVersions,
+      resources,
+      project,
+      period,
+      ownerConnectorByTicket: new Map([['tb', 'con-from-map']]),
+    });
+    expect(viaMap.openingBalanceMhByConnector.get('con-from-map')).toBe(hoursToMh(40));
+
+    expect(() =>
+      attribute({
+        entries: [{ ...entry(1, 'tb', 10, OUT, 'opening_balance'), connectorId: null }],
+        head: mappingHead(events),
+        wps,
+        baselineVersions,
+        resources,
+        project,
+        period,
+        ownerConnectorByTicket: new Map([['other', 'con-x']]),
+      }),
+    ).toThrow(/no connector id/);
+  });
+
+  it('returns an empty per-Connector OB map when there are no opening_balance rows (story 5.13)', () => {
+    const r = run([entry(1, 'tb', 20, IN)]);
+    expect(r.openingBalanceMh).toBe(0n);
+    expect(r.openingBalanceMhByConnector.size).toBe(0);
   });
 
   it('moves hours out of Unplanned Work as soon as the Mapping changes (FR-21)', () => {

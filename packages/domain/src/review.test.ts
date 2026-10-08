@@ -452,3 +452,210 @@ describe('computeReview flags Tickets a rule moved to Unmapped (story 5.10 / UX-
     expect(computeReview({ ...input, mappingEvents: released }).ruleUnmapped).toEqual([]);
   });
 });
+
+describe('computeReview scope honesty (story 5.13 / FR-20)', () => {
+  const ticket = (
+    id: string,
+    opts: { actualMh?: bigint | null; issueTypeId?: string } = {},
+  ) => ({
+    trackerIssueId: id,
+    key: id,
+    title: id,
+    statusId: 'Open',
+    estimateMh: null,
+    actualMh: opts.actualMh === undefined ? hoursToMh(0) : opts.actualMh,
+    assigneeAccountId: 'acct-1' as string | null,
+    createdAt: '2026-06-01T00:00:00.000Z',
+    parentIssueId: null,
+    issueTypeId: opts.issueTypeId ?? 'Task',
+    trackerProjectId: null,
+    attributes: [] as { kind: 'category'; id: string }[],
+  });
+
+  it('lists every in-scope Ticket as mapped or unmapped — including 0h and orphan wpId', () => {
+    const r = computeReview({
+      ...input,
+      mappingEvents: [
+        { seq: 1, ticketId: 'tb', wpId: 'WP-B', source: 'manual', at: 'x', actor: 'pm' },
+        { seq: 2, ticketId: 'orphan', wpId: 'WP-GONE', source: 'manual', at: 'x', actor: 'pm' },
+        // zero-h unmapped has no mapping event
+      ],
+      ledger: [
+        {
+          seq: 1,
+          ticketId: 'tb',
+          kind: 'delta',
+          deltaMh: hoursToMh(30),
+          windowStart: null,
+          windowEnd: '2026-09-15T09:00:00.000Z',
+          assigneeAccountId: 'acct-1',
+          activeBaselineVersionSeq: 1,
+          connectorId: 'con-a',
+        },
+      ],
+      pinnedSnapshot: {
+        ...input.pinnedSnapshot,
+        tickets: [
+          ticket('tb', { actualMh: hoursToMh(30) }),
+          ticket('orphan', { actualMh: hoursToMh(5), issueTypeId: 'Bug' }),
+          ticket('zero', { actualMh: 0n, issueTypeId: 'Task' }),
+        ],
+      },
+    });
+    const listedIds = r.unmappedGroups.flatMap((g) => g.tickets.map((t) => t.ticketId)).sort();
+    expect(listedIds).toEqual(['orphan', 'zero']);
+    expect(r.coverage.unmappedTickets).toBe(2);
+    // Mapped leaf stays out of Unmapped.
+    expect(listedIds).not.toContain('tb');
+  });
+
+  it('keeps left-scope Tickets out of Unmapped groups', () => {
+    const r = computeReview({
+      ...input,
+      mappingEvents: [],
+      leftScopeTicketIds: new Set(['tb']),
+      pinnedSnapshot: {
+        ...input.pinnedSnapshot,
+        tickets: [ticket('tb', { actualMh: hoursToMh(30) })],
+      },
+    });
+    expect(r.unmappedGroups).toEqual([]);
+    expect(r.coverage.unmappedTickets).toBe(0);
+  });
+
+  it('keeps snapshot.ticketCount as the full pin while coverage stays in-scope only', () => {
+    const r = computeReview({
+      ...input,
+      mappingEvents: [],
+      leftScopeTicketIds: new Set(['tb']),
+      pinnedSnapshot: {
+        ...input.pinnedSnapshot,
+        tickets: [
+          ticket('tb', { actualMh: hoursToMh(30) }),
+          ticket('still-in', { actualMh: 0n }),
+        ],
+      },
+    });
+    expect(r.snapshot.ticketCount).toBe(2);
+    expect(r.coverage.unmappedTickets).toBe(1);
+    expect(r.coverage.mappedTicketShare).toEqual({ num: 0n, den: 1n });
+  });
+
+  it('exposes per-Connector Opening Balances and omits the caption when there is no OB', () => {
+    const withOb = computeReview({
+      ...input,
+      connectorsForCoverage: [
+        { id: 'con-a', label: 'Space A', measurementBasis: 'hours' },
+        { id: 'con-b', label: 'Space B', measurementBasis: 'hours' },
+      ],
+      ledger: [
+        {
+          seq: 1,
+          ticketId: 'tb',
+          kind: 'opening_balance',
+          deltaMh: hoursToMh(40),
+          windowStart: null,
+          windowEnd: '2026-08-01T09:00:00.000Z',
+          assigneeAccountId: 'acct-1',
+          activeBaselineVersionSeq: 1,
+          connectorId: 'con-a',
+        },
+        {
+          seq: 2,
+          ticketId: 'tb2',
+          kind: 'opening_balance',
+          deltaMh: hoursToMh(25),
+          windowStart: null,
+          windowEnd: '2026-08-01T09:00:00.000Z',
+          assigneeAccountId: 'acct-1',
+          activeBaselineVersionSeq: 1,
+          connectorId: 'con-b',
+        },
+        {
+          seq: 3,
+          ticketId: 'tb',
+          kind: 'delta',
+          deltaMh: hoursToMh(10),
+          windowStart: null,
+          windowEnd: '2026-09-15T09:00:00.000Z',
+          assigneeAccountId: 'acct-1',
+          activeBaselineVersionSeq: 1,
+          connectorId: 'con-a',
+        },
+      ],
+      mappingEvents: [
+        { seq: 1, ticketId: 'tb', wpId: 'WP-B', source: 'manual', at: 'x', actor: 'pm' },
+        { seq: 2, ticketId: 'tb2', wpId: 'WP-B', source: 'manual', at: 'x', actor: 'pm' },
+      ],
+      pinnedSnapshot: {
+        ...input.pinnedSnapshot,
+        tickets: [
+          ticket('tb', { actualMh: hoursToMh(50) }),
+          ticket('tb2', { actualMh: hoursToMh(25) }),
+        ],
+      },
+    });
+    expect(withOb.openingBalanceMh).toBe(hoursToMh(65));
+    expect(withOb.openingBalanceByConnector).toEqual([
+      { connectorId: 'con-a', label: 'Space A', mh: hoursToMh(40) },
+      { connectorId: 'con-b', label: 'Space B', mh: hoursToMh(25) },
+    ]);
+
+    const noOb = computeReview(input);
+    expect(noOb.openingBalanceMh).toBe(0n);
+    expect(noOb.openingBalanceByConnector).toEqual([]);
+  });
+
+  it('surfaces the latest scope change with nested left-scope Tickets and hours', () => {
+    const r = computeReview({
+      ...input,
+      connectorsForCoverage: [{ id: 'con-a', label: 'Space A', measurementBasis: 'hours' }],
+      connectorScopeEvents: [
+        {
+          seq: 1,
+          connectorId: 'con-a',
+          scope: 'projectKey=OLD',
+          at: '2026-08-01T00:00:00.000Z',
+        },
+        {
+          seq: 2,
+          connectorId: 'con-a',
+          scope: 'projectKey=NEW',
+          at: '2026-09-01T00:00:00.000Z',
+        },
+      ],
+      leftScopeTicketDetails: [
+        {
+          trackerIssueId: 'gone-1',
+          key: 'GONE-1',
+          ownerConnectorId: 'con-a',
+          hoursMh: hoursToMh(12),
+        },
+      ],
+      leftScopeTicketIds: new Set(['gone-1']),
+    });
+    expect(r.latestScopeChanges).toEqual([
+      {
+        connectorId: 'con-a',
+        label: 'Space A',
+        previousScope: 'projectKey=OLD',
+        newScope: 'projectKey=NEW',
+        at: '2026-09-01T00:00:00.000Z',
+        leftScopeTickets: [{ ticketId: 'gone-1', key: 'GONE-1', hoursMh: hoursToMh(12) }],
+      },
+    ]);
+  });
+
+  it('still shows a scope change when left-scope is empty', () => {
+    const r = computeReview({
+      ...input,
+      connectorsForCoverage: [{ id: 'con-a', label: 'Space A', measurementBasis: 'hours' }],
+      connectorScopeEvents: [
+        { seq: 1, connectorId: 'con-a', scope: 'a', at: '2026-08-01T00:00:00.000Z' },
+        { seq: 2, connectorId: 'con-a', scope: 'b', at: '2026-09-01T00:00:00.000Z' },
+      ],
+    });
+    expect(r.latestScopeChanges).toHaveLength(1);
+    expect(r.latestScopeChanges[0]!.leftScopeTickets).toEqual([]);
+  });
+});

@@ -7,7 +7,12 @@ import {
   share,
   sum,
 } from '@momo/domain';
-import { asOfDate, buildDemoState, currentPeriod } from './fixtures';
+import {
+  asOfDate,
+  buildDemoState,
+  currentPeriod,
+  stampDemoLedgerConnectorId,
+} from './fixtures';
 
 /**
  * Golden numbers for the demo dataset.
@@ -36,7 +41,7 @@ function review() {
       wps: state.wps,
       baselineVersions: state.baselineVersions,
       activeBaselineSeq: state.activeBaselineSeq,
-      ledger: state.ledger,
+      ledger: stampDemoLedgerConnectorId(state.ledger),
       mappingEvents: state.mappingEvents,
       pinnedSnapshot: state.snapshots[state.snapshots.length - 1]!,
       resources: state.resources,
@@ -157,6 +162,10 @@ describe('demo dataset — golden EVM figures', () => {
   it('reports Opening Balances separately from period metrics', () => {
     expect(hours(r.openingBalanceMh)).toBe('900.2');
     expect(hours(r.attribution.period.totalMh)).toBe('172.9');
+    // Story 5.13: single fixture Connector; label falls back to id without connectorsForCoverage.
+    expect(r.openingBalanceByConnector).toEqual([
+      { connectorId: 'con-fixture-ec2', label: 'con-fixture-ec2', mh: 900_228n },
+    ]);
   });
 
   it('keeps the four scope-ledger buckets mutually exclusive and summing to the total', () => {
@@ -164,6 +173,19 @@ describe('demo dataset — golden EVM figures', () => {
     expect(total).toBe(r.attribution.cumulative.totalMh);
     expect(total).toBe(1_661_495n);
     expect(hours(total)).toBe('1661.5');
+  });
+
+  it('proves Period four-bucket sum equals period.totalMh excluding Opening Balances (story 5.13)', () => {
+    const p = r.attribution.period;
+    expect(
+      p.mappedBaselinedMh +
+        p.mappedNonBaselinedMh +
+        p.catchAllMh +
+        p.catchAllOverflowMh +
+        p.unmappedMh,
+    ).toBe(p.totalMh);
+    // Same Period total the Opening Balances test already pins via hours() → '172.9'.
+    expect(hours(p.totalMh)).toBe('172.9');
   });
 
   it('groups Unmapped Work by Tracker attribute — the UJ-3 bug story', () => {

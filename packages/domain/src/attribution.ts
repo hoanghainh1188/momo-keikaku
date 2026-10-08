@@ -106,6 +106,11 @@ export interface AttributionInput {
   wpFlagEvents?: readonly WpFlagEvent[];
   /** Pin ceiling for `wp_flag_event` (ComputationInputs). */
   wpFlagSeqMax?: number | null;
+  /**
+   * Story 5.13: ticket → owning Connector when `LedgerEntry.connectorId` is absent
+   * (unit fixtures). OB grouping refuses a row that still has no Connector id.
+   */
+  ownerConnectorByTicket?: ReadonlyMap<string, string>;
 }
 
 export interface AttributionResult {
@@ -115,6 +120,11 @@ export interface AttributionResult {
   acByWp: Map<string, Mh>;
   /** FR-42: reported separately, never in period metrics */
   openingBalanceMh: Mh;
+  /**
+   * Story 5.13 / FR-20 / UX-DR23: Opening Balances grouped by owning Connector.
+   * Empty when there are no `opening_balance` rows. Never folded into Period buckets.
+   */
+  openingBalanceMhByConnector: Map<string, Mh>;
   /** cumulative hours per Ticket (for drill-down) */
   hoursByTicket: Map<string, Mh>;
   /**
@@ -258,6 +268,7 @@ export function attribute(input: AttributionInput): AttributionResult {
     projectDefaultRates,
     wpFlagEvents,
     wpFlagSeqMax,
+    ownerConnectorByTicket,
   } = input;
 
   const wpById = new Map(wps.map((w) => [w.id, w]));
@@ -274,6 +285,7 @@ export function attribute(input: AttributionInput): AttributionResult {
   /** Catch-all running state per WP (water-level + LIFO overflow stack). */
   const catchAllState = new Map<string, CatchAllState>();
   let openingBalanceMh: Mh = 0n;
+  const openingBalanceMhByConnector = new Map<string, Mh>();
 
   // AR-18: cumulative order is (window_end, seq), not seq alone.
   const ordered = [...entries].sort((a, b) =>
@@ -294,6 +306,17 @@ export function attribute(input: AttributionInput): AttributionResult {
     if (e.kind === 'opening_balance') {
       openingBalanceMh += e.deltaMh;
       // FR-42: Opening Balances count in cumulative AC but never in Period metrics.
+      // Story 5.13 / UX-DR23: group per Connector — refuse a row with no owner.
+      const connectorId = e.connectorId ?? ownerConnectorByTicket?.get(e.ticketId) ?? null;
+      if (!connectorId) {
+        throw new Error(
+          `opening_balance ledger entry seq ${e.seq} (ticket ${e.ticketId}) has no connector id`,
+        );
+      }
+      openingBalanceMhByConnector.set(
+        connectorId,
+        (openingBalanceMhByConnector.get(connectorId) ?? 0n) + e.deltaMh,
+      );
     }
 
     const inPeriod = e.kind !== 'opening_balance' && periodContains(period, onDate);
@@ -384,6 +407,7 @@ export function attribute(input: AttributionInput): AttributionResult {
     period: periodB,
     acByWp,
     openingBalanceMh,
+    openingBalanceMhByConnector,
     hoursByTicket,
     overflowMhByTicket,
   };
