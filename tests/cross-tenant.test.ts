@@ -294,6 +294,9 @@ const ALLOCATED_SEQ_KEYS: ReadonlySet<string> = new Set([
   'mappingSeqMax',
   // Story 5.8: link event seq is a global identity; probes land in different bands.
   'linkSeqMax',
+  // Story 5.12: wp_flag_event.seq is generatedAlwaysAsIdentity (global); probes land in
+  // different bands so wpFlagSeqMax cannot agree across tenants.
+  'wpFlagSeqMax',
 ]);
 
 /**
