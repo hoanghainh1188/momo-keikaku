@@ -2,7 +2,7 @@
 title: 'Story 5.13 — Nothing in scope is silently excluded'
 type: 'feature'
 created: '2026-10-08'
-status: 'in-progress'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '2148e15dfbe2c01eabe298e52879479f2efeee2d'
@@ -93,6 +93,23 @@ context:
 ## Spec Change Log
 
 ## Review Triage Log
+
+- `medium` → patch — `ja.json` OB / UX-DR23 captions (`connectors.opening_balance_*`, `review.unplanned.opening_balance_*`) stay English while new scope-change keys were localized.
+- `low` → reject — leftover `opening_balance_row` / `opening_balance_footnote` / unused `opening_balance_caption` keys: everyday harm low; deletion is cleanup, not a product defect.
+- `false` — spec `status: in-progress` vs sprint `review`: process lag during step-04; working tree set to `in-review`.
+- `medium` → patch — demo-golden / Period honesty: agent decision asked for a seed/demo assertion when totals are stable; golden still only pins scalar `openingBalanceMh`, not per-Connector OB or Period four-bucket === `period.totalMh`.
+- `false` — `diffLedger` OB without `connectorId` hard-fails Review: production load/ingest stamps `connector_id` on insert and `loadReview` maps it; throw is a fixture guard, not a live path.
+- `false` — nesting all current left-scope under latest prev→new: matches Q2→A (latest change + that Connector's left-scope Tickets/hours), not a causal time filter.
+- `false` — Review ScopeLedgerBar project-wide footnote plus per-Connector OB list: intentional rollup; Q1→B only required Connectors to drop the dishonest project-wide row.
+- `false` — UX-DR23 caption omitted FR-42 “counted in cumulative AC”: epic/UX-DR23 text is exactly the shorter caption; Design Notes keep FR-42 for domain, not UI copy.
+- `medium` → patch — Connectors OB caption gated behind `hasSnapshot`; move it so a Connector with OB hours is not hidden by the snapshot branch.
+- `medium` → patch — no test for `ownerConnectorByTicket` fallback when OB entry lacks `connectorId`.
+- `low` → reject — duplicate left-scope under scope-change and `review-left-scope-list`: both surfaces intentional; clarifying copy is polish.
+- `medium` → patch — `snapshot.ticketCount` now uses `inScopePinned.length` (excludes left-scope); pre-5.13 used full pin length for the snapshot chrome while coverage shares stay in-scope-only.
+- `false` — scope events without `leftScopeTicketDetails`: production `loadReview` always sets both; empty nest only if a unit caller omits details.
+- `defer` — Connectors page single `meta.connector` card cannot show every Connector's OB when multi-Connector; pre-existing page shape, not introduced as a multi-card rewrite.
+- `medium` → patch (VG) — `db-round-trip` never asserts `bundle.input.connectorScopeEvents` / `leftScopeTicketDetails` (or `review.openingBalanceByConnector` / non-empty `latestScopeChanges` when ≥2 events seeded).
+- `defer` (VG) — no web/page tests for new `data-testid`s; repo pins Review at domain/demo-golden/db-round-trip, not page HTML.
 
 ## Design Notes
 

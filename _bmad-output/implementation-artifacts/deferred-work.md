@@ -1474,3 +1474,11 @@ above can see where it went.
   summary: Catch-all overflow Ticket filter membership is approximate — every Catch-all Ticket is listed when any Catch-all overflow hours exist, because attribution has no per-Ticket overflow split.
   evidence: 2026-10-07 story 5.11 review (blind-hunter / verification-gap). Hours bar correctly splits catchAllMh vs catchAllOverflowMh; Ticket membership cannot be mutually exclusive until attribution (or 5.12+) exposes a per-Ticket overflow share. Documented in coverage.ts / get-project-mapping catchAllOverflowTicketIds; deferred rather than inventing a false distinct Ticket set.
   resolved: YES, 2026-10-08 by story 5.12 — `attribute()` exposes `overflowMhByTicket`; Mapping Coverage's catch-all-overflow Ticket set is every Ticket with positive overflow mh (no invented distinct set).
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-13-nothing-in-scope-is-silently-excluded.md`
+  summary: Connectors page still renders a single `meta.connector` card, so multi-Connector Opening Balance captions beyond the primary card are not listed there (Review shows all).
+  evidence: 2026-10-08 story 5.13 review — Q1→B replaced the dishonest project-wide row on the existing card; rewriting Connectors into a multi-card list is pre-existing page shape, not this story's rewrite.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-13-nothing-in-scope-is-silently-excluded.md`
+  summary: No web/page tests assert the new Review/Connectors `data-testid`s for per-Connector OB and scope-change surfaces.
+  evidence: 2026-10-08 story 5.13 verification-gap — repo pins Review figures at domain / demo-golden / db-round-trip, not page HTML; inventing a new UI content-test style is out of this story's verification style.
