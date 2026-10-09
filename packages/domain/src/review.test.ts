@@ -659,3 +659,93 @@ describe('computeReview scope honesty (story 5.13 / FR-20)', () => {
     expect(r.latestScopeChanges[0]!.leftScopeTickets).toEqual([]);
   });
 });
+
+describe('Unplanned Work and the Review never name a person (story 5.14 / FR-26 / UX-DR29)', () => {
+  // Distinct sentinels per kind of identity, so a leak names what leaked.
+  const people = [
+    { id: 'SENTINEL-RESOURCE-ID-A', name: 'Sentinel Person Name A', accountId: 'SENTINEL-ACCOUNT-ID-A' },
+    { id: 'SENTINEL-RESOURCE-ID-B', name: 'Sentinel Person Name B', accountId: 'SENTINEL-ACCOUNT-ID-B' },
+  ];
+  const resources = people.map((p) => ({
+    id: p.id,
+    name: p.name,
+    departmentId: 'd',
+    trackerAccountIds: [p.accountId],
+    rates: [{ seq: 1, effectiveFrom: '2026-01-01', yenPerHour: 5000n }],
+  }));
+  const ticket = (id: string, assigneeAccountId: string) => ({
+    trackerIssueId: id,
+    key: id,
+    title: id,
+    statusId: 'Open',
+    estimateMh: null,
+    actualMh: hoursToMh(8),
+    assigneeAccountId,
+    createdAt: '2026-06-01T00:00:00.000Z',
+    parentIssueId: null,
+    issueTypeId: 'Bug',
+    trackerProjectId: null,
+    attributes: [] as { kind: 'category'; id: string }[],
+  });
+  const delta = (seq: number, ticketId: string, assigneeAccountId: string) => ({
+    seq,
+    ticketId,
+    kind: 'delta' as const,
+    deltaMh: hoursToMh(8),
+    windowStart: null,
+    windowEnd: '2026-09-15T09:00:00.000Z',
+    assigneeAccountId,
+    activeBaselineVersionSeq: 1,
+  });
+  /** Unmapped Tickets `t0…`, one per assignee, plus the fixture's mapped `tb` re-assigned to the first. */
+  const inputWith = (assignees: readonly string[]): ReviewInput => ({
+    ...input,
+    resources,
+    ledger: [
+      ...input.ledger.map((e) => ({ ...e, assigneeAccountId: assignees[0]! })),
+      ...assignees.map((a, i) => delta(input.ledger.length + i + 1, `t${i}`, a)),
+    ],
+    pinnedSnapshot: {
+      ...input.pinnedSnapshot,
+      tickets: [
+        ...input.pinnedSnapshot.tickets.map((tk) => ({ ...tk, assigneeAccountId: assignees[0]! })),
+        ...assignees.map((a, i) => ticket(`t${i}`, a)),
+      ],
+    },
+  });
+  const reviewWith = (assignees: readonly string[]) => computeReview(inputWith(assignees));
+  const serialise = (value: unknown): string =>
+    JSON.stringify(value, (_k, v: unknown) => {
+      if (typeof v === 'bigint') return v.toString();
+      if (v instanceof Set) return [...v];
+      if (v instanceof Map) return [...v.entries()];
+      return v;
+    });
+  const sentinels = people.flatMap((p) => [p.accountId, p.id, p.name]);
+  const groupView = (r: ReturnType<typeof computeReview>) =>
+    r.unmappedGroups.map((g) => ({ key: g.key, label: g.label, attribute: g.attribute }));
+
+  it('gives a Ticket the same group key and label whoever it is assigned to', () => {
+    const asA = reviewWith([people[0]!.accountId]);
+    const asB = reviewWith([people[1]!.accountId]);
+    expect(groupView(asA)).toEqual(groupView(asB));
+    expect(asA.unmappedGroups).toEqual(asB.unmappedGroups);
+  });
+
+  it('puts two Tickets that differ only in assignee in one group, with one key and label', () => {
+    const r = reviewWith(people.map((p) => p.accountId));
+    expect(r.unmappedGroups).toHaveLength(1);
+    expect(r.unmappedGroups[0]!.ticketCount).toBe(2);
+  });
+
+  it('carries no Tracker Account id, Resource id or person name anywhere in the Review output', () => {
+    const reviewInput = inputWith(people.map((p) => p.accountId));
+    // The sentinels ARE in the input — otherwise their absence below would prove nothing.
+    const given = serialise(reviewInput);
+    for (const s of sentinels) expect(given, `sentinel ${s} missing from the input`).toContain(s);
+
+    const output = serialise(computeReview(reviewInput));
+    const leaked = sentinels.filter((s) => output.includes(s));
+    expect(leaked, `person identity leaked into the Review output: ${leaked.join(', ')}`).toEqual([]);
+  });
+});

@@ -34,6 +34,22 @@ const SCHEDULING_REPOSITORIES = '^packages/db/src/repositories/(schedule|plan-in
 /** Baseline writer repository (story 4.1) — only `app/baseline` may import it. */
 const BASELINE_REPOSITORIES = '^packages/db/src/repositories/baseline([.][a-z.]+$|/)';
 
+/**
+ * The Client View route (FR-36, R1): `apps/web/src/app/c/…`, also behind route groups
+ * (`app/(client)/c/…`) and parallel-route slots (`app/@modal/c/…`), which the App Router leaves
+ * out of the URL. Spelled out per depth (zero to three such segments) rather than as
+ * `(?:SEGMENT/)*`: dependency-cruiser refuses a rule whose regex has a repeated group around a
+ * repeat (safe-regex, star height 2), and `?` or `{0,n}` count as repeats too (measured). The
+ * cap is held by a tripwire in `apps/web/src/app/approximate-guards.test.ts`, which fails if any
+ * `c/` folder sits behind more than three of them.
+ */
+const URL_LESS_SEGMENT = '(?:[(][^/]+[)]|@[^/]+)/';
+const CLIENT_VIEW_ROUTE = [0, 1, 2, 3].map((depth) => `^apps/web/src/app/${URL_LESS_SEGMENT.repeat(depth)}c/`);
+
+/** Story 5.14: the person/day-level approximate contract — the web wrapper and both domain modules. */
+const APPROXIMATE_MODULES =
+  '^apps/web/src/components/approximate-notice[.]tsx?$|^packages/domain/src/(present/)?approximate[.]ts$';
+
 /** @type {import('dependency-cruiser').IConfiguration} */
 module.exports = {
   forbidden: [
@@ -144,12 +160,28 @@ module.exports = {
         'nothing that computes. Not the `@momo/domain` barrel, not another module by subpath, ' +
         'and not present/codec.ts, which present/index.ts deliberately does not re-export: ' +
         'writing and reading stored values is not a page\'s to do. A figure a page needs comes ' +
-        'from a packages/app use case or the Review result.',
+        'from a packages/app use case or the Review result. Story 5.14 adds ONE more entry, ' +
+        'present/approximate.ts — the type-only door to the person/day-level Approximated<T> ' +
+        'envelope, kept out of the barrel so that importing present/index.ts never reaches it.',
       from: { path: '^apps/web/' },
       to: {
         path: '^packages/domain/',
-        pathNot: '^packages/domain/src/present/index[.]ts$',
+        pathNot: '^packages/domain/src/present/(index|approximate)[.]ts$',
       },
+    },
+    {
+      name: 'client-view-not-to-approximate',
+      severity: 'error',
+      comment:
+        'Story 5.14 / FR-26 / FR-34: person-level actuals never appear in a Client View. Nothing ' +
+        'reachable from the Client View route (app/**/c/**, route groups `(name)/` and slots ' +
+        '`@name/` ignored, since they do not change the URL) may reach the approximate ' +
+        '(person/day-level) contract: the ApproximateBreakdown wrapper or either approximate ' +
+        'domain module. Neither domain barrel re-exports approximate.ts, so a Client View that ' +
+        'reaches @momo/domain through packages/app stays clean. Probed by ' +
+        'apps/web/src/app/approximate-guards.test.ts with a temporary app/(__probe-approximate)/c page.',
+      from: { path: CLIENT_VIEW_ROUTE },
+      to: { path: APPROXIMATE_MODULES, reachable: true },
     },
     {
       name: 'other-apps-not-to-db',

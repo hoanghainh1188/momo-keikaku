@@ -507,7 +507,6 @@
     "formula": "Formula",
     "reading": "Reading",
     "the_effort_forecast_is_the_eac_from_the_project_": "The effort forecast is the EAC from the Project's EAC Method, so it includes Unplanned Work.",
-    "approximate_hours_are_derived_from_the_differenc": "Approximate — hours are derived from the difference between Tracker Snapshots, not from worklogs. Any breakdown by person or by day is approximate for that reason, and no view ranks or scores people by Unplanned Work.",
     "ticket": "Ticket",
     "title": "Title",
     "not_dispositioned": "not dispositioned",
@@ -702,5 +701,10 @@
     "em_dash": "—",
     "unit_hours": "h",
     "percent_symbol": "%"
+  },
+  "actuals": {
+    "approximate": {
+      "hours_spread_between_snapshots": "Approximate — hours are spread between snapshots, not taken from worklogs."
+    }
   }
 }

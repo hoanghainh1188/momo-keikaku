@@ -131,6 +131,12 @@ describe('@momo/domain/present, the one domain module apps/web may import (AD-1)
       'yen',
     ]);
   });
+
+  it('crosses no runtime value through present/approximate, the web entry to Approximated<T> (story 5.14)', async () => {
+    // `.dependency-cruiser.cjs` allows web this second file too; it is a type-only door, so a
+    // runtime export here (e.g. `approximate()`) would let a page mint or compute labels.
+    expect(Object.keys(await import('./approximate'))).toEqual([]);
+  });
 });
 
 describe('plan-display helpers (Epic 2 retro F2/F5)', () => {

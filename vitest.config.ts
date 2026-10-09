@@ -16,8 +16,13 @@ export default defineConfig({
       // apps/web's own `@/…` specifier (story 1.4 slice 1: the middleware and sign-in action tests).
       '@/': fileURLToPath(new URL('./apps/web/src/', import.meta.url)),
       // Before the bare name: an alias matches its key as a PREFIX too, so without this entry
-      // `@momo/domain/present` would resolve to `.../src/index.ts/present`. It is the one
-      // domain subpath `apps/web` imports (`.dependency-cruiser.cjs`, web-to-domain-present-only).
+      // `@momo/domain/present` would resolve to `.../src/index.ts/present`. With
+      // `present/approximate` (story 5.14), these are the only domain subpaths `apps/web` imports
+      // (`.dependency-cruiser.cjs`, web-to-domain-present-only); that one goes first, for the
+      // same prefix reason.
+      '@momo/domain/present/approximate': fileURLToPath(
+        new URL('./packages/domain/src/present/approximate.ts', import.meta.url),
+      ),
       '@momo/domain/present': fileURLToPath(
         new URL('./packages/domain/src/present/index.ts', import.meta.url),
       ),
