@@ -718,8 +718,6 @@ export default async function ReviewPage({
             </>
           )}
         </Section>
-
-        <p className="caption" style={{ marginTop: 40 }}>{t('review.approximate_hours_are_derived_from_the_differenc')}</p>
       </div>
 
       <DispositionRail

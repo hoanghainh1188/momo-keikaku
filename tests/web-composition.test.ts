@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { computeReview } from '@momo/domain';
 import type { ProjectReview } from '../packages/app/src/ports/project-read';
 import { MAPPING_TICKET_LIMIT } from '../packages/app/src/use-cases/get-project-mapping';
+import { acquireTreeProbeLock } from './support/tree-probe-lock';
 import {
   asOfDate,
   buildDemoState,
@@ -1107,23 +1108,33 @@ describe('apps/web states no Tenant and no actor of its own', () => {
       ['a constant actor', /\bactor\s*:/],
     ];
 
-    const files = walk(root);
+    // `apps/web/src/app/approximate-guards.test.ts` (story 5.14) writes a temporary probe page
+    // under this root; list and read it under the tree-probe lock so a probe is never listed and
+    // then gone (`tests/support/tree-probe-lock.ts`).
+    const releaseTree = await acquireTreeProbeLock();
+    let sources: (readonly [string, string])[];
+    try {
+      sources = walk(root).map((file) => [file, readFileSync(file, 'utf8')] as const);
+    } finally {
+      releaseTree();
+    }
+    const files = sources.map(([file]) => file);
     // A FLOOR, so the scan cannot pass having read nothing. `expect(offences).toEqual([])` is
     // vacuously true for an empty file list, and this is the only gate on "no constant Tenant id
     // or actor literal remains in apps/web" — a moved or renamed source root would retire it in
     // silence. The number is a floor, not a count: it only has to notice the directory vanishing.
     expect(files.length, 'the apps/web scan found no source file — has src/ moved?').toBeGreaterThan(20);
 
-    const offences = files.flatMap((file) => {
+    const offences = sources.flatMap(([file, source]) => {
       // Comments stripped first, as `packages/db/src/source-discipline.test.ts` does: a JSDoc
       // example or a prose sentence naming `tenantId:` is not a constant in the code.
-      const text = readFileSync(file, 'utf8')
+      const text = source
         .replace(/\/\*[\s\S]*?\*\//g, '')
         .replace(/(^|[^:])\/\/.*$/gm, '$1');
       return banned.filter(([, pattern]) => pattern.test(text)).map(([what]) => `${file}: ${what}`);
     });
     expect(offences).toEqual([]);
-  });
+  }, 300_000);
 });
 
 /**

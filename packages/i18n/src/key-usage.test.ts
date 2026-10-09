@@ -1,7 +1,8 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { acquireTreeProbeLock } from '../../../tests/support/tree-probe-lock';
 import { flattenKeys, messagesOf } from './index';
 
 /**
@@ -17,6 +18,15 @@ import { flattenKeys, messagesOf } from './index';
  * under any namespace the file declares.
  */
 const WEB_SRC = fileURLToPath(new URL('../../../apps/web/src/', import.meta.url));
+
+// `apps/web/src/app/approximate-guards.test.ts` (story 5.14) writes a temporary probe page under
+// `apps/web/src/app/`; walking the tree without the tree-probe lock could list it and then fail
+// to read it (`tests/support/tree-probe-lock.ts`).
+let releaseTree = (): void => {};
+beforeAll(async () => {
+  releaseTree = await acquireTreeProbeLock();
+}, 300_000);
+afterAll(() => releaseTree());
 
 function sourceFiles(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {

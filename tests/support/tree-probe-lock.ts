@@ -10,10 +10,15 @@
  * laptop). Excluding `__probe` from the other cruise would not have been enough — the composition
  * edit is not a probe file — and would have taught a second gate to look away from a path.
  *
- * So the writer holds this lock from the first probe written to the last one removed, and every
- * suite that walks or cruises the whole of `apps/` or `packages/` holds it while it does. Suites
- * that read one fixed directory without probes in it (`apps/web/src`, `packages/adapters/src`)
- * do not need it.
+ * Since story 5.14 `apps/web/src` is a probe target too: `apps/web/src/app/approximate-guards.test.ts`
+ * writes a temporary Client View under `apps/web/src/app/(__probe-approximate)/c/`, and
+ * `tests/depcruise-fences.test.ts` writes `apps/web/src/__probe-*.ts` files.
+ *
+ * So each writer holds this lock from the first probe written to the last one removed, and every
+ * suite that walks or cruises the whole of `apps/`, `packages/` or `apps/web/src` holds it while
+ * it does (`removed-routes.test.ts`, `packages/i18n/src/key-usage.test.ts`, the source scan in
+ * `tests/web-composition.test.ts`). Suites that read one fixed directory with no probes in it
+ * (`packages/adapters/src`) do not need it.
  *
  * The lock is a file created with `wx` (atomic: exactly one creator wins) holding the owner's
  * pid. It lives in the OS temp dir keyed by the checkout's path, so two worktrees never wait on

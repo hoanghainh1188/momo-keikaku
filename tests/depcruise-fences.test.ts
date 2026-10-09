@@ -50,7 +50,17 @@ function depcruise(): Cruise {
   }
 }
 
-const clean = depcruise();
+// The clean cruise is taken under the tree-probe lock too: since story 5.14,
+// `apps/web/src/app/approximate-guards.test.ts` also writes a probe into the tree, and its
+// deliberate violation must not be counted as this tree's.
+const clean = await (async (): Promise<Cruise> => {
+  const release = await acquireTreeProbeLock();
+  try {
+    return depcruise();
+  } finally {
+    release();
+  }
+})();
 
 /** Every module that imports better-auth, by the source path the cruiser resolved it at. */
 const betterAuthImporters = clean.modules
@@ -76,7 +86,7 @@ describe('the AD-1 Better Auth carve-out is still visible to the cruiser', () =>
 });
 
 /**
- * Five files written where a rule should and should not fire, cruised once together. They are
+ * Seven files written where a rule should and should not fire, cruised once together. They are
  * removed in `afterAll` even if an assertion throws; a stray `__probe` file would fail
  * `pnpm typecheck` loudly, which is the right failure mode should one ever leak.
  *
@@ -104,6 +114,17 @@ const PROBES = {
   baselineRepo: [
     'packages/app/src/__probe-baseline-repo.ts',
     "export { baselineRepositoryOn } from '../../db/src/repositories/baseline/index.js';\n",
+  ],
+  /**
+   * Story 5.14 widened `web-to-domain-present-only`'s `pathNot` from `present/index.ts` to
+   * `present/(index|approximate).ts`. These two hold the widening to exactly that: the codec,
+   * which `present/index.ts` deliberately leaves out, and the domain `approximate.ts` itself
+   * (only its type-only `present/approximate.ts` door is open to web) both still fire.
+   */
+  webCodec: ['apps/web/src/__probe-present-codec.ts', "export { encode } from '../../../packages/domain/src/present/codec';\n"],
+  webApproximate: [
+    'apps/web/src/__probe-domain-approximate.ts',
+    "export { approximate } from '../../../packages/domain/src/approximate';\n",
   ],
 } as const;
 
@@ -175,6 +196,18 @@ describe('the import fences fire where they should, and only there', () => {
     expect(
       fired.filter((v) => v.from === PROBES.baselineRepo[0]).map((v) => v.rule.name),
     ).toEqual(['baseline-repositories-only-from-app-baseline']);
+  });
+
+  it('fires web-to-domain-present-only on a web file importing present/codec.ts', () => {
+    expect(fired.filter((v) => v.from === PROBES.webCodec[0]).map((v) => v.rule.name)).toEqual([
+      'web-to-domain-present-only',
+    ]);
+  });
+
+  it('fires web-to-domain-present-only on a web file importing domain approximate.ts directly', () => {
+    expect(fired.filter((v) => v.from === PROBES.webApproximate[0]).map((v) => v.rule.name)).toEqual([
+      'web-to-domain-present-only',
+    ]);
   });
 
   it('fires both baseline rules when the composition root imports the baseline repository', () => {

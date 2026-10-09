@@ -1,6 +1,7 @@
 import { readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { acquireTreeProbeLock } from '../../../../tests/support/tree-probe-lock';
 
 /**
  * Story 2.2 removed the spike's Client View route, `app/c/[projectId]/page.tsx`. The Client View
@@ -10,6 +11,15 @@ import { describe, expect, it } from 'vitest';
  * rebuilds the Client View deletes this test deliberately.
  */
 const APP_DIR = fileURLToPath(new URL('.', import.meta.url));
+
+// `approximate-guards.test.ts` (story 5.14) probes its depcruise rule with a temporary
+// `app/(__probe-approximate)/c/` page — exactly the shape the second case below rejects — so this suite reads
+// `app/` under the tree-probe lock (`tests/support/tree-probe-lock.ts`).
+let releaseTree = (): void => {};
+beforeAll(async () => {
+  releaseTree = await acquireTreeProbeLock();
+}, 300_000);
+afterAll(() => releaseTree());
 
 const topLevelSegments = (): string[] =>
   readdirSync(APP_DIR, { withFileTypes: true })

@@ -1482,3 +1482,24 @@ above can see where it went.
 - source_spec: `_bmad-output/implementation-artifacts/spec-5-13-nothing-in-scope-is-silently-excluded.md`
   summary: No web/page tests assert the new Review/Connectors `data-testid`s for per-Connector OB and scope-change surfaces.
   evidence: 2026-10-08 story 5.13 verification-gap — repo pins Review figures at domain / demo-golden / db-round-trip, not page HTML; inventing a new UI content-test style is out of this story's verification style.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-14-approximate-figures-say-they-are-approximate.md`
+  summary: The structural guard in `apps/web/src/app/approximate-guards.test.ts` only sees a web view that names the envelope — an import of `Approximated` or anything from `@momo/domain/present/approximate`. A view that gets an `Approximated<T>` by inference (`const r = await byPerson(); r.data.map(…)`) without importing the type name bypasses `ApproximateBreakdown` unseen. The story that adds the first producer of `Approximated<T>` (the first person- or day-level breakdown) must tighten the guard — e.g. type-aware: no `.data` read on an `Approximated<T>`-typed expression outside `apps/web/src/components/approximate-notice.tsx`.
+  evidence: 2026-10-09 story 5.14 loop 1 decision (Q1→A, Loop 1 / 1→B): R0 ships the contract, the render-prop wrapper and the guards only; nothing produces `Approximated<T>` yet, so a type-checker-backed scan has nothing to hold and would be built blind. The AST guard already ignores comments and strings and covers named, renamed and namespace imports.
+  also: the guard is per file — `rendersBreakdown` is satisfied by one wrapper use, so a file that renders one envelope through `ApproximateBreakdown` and another's `.data` directly passes; and a local alias re-export (`export type { Approximated as Rows }`) hides the type name from the views that import `Rows`. Same root, same fix: a type-aware guard once a producer exists.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-14-approximate-figures-say-they-are-approximate.md`
+  summary: Rule `client-view-not-to-approximate` (`.dependency-cruiser.cjs`, `reachable: true`) targets `packages/domain/src/approximate.ts`, which today no barrel re-exports. Once a domain producer of `Approximated<T>` (a person- or day-level breakdown) is exported through the `@momo/domain` barrel, the barrel reaches `approximate.ts` and every real Client View (which reaches `@momo/domain` through `packages/app`) trips the rule. That story must re-target the rule — e.g. at the producer module or the `packages/app` use case that serves it — rather than at the envelope module, and keep the barrel-reach test in `apps/web/src/app/approximate-guards.test.ts` in step.
+  evidence: 2026-10-09 story 5.14 loop 2 (bad_spec): the loop-1 barrel export made the domain barrel reach `approximate.ts`; loop 2 removed it and added a barrel-reach test. The rule is correct only while no barrel reaches the envelope.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-14-approximate-figures-say-they-are-approximate.md`
+  summary: The 5.14 structural guard matches names, not bindings — an inline `import('@momo/domain/present/approximate').Approximated<T>` type, a `createElement as h` or namespace React callee in a `.ts` view, or a local component that happens to be named `ApproximateBreakdown` all slip past it.
+  evidence: Story 5.14 loop-2 review (Blind Hunter + Edge Case Hunter). Same root as the deferred inferred-envelope gap; close it with the type-aware guard the first producer of `Approximated<T>` needs.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-14-approximate-figures-say-they-are-approximate.md`
+  summary: `client-view-not-to-approximate` and its depth-cap tripwire do not match intercepting-route Client Views (`(.)c/`, `(..)c/`, `(...)c/`).
+  evidence: Story 5.14 loop-2 review (Edge Case Hunter). No Client View exists (R1); dependency-cruiser refuses nested regex repeats, so the markers must be enumerated — decide with the R1 Client View story how it is mounted.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-14-approximate-figures-say-they-are-approximate.md`
+  summary: The ja caption `actuals.approximate.hours_spread_between_snapshots` ("概算です — 時間はスナップショット間で按分したもので、作業ログから取得したものではありません。") is agent wording and needs a native-speaker check.
+  evidence: Story 5.14 implementation note; R1 Japanese copy is です・ます register (EXPERIENCE.md Voice and Tone).
