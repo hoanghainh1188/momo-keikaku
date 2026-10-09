@@ -8,6 +8,7 @@ import { hashPassword } from '../packages/db/auth/src/password';
 import { closeAllPools } from '../packages/db/src/client';
 import {
   LOAD_PROJECT_COUNT,
+  LOAD_TICKETS_PER_PROJECT,
   LOAD_WP_PER_PROJECT,
 } from '../packages/db/src/load-generator';
 import {
@@ -115,6 +116,14 @@ describe.skipIf(!reachable)('seed load orchestration (story 1.8)', () => {
 
       const tenants = await owner().select({ id: schema.tenant.id }).from(schema.tenant);
       expect(tenants.map((t) => t.id)).toEqual(['ten-load']);
+
+      // Story 5.15: the Ticket half — 2,000 per Project, every bk-load-* account linked once.
+      const [{ ticketCount }] = await owner().select({ ticketCount: count() }).from(schema.ticket);
+      expect(Number(ticketCount)).toBe(LOAD_PROJECT_COUNT * LOAD_TICKETS_PER_PROJECT);
+      const [{ linkCount }] = await owner()
+        .select({ linkCount: count() })
+        .from(schema.trackerAccountLinkEvent);
+      expect(Number(linkCount)).toBe(24);
 
       // Stable per-project index bands (not hash): 1000..1004 for the five load projects.
       const defaultRates = await owner()

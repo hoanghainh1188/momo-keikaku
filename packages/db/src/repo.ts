@@ -285,11 +285,19 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
     };
   });
 
-  const [latestSnap] = await tx
-    .select()
-    .from(s.trackerSnapshot)
-    .orderBy(desc(s.trackerSnapshot.observedAt))
-    .limit(1);
+  // Story 5.15 decision 4: pin THIS Project's latest snapshot — only its own Connectors' snapshots,
+  // latest by observedAt, seq as tiebreak. A Tenant-wide "latest" pinned another Project's Tickets
+  // in any multi-Project Tenant.
+  const projectConnectorIds = connectorRows.map((c) => c.id);
+  const [latestSnap] =
+    projectConnectorIds.length === 0
+      ? []
+      : await tx
+          .select()
+          .from(s.trackerSnapshot)
+          .where(inArray(s.trackerSnapshot.connectorId, projectConnectorIds))
+          .orderBy(desc(s.trackerSnapshot.observedAt), desc(s.trackerSnapshot.seq))
+          .limit(1);
 
   // Story 5.2: greenfield Projects (no Connector / no snapshot yet) must still load so the
   // Connectors page can show AddConnectorForm. Empty pinned snapshot until the first ingest.

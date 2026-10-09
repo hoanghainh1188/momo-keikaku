@@ -2,6 +2,11 @@ import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
+import {
+  LOAD_PROJECT_COUNT,
+  LOAD_TICKET_HISTORY,
+} from '../packages/db/src/load-generator';
+import { checkFixturePage, generatedLoadPages, runWhitelistGate } from './check-fixture-whitelist';
 
 const ROOT = join(import.meta.dirname, '..');
 const CHECKER = join(ROOT, 'scripts', 'check-fixture-whitelist.ts');
@@ -69,5 +74,50 @@ describe('fixture scenarios (story 5.1)', () => {
     } finally {
       rmSync(probeDir, { recursive: true, force: true });
     }
+  });
+});
+
+describe('fixture whitelist page check (story 5.15)', () => {
+  it('covers every generated load-fixture page and finds them clean', () => {
+    const pages = generatedLoadPages();
+    expect(pages).toHaveLength(LOAD_PROJECT_COUNT * LOAD_TICKET_HISTORY.length);
+    const observations = pages.reduce(
+      (sum, { page }) => sum + (page as { tickets: readonly unknown[] }).tickets.length,
+      0,
+    );
+    expect(observations).toBe(
+      LOAD_PROJECT_COUNT * LOAD_TICKET_HISTORY.reduce((a, b) => a + b, 0),
+    );
+    for (const { label, page } of pages) expect(checkFixturePage(page), label).toBeNull();
+    const gate = runWhitelistGate();
+    if (!gate.ok) throw new Error(gate.error);
+    // The gate itself walked the generated pages, not only the committed files.
+    expect(gate.summary).toContain(
+      `${LOAD_PROJECT_COUNT * LOAD_TICKET_HISTORY.length} generated load pages / ` +
+        `${observations} Ticket observations`,
+    );
+  });
+
+  it('names the offending field when a generated Ticket carries one outside the whitelist', () => {
+    const [first] = generatedLoadPages();
+    const page = first!.page as { tickets: Record<string, unknown>[] };
+    const dirty = {
+      ...page,
+      tickets: [{ ...page.tickets[0], description: 'leaked' }, ...page.tickets.slice(1)],
+    };
+    expect(checkFixturePage(dirty)).toMatch(/tickets\[0\] has banned field "description"/);
+
+    const extra = { ...page, tickets: [{ ...page.tickets[0], dueDate: 'x' }] };
+    expect(checkFixturePage(extra)).toMatch(/out-of-whitelist field "dueDate"/);
+  });
+
+  it('refuses an attribute kind outside the closed Backlog set', () => {
+    const [first] = generatedLoadPages();
+    const page = first!.page as { tickets: Record<string, unknown>[] };
+    const dirty = {
+      ...page,
+      tickets: [{ ...page.tickets[0], attributes: [{ kind: 'label', id: 'x' }] }],
+    };
+    expect(checkFixturePage(dirty)).toMatch(/attributes\[0\]\.kind must be one of/);
   });
 });

@@ -10,6 +10,34 @@ Epic 3 (Excel import) is still `backlog`. Every retro action item is `done`.
 `main`. It probably overlaps PR #119 (wall-clock NFR budgets run serially under `pnpm test:nfr`).
 Rebase it, or close it if #119 already covers it.
 
+## Story 5.15 — the Ticket half of the load fixture: measured (2026-10-10)
+
+`generateLoadFixture` now emits 2,000 Tickets per load Project over four weekly snapshots
+(1,700 / 1,800 / 1,900 / 2,000), replayed through `replayConnector` (`ingestSnapshot` +
+`applyRules`, extracted from `buildDemoState`). `SEED_PROFILE=load` writes 5 × 500 WPs and
+5 × 2,000 Tickets. `pnpm test:nfr` gates both budgets in `tests/load-fixture-nfr.test.ts` against a
+load-shaped probe Tenant (`ten-xtload`, seq band 975,000,000). Measured on local compose (macOS,
+Docker Postgres), two runs:
+
+| What | Measured | Budget |
+|------|----------|--------|
+| Probe seed, full shape (`writeLoadTenantRows`) — 10,000 Tickets, 26,193 ledger entries, 9,000 Mapping events | 3.2–3.3 s | 2 min stop-and-report line (1A) |
+| `SEED_PROFILE=load pnpm seed` | 3.8 s | — |
+| Week-5 full snapshot via `writeIngestSnapshot` onto a load Project (2,000 Tickets, 1,386 deltas) | 0.70–0.71 s | ≤ 5 min |
+| Server-side Review (`getProjectReview`, DB load + compute), 20 samples after warmup, after the pin fix | p75 140–141 ms, p95 146–149 ms | p75 < 2 s, p95 < 4 s |
+
+**Snapshot pin fix (decision 4).** `loadBundleInTenant` (`packages/db/src/repo.ts`) used to pin
+the Tenant-wide latest snapshot, so in a multi-Project Tenant a Review could read another
+Project's Tickets. It now pins the latest snapshot of this Project's own Connectors
+(`observedAt` desc, `seq` desc). `packages/db/src/review-snapshot-pin.test.ts` is the two-Project
+regression test, and it fails without the fix. The first Review measurement (p75 ≈ 137 ms) is
+**invalid**: it was taken over Project 1's week-5 snapshot, not the Reviewed Project's own.
+
+The Review figure is the server-side Review only. It excludes RSC render and network, and is **not**
+NFR-P1 met for page load (decision 2A). The page-load harness is one deferred-work entry, tied to
+Story 6.1. Decision 3A was not triggered: the identity upserts in `writeIngestSnapshot` are still
+one by one, and the 5-minute budget holds without batching them. CI timings will differ.
+
 ## Brief — Story 5.11: Coverage, per Connector, in Tickets and in hours
 
 Source: `epics.md:2361`; FR-23 (`prd.md:642`); SM-5 (`prd.md:1222`); UX-DR18 and UX-DR26 (`epics.md:237,245`);
