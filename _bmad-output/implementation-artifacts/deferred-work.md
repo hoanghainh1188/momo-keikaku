@@ -1131,6 +1131,7 @@ above can see where it went.
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-13-the-plan-tree-grid-and-its-schedule-preset.md`
   summary: Formal NFR-P1 Plan grid load harness (p75 under 2 s / p95 under 4 s on the Epic 1 500-WP fixture). Story 2.13 ships structural + smoke coverage (row render / ARIA treegrid / compareWp order); the timed harness is deferred.
   evidence: Spec Verification and Design Notes — fixture load smoke where practical; formal p75 harness deferred unless requested.
+  note: Gathered by Story 5.15 (2026-10-10) into the single NFR-P1 page-load harness entry (spec-5-15 source), tied to Story 6.1.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-13-the-plan-tree-grid-and-its-schedule-preset.md`
   summary: Schedule-strip sticky chrome, Float-anchor sentence, and What-moved band behaviour after recalculation (story 2.15). 2.13 ships empty structural slots only (Q1→A).
@@ -1339,6 +1340,7 @@ above can see where it went.
 - source_spec: `_bmad-output/implementation-artifacts/spec-5-5-one-writer-builds-the-actuals-ledger.md`
   summary: Batch ticket/tracker_account upserts inside writeIngestSnapshot to reduce NFR-P1 lock hold time on 2,000-Ticket ingest.
   evidence: Story 5.5 review — observations/ledger are chunked at 500; identity upserts remain one-by-one awaits under the Project lock.
+  note: Story 5.15 (2026-10-10) timed a full 2,000-Ticket week-5 snapshot onto a load-shaped Project at 0.70–0.74 s locally across runs, well inside 5 min, so decision 3A did not trigger. Still open as a lock-hold improvement.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-5-5-one-writer-builds-the-actuals-ledger.md`
   summary: Wire worker `notifyRecipients` (and credential/operator mail) to real Project ops emails instead of relying on the optional empty default.
@@ -1503,3 +1505,15 @@ above can see where it went.
 - source_spec: `_bmad-output/implementation-artifacts/spec-5-14-approximate-figures-say-they-are-approximate.md`
   summary: The ja caption `actuals.approximate.hours_spread_between_snapshots` ("概算です — 時間はスナップショット間で按分したもので、作業ログから取得したものではありません。") is agent wording and needs a native-speaker check.
   evidence: Story 5.14 implementation note; R1 Japanese copy is です・ます register (EXPERIENCE.md Voice and Tone).
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-15-the-ticket-half-of-the-load-fixture.md`
+  summary: NFR-P1 page-load harness (p75 < 2 s / p95 < 4 s, PRD:992) for the three pages it names. (1) Plan grid on the 500-WP fixture (already deferred by story 2.13). (2) Reconciliation Review, the Epic 6 view. (3) Client View. Each is measured end to end (RSC render plus network) against the load-fixture Tenant (`SEED_PROFILE=load`, 5 × 500 WPs × 2,000 Tickets). Tied to Story 6.1, Epic 6's first story.
+  evidence: Story 5.15 decision 2A (founder, 2026-10-10). `tests/load-fixture-nfr.test.ts` gates only the server-side `getProjectReview` (DB load plus compute), measured at p75 ≈ 140 ms locally after the snapshot-pin fix (decision 4; an earlier ≈ 137 ms was measured over the wrong snapshot and is invalid). That figure must not be reported as NFR-P1 met for page load.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-15-the-ticket-half-of-the-load-fixture.md`
+  summary: Test the Review snapshot pin's `seq` tiebreak (two Connectors on one Project with snapshots at the same `observedAt`).
+  evidence: maybe-false, medium if real — story 5.15 review round 2; removing `desc(seq)` from the pin in `loadBundleInTenant` passes every test. Settle with a two-Connector tie test.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-15-the-ticket-half-of-the-load-fixture.md`
+  summary: A multi-Connector (or mixed hours/count) Project's Review pins a single snapshot, so the other Connector's Tickets drop out of coverage and may not match the hours-filtered ledger.
+  evidence: Pre-existing (the Tenant-wide query also pinned one snapshot); story 5.15 decision 4 only scoped it to the Project. Per-Connector pinning belongs to Epic 6 (epic-5-context Downstream).

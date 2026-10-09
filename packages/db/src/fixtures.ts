@@ -271,36 +271,14 @@ export function buildDemoState(anchorIso?: string): DemoState {
   // which is a different string than a fixture-relabelled id. Stamping here broke
   // cross-tenant label completeness (story 5.13). In-memory Reviews that need OB
   // grouping call `stampDemoLedgerConnectorId` at the computeReview boundary.
-  let ledgerSeq = 1;
-  const ledger: LedgerEntry[] = [];
-  const leftScope: { ticketId: string; key: string }[] = [];
-  let prev: SnapshotRead | null = null;
-  let basis: 'hours' | 'count' = 'hours';
-
-  for (const snap of snapshots) {
-    // AD-7 / adversarial review H3: the active Baseline is the latest committed
-    // version BY SEQUENCE, never by comparing fixture timestamps.
-    const activeBaselineSeq = Math.max(...baselineVersions.map((b) => b.seq));
-    const res = ingestSnapshot({
-      prev,
-      next: snap,
-      activeBaselineVersionSeq: activeBaselineSeq,
-      seqFrom: ledgerSeq,
-      approvalRecordedAt: '2026-09-01T00:00:00.000Z',
-    });
-    ledger.push(...res.entries);
-    leftScope.push(...res.leftScope);
-    ledgerSeq = res.nextSeq;
-    basis = res.measurementBasis;
-
-    // FR-22: rules are live — re-evaluate every Ticket without a manual Mapping.
-    const head = mappingHead(mappingEvents);
-    const events = applyRules(fixture.mappingRules, snap.tickets, head, mapSeq, snap.observedAt);
-    mappingEvents.push(...events);
-    mapSeq += events.length;
-
-    prev = snap;
-  }
+  const replayed = replayConnector({
+    snapshots,
+    baselineVersions,
+    mappingRules: fixture.mappingRules,
+    seedMappingEvents: mappingEvents,
+    ledgerSeqFrom: 1,
+    mappingSeqFrom: mapSeq,
+  });
 
   return {
     anchor,
@@ -312,12 +290,78 @@ export function buildDemoState(anchorIso?: string): DemoState {
     activeBaselineSeq: fixture.baseline.seq,
     resources,
     snapshots,
-    ledger,
-    mappingEvents,
+    ledger: replayed.ledger,
+    mappingEvents: replayed.mappingEvents,
     mappingRules: fixture.mappingRules,
-    leftScope,
-    measurementBasis: basis,
+    leftScope: replayed.leftScope,
+    measurementBasis: replayed.measurementBasis,
   };
+}
+
+/** Client approval instant the fixture Connector replays under (FR-17 / story 5.2). */
+export const FIXTURE_APPROVAL_RECORDED_AT = '2026-09-01T00:00:00.000Z';
+
+export interface ReplayConnectorInput {
+  readonly snapshots: readonly SnapshotRead[];
+  readonly baselineVersions: readonly BaselineVersion[];
+  readonly mappingRules: readonly MappingRule[];
+  /** Mappings recorded before the first snapshot (the PM's manual ones); copied, never mutated. */
+  readonly seedMappingEvents: readonly MappingEvent[];
+  /** First ledger `seq` this replay allocates. */
+  readonly ledgerSeqFrom: number;
+  /** First `seq` for the Mapping events the rules append. */
+  readonly mappingSeqFrom: number;
+}
+
+export interface ReplayConnectorResult {
+  readonly ledger: LedgerEntry[];
+  /** Seed Mappings followed by every rule event the replay appended, in seq order. */
+  readonly mappingEvents: MappingEvent[];
+  readonly leftScope: { ticketId: string; key: string }[];
+  readonly measurementBasis: 'hours' | 'count';
+}
+
+/**
+ * Replays a fixture Connector through the domain path the product's writer uses: ingest each
+ * snapshot in order (`ingestSnapshot`), then re-evaluate Mapping Rules against the head inside
+ * the same step (AD-7 (e), FR-22). Pure and deterministic, so the demo and the load fixture
+ * (story 5.15) derive their ledger and Mappings the same way.
+ */
+export function replayConnector(input: ReplayConnectorInput): ReplayConnectorResult {
+  let ledgerSeq = input.ledgerSeqFrom;
+  let mapSeq = input.mappingSeqFrom;
+  const mappingEvents: MappingEvent[] = [...input.seedMappingEvents];
+  const ledger: LedgerEntry[] = [];
+  const leftScope: { ticketId: string; key: string }[] = [];
+  let prev: SnapshotRead | null = null;
+  let basis: 'hours' | 'count' = 'hours';
+
+  for (const snap of input.snapshots) {
+    // AD-7 / adversarial review H3: the active Baseline is the latest committed
+    // version BY SEQUENCE, never by comparing fixture timestamps.
+    const activeBaselineSeq = Math.max(...input.baselineVersions.map((b) => b.seq));
+    const res = ingestSnapshot({
+      prev,
+      next: snap,
+      activeBaselineVersionSeq: activeBaselineSeq,
+      seqFrom: ledgerSeq,
+      approvalRecordedAt: FIXTURE_APPROVAL_RECORDED_AT,
+    });
+    ledger.push(...res.entries);
+    leftScope.push(...res.leftScope);
+    ledgerSeq = res.nextSeq;
+    basis = res.measurementBasis;
+
+    // FR-22: rules are live — re-evaluate every Ticket without a manual Mapping.
+    const head = mappingHead(mappingEvents);
+    const events = applyRules(input.mappingRules, snap.tickets, head, mapSeq, snap.observedAt);
+    mappingEvents.push(...events);
+    mapSeq += events.length;
+
+    prev = snap;
+  }
+
+  return { ledger, mappingEvents, leftScope, measurementBasis: basis };
 }
 
 /** Connector id seed writes for the demo fixture Tenant (not projectOnly probes). */

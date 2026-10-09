@@ -38,6 +38,13 @@ import { and, eq, sql } from 'drizzle-orm';
 import type { Db } from './client';
 import { actorOf, DEMO_USERS } from './demo-identities';
 import { buildDemoState, type DemoState } from './fixtures';
+import {
+  generateLoadFixture,
+  loadProjectAsDemoState,
+  LOAD_TICKETS_PER_PROJECT,
+  LOAD_WP_PER_PROJECT,
+  type LoadFixtureShape,
+} from './load-generator';
 import * as s from './schema';
 import { tenantMembership } from './schema-membership';
 import { rebuildMappingHeadForProject } from './repo-writes';
@@ -161,6 +168,14 @@ export interface TenantRowWriteOptions {
    * `1_000 + projectIndex` — stable and collision-free across the 5×500 shape (story 1.8).
    */
   readonly projectIndex?: number;
+  /**
+   * Story 5.15: write Ticket and Tracker Account identity under the Connector's `site` — the key
+   * `writeIngestSnapshot` looks them up by — instead of the display site. The load fixture sets
+   * it so a later live snapshot onto a seeded load Project finds its 2,000 Tickets rather than
+   * colliding with them on `ticket_project_tracker_issue_key`. The demo and its probes leave it
+   * unset: their identity rows stay byte-for-byte what they were.
+   */
+  readonly identityOnConnectorSite?: boolean;
 }
 
 /** The demo seed's own options: no prefix, no offset — byte-for-byte what it wrote before. */
@@ -181,6 +196,8 @@ export interface TenantRowWriteResult {
     /** `wp_status_event` rows: one per WP the fixture records an actual finish for. */
     readonly statusEvents: number;
     readonly snapshots: number;
+    /** Tickets in the latest snapshot (story 5.15 logs these for the load profile). */
+    readonly tickets: number;
     readonly ledgerEntries: number;
     readonly mappingEvents: number;
   };
@@ -478,13 +495,17 @@ export async function writeTenantRows(
   }
 
   // --- the replayed Connector
+  // Story 5.15: load Projects each carry four snapshots, and `seq` is a global key — so each
+  // load Project takes its own band (`10_000 + 100 × projectIndex`). The demo keeps 1..n.
+  const snapshotSeqBase =
+    options.projectIndex !== undefined ? 10_000 + options.projectIndex * 100 : 0;
   for (let i = 0; i < state.snapshots.length; i += 1) {
     const snap = state.snapshots[i]!;
     await tx
       .insert(s.trackerSnapshot)
       .overridingSystemValue()
       .values({
-        seq: fixtureRelativeSeq(i + 1, options.seqOffset),
+        seq: fixtureRelativeSeq(snapshotSeqBase + i + 1, options.seqOffset),
         id: snap.snapshotId,
         tenantId,
         connectorId,
@@ -517,9 +538,10 @@ export async function writeTenantRows(
   // Seed Mappings (and probe copies) name Tickets that never appear in any snapshot — upsert
   // those rows too so the FK holds when events are written below.
   const latestForIdentity = state.snapshots.at(-1);
-  const site = own(
-    projectOnly ? `${f.project.id}.backlog.jp` : 'osaka-retail.backlog.jp',
-  );
+  const site =
+    options.identityOnConnectorSite === true
+      ? connectorSite
+      : own(projectOnly ? `${f.project.id}.backlog.jp` : 'osaka-retail.backlog.jp');
   if (latestForIdentity) {
     const accounts = latestForIdentity.accounts ?? [];
     if (accounts.length > 0) {
@@ -550,7 +572,9 @@ export async function writeTenantRows(
             },
           }),
       );
-      // Story 5.8: demo links as append-only events (live array already stamped on resource insert).
+      // Story 5.8: the Tenant's Resource links as append-only events (live array already stamped on
+      // resource insert), written once — with the Tenant shell, so the load profile's first Project
+      // links every `bk-load-*` account to its `res-load-*` Resource (story 5.15).
       // Fixture Resources may name accountIds absent from every snapshot (e.g. bk-1001 / Linh).
       // Upsert synthetic Tracker Account rows so link events satisfy the FK and cross-tenant
       // fixture-value coverage still sees those accountIds after link_seq_max rebuild.
@@ -767,6 +791,7 @@ export async function writeTenantRows(
       wps: state.wps.length,
       statusEvents: statusEvents.length,
       snapshots: state.snapshots.length,
+      tickets: state.snapshots.at(-1)?.tickets.length ?? 0,
       ledgerEntries: state.ledger.length,
       mappingEvents: state.mappingEvents.length,
     },
@@ -860,12 +885,8 @@ export async function seed(db: Db, options: SeedOptions): Promise<void> {
     throw new Error('seed was given an empty demo password hash; hash SEED_DEMO_PASSWORD first.');
   }
   if (options.profile === 'load') {
-    const { generateLoadFixture, loadProjectAsDemoState } = await import('./load-generator');
     const shape = generateLoadFixture();
-    const first = loadProjectAsDemoState(shape, 0);
-    await withTenant(db, first.fixture.tenant.id, (tx) =>
-      seedLoadInTenant(tx, shape, options),
-    );
+    await withTenant(db, shape.tenant.id, (tx) => seedLoadInTenant(tx, shape, options));
     return;
   }
   const state = buildDemoState();
@@ -893,50 +914,84 @@ async function seedInTenant(tx: Tx, state: DemoState, options: SeedOptions): Pro
 
 async function seedLoadInTenant(
   tx: Tx,
-  shape: import('./load-generator').LoadFixtureShape,
+  shape: LoadFixtureShape,
   options: SeedOptions,
 ): Promise<void> {
-  const { loadProjectAsDemoState, LOAD_PROJECT_COUNT, LOAD_WP_PER_PROJECT } = await import(
-    './load-generator'
-  );
-  const first = loadProjectAsDemoState(shape, 0);
-  const tenantId = first.fixture.tenant.id;
-  await assertSingleTenantDatabase(tx, tenantId);
+  await assertSingleTenantDatabase(tx, shape.tenant.id);
   await truncateForReseed(tx);
 
-  const allProjectIds = shape.projects.map((p) => p.id);
-  let totalWps = 0;
-  for (let i = 0; i < shape.projects.length; i += 1) {
-    const state = loadProjectAsDemoState(shape, i);
-    if (i === 0) {
-      const written = await writeTenantRows(tx, state, {
-        ...DEMO_ROW_WRITE_OPTIONS,
-        passwordHash: options.demoPasswordHash,
-        clock: options.clock,
-        projectIndex: i,
-      });
-      totalWps += written.counts.wps;
-      await tx
-        .update(tenantMembership)
-        .set({ projectIds: allProjectIds })
-        .where(
-          sql`${tenantMembership.tenantId} = ${tenantId} AND ${tenantMembership.role} = 'pm'`,
-        );
-    } else {
-      const written = await writeTenantRows(tx, state, {
-        ...DEMO_ROW_WRITE_OPTIONS,
-        clock: options.clock,
-        projectOnly: true,
-        projectIndex: i,
-      });
-      totalWps += written.counts.wps;
-    }
-  }
+  const started = performance.now();
+  const written = await writeLoadTenantRows(tx, shape, {
+    ...DEMO_ROW_WRITE_OPTIONS,
+    passwordHash: options.demoPasswordHash,
+    clock: options.clock,
+  });
+  const c = written.counts;
 
   console.log(
-    `seeded (load): ${LOAD_PROJECT_COUNT} Projects × ${LOAD_WP_PER_PROJECT} WPs ` +
-      `(${totalWps} total), ${shape.resources.length} Resources`,
+    `seeded (load): ${c.projects} Projects × ${LOAD_WP_PER_PROJECT} WPs (${c.wps} total), ` +
+      `${shape.resources.length} Resources; ${c.projects} × ${LOAD_TICKETS_PER_PROJECT} Tickets ` +
+      `(${c.tickets} total), ${c.snapshots} snapshots, ${c.ledgerEntries} ledger entries, ` +
+      `${c.mappingEvents} mapping events in ${Math.round(performance.now() - started)} ms`,
   );
+}
+
+/** What `writeLoadTenantRows` wrote, summed over the load Projects. */
+export interface LoadTenantRowWriteResult {
+  readonly tenantId: string;
+  readonly projectIds: readonly string[];
+  readonly counts: {
+    readonly projects: number;
+    readonly wps: number;
+    readonly tickets: number;
+    readonly snapshots: number;
+    readonly ledgerEntries: number;
+    readonly mappingEvents: number;
+  };
+}
+
+/**
+ * Writes the whole load-fixture Tenant — the shell with the first Project, then the other
+ * Projects `projectOnly` — through `writeTenantRows`, and gives the PM every load Project.
+ *
+ * The load seed calls it with no prefix and no offset; story 5.15's NFR gate calls it with an
+ * `idPrefix` / `seqOffset` (and a namespaced shape from `generateLoadFixture`) to write a
+ * load-shaped probe Tenant beside whatever else the database holds. Assumes `tx` is inside
+ * `withTenant(shape.tenant.id)`; no TRUNCATE, no guard — those are the seed's.
+ */
+export async function writeLoadTenantRows(
+  tx: Tx,
+  shape: LoadFixtureShape,
+  options: Pick<TenantRowWriteOptions, 'idPrefix' | 'seqOffset' | 'passwordHash' | 'clock'>,
+): Promise<LoadTenantRowWriteResult> {
+  const projectIds = shape.projects.map((p) => p.id);
+  const totals = { projects: 0, wps: 0, tickets: 0, snapshots: 0, ledgerEntries: 0, mappingEvents: 0 };
+  for (let i = 0; i < shape.projects.length; i += 1) {
+    const state = loadProjectAsDemoState(shape, i);
+    const written = await writeTenantRows(tx, state, {
+      idPrefix: options.idPrefix,
+      seqOffset: options.seqOffset,
+      clock: options.clock,
+      projectIndex: i,
+      identityOnConnectorSite: true,
+      ...(i === 0 ? { passwordHash: options.passwordHash } : { projectOnly: true }),
+    });
+    totals.projects += 1;
+    totals.wps += written.counts.wps;
+    totals.tickets += written.counts.tickets;
+    totals.snapshots += written.counts.snapshots;
+    totals.ledgerEntries += written.counts.ledgerEntries;
+    totals.mappingEvents += written.counts.mappingEvents;
+    if (i === 0) {
+      await tx
+        .update(tenantMembership)
+        .set({ projectIds })
+        .where(
+          sql`${tenantMembership.tenantId} = ${shape.tenant.id} AND ${tenantMembership.role} = 'pm'`,
+        );
+    }
+  }
+  return { tenantId: shape.tenant.id, projectIds, counts: totals };
 }
 
 async function assertSingleTenantDatabase(tx: Tx, tenantId: string): Promise<void> {
