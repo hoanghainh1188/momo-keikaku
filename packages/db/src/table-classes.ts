@@ -241,7 +241,7 @@ export const TABLE_REGISTRY: readonly TableEntry[] = [
     table: 'pct_override_event',
     class: 'append-only',
     tenantColumn: 'tenant_id',
-    why: 'Recorded Percent Complete for Plan-grid edits (story 2.10, AD-25). Append-only; the head feeds schedule_run.inputs. FR-30\'s audited override ceremony is Epic 6.',
+    why: 'Recorded Percent Complete for Plan-grid edits (story 2.10, AD-25) and Review Accept (story 6.4 / FR-30 reason+source). Append-only; the head feeds schedule_run.inputs.',
   },
   {
     table: 'custom_field_definition',

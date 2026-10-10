@@ -133,11 +133,18 @@ export interface AppendStatusEventCommand {
   readonly at: Date;
 }
 
+/** Story 6.4 R0 writers for Recorded % — Accept vs Plan-grid. */
+export type PctOverrideSource = 'pm_override' | 'plan_edit';
+
 export interface AppendPctOverrideCommand {
   readonly projectId: string;
   readonly wpId: string;
   readonly recordedPctNum: bigint;
   readonly recordedPctDen: bigint;
+  /** Story 6.4: Accept requires non-empty; Plan-grid / legacy may omit. */
+  readonly reason?: string | null;
+  /** Story 6.4: `pm_override` (Accept) or `plan_edit` (Plan-grid). */
+  readonly source?: PctOverrideSource | null;
   readonly actor: string;
   readonly at: Date;
 }
@@ -828,6 +835,8 @@ export function planInputRepositoryOn(bound: Bound) {
         wpId: command.wpId,
         recordedPctNum: command.recordedPctNum,
         recordedPctDen: command.recordedPctDen,
+        reason: command.reason ?? null,
+        source: command.source ?? null,
         actor: command.actor,
         at: command.at,
       });

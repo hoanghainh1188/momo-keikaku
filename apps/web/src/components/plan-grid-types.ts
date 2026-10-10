@@ -43,6 +43,8 @@ export interface PlanGridRowView {
   readonly actualStart: string | null;
   readonly actualFinish: string | null;
   readonly recordedPct: { readonly num: string; readonly den: string } | null;
+  /** Story 6.4: non-empty head reason ⇒ PM-adjusted (unhideable contract stub). */
+  readonly recordedPctPmAdjusted: boolean;
   readonly remainingDays: number | null;
   readonly exceptionLabel: string | null;
   readonly exceptionKind: 'violation' | 'out_of_sequence' | 'not_schedulable' | null;

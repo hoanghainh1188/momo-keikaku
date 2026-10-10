@@ -47,4 +47,17 @@ describe('divergenceStatusTags (story 6.2)', () => {
       divergenceStatusTags({ lowEvidence: true, baselineMh: 0n, evFell: false }),
     ).toEqual([]);
   });
+
+  it('includes estimate-driven tag when estimateDrivenEv is true (story 6.4)', () => {
+    const html = renderTags(
+      divergenceStatusTags({
+        lowEvidence: false,
+        baselineMh: 1000n,
+        evFell: false,
+        estimateDrivenEv: true,
+      }),
+    );
+    expect(html).toContain('data-testid="estimate-driven-ev"');
+    expect(html).toContain('estimate_driven');
+  });
 });

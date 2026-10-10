@@ -13,9 +13,16 @@ import {
 } from './formula-popover-detail';
 import { computeEvm, FORMULA_VERSION, type EvmResult, type WpMeasure } from './evm';
 import { computeForecast, type ForecastResult } from './forecast';
-import { computeHealth, isBehindPlan, type HealthColour, type HealthIndicator } from './health';
+import {
+  compareRatio,
+  computeHealth,
+  isBehindPlan,
+  type HealthColour,
+  type HealthIndicator,
+} from './health';
 import { mappingHead, type MappingHeadEntry } from './mapping';
 import { compareWp } from './schedule/order';
+import { remainingDuration } from './schedule/recalculate';
 import {
   DEFAULT_RESOLVED_STATUS_IDS,
   isResolvedStatus,
@@ -32,6 +39,7 @@ import {
 import {
   compareBigint,
   costOf,
+  divRoundHalfEven,
   mhAmountOrZero,
   ratio,
   ratioValue,
@@ -44,6 +52,30 @@ import {
   type Ratio,
   type RatioMetric,
 } from './units';
+
+/**
+ * Story 6.4 Comfort threshold: leaf WPs with |Observed − Recorded| strictly greater than this
+ * many percentage points appear on the gap list. Fixed at 10 pts (no Project setting UI).
+ */
+export const OBSERVED_RECORDED_GAP_THRESHOLD_PTS = 10;
+
+/** Exact Ratio for the Comfort threshold (10 percentage points = 10/100). */
+const GAP_THRESHOLD = ratio(BigInt(OBSERVED_RECORDED_GAP_THRESHOLD_PTS), 100n);
+
+/** Story 6.4 R0 Recorded % source labels (display / Accept writers). */
+export type RecordedPctSource = 'none' | 'pm_override' | 'plan_edit';
+
+/**
+ * Pinned head of `pct_override_event` for one WP (at or below `pctOverrideSeqMax`).
+ * Absent from the map ≡ no Recorded value (scheduled as 0%).
+ */
+export interface RecordedPctHead {
+  readonly pct: Ratio;
+  /** Null when Plan-grid / legacy left none; non-empty marks PM-adjusted. */
+  readonly reason: string | null;
+  /** Null on legacy rows; Accept writes `pm_override`, Plan-grid `plan_edit`. */
+  readonly source: 'pm_override' | 'plan_edit' | null;
+}
 
 export type DispositionKind = 'map' | 'plan' | 'cr_candidate' | 'explain';
 
@@ -210,6 +242,16 @@ export interface ReviewInput {
    * Passed into `computeEvm`; absent/empty → no EV-fall flags. Never invent priors.
    */
   priorEvByWp?: ReadonlyMap<string, Mh>;
+  /**
+   * Story 6.4: pinned Recorded % heads (at `pctOverrideSeqMax`). Missing WP ≡ null Recorded
+   * (scheduled as 0%; source `none` on the gap list).
+   */
+  recordedPctByWp?: ReadonlyMap<string, RecordedPctHead>;
+  /**
+   * Story 6.4: leaf duration (working days) for Accept consequence remaining-duration copy.
+   * Null duration ⇒ remaining before/after unavailable on the row.
+   */
+  durationDaysByWp?: ReadonlyMap<string, number | null>;
 }
 
 /** Story 5.13 / UX-DR23: Opening Balance hours for one Connector. */
@@ -295,8 +337,50 @@ export interface DivergenceRow {
   lowEvidence: boolean;
   /** Story 6.2: current EV strictly below a supplied prior for this WP. */
   evFell: boolean;
+  /**
+   * Story 6.4: Observed % (and thus EV) is estimate-basis — pin estimates move Observed EV.
+   */
+  estimateDrivenEv: boolean;
   isCatchAll: boolean;
   nonBaselined: boolean;
+}
+
+/**
+ * Story 6.4: a leaf WP whose pinned Recorded head carries a non-empty reason (PM-adjusted).
+ */
+export interface PmAdjustedRow {
+  wpId: string;
+  wbsCode: string;
+  name: string;
+  recordedPct: Ratio;
+  reason: string;
+  source: Exclude<RecordedPctSource, 'none'>;
+}
+
+/**
+ * Story 6.4: one leaf WP on the Observed-vs-Recorded gap list (|gap| > 10 pts, worst first).
+ */
+export interface ObservedVsRecordedGapRow {
+  wpId: string;
+  wbsCode: string;
+  name: string;
+  observedPct: Ratio;
+  pctBasis: WpMeasure['pctBasis'];
+  evidenceCount: number;
+  /** Null when no Recorded override (scheduled as 0%). */
+  recordedPct: Ratio | null;
+  recordedSource: RecordedPctSource;
+  /** Non-empty head reason ⇒ PM-adjusted; null otherwise. */
+  recordedReason: string | null;
+  /** Exact |Observed − Recorded| as a Ratio (Recorded null treated as 0). */
+  gapAbs: Ratio;
+  evObservedMh: Mh;
+  evRecordedMh: Mh;
+  /** True when Observed % uses estimate basis (pin estimates move EV). */
+  estimateDrivenEv: boolean;
+  durationDays: number | null;
+  remainingDaysBefore: number | null;
+  remainingDaysAfter: number | null;
 }
 
 /**
@@ -347,6 +431,17 @@ export interface ReviewResult {
   milestones: MilestoneRow[] | null;
   /** Null while the Project has no Baseline. */
   divergence: DivergenceRow[] | null;
+  /**
+   * Story 6.4: Observed-vs-Recorded gap list (|gap| > 10 pts, worst first). Null without Baseline
+   * (same PARTIAL as divergence). Never includes SM-C4.
+   */
+  observedVsRecorded: ObservedVsRecordedGapRow[] | null;
+  /**
+   * Story 6.4: leaf WPs whose pinned Recorded head has a non-empty reason (PM-adjusted).
+   * Independent of the gap list so Accept that closes a gap still shows the marker.
+   * Empty when none; never null.
+   */
+  pmAdjusted: readonly PmAdjustedRow[];
   /** Story 6.3: formula popover payloads; null without Baseline. */
   formulaMetrics: FormulaMetricDetail[] | null;
   /**
@@ -586,6 +681,19 @@ export function computeReview(input: ReviewInput): ReviewResult {
       ? null
       : divergenceRows(baseline, evm, input.wps, attribution.acByWp);
 
+  const recordedPctByWp = input.recordedPctByWp ?? new Map();
+  const observedVsRecorded =
+    baseline === null || evm === null
+      ? null
+      : observedVsRecordedGapRows({
+          baseline,
+          evm,
+          wps: input.wps,
+          recordedPctByWp,
+          durationDaysByWp: input.durationDaysByWp ?? new Map(),
+        });
+  const pmAdjusted = pmAdjustedRows(input.wps, recordedPctByWp);
+
   // --- FR-23 coverage (Review captions; hour share from Coverage/SM-5 pass)
   const inScopePinned = input.pinnedSnapshot.tickets.filter(
     (t) => !leftScope.has(t.trackerIssueId),
@@ -768,6 +876,8 @@ export function computeReview(input: ReviewInput): ReviewResult {
     ruleUnmapped,
     milestones,
     divergence,
+    observedVsRecorded,
+    pmAdjusted,
     formulaMetrics,
     coverage,
     catchAllShare,
@@ -830,6 +940,7 @@ function divergenceRows(
     .map((w) => {
       const b = baselineWpById.get(w.id);
       const m = perWpById.get(w.id);
+      const pctBasis = m?.pctBasis ?? 'no-evidence';
       return {
         wpId: w.id,
         wbsCode: w.wbsCode,
@@ -843,9 +954,10 @@ function divergenceRows(
         acMh: acByWp.get(w.id) ?? 0n,
         evMh: m?.evMh ?? 0n,
         pctComplete: m?.pctComplete ?? ZERO,
-        pctBasis: m?.pctBasis ?? 'no-evidence',
+        pctBasis,
         lowEvidence: m?.lowEvidence ?? true,
         evFell: m?.evFell ?? false,
+        estimateDrivenEv: pctBasis === 'estimate',
         // Story 5.12: show the Baseline pin when present; else the live cache (display only).
         isCatchAll: b?.isCatchAll ?? w.isCatchAll,
         nonBaselined: !b,
@@ -854,6 +966,131 @@ function divergenceRows(
     .sort((a, b) =>
       compareWp({ id: a.wpId, wbsCode: a.wbsCode }, { id: b.wpId, wbsCode: b.wbsCode }),
     );
+}
+
+/** Exact |a − b| as an unreduced Ratio (both dens positive after construction). */
+function absRatioDiff(a: Ratio, b: Ratio): Ratio {
+  const left = a.num * b.den;
+  const right = b.num * a.den;
+  const den = a.den * b.den;
+  const raw = left >= right ? left - right : right - left;
+  const num = raw < 0n ? -raw : raw;
+  const positiveDen = den < 0n ? -den : den;
+  return ratio(num, positiveDen === 0n ? 1n : positiveDen);
+}
+
+/**
+ * Story 6.4: leaf WPs whose |Observed − Recorded| exceeds the Comfort threshold (10 pts),
+ * worst gap first. Recorded null schedules as 0%. EVRec = baselineMh × recordedPct (half-even).
+ */
+function observedVsRecordedGapRows(input: {
+  readonly baseline: BaselineVersion;
+  readonly evm: EvmResult;
+  readonly wps: readonly WorkPackage[];
+  readonly recordedPctByWp: ReadonlyMap<string, RecordedPctHead>;
+  readonly durationDaysByWp: ReadonlyMap<string, number | null>;
+}): ObservedVsRecordedGapRow[] {
+  const baselineWpById = new Map(input.baseline.wps.map((b) => [b.wpId, b]));
+  const perWpById = new Map(input.evm.perWp.map((w) => [w.wpId, w]));
+  const rows: ObservedVsRecordedGapRow[] = [];
+
+  for (const w of input.wps) {
+    if (!w.isLeaf || w.isMilestone) continue;
+    const m = perWpById.get(w.id);
+    const b = baselineWpById.get(w.id);
+    const observedPct = m?.pctComplete ?? ZERO;
+    const pctBasis = m?.pctBasis ?? 'no-evidence';
+    const head = input.recordedPctByWp.get(w.id);
+    const recordedPct = head?.pct ?? null;
+    const recordedForGap = recordedPct ?? ZERO;
+    const gapAbs = absRatioDiff(observedPct, recordedForGap);
+    if (compareRatio(gapAbs, GAP_THRESHOLD) <= 0) continue;
+
+    const baselineMh = b?.baselineMh ?? 0n;
+    const evObservedMh = m?.evMh ?? 0n;
+    const evRecordedMh =
+      recordedPct === null
+        ? 0n
+        : divRoundHalfEven(baselineMh * recordedPct.num, recordedPct.den);
+
+    let recordedSource: RecordedPctSource = 'none';
+    if (head !== undefined) {
+      recordedSource = head.source === 'pm_override' ? 'pm_override' : 'plan_edit';
+      // Legacy rows with a head but null source still show as plan_edit (a written override).
+      if (head.source === null) recordedSource = 'plan_edit';
+    }
+
+    const durationDays = input.durationDaysByWp.has(w.id)
+      ? (input.durationDaysByWp.get(w.id) ?? null)
+      : null;
+    let remainingDaysBefore: number | null = null;
+    let remainingDaysAfter: number | null = null;
+    if (durationDays !== null && durationDays !== undefined) {
+      // Consequence copy must never fail the Review (bad duration / pct → leave null).
+      try {
+        remainingDaysBefore = remainingDuration(durationDays, recordedPct);
+        remainingDaysAfter = remainingDuration(durationDays, observedPct);
+      } catch {
+        remainingDaysBefore = null;
+        remainingDaysAfter = null;
+      }
+    }
+
+    rows.push({
+      wpId: w.id,
+      wbsCode: w.wbsCode,
+      name: w.name,
+      observedPct,
+      pctBasis,
+      evidenceCount: m?.mappedTickets ?? 0,
+      recordedPct,
+      recordedSource,
+      recordedReason: head?.reason ?? null,
+      gapAbs,
+      evObservedMh,
+      evRecordedMh,
+      estimateDrivenEv: pctBasis === 'estimate',
+      durationDays,
+      remainingDaysBefore,
+      remainingDaysAfter,
+    });
+  }
+
+  rows.sort((a, b) => {
+    const gapCmp = compareRatio(b.gapAbs, a.gapAbs);
+    if (gapCmp !== 0) return gapCmp;
+    return compareWp({ id: a.wpId, wbsCode: a.wbsCode }, { id: b.wpId, wbsCode: b.wbsCode });
+  });
+  return rows;
+}
+
+/** Leaf WPs with a non-empty pinned Recorded reason — PM-adjusted (story 6.4). */
+function pmAdjustedRows(
+  wps: readonly WorkPackage[],
+  recordedPctByWp: ReadonlyMap<string, RecordedPctHead>,
+): PmAdjustedRow[] {
+  const rows: PmAdjustedRow[] = [];
+  for (const w of wps) {
+    if (!w.isLeaf || w.isMilestone) continue;
+    const head = recordedPctByWp.get(w.id);
+    if (head === undefined) continue;
+    const reason = head.reason?.trim() ?? '';
+    if (reason.length === 0) continue;
+    const source: Exclude<RecordedPctSource, 'none'> =
+      head.source === 'pm_override' ? 'pm_override' : 'plan_edit';
+    rows.push({
+      wpId: w.id,
+      wbsCode: w.wbsCode,
+      name: w.name,
+      recordedPct: head.pct,
+      reason,
+      source,
+    });
+  }
+  rows.sort((a, b) =>
+    compareWp({ id: a.wpId, wbsCode: a.wbsCode }, { id: b.wpId, wbsCode: b.wbsCode }),
+  );
+  return rows;
 }
 
 export type { MappingHeadEntry };

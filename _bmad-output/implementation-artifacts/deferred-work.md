@@ -1549,3 +1549,15 @@ above can see where it went.
 - source_spec: `_bmad-output/implementation-artifacts/spec-6-3-the-formulas-and-the-one-eac-method-r0-ships.md`
   summary: BAC money at Baseline date with equal split across assigned Resources (unassigned → Project default Rate), aligned with epic AC §3 — not the R0 default-Rate shortcut.
   evidence: Story 6.3 founder decision Q4-B — R0 ships `bacJpy = costOf(bacMh, project.defaultRateYenPerHour)` matching PV/EV money; defer equal-split / rate-at-Baseline-date until a dedicated money slice.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-6-4-the-evidence-and-the-plan-are-made-to-face-each-other.md`
+  summary: SM-C4 — report the share of EV coming from PM overrides (rising share means numbers are being steered).
+  evidence: Story 6.4 founder decision Q4-B — defer counter-metric; gap list + Accept ship without it.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-6-4-the-evidence-and-the-plan-are-made-to-face-each-other.md`
+  summary: Accept Observed dialog RTL/component tests (Esc/focus, empty-reason UI, consequence copy).
+  evidence: Story 6.4 review — action + domain tests cover ceremony; UI harness deferred as low/cosmetic for R0.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-6-4-the-evidence-and-the-plan-are-made-to-face-each-other.md`
+  summary: DB-backed assertion that `loadReview` pins `recordedPctByWp` / `durationDaysByWp` (and gap rows reflect stored reason/source).
+  evidence: Story 6.4 verification-gap — unit injects maps; no Postgres in build VM to extend baseline-read/db-round-trip.

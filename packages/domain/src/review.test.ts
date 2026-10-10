@@ -857,3 +857,299 @@ describe('Unplanned Work and the Review never name a person (story 5.14 / FR-26 
     expect(leaked, `person identity leaked into the Review output: ${leaked.join(', ')}`).toEqual([]);
   });
 });
+
+describe('computeReview Observed-vs-Recorded gap list (story 6.4)', () => {
+  const gapInput = (overrides: Partial<ReviewInput> = {}): ReviewInput => ({
+    ...input,
+    measurementBasis: 'hours',
+    ...overrides,
+  });
+
+  it('is null without a Baseline (same PARTIAL as divergence)', () => {
+    const r = computeReview(gapInput({ activeBaselineSeq: null }));
+    expect(r.observedVsRecorded).toBeNull();
+    expect(r.divergence).toBeNull();
+  });
+
+  it('treats null Recorded as 0% for gap and EVRec, source none', () => {
+    // Base fixture: one mapped open ticket → Observed 0% (no-evidence or count 0) — force
+    // a large Observed by marking the ticket Closed with estimate basis.
+    const withObs = gapInput({
+      pinnedSnapshot: {
+        ...input.pinnedSnapshot,
+        tickets: [
+          {
+            ...input.pinnedSnapshot.tickets[0]!,
+            statusId: 'Closed',
+            estimateMh: hoursToMh(100),
+          },
+        ],
+      },
+      // No recordedPctByWp → null Recorded
+    });
+    const r = computeReview(withObs);
+    expect(r.observedVsRecorded).not.toBeNull();
+    const row = r.observedVsRecorded!.find((x) => x.wpId === 'WP-B');
+    expect(row).toBeDefined();
+    expect(row!.recordedPct).toBeNull();
+    expect(row!.recordedSource).toBe('none');
+    expect(row!.evRecordedMh).toBe(0n);
+    expect(row!.estimateDrivenEv).toBe(true);
+  });
+
+  it('lists only leaf WPs with |gap| > 10 pts, worst first', () => {
+    const wpA: WorkPackage = { ...wp, id: 'WP-A', wbsCode: '1.0', name: 'A' };
+    const wpC: WorkPackage = { ...wp, id: 'WP-C', wbsCode: '1.2', name: 'C' };
+    const r = computeReview(
+      gapInput({
+        wps: [wpA, wp, wpC],
+        baselineVersions: [
+          {
+            ...input.baselineVersions[0]!,
+            wps: [
+              {
+                wpId: 'WP-A',
+                start: '2026-06-01',
+                finish: '2026-12-01',
+                baselineMh: hoursToMh(100),
+                isMilestone: false,
+                isCatchAll: false,
+              },
+              input.baselineVersions[0]!.wps[0]!,
+              {
+                wpId: 'WP-C',
+                start: '2026-06-01',
+                finish: '2026-12-01',
+                baselineMh: hoursToMh(100),
+                isMilestone: false,
+                isCatchAll: false,
+              },
+            ],
+          },
+        ],
+        mappingEvents: [
+          { seq: 1, ticketId: 'ta', wpId: 'WP-A', source: 'manual', at: 'x', actor: 'pm' },
+          { seq: 2, ticketId: 'tb', wpId: 'WP-B', source: 'manual', at: 'x', actor: 'pm' },
+          { seq: 3, ticketId: 'tc', wpId: 'WP-C', source: 'manual', at: 'x', actor: 'pm' },
+        ],
+        pinnedSnapshot: {
+          ...input.pinnedSnapshot,
+          tickets: [
+            {
+              ...input.pinnedSnapshot.tickets[0]!,
+              trackerIssueId: 'ta',
+              key: 'ta',
+              statusId: 'Closed',
+              estimateMh: hoursToMh(100),
+            },
+            {
+              ...input.pinnedSnapshot.tickets[0]!,
+              trackerIssueId: 'tb',
+              key: 'tb',
+              statusId: 'Closed',
+              estimateMh: hoursToMh(50),
+            },
+            {
+              ...input.pinnedSnapshot.tickets[0]!,
+              trackerIssueId: 'tc',
+              key: 'tc',
+              statusId: 'Open',
+              estimateMh: hoursToMh(100),
+            },
+          ],
+        },
+        recordedPctByWp: new Map([
+          // A: Obs ~100% (capped 99), Rec 90% → gap ~9 pts — below threshold, excluded
+          [
+            'WP-A',
+            {
+              pct: { num: 90n, den: 100n },
+              reason: null,
+              source: 'plan_edit' as const,
+            },
+          ],
+          // B: Obs with estimate 50/max(200,50)=50/200=25% vs Rec 0 → gap 25 > 10
+          // C: Obs 0% vs Rec 0 → not listed
+        ]),
+        durationDaysByWp: new Map([
+          ['WP-A', 10],
+          ['WP-B', 10],
+          ['WP-C', 10],
+        ]),
+      }),
+    );
+    expect(r.observedVsRecorded).not.toBeNull();
+    const ids = r.observedVsRecorded!.map((x) => x.wpId);
+    expect(ids).toContain('WP-B');
+    expect(ids).not.toContain('WP-C');
+    // A may or may not appear depending on 99% cap vs 90% (9 pts) — must not appear
+    expect(ids).not.toContain('WP-A');
+    // Worst first: if multiple rows, first has the largest gap
+    for (let i = 1; i < r.observedVsRecorded!.length; i++) {
+      const prev = r.observedVsRecorded![i - 1]!.gapAbs;
+      const cur = r.observedVsRecorded![i]!.gapAbs;
+      const prevV = Number(prev.num) / Number(prev.den);
+      const curV = Number(cur.num) / Number(cur.den);
+      expect(prevV).toBeGreaterThanOrEqual(curV);
+    }
+  });
+
+  it('computes dual EV and remaining-duration consequence fields', () => {
+    const r = computeReview(
+      gapInput({
+        pinnedSnapshot: {
+          ...input.pinnedSnapshot,
+          tickets: [
+            {
+              ...input.pinnedSnapshot.tickets[0]!,
+              statusId: 'Closed',
+              estimateMh: hoursToMh(100),
+            },
+          ],
+        },
+        recordedPctByWp: new Map([
+          [
+            'WP-B',
+            {
+              pct: { num: 10n, den: 100n },
+              reason: 'QA pending',
+              source: 'pm_override' as const,
+            },
+          ],
+        ]),
+        durationDaysByWp: new Map([['WP-B', 10]]),
+      }),
+    );
+    const row = r.observedVsRecorded!.find((x) => x.wpId === 'WP-B')!;
+    expect(row.recordedSource).toBe('pm_override');
+    expect(row.recordedReason).toBe('QA pending');
+    // EVRec = baselineMh × 10/100
+    expect(row.evRecordedMh).toBe(hoursToMh(200) / 10n);
+    expect(row.remainingDaysBefore).toBe(9); // ceil(10 * 0.9) = 9
+    expect(row.remainingDaysAfter).not.toBeNull();
+    expect(row.evObservedMh).toBeGreaterThan(0n);
+  });
+
+  it('flags estimate-driven EV on divergence rows', () => {
+    const r = computeReview(
+      gapInput({
+        pinnedSnapshot: {
+          ...input.pinnedSnapshot,
+          tickets: [
+            {
+              ...input.pinnedSnapshot.tickets[0]!,
+              statusId: 'Closed',
+              estimateMh: hoursToMh(100),
+            },
+          ],
+        },
+      }),
+    );
+    const d = r.divergence!.find((x) => x.wpId === 'WP-B')!;
+    expect(d.estimateDrivenEv).toBe(true);
+  });
+
+  it('excludes |gap| exactly equal to the Comfort threshold (10 pts)', () => {
+    // Observed 50% (count: 1 of 2 Resolved) vs Recorded 40% → gap 10 pts → excluded.
+    const r = computeReview(
+      gapInput({
+        mappingEvents: [
+          { seq: 1, ticketId: 't1', wpId: 'WP-B', source: 'manual', at: 'x', actor: 'pm' },
+          { seq: 2, ticketId: 't2', wpId: 'WP-B', source: 'manual', at: 'x', actor: 'pm' },
+        ],
+        pinnedSnapshot: {
+          ...input.pinnedSnapshot,
+          tickets: [
+            {
+              ...input.pinnedSnapshot.tickets[0]!,
+              trackerIssueId: 't1',
+              key: 't1',
+              statusId: 'Closed',
+              estimateMh: null,
+            },
+            {
+              ...input.pinnedSnapshot.tickets[0]!,
+              trackerIssueId: 't2',
+              key: 't2',
+              statusId: 'Open',
+              estimateMh: null,
+            },
+          ],
+        },
+        recordedPctByWp: new Map([
+          [
+            'WP-B',
+            {
+              pct: { num: 40n, den: 100n },
+              reason: null,
+              source: 'plan_edit' as const,
+            },
+          ],
+        ]),
+      }),
+    );
+    expect(r.observedVsRecorded!.find((x) => x.wpId === 'WP-B')).toBeUndefined();
+  });
+
+  it('lists pmAdjusted from heads with non-empty reason even when the gap has closed', () => {
+    const r = computeReview(
+      gapInput({
+        recordedPctByWp: new Map([
+          [
+            'WP-B',
+            {
+              pct: { num: 0n, den: 1n },
+              reason: 'Accepted from evidence',
+              source: 'pm_override' as const,
+            },
+          ],
+        ]),
+      }),
+    );
+    // Observed ~0 with no evidence vs Rec 0 → no gap row, but PM-adjusted remains.
+    expect(r.observedVsRecorded!.find((x) => x.wpId === 'WP-B')).toBeUndefined();
+    expect(r.pmAdjusted).toEqual([
+      {
+        wpId: 'WP-B',
+        wbsCode: '1.1',
+        name: 'Build',
+        recordedPct: { num: 0n, den: 1n },
+        reason: 'Accepted from evidence',
+        source: 'pm_override',
+      },
+    ]);
+  });
+
+  it('leaves remainingDays* null when remainingDuration would throw', () => {
+    const r = computeReview(
+      gapInput({
+        pinnedSnapshot: {
+          ...input.pinnedSnapshot,
+          tickets: [
+            {
+              ...input.pinnedSnapshot.tickets[0]!,
+              statusId: 'Closed',
+              estimateMh: hoursToMh(100),
+            },
+          ],
+        },
+        // Negative duration is invalid for remainingDuration — must not fail computeReview.
+        durationDaysByWp: new Map([['WP-B', -1]]),
+        recordedPctByWp: new Map([
+          [
+            'WP-B',
+            {
+              pct: { num: 10n, den: 100n },
+              reason: null,
+              source: 'plan_edit' as const,
+            },
+          ],
+        ]),
+      }),
+    );
+    const row = r.observedVsRecorded!.find((x) => x.wpId === 'WP-B');
+    expect(row).toBeDefined();
+    expect(row!.remainingDaysBefore).toBeNull();
+    expect(row!.remainingDaysAfter).toBeNull();
+  });
+});

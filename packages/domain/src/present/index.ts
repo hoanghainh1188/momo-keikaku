@@ -18,6 +18,10 @@ import {
  * The codec (`./codec`) is deliberately NOT re-exported here: it is how stored values are
  * written and read, which is not a page's to call. It reaches the rest of the codebase through
  * the `@momo/domain` barrel, which a page may not import.
+ *
+ * Story 6.4 contract stub: the "PM-adjusted" marker (non-empty `pct_override_event.reason`)
+ * must remain visible wherever Recorded % appears. No Visibility Policy may hide it — Publish
+ * / Client View (FR-34/35) will honour this when those surfaces exist.
  */
 export type { Jpy, Metric, Mh, Ratio } from '../units';
 

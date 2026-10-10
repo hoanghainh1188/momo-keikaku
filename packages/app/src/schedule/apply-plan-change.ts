@@ -37,6 +37,7 @@ import {
   resolveScheduleInputs,
   type RecalculateProjectResult,
 } from './recalculate-project';
+import { pctOverrideAppendFields } from './pct-override-append-fields';
 
 const noNul = (value: string) => !value.includes('\0');
 const id = z.string().min(1).refine(noNul, 'must not contain a NUL character');
@@ -153,6 +154,12 @@ const planMutationBase = z.discriminatedUnion('kind', [
     wpId: id,
     recordedPctNum: z.bigint(),
     recordedPctDen: z.bigint(),
+    /**
+     * Story 6.4: Accept (`pm_override`) requires a non-empty trimmed reason. Plan-grid
+     * (`plan_edit`) may omit. Validated in `superRefine`.
+     */
+    reason: z.string().optional(),
+    source: z.enum(['pm_override', 'plan_edit']).optional(),
   }),
   z.object({
     kind: z.literal('create_custom_field_definition'),
@@ -258,6 +265,18 @@ export const planMutationSchema = planMutationBase.superRefine((value, ctx) => {
           code: z.ZodIssueCode.custom,
           path: ['recordedPctNum'],
           message: 'recorded pct must be in [0, 1]',
+        });
+      }
+    }
+    // Story 6.4: Accept (pm_override) requires a non-empty reason; Plan-grid may omit.
+    const source = value.source ?? 'plan_edit';
+    if (source === 'pm_override') {
+      const reason = value.reason?.trim() ?? '';
+      if (reason.length === 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['reason'],
+          message: 'Accept requires a non-empty reason',
         });
       }
     }
@@ -547,16 +566,20 @@ async function applyMutation(
       });
       return warnings;
     }
-    case 'patch_recorded_pct':
+    case 'patch_recorded_pct': {
+      const fields = pctOverrideAppendFields(mutation);
       await planInput.appendPctOverride({
         projectId: mutation.projectId,
         wpId: mutation.wpId,
-        recordedPctNum: mutation.recordedPctNum,
-        recordedPctDen: mutation.recordedPctDen,
+        recordedPctNum: fields.recordedPctNum,
+        recordedPctDen: fields.recordedPctDen,
+        reason: fields.reason,
+        source: fields.source,
         actor: stamp.actor,
         at: stamp.at,
       });
       return warnings;
+    }
     case 'create_custom_field_definition': {
       const count = await planInput.countCustomFieldDefinitions(mutation.projectId);
       if (count >= 100) {
@@ -813,6 +836,18 @@ export async function applyPlanChange<Handle>(
           haltedReason: result.haltedReason,
           ...(settingsAudit !== undefined ? settingsAudit : {}),
           ...(warnings.length > 0 ? { warnings } : {}),
+          ...(mutation.kind === 'patch_recorded_pct'
+            ? (() => {
+                const fields = pctOverrideAppendFields(mutation);
+                return {
+                  wpId: mutation.wpId,
+                  recordedPctNum: fields.recordedPctNum.toString(),
+                  recordedPctDen: fields.recordedPctDen.toString(),
+                  reason: fields.reason,
+                  source: fields.source,
+                };
+              })()
+            : {}),
         });
 
         return warnings.length > 0 ? { ...result, warnings } : result;

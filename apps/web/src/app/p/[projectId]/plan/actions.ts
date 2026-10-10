@@ -230,6 +230,8 @@ export async function patchWpRecordedPctAction(input: {
     wpId: input.wpId,
     recordedPctNum: ratio.num,
     recordedPctDen: ratio.den,
+    // Story 6.4: Plan-grid may omit reason; source is always plan_edit here.
+    source: 'plan_edit',
   });
 }
 

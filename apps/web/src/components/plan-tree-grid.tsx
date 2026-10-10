@@ -1354,13 +1354,20 @@ export function PlanTreeGrid({
         </td>
         <td className="num">
           {row.isLeaf ? (
-            <InlineNumberCell
-              value={recordedPctWhole(row.recordedPct)}
-              ariaLabel={`Recorded percent for ${row.name}`}
-              suffix="%"
-              emptyLabel={pctLabel ?? 'none — scheduled as 0%'}
-              onCommit={(next) => patchRecordedPct(row.wpId, next)}
-            />
+            <>
+              <InlineNumberCell
+                value={recordedPctWhole(row.recordedPct)}
+                ariaLabel={`Recorded percent for ${row.name}`}
+                suffix="%"
+                emptyLabel={pctLabel ?? 'none — scheduled as 0%'}
+                onCommit={(next) => patchRecordedPct(row.wpId, next)}
+              />
+              {row.recordedPctPmAdjusted ? (
+                <span className="tag" data-testid={`pm-adjusted-${row.wpId}`}>
+                  {t('common.pm_adjusted')}
+                </span>
+              ) : null}
+            </>
           ) : (
             <SummaryDash />
           )}
@@ -1395,13 +1402,20 @@ export function PlanTreeGrid({
       </td>
       <td className="num">
         {row.isLeaf ? (
-          <InlineNumberCell
-            value={recordedPctWhole(row.recordedPct)}
-            ariaLabel={`Recorded percent for ${row.name}`}
-            suffix="%"
-            emptyLabel="none — scheduled as 0%"
-            onCommit={(next) => patchRecordedPct(row.wpId, next)}
-          />
+          <>
+            <InlineNumberCell
+              value={recordedPctWhole(row.recordedPct)}
+              ariaLabel={`Recorded percent for ${row.name}`}
+              suffix="%"
+              emptyLabel="none — scheduled as 0%"
+              onCommit={(next) => patchRecordedPct(row.wpId, next)}
+            />
+            {row.recordedPctPmAdjusted ? (
+              <span className="tag" data-testid={`pm-adjusted-progress-${row.wpId}`}>
+                {t('common.pm_adjusted')}
+              </span>
+            ) : null}
+          </>
         ) : (
           <SummaryDash />
         )}

@@ -611,13 +611,42 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
     .limit(1);
   const projectDefaultRateSeqMax = defaultRateHead ? Number(defaultRateHead.seq) : null;
 
-  const [pctHead] = await tx
-    .select({ seq: s.pctOverrideEvent.seq })
+  // Story 6.4: pin ceiling + per-WP head (reason/source for PM-adjusted + gap list).
+  const pctRows = await tx
+    .select({
+      seq: s.pctOverrideEvent.seq,
+      wpId: s.pctOverrideEvent.wpId,
+      recordedPctNum: s.pctOverrideEvent.recordedPctNum,
+      recordedPctDen: s.pctOverrideEvent.recordedPctDen,
+      reason: s.pctOverrideEvent.reason,
+      source: s.pctOverrideEvent.source,
+    })
     .from(s.pctOverrideEvent)
     .where(eq(s.pctOverrideEvent.projectId, projectId))
-    .orderBy(desc(s.pctOverrideEvent.seq))
-    .limit(1);
-  const pctOverrideSeqMax = pctHead ? Number(pctHead.seq) : null;
+    .orderBy(asc(s.pctOverrideEvent.seq));
+  let pctOverrideSeqMax: number | null = null;
+  const recordedPctByWp = new Map<
+    string,
+    {
+      pct: { num: bigint; den: bigint };
+      reason: string | null;
+      source: 'pm_override' | 'plan_edit' | null;
+    }
+  >();
+  for (const row of pctRows) {
+    const seq = Number(row.seq);
+    if (pctOverrideSeqMax === null || seq > pctOverrideSeqMax) pctOverrideSeqMax = seq;
+    const source =
+      row.source === 'pm_override' || row.source === 'plan_edit' ? row.source : null;
+    recordedPctByWp.set(row.wpId, {
+      pct: { num: row.recordedPctNum, den: row.recordedPctDen },
+      reason: row.reason,
+      source,
+    });
+  }
+  const durationDaysByWp = new Map<string, number | null>(
+    wpRows.map((w) => [w.id, w.durationDays]),
+  );
 
   const [calendarHead] = await tx
     .select({ seq: s.holidayCalendarVersion.seq })
@@ -731,6 +760,8 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
     rateSeqMax,
     projectDefaultRateSeqMax,
     pctOverrideSeqMax,
+    recordedPctByWp,
+    durationDaysByWp,
     dispositionSeqMax,
     settingSeqMax,
     tenantSettingSeqMax: null,
