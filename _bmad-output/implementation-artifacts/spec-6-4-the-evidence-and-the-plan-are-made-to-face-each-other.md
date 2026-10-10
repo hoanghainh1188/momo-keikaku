@@ -2,7 +2,7 @@
 title: '6.4 — The evidence and the plan are made to face each other'
 type: 'feature'
 created: '2026-10-10'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 context: []
@@ -99,8 +99,26 @@ baseline_commit: 'ed8584cfb1a2b3e645ed1043da97c2ee343b3b39'
 
 ## Review Triage Log
 
-- **2026-10-10 — implementation review fixes applied** (Accept trust Observed, remainingDuration guard, Accept Esc/i18n, Progress & Dates empty/PM-adjusted/pts, ReviewResult.pmAdjusted, append fields unit, Comfort boundary, plan-grid PmAdjusted true, source CHECK).
-
+- blind: PM-adjusted lost on Review after Accept closes gap — **medium** → patch (`pmAdjusted` list)
+- blind: empty gap list no empty-state — **low** → patch
+- blind: null Recorded omits 0% figure — **low** → patch
+- blind: Accept errors show raw messageKey — **low** → patch
+- blind: Esc does not clear reason — **low** → patch
+- blind: aria-modal without focus trap — **low** rejected (R0 Esc/focus return enough)
+- blind: Accept revalidatePath misses schedule — **false** (plan page hosts dates; plan+review revalidated)
+- blind/edge: Accept trusts client Observed ratio — **medium** → patch (server re-reads Observed)
+- blind: source column unconstrained — **low** → patch (CHECK)
+- blind/vgap: fence tests schema-only — **medium** → patch (append fields + action tests)
+- blind: sprint vs spec status drift — **low** → process (sprint → `review` at present)
+- blind: hardcoded `" pts"` — **low** → patch (i18n)
+- blind: no exact |gap|==10 boundary test — **low** → patch
+- blind: no Accept UI/RTL coverage — **low** → defer
+- edge: remainingDuration throw fails Review — **medium** → patch (try/catch)
+- edge: Esc while pending closes dialog — **medium** → patch
+- edge: untranslated refuse keys — **low** carried → translate patch
+- vgap: loadReview pin unverified in DB — **medium** unverified (no Postgres) → defer
+- vgap: acceptObservedPctAction untested — **medium** → patch
+- vgap: Plan recordedPctPmAdjusted true-path — **medium** → patch
 
 ## Design Notes
 
