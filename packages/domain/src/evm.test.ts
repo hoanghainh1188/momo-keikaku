@@ -107,6 +107,51 @@ describe('plannedValue (FR-30 / AD-4: largest remainder over baseline working da
       plannedValueLargestRemainder(10n, '2026-06-01', '2026-06-02', '2026-06-01', cal, ['r-b', 'r-a']),
     ).toBe(6n);
   });
+
+  it('returns 0 when asOf is before start even if the baseline window is inverted (no working days)', () => {
+    // start > finish → empty day list; asOf still before start must win over asOf ≥ finish
+    expect(
+      plannedValueLargestRemainder(hoursToMh(100), '2026-06-05', '2026-06-01', '2026-06-03', cal, []),
+    ).toBe(0n);
+  });
+});
+
+describe('computeEvm — multi-resource largest-remainder PV (story 6.2 / Q2-A)', () => {
+  it('uses live assignedResourceIds for mid-window pvMh', () => {
+    const baseline: BaselineVersion = {
+      seq: 1,
+      id: 'bl-1',
+      reason: 'multi-res',
+      recordedAt: '2026-06-01T00:00:00.000Z',
+      actor: 'user:pm',
+      wps: [
+        {
+          wpId: 'WP-1',
+          start: '2026-06-01',
+          finish: '2026-06-02',
+          baselineMh: 10n,
+          isMilestone: false,
+          isCatchAll: false,
+        },
+      ],
+    };
+    const r = computeEvm({
+      asOf: '2026-06-01',
+      calendar: cal,
+      baseline,
+      wps: [wp({ id: 'WP-1', assignedResourceIds: ['r-b', 'r-a'] })],
+      mappedTicketsByWp: new Map(),
+      acByWp: new Map(),
+      unplannedAcMh: 0n,
+      totalAcMh: 0n,
+      plannedScopeAcMh: 0n,
+      measurementBasis: 'hours',
+      formulaVersion: FORMULA_VERSION,
+    });
+    // 10 mh / (2 days × 2 resources): rem to Mon r-a + Mon r-b → 3+3 = 6
+    expect(r.perWp[0]!.pvMh).toBe(6n);
+    expect(r.pvMh).toEqual({ kind: 'value', value: 6n, unit: 'mh', coverage: null });
+  });
 });
 
 describe('computeEvm — EV fall vs priorEvByWp (story 6.2 / Q1-A)', () => {

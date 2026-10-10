@@ -10,6 +10,7 @@ import { ReviewPinRegistrar } from '@/components/review-pin-context';
 import { SetBaselineButton } from '@/components/set-baseline-button';
 import { UnmappedGroupRows } from '@/components/unmapped-group-rows';
 import { REPORT_LOCALE } from '@/lib/report-locale';
+import { divergenceStatusTags } from '@/lib/divergence-status-tags';
 import { OverlapResolveForm } from '../connectors/overlap-resolve-form';
 
 export const dynamic = 'force-dynamic';
@@ -530,14 +531,19 @@ export default async function ReviewPage({
                         <td className="num">{wholePercent(d.pctComplete)}%</td>
                         <td>
                           <span className="tag">{d.pctBasis}</span>
-                          {d.lowEvidence && d.baselineMh > 0n ? (
-                            <span className="tag">{t('review.low_evidence')}</span>
-                          ) : null}
-                          {d.evFell ? (
-                            <span className="tag" data-testid="ev-fell">
-                              {t('review.ev_fell')}
+                          {divergenceStatusTags({
+                            lowEvidence: d.lowEvidence,
+                            baselineMh: d.baselineMh,
+                            evFell: d.evFell,
+                          }).map((tag) => (
+                            <span
+                              key={tag.key}
+                              className="tag"
+                              {...(tag.testId ? { 'data-testid': tag.testId } : {})}
+                            >
+                              {t(`review.${tag.key}`)}
                             </span>
-                          ) : null}
+                          ))}
                         </td>
                       </tr>
                     ))}

@@ -309,15 +309,27 @@ describe('computeReview EV fall + dual CPI + money (story 6.2)', () => {
         ],
       },
     });
+    const baselineOnly = computeReview(input);
     expect(withUnplanned.unplanned.cumulative.unplannedMh).toBe(hoursToMh(10));
     expect(withUnplanned.evm).not.toBeNull();
     expect(withUnplanned.evm!.cpiAllIn.kind).toBe('value');
     expect(withUnplanned.evm!.cpiPlannedScope.kind).toBe('value');
     // All-in uses total AC (baselined + Unplanned); planned-scope excludes Unplanned → CPIs differ.
     expect(withUnplanned.evm!.cpiAllIn).not.toEqual(withUnplanned.evm!.cpiPlannedScope);
-    // EVM Project PV/EV come only from baselined leaves — Unplanned carries AC only (PV=EV=0).
-    expect(withUnplanned.evm!.pvMh.kind).toBe('value');
-    expect(withUnplanned.evm!.evMh.kind).toBe('value');
+    // Unplanned carries AC only (PV=EV=0): Project PV/EV ignore the Unplanned line.
+    expect(withUnplanned.evm!.pvMh).toEqual(baselineOnly.evm!.pvMh);
+    expect(withUnplanned.evm!.evMh).toEqual(baselineOnly.evm!.evMh);
+    // Roll-up AC = baselined leaf AC + Unplanned.
+    expect(withUnplanned.attribution.cumulative.totalMh).toBe(
+      withUnplanned.attribution.cumulative.mappedBaselinedMh +
+        withUnplanned.unplanned.cumulative.unplannedMh,
+    );
+    expect(withUnplanned.evm!.acMh).toEqual({
+      kind: 'value',
+      value: withUnplanned.attribution.cumulative.totalMh,
+      unit: 'mh',
+      coverage: null,
+    });
     expect(withUnplanned.money).not.toBeNull();
     expect(withUnplanned.money!.pvJpy).toBeGreaterThan(0n);
   });

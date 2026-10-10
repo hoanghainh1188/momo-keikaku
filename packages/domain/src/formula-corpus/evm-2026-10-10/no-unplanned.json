@@ -181,6 +181,8 @@
     "measurementBasis": "hours",
     "unplannedMh": "0",
     "totalMh": "30000",
-    "mappedBaselinedMh": "30000"
+    "mappedBaselinedMh": "30000",
+    "pvMh": "118190",
+    "evMh": "0"
   }
 }

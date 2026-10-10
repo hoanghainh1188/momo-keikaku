@@ -1541,3 +1541,7 @@ above can see where it went.
 - source_spec: `_bmad-output/implementation-artifacts/spec-6-2-evm-in-hours-with-unplanned-work-carrying-no-earned-value.md`
   summary: Pin live `WorkPackage.assignedResourceIds` onto Baseline / ComputationInputs so PV cannot move when assignments change without Re-baseline (Q2-A R0 pin hole; same class as deferred calendar live-resolve).
   evidence: Story 6.2 decision Q2-A — PV/BAC largest-remainder uses live assignments at compute time; empty → anonymous day-only bucket. Documented; do not add `baseline_wp` resource columns in 6.2.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-6-2-evm-in-hours-with-unplanned-work-carrying-no-earned-value.md`
+  summary: Fill `priorEvByWp` on Review capture from a last-open-Review / prior as-of store so EV-fall flags can fire in live Reviews (Q1-A path unfinished without inventing priors).
+  evidence: Story 6.2 — pin field + compute/UI wired; loader leaves the map absent because no persisted prior-EV source exists yet. Never synthesize priors.

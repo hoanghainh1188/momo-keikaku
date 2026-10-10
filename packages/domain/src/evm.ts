@@ -169,9 +169,11 @@ export function plannedValueLargestRemainder(
   cal: HolidayCalendar,
   assignedResourceIds: readonly string[],
 ): Mh {
+  // Before empty-days / finish checks: inverted windows (start > finish) must not treat
+  // asOf ≥ finish as "full BAC" when asOf is still before start.
+  if (asOf < start) return 0n;
   const days = workingDaysInclusive(start, finish, cal);
   if (days.length === 0) return asOf >= finish ? baselineMh : 0n;
-  if (asOf < start) return 0n;
   if (asOf >= finish) return baselineMh;
 
   const resources =
