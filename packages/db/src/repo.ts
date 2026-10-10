@@ -710,6 +710,8 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
     asOf: projectDate(anchor, tzOffsetMinutes),
     dispositions,
     formulaVersion: FORMULA_VERSION,
+    // Story 6.2: `priorEvByWp` is optional on the pin. Capture leaves it absent until a
+    // last-open-Review / prior-as-of source exists — never invent priors (Q1-A).
     measurementBasis,
     basisSeqMax,
     connectorSettingSeqMax,

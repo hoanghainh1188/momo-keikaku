@@ -6,11 +6,12 @@
  * `reduce()` on purpose. Counts, dates and minutes stay `number`.
  *
  * Rounding happens only in `present/` (ratios 2 dp, hours 1 dp, yen integer). Outside it there
- * are exactly two sanctioned integer steps, each through one helper here:
+ * are exactly three sanctioned integer steps, each through one helper here:
+ *   - `allocateLargestRemainder` for fractional spreads (PV day×resource cells; AD-4);
  *   - `divRoundHalfEven` for a derived milli-hour quotient that must itself be an integer
- *     (PV, EV, EAC) and for Hours × Rate (`costOf`);
+ *     (EV, EAC) and for Hours × Rate (`costOf`);
  *   - `ceilDiv` for whole working days (AD-27).
- * Neither is "rounding for display"; both produce stored-shape integers.
+ * Neither of the last two is "rounding for display"; all three produce stored-shape integers.
  */
 export type Mh = bigint;
 export type Jpy = bigint;
@@ -90,6 +91,50 @@ export function hoursToMh(h: number | string): Mh {
 /** AD-4: hours × Rate, per ledger entry, then summed — half-even, from the exact product. */
 export function costOf(mh: Mh, yenPerHour: Jpy): Jpy {
   return divRoundHalfEven(mh * yenPerHour, H);
+}
+
+/** One equal-share cell in an AD-4 largest-remainder spread (PV day × resource). */
+export interface LargestRemainderCell {
+  readonly date: string;
+  readonly resourceId: string;
+}
+
+/**
+ * AD-4: allocate `total` integer units across equal-share cells by largest remainder.
+ * Every cell gets `floor(total / n)`; the `total % n` remainder units go to cells with the
+ * largest fractional part. Equal shares share one fractional part, so remainders are assigned
+ * by the declared tie-break: date ascending, then resource id ascending (stable on input order).
+ * Returns amounts aligned to the input `cells` order; their sum equals `total`.
+ */
+export function allocateLargestRemainder(
+  total: bigint,
+  cells: readonly LargestRemainderCell[],
+): bigint[] {
+  const n = cells.length;
+  if (n === 0) {
+    if (total !== 0n) {
+      throw new RangeError(`allocateLargestRemainder(${total}, []): no cells for a non-zero total`);
+    }
+    return [];
+  }
+  if (total < 0n) throw new RangeError(`allocateLargestRemainder: negative total ${total}`);
+  const nBig = BigInt(n);
+  const quotient = total / nBig;
+  const remainder = total % nBig;
+  const order = cells
+    .map((cell, index) => ({ cell, index }))
+    .sort((a, b) => {
+      if (a.cell.date !== b.cell.date) return a.cell.date < b.cell.date ? -1 : 1;
+      if (a.cell.resourceId !== b.cell.resourceId) {
+        return a.cell.resourceId < b.cell.resourceId ? -1 : 1;
+      }
+      return a.index - b.index;
+    });
+  const out = Array.from({ length: n }, () => quotient);
+  for (let k = 0; k < Number(remainder); k += 1) {
+    out[order[k]!.index]! += 1n;
+  }
+  return out;
 }
 
 export function sum(xs: readonly bigint[]): bigint {

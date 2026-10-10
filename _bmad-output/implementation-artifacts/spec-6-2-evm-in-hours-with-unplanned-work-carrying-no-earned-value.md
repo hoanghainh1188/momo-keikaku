@@ -2,7 +2,7 @@
 title: 'Story 6.2 — EVM in hours, with Unplanned Work carrying no earned value'
 type: 'feature'
 created: '2026-10-10'
-status: 'draft'
+status: 'in-progress'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: 'dbf2b338bb35feb836e581d131b48b40f0549426'
@@ -64,14 +64,14 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `packages/domain/src/units.ts` (+ tests) — `allocateLargestRemainder` cells with tie-break (date asc, resource id asc).
-- [ ] `packages/domain/src/evm.ts` (+ `evm.test.ts`) — PV via day×resource largest remainder on live `assignedResourceIds`; bump `FORMULA_VERSION`; branch legacy PV for `evm-2026-09-20`; `evFell` vs `priorEvByWp` (Q1-A).
-- [ ] `packages/domain/src/formula-version.ts` + `formula-corpus/` — register new version; keep old goldens green; add/adjust fixture for new PV.
-- [ ] `packages/domain/src/attribution.test.ts` — assert re-baseline: pre-stamp hours stay Unplanned; post-stamp hours baselined.
-- [ ] `packages/domain/src/review.ts` (+ tests) — pass pinned inputs only; wire `priorEvByWp` (Q1-A); expose `evFell` on Divergence/ReviewResult; money layer unchanged except gaps vs AC.
-- [ ] `apps/web/.../review/page.tsx` (+ i18n if needed) — thin EV-fall flag; keep Internal money column + CPI-money footnote; no formula popovers.
-- [ ] `_bmad-output/implementation-artifacts/sprint-status.yaml` — `6-2-…` → in-progress when impl starts; keep `6-1-…: done`.
-- [ ] Unit tests for matrix rows (PV edges, dual CPI, Unplanned line, money caption presence).
+- [x] `packages/domain/src/units.ts` (+ tests) — `allocateLargestRemainder` cells with tie-break (date asc, resource id asc).
+- [x] `packages/domain/src/evm.ts` (+ `evm.test.ts`) — PV via day×resource largest remainder on live `assignedResourceIds`; bump `FORMULA_VERSION`; branch legacy PV for `evm-2026-09-20`; `evFell` vs `priorEvByWp` (Q1-A).
+- [x] `packages/domain/src/formula-version.ts` + `formula-corpus/` — register new version; keep old goldens green; add/adjust fixture for new PV.
+- [x] `packages/domain/src/attribution.test.ts` — assert re-baseline: pre-stamp hours stay Unplanned; post-stamp hours baselined.
+- [x] `packages/domain/src/review.ts` (+ tests) — pass pinned inputs only; wire `priorEvByWp` (Q1-A); expose `evFell` on Divergence/ReviewResult; money layer unchanged except gaps vs AC.
+- [x] `apps/web/.../review/page.tsx` (+ i18n if needed) — thin EV-fall flag; keep Internal money column + CPI-money footnote; no formula popovers.
+- [x] `_bmad-output/implementation-artifacts/sprint-status.yaml` — `6-2-…` → in-progress when impl starts; keep `6-1-…: done`.
+- [x] Unit tests for matrix rows (PV edges, dual CPI, Unplanned line, money caption presence).
 
 **Acceptance Criteria:**
 - Given baselined leaf WP hours and live `assignedResourceIds`, when PV is computed, then milli-hours use largest remainder over baseline working days × resources, ties date then resource id (FR-30, AR-6, Q2-A).
@@ -86,6 +86,13 @@ context:
 - Given `formulaVersion` change, when CI runs, then every registered version still recomputes its goldens (AR-19).
 
 ## Implementation Notes
+
+- `FORMULA_VERSION` is now `evm-2026-10-10` (largest-remainder PV + `evFell`). `LEGACY_FORMULA_VERSION` (`evm-2026-09-20`) stays registered and uses half-even PV so 6.1 goldens recompute.
+- `allocateLargestRemainder` in `units.ts`; `plannedValue` / `plannedValueLargestRemainder` / `plannedValueLegacy` in `evm.ts`. Empty `assignedResourceIds` → anonymous day-only bucket. Mutable-assignment pin hole deferred (see `deferred-work.md`).
+- `priorEvByWp` on `ReviewInput` / `EvmInput`; `evFell` on `WpMeasure` + `DivergenceRow`. Capture does not invent priors (no last-open-Review store yet).
+- Review UI: thin `review.ev_fell` tag beside low-evidence; Internal money column + `cpi_money_footnote` unchanged.
+- Demo golden money yen updated for LR PV (hours still present as 1459.8 / 1330.8). Corpus: `formula-corpus/evm-2026-10-10/no-unplanned.json`.
+- Verified: `pnpm lint`, `pnpm typecheck` (+ web), `pnpm depcruise`, `pnpm test` — all exit 0.
 
 ## Spec Change Log
 

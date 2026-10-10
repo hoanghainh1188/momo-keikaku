@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { compareRatio, isBehindPlan } from './health';
-import { ceilDiv, costOf, divRoundHalfEven, hoursToMh, ratio, ratioValue, reduce, unavailable } from './units';
+import {
+  allocateLargestRemainder,
+  ceilDiv,
+  costOf,
+  divRoundHalfEven,
+  hoursToMh,
+  ratio,
+  ratioValue,
+  reduce,
+  unavailable,
+} from './units';
 
 describe('Ratio (AD-4: exact, unreduced)', () => {
   it('is carried exactly as given, and reduced only by an explicit reduce()', () => {
@@ -62,6 +72,30 @@ describe('money (AD-4: hours × Rate, half-even, per entry)', () => {
     expect(costOf(1_500n, 3n)).toBe(4n); // 4.5 -> 4
     expect(costOf(2_500n, 3n)).toBe(8n); // 7.5 -> 8
     expect(costOf(1_661_495n, 4000n)).toBe(6_645_980n); // always integral at 4000 JPY/h
+  });
+});
+
+describe('allocateLargestRemainder (AD-4: equal shares, date then resource tie-break)', () => {
+  it('spreads exactly and prefers earlier date, then lower resource id, on ties', () => {
+    // 10 mh over 3 day×resource cells → quotient 3, remainder 1 → first by tie-break gets +1
+    const cells = [
+      { date: '2026-06-02', resourceId: 'r-a' },
+      { date: '2026-06-01', resourceId: 'r-b' },
+      { date: '2026-06-01', resourceId: 'r-a' },
+    ];
+    expect(allocateLargestRemainder(10n, cells)).toEqual([3n, 3n, 4n]);
+    // Same date: lower resource id wins the remainder
+    expect(
+      allocateLargestRemainder(5n, [
+        { date: '2026-06-01', resourceId: 'r-b' },
+        { date: '2026-06-01', resourceId: 'r-a' },
+      ]),
+    ).toEqual([2n, 3n]);
+  });
+
+  it('returns an empty allocation for an empty cell list and a zero total', () => {
+    expect(allocateLargestRemainder(0n, [])).toEqual([]);
+    expect(() => allocateLargestRemainder(1n, [])).toThrow(/no cells/);
   });
 });
 

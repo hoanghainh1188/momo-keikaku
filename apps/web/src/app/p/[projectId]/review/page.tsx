@@ -533,6 +533,11 @@ export default async function ReviewPage({
                           {d.lowEvidence && d.baselineMh > 0n ? (
                             <span className="tag">{t('review.low_evidence')}</span>
                           ) : null}
+                          {d.evFell ? (
+                            <span className="tag" data-testid="ev-fell">
+                              {t('review.ev_fell')}
+                            </span>
+                          ) : null}
                         </td>
                       </tr>
                     ))}

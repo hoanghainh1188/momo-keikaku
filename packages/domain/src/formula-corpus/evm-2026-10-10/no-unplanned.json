@@ -1,0 +1,186 @@
+{
+  "id": "no-unplanned",
+  "formulaVersion": "evm-2026-10-10",
+  "inputs": {
+    "project": {
+      "id": "p",
+      "name": "p",
+      "clientName": "c",
+      "contractType": "\u6e96\u59d4\u4efb",
+      "tzOffsetMinutes": 540,
+      "teireiWeekday": 4,
+      "defaultRateYenPerHour": "4000",
+      "eacMethod": "typical",
+      "thresholds": {
+        "ratioGreen": {
+          "num": "95",
+          "den": "100"
+        },
+        "ratioAmber": {
+          "num": "85",
+          "den": "100"
+        },
+        "tcpiRed": {
+          "num": "11",
+          "den": "10"
+        },
+        "unplannedGreenBelow": {
+          "num": "1",
+          "den": "10"
+        },
+        "unplannedAmberMax": {
+          "num": "2",
+          "den": "10"
+        }
+      }
+    },
+    "calendar": {
+      "id": "cal",
+      "holidays": {}
+    },
+    "wps": [
+      {
+        "id": "WP-B",
+        "wbsCode": "1.1",
+        "name": "Build",
+        "parentId": null,
+        "isLeaf": true,
+        "isMilestone": false,
+        "isCatchAll": false,
+        "plannedMh": "200000",
+        "actualStart": null,
+        "actualFinish": null,
+        "assignedResourceIds": []
+      }
+    ],
+    "baselineVersions": [
+      {
+        "seq": 1,
+        "id": "bl-1",
+        "reason": "x",
+        "recordedAt": "2026-06-01T00:00:00.000Z",
+        "actor": "user:pm",
+        "wps": [
+          {
+            "wpId": "WP-B",
+            "start": "2026-06-01",
+            "finish": "2026-12-01",
+            "baselineMh": "200000",
+            "isMilestone": false,
+            "isCatchAll": false
+          }
+        ]
+      }
+    ],
+    "activeBaselineSeq": 1,
+    "baselineVersionId": "bl-1",
+    "measurementBasis": "hours",
+    "resolvedStatusIds": [
+      "Closed"
+    ],
+    "ledger": [
+      {
+        "seq": 1,
+        "ticketId": "tb",
+        "kind": "delta",
+        "deltaMh": "30000",
+        "windowStart": null,
+        "windowEnd": "2026-09-15T09:00:00.000Z",
+        "assigneeAccountId": "acct-1",
+        "activeBaselineVersionSeq": 1,
+        "connectorId": "conn-1",
+        "snapshotId": "snap-1"
+      }
+    ],
+    "mappingEvents": [
+      {
+        "seq": 1,
+        "ticketId": "tb",
+        "wpId": "WP-B",
+        "source": "manual",
+        "at": "x",
+        "actor": "pm"
+      }
+    ],
+    "pinnedSnapshot": {
+      "snapshotId": "snap-1",
+      "observedAt": "2026-09-16T09:00:00.000Z",
+      "hoursFieldPresent": true,
+      "adapterKind": "fixture",
+      "tickets": [
+        {
+          "trackerIssueId": "tb",
+          "key": "tb",
+          "title": "tb",
+          "statusId": "Open",
+          "estimateMh": null,
+          "actualMh": "30000",
+          "assigneeAccountId": "acct-1",
+          "createdAt": "2026-06-01T00:00:00.000Z",
+          "parentIssueId": null,
+          "issueTypeId": "Task",
+          "trackerProjectId": null,
+          "attributes": []
+        }
+      ]
+    },
+    "trackerSnapshotIdByConnector": [
+      [
+        "conn-1",
+        "snap-1"
+      ]
+    ],
+    "ledgerSeqMax": 1,
+    "resources": [
+      {
+        "id": "r1",
+        "name": "R",
+        "departmentId": "d",
+        "trackerAccountIds": [
+          "acct-1"
+        ],
+        "rates": [
+          {
+            "seq": 1,
+            "effectiveFrom": "2026-01-01",
+            "yenPerHour": "5000"
+          }
+        ]
+      }
+    ],
+    "period": {
+      "start": "2026-09-11",
+      "end": "2026-09-17",
+      "label": "2026-09-11 \u2013 2026-09-17"
+    },
+    "asOf": "2026-09-16",
+    "dispositions": [],
+    "formulaVersion": "evm-2026-10-10",
+    "calendarId": "cal",
+    "calendarVersion": null,
+    "scheduleRunSeq": null,
+    "mappingSeqMax": 1,
+    "dispositionSeqMax": null,
+    "settingSeqMax": null,
+    "tenantSettingSeqMax": null,
+    "wpStatusSeqMax": null,
+    "wpFlagSeqMax": null,
+    "linkSeqMax": null,
+    "rateSeqMax": 1,
+    "projectDefaultRateSeqMax": null,
+    "pctOverrideSeqMax": null,
+    "calendarSeqMax": null,
+    "connectorScopeSeqMax": null,
+    "connectorSettingSeqMax": null,
+    "basisSeqMax": null,
+    "visibilityPolicy": null,
+    "visibilitySeqMax": null
+  },
+  "expected": {
+    "formulaVersion": "evm-2026-10-10",
+    "measurementBasis": "hours",
+    "unplannedMh": "0",
+    "totalMh": "30000",
+    "mappedBaselinedMh": "30000"
+  }
+}

@@ -152,6 +152,7 @@ describe('ComputationInputs closure (AR-19 / AD-10)', () => {
       'calendarId',
       'calendarVersion',
       'mappingSeqMax',
+      'priorEvByWp',
     ] as const;
     const reviewSource = readFileSync(join(DOMAIN, 'review.ts'), 'utf8');
     for (const key of requiredKeys) {
