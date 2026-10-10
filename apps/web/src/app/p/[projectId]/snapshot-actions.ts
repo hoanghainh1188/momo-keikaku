@@ -7,6 +7,7 @@ import { revalidatePath } from 'next/cache';
 import {
   getSnapshotPinState,
   requestSnapshotRefresh,
+  repinReviewTracker,
   requestContext,
 } from '@/server/composition';
 import { messageFromKey } from '@/server/error-message';
@@ -54,4 +55,14 @@ export async function loadSnapshotPinStateAction(input: {
       })),
     },
   };
+}
+
+/** Story 6.7 / Q1→C: explicit Re-pin rewrites the Tracker freeze then refreshes Review. */
+export async function repinReviewTrackerAction(input: { readonly projectId: string }) {
+  const ctx = await requestContext();
+  const result = await repinReviewTracker({ projectId: input.projectId }, ctx);
+  if (!result.ok) return { ok: false as const, error: messageFromKey(result.error.messageKey) };
+  revalidatePath(`/p/${input.projectId}/review`);
+  revalidatePath(`/p/${input.projectId}`);
+  return { ok: true as const };
 }

@@ -732,6 +732,9 @@ describe('computeReview scope honesty (story 5.13 / FR-20)', () => {
     expect(r.coverage.unmappedTickets).toBe(2);
     // Mapped leaf stays out of Unmapped.
     expect(listedIds).not.toContain('tb');
+    // Story 6.7: expanded Unmapped Tickets carry money (hours × Project default Rate).
+    const orphan = r.unmappedGroups.flatMap((g) => g.tickets).find((t) => t.ticketId === 'orphan');
+    expect(orphan).toEqual(expect.objectContaining({ jpy: expect.any(BigInt) }));
   });
 
   it('keeps left-scope Tickets out of Unmapped groups', () => {

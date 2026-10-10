@@ -30,10 +30,27 @@ import {
 import type { Db } from './client';
 import { projectNotFound } from './project-not-found';
 import * as s from './schema';
+import {
+  captureReviewTrackerPin,
+  resolveTrackerPins,
+  type ReviewTrackerPin,
+} from './review-tracker-pin';
 import { lockWatermarkShared } from './watermark-lock';
 import { withTenant, type Tx } from './with-tenant';
 
+export type { ReviewTrackerPin } from './review-tracker-pin';
+export { captureReviewTrackerPin, resolveTrackerPins } from './review-tracker-pin';
+
 export const DEMO_PROJECT_ID = 'prj-ec2';
+
+/** Options for Story 6.7 Q1→C Tracker freeze on Review load. */
+export interface LoadBundleOptions {
+  /**
+   * When set and valid, freeze Tracker snapshot/ledger to these ids.
+   * Invalid/missing freeze falls back to live heads inside the loader.
+   */
+  readonly trackerPin?: ReviewTrackerPin | null;
+}
 
 /**
  * The demo Tenant `seed.ts` writes.
@@ -120,15 +137,20 @@ export async function loadProjectBundle(
   db: Db,
   tenantId: string,
   projectId: string = DEMO_PROJECT_ID,
+  options?: LoadBundleOptions,
 ): Promise<ProjectBundle> {
   // Everything below is issued on `tx`, inside the transaction `withTenant` opened with
   // `app.tenant_id` bound. On the bare `db` handle each of these 15 selects would return
   // zero rows as the application role, because the isolation policy would compare
   // `tenant_id` against a setting nothing had set.
-  return withTenant(db, tenantId, (tx) => loadBundleInTenant(tx, projectId));
+  return withTenant(db, tenantId, (tx) => loadBundleInTenant(tx, projectId, options));
 }
 
-async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBundle> {
+async function loadBundleInTenant(
+  tx: Tx,
+  projectId: string,
+  options?: LoadBundleOptions,
+): Promise<ProjectBundle> {
   const [p] = await tx.select().from(s.project).where(eq(s.project.id, projectId));
   if (!p) throw projectNotFound(projectId);
 
@@ -324,34 +346,29 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
   const snapshotSeqById = new Map<string, number>();
   for (const snap of snapshotRows) snapshotSeqById.set(snap.id, Number(snap.seq));
 
-  const trackerSnapshotIdByConnector = new Map<string, string>();
-  for (const c of connectorRows) {
-    const latestForConnector = snapshotRows
-      .filter((snap) => snap.connectorId === c.id)
-      .sort((a, b) => {
-        const byTime = b.observedAt.getTime() - a.observedAt.getTime();
-        if (byTime !== 0) return byTime;
-        return Number(b.seq) - Number(a.seq);
-      })[0];
-    if (latestForConnector) {
-      trackerSnapshotIdByConnector.set(c.id, latestForConnector.id);
-    }
-  }
+  // Story 6.7 / Q1→C: optional Tracker freeze; invalid freeze → live heads.
+  const resolvedPins = resolveTrackerPins({
+    snapshotRows: snapshotRows.map((snap) => ({
+      id: snap.id,
+      seq: Number(snap.seq),
+      connectorId: snap.connectorId,
+      observedAt: snap.observedAt,
+    })),
+    connectorIds: projectConnectorIds,
+    freeze: options?.trackerPin ?? null,
+  });
+  const trackerSnapshotIdByConnector = resolvedPins.trackerSnapshotIdByConnector;
 
-  const latestSnap =
-    snapshotRows.length === 0
+  const pinnedSnapRow =
+    resolvedPins.overallSnapshotId === undefined
       ? undefined
-      : [...snapshotRows].sort((a, b) => {
-          const byTime = b.observedAt.getTime() - a.observedAt.getTime();
-          if (byTime !== 0) return byTime;
-          return Number(b.seq) - Number(a.seq);
-        })[0];
+      : snapshotRows.find((snap) => snap.id === resolvedPins.overallSnapshotId);
 
   // Story 5.2: greenfield Projects (no Connector / no snapshot yet) must still load so the
   // Connectors page can show AddConnectorForm. Empty pinned snapshot until the first ingest.
   const anchorIsoEarly = p.demoAnchor.toISOString();
   let pinnedSnapshot: SnapshotRead & { snapshotId: string };
-  if (!latestSnap) {
+  if (!pinnedSnapRow) {
     pinnedSnapshot = {
       snapshotId: '',
       observedAt: anchorIsoEarly,
@@ -364,13 +381,13 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
     const obsRows = await tx
       .select()
       .from(s.ticketObservation)
-      .where(eq(s.ticketObservation.snapshotId, latestSnap.id));
+      .where(eq(s.ticketObservation.snapshotId, pinnedSnapRow.id));
 
     pinnedSnapshot = {
-      snapshotId: latestSnap.id,
-      observedAt: latestSnap.observedAt.toISOString(),
-      hoursFieldPresent: latestSnap.measurementBasis === 'hours',
-      adapterKind: (latestSnap.adapterKind as SnapshotRead['adapterKind']) ?? 'fixture',
+      snapshotId: pinnedSnapRow.id,
+      observedAt: pinnedSnapRow.observedAt.toISOString(),
+      hoursFieldPresent: pinnedSnapRow.measurementBasis === 'hours',
+      adapterKind: (pinnedSnapRow.adapterKind as SnapshotRead['adapterKind']) ?? 'fixture',
       complete: true,
       rateLimit: null,
       tickets: obsRows.map((o) => ({
@@ -1025,9 +1042,9 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
       })),
       trackerAccounts: trackerAccountsMeta,
       anchor,
-      snapshotAgeMinutes: latestSnap
+      snapshotAgeMinutes: pinnedSnapRow
         ? Math.round(
-            (new Date(anchor).getTime() - latestSnap.observedAt.getTime()) / 60_000,
+            (new Date(anchor).getTime() - pinnedSnapRow.observedAt.getTime()) / 60_000,
           )
         : 0,
       baselineReason: activeBaseline?.reason ?? '',
@@ -1045,8 +1062,9 @@ export async function loadReview(
   db: Db,
   tenantId: string,
   projectId: string = DEMO_PROJECT_ID,
+  options?: LoadBundleOptions,
 ): Promise<{ bundle: ProjectBundle; review: ReviewResult }> {
-  const bundle = await loadProjectBundle(db, tenantId, projectId);
+  const bundle = await loadProjectBundle(db, tenantId, projectId, options);
   return { bundle, review: computeReview(bundle.input) };
 }
 

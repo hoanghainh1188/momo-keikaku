@@ -347,6 +347,8 @@ export interface UnmappedGroup {
     key: string;
     title: string;
     mh: Mh;
+    /** Hours × Project default Rate — Internal money in PM views (Story 6.7). */
+    jpy: Jpy;
     resolved: boolean;
     status: string;
   }[];
@@ -705,12 +707,14 @@ export function computeReview(input: ReviewInput): ReviewResult {
     };
     g.ticketCount += 1;
     g.mh += mh;
-    g.jpy += costOf(mh, input.project.defaultRateYenPerHour);
+    const ticketJpy = costOf(mh, input.project.defaultRateYenPerHour);
+    g.jpy += ticketJpy;
     g.tickets.push({
       ticketId: t.trackerIssueId,
       key: t.key,
       title: t.title,
       mh,
+      jpy: ticketJpy,
       resolved: isResolvedStatus(t.statusId, resolvedStatusIds),
       status: t.statusId,
     });

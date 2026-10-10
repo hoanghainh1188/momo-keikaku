@@ -207,12 +207,19 @@ import {
   listPrograms as listProgramRows,
   listProjects as listProjectRows,
   tenantCurrencyOn,
+  captureReviewTrackerPin,
   loadProjectBundle,
   loadReview,
   loadRuleEvaluation,
   membershipsOf,
   type Db,
+  type ReviewTrackerPin,
 } from '@momo/db';
+import {
+  readReviewTrackerPin,
+  writeReviewTrackerPin,
+  clearReviewTrackerPin,
+} from '../lib/review-tracker-pin-cookie';
 import {
   createAuth,
   googleRegistered,
@@ -548,11 +555,35 @@ export async function resetPassword(input: { readonly token: string; readonly pa
 /**
  * The project read port, wired. Built per call rather than at module load, so importing this
  * file reads no configuration — `next build` evaluates route modules without a database.
+ *
+ * Story 6.7 / Q1→C: optional Tracker freeze. Header stays live; Review ensures a pin on open;
+ * Mapping respects an existing pin without creating one.
  */
-function projectReadDeps() {
+function projectReadDeps(options?: {
+  readonly trackerPin?: ReviewTrackerPin | null;
+  readonly ensurePin?: boolean;
+}) {
+  const pin = options?.trackerPin ?? null;
+  const ensurePin = options?.ensurePin === true;
   return {
     handle: webDb(),
-    projectRead: { loadProjectBundle, loadReview, loadRuleEvaluation },
+    projectRead: {
+      loadProjectBundle: (handle: Db, tenantId: string, projectId: string) =>
+        loadProjectBundle(handle, tenantId, projectId, { trackerPin: pin }),
+      loadReview: async (handle: Db, tenantId: string, projectId: string) => {
+        const result = await loadReview(handle, tenantId, projectId, { trackerPin: pin });
+        if (ensurePin && !pin) {
+          const captured = captureReviewTrackerPin({
+            overallSnapshotId: result.bundle.input.pinnedSnapshot.snapshotId,
+            trackerSnapshotIdByConnector:
+              result.bundle.input.trackerSnapshotIdByConnector ?? new Map(),
+          });
+          if (captured) await writeReviewTrackerPin(projectId, captured);
+        }
+        return result;
+      },
+      loadRuleEvaluation,
+    },
   } satisfies ProjectReadDeps<Db>;
 }
 
@@ -562,16 +593,50 @@ export async function getProjectHeader(input: ProjectInput, ctx?: RequestContext
   return getProjectHeaderUseCase(projectReadDeps(), context, input);
 }
 
-/** The bundle and its Review, for every project page. See `packages/app`'s `getProjectReview`. */
-export async function getProjectReview(input: ProjectInput, ctx?: RequestContext) {
+/**
+ * The bundle and its Review, for every project page. See `packages/app`'s `getProjectReview`.
+ * Story 6.7 / Q1→C: pass `{ openReview: true }` from the Review page so the first open persists
+ * the Tracker freeze; other surfaces reuse an existing freeze without creating one.
+ */
+export async function getProjectReview(
+  input: ProjectInput,
+  ctx?: RequestContext,
+  options?: { readonly openReview?: boolean },
+) {
   const context = ctx ?? (await requestContext());
-  return getProjectReviewUseCase(projectReadDeps(), context, input);
+  const existing = await readReviewTrackerPin(input.projectId);
+  return getProjectReviewUseCase(
+    projectReadDeps({
+      trackerPin: existing,
+      ensurePin: options?.openReview === true,
+    }),
+    context,
+    input,
+  );
+}
+
+/**
+ * Story 6.7 / Q1→C: explicit Re-pin — drop the freeze, capture live Tracker heads, persist.
+ */
+export async function repinReviewTracker(input: ProjectInput, ctx?: RequestContext) {
+  const context = ctx ?? (await requestContext());
+  await clearReviewTrackerPin(input.projectId);
+  return getProjectReviewUseCase(
+    projectReadDeps({ trackerPin: null, ensurePin: true }),
+    context,
+    input,
+  );
 }
 
 /** The Mapping surface, joined and ordered. See `packages/app`'s `getProjectMapping`. */
 export async function getProjectMapping(input: ProjectInput, ctx?: RequestContext) {
   const context = ctx ?? (await requestContext());
-  return getProjectMappingUseCase(projectReadDeps(), context, input);
+  const existing = await readReviewTrackerPin(input.projectId);
+  return getProjectMappingUseCase(
+    projectReadDeps({ trackerPin: existing, ensurePin: false }),
+    context,
+    input,
+  );
 }
 
 /**

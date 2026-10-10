@@ -502,11 +502,46 @@ a {
   grid-template-columns: minmax(0, 1fr) var(--rail-w);
   gap: 24px;
   align-items: start;
+  position: relative;
 }
 @media (max-width: 1279px) {
   .layout-review {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
+/* Story 6.7: Disposition rail drawer on narrow viewports (Plan exceptions pattern). */
+.review-rail-drawer-root {
+  position: relative;
+}
+.review-rail-toggle {
+  position: sticky;
+  top: 72px;
+  z-index: 7;
+  margin-bottom: 8px;
+}
+.rail.rail--drawer {
+  position: absolute;
+  top: 36px;
+  right: 0;
+  width: var(--rail-w);
+  min-width: var(--rail-w);
+  max-height: calc(100vh - 96px);
+  overflow: auto;
+  z-index: 8;
+  box-shadow: -4px 0 16px rgba(29, 31, 35, 0.08);
+}
+
+.review-stale-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--health-amber);
+  background: color-mix(in srgb, var(--health-amber) 12%, var(--sheet));
+  color: var(--ink);
 }
 
 /* ---------------------------------------------------------------- type */
@@ -876,6 +911,36 @@ table.ledger tr.total-row td {
 .rail-group {
   border-top: 1px solid var(--rule-strong);
   padding: 12px 0;
+}
+
+/* Story 6.7 / UX-DR30 Comfort: A4 landscape print; hide shell chrome + Disposition rail. */
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 12mm;
+  }
+  .topbar,
+  .sidebar,
+  .rail,
+  .review-rail-toggle,
+  .review-rail-drawer-root,
+  .no-print {
+    display: none !important;
+  }
+  .layout-review {
+    display: block;
+  }
+  .sheet {
+    border: none;
+    max-width: none;
+    padding: 0;
+  }
+  .app {
+    display: block;
+  }
+  .main {
+    padding: 0;
+  }
 }
 .btn {
   font-family: inherit;
