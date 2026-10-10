@@ -2,7 +2,7 @@
 title: '6.3 The formulas, and the one EAC method R0 ships'
 type: 'feature'
 created: '2026-10-10'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '99b9a4b'
