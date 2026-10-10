@@ -13,6 +13,7 @@ import {
   hoursSigned,
   inkTone,
   present,
+  ratioDeltaSigned,
   ratioText,
   share,
   SUMMARY_NA_LABEL,
@@ -22,6 +23,11 @@ import {
 } from './index';
 
 describe('present (AD-4: the only rounding site, from the exact value, half-even)', () => {
+  it('renders signed ratio delta for Period change', () => {
+    expect(ratioDeltaSigned(ratio(91n, 100n), ratio(86n, 100n))).toBe('+0.05');
+    expect(ratioDeltaSigned(ratio(86n, 100n), ratio(91n, 100n))).toBe('-0.05');
+  });
+
   it('renders ratios to 2 dp, ties to even', () => {
     expect(ratioText(ratio(91n, 100n))).toBe('0.91');
     expect(ratioText(ratio(1n, 3n))).toBe('0.33');
@@ -75,6 +81,15 @@ describe('present (AD-4: the only rounding site, from the exact value, half-even
     expect(cssPercent(ratio(1n, 4n))).toBe('25%');
   });
 
+  it('renders BAC exhausted in the figure slot (UX-DR23)', () => {
+    expect(present(unavailable('bac_exhausted'))).toEqual({
+      text: 'BAC exhausted',
+      unit: null,
+      unavailableReason: 'BAC exhausted',
+      coverage: null,
+    });
+  });
+
   it('renders an unavailable metric as an em dash and its reason, never 0', () => {
     expect(present(unavailable('no_actuals_yet'))).toEqual({
       text: '—',
@@ -124,6 +139,7 @@ describe('@momo/domain/present, the one domain module apps/web may import (AD-1)
       'hoursSigned',
       'inkTone',
       'present',
+      'ratioDeltaSigned',
       'ratioText',
       'share',
       'thresholdText',

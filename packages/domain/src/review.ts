@@ -1,11 +1,16 @@
 import { attribute, periodUnplannedTicketCount, type AttributionResult, type Buckets } from './attribution';
 import type { MeasurementBasis } from './basis';
-import type { HolidayCalendar, IsoDate, ReportingPeriod } from './calendar';
+import { addDays, type HolidayCalendar, type IsoDate, ReportingPeriod } from './calendar';
 import {
   computeCoverage,
   type CoverageConnectorInput,
   type CoverageResult,
 } from './coverage';
+import {
+  buildFormulaMetricDetails,
+  ticketKeysByWpFromMapping,
+  type FormulaMetricDetail,
+} from './formula-popover-detail';
 import { computeEvm, FORMULA_VERSION, type EvmResult, type WpMeasure } from './evm';
 import { computeForecast, type ForecastResult } from './forecast';
 import { computeHealth, isBehindPlan, type HealthColour, type HealthIndicator } from './health';
@@ -308,11 +313,16 @@ export interface ReviewResult {
   /** Null while the Project has no Baseline. */
   evm: EvmResult | null;
   /**
+   * Story 6.3 / Q1-A: same pin recomputed at `period.start − 1 day` for Period-Δ in formula popovers.
+   * Null when there is no Baseline.
+   */
+  evmAtPeriodStart: EvmResult | null;
+  /**
    * PV and EV in money, at the Project default Rate (`costOf`, half-even per figure). AC's money
    * is `attribution.cumulative.totalJpy`, at the per-Resource Rate in force on each hour's date.
    * Null while the Project has no Baseline.
    */
-  money: { pvJpy: Jpy; evJpy: Jpy } | null;
+  money: { pvJpy: Jpy; evJpy: Jpy; bacJpy: Jpy } | null;
   /** SPI strictly below 1, compared exactly (`isBehindPlan`); false while SPI is unavailable. */
   behindPlan: boolean;
   /** Null while the Project has no Baseline. */
@@ -337,6 +347,8 @@ export interface ReviewResult {
   milestones: MilestoneRow[] | null;
   /** Null while the Project has no Baseline. */
   divergence: DivergenceRow[] | null;
+  /** Story 6.3: formula popover payloads; null without Baseline. */
+  formulaMetrics: FormulaMetricDetail[] | null;
   /**
    * Project-wide FR-23 figures — Review captions.
    * `mappedHourShare` is Coverage `projectTotal.hourShare.mappedExcludingCatchAll`
@@ -413,25 +425,47 @@ export function computeReview(input: ReviewInput): ReviewResult {
   const plannedScopeAcMh =
     attribution.cumulative.mappedBaselinedMh + attribution.cumulative.catchAllMh;
 
+  const evmInputBase = {
+    calendar: input.calendar,
+    baseline: baseline!,
+    wps: input.wps,
+    mappedTicketsByWp,
+    acByWp: attribution.acByWp,
+    unplannedAcMh: attribution.cumulative.unplannedMh,
+    totalAcMh: attribution.cumulative.totalMh,
+    plannedScopeAcMh,
+    measurementBasis,
+    acCoverage: input.acCoverage ?? null,
+    resolvedStatusIds,
+    priorEvByWp: input.priorEvByWp,
+    formulaVersion: input.formulaVersion ?? FORMULA_VERSION,
+  };
+
   const evm =
     baseline === null
       ? null
       : computeEvm({
+          ...evmInputBase,
           asOf: input.asOf,
-          calendar: input.calendar,
-          baseline,
-          wps: input.wps,
-          mappedTicketsByWp,
-          acByWp: attribution.acByWp,
-          unplannedAcMh: attribution.cumulative.unplannedMh,
-          totalAcMh: attribution.cumulative.totalMh,
-          plannedScopeAcMh,
-          measurementBasis,
-          acCoverage: input.acCoverage ?? null,
-          resolvedStatusIds,
-          priorEvByWp: input.priorEvByWp,
-          formulaVersion: input.formulaVersion ?? FORMULA_VERSION,
         });
+
+  const evmAtPeriodStart =
+    baseline === null
+      ? null
+      : computeEvm({
+          ...evmInputBase,
+          asOf: addDays(input.period.start, -1),
+        });
+
+  const ticketKeysByWp = ticketKeysByWpFromMapping(
+    input.pinnedSnapshot.tickets,
+    head,
+  );
+
+  const formulaMetrics =
+    evm === null || evmAtPeriodStart === null
+      ? null
+      : buildFormulaMetricDetails(evm, evmAtPeriodStart, ticketKeysByWp);
 
   const milestones = baseline === null ? null : milestoneRows(baseline, input.wps, input.asOf);
 
@@ -690,12 +724,14 @@ export function computeReview(input: ReviewInput): ReviewResult {
     },
     measurementBasis,
     evm,
+    evmAtPeriodStart,
     money:
       evm === null
         ? null
         : {
             pvJpy: costOf(mhAmountOrZero(evm.pvMh), input.project.defaultRateYenPerHour),
             evJpy: costOf(mhAmountOrZero(evm.evMh), input.project.defaultRateYenPerHour),
+            bacJpy: costOf(evm.bacMh, input.project.defaultRateYenPerHour),
           },
     behindPlan: evm !== null && isBehindPlan(evm.spi),
     forecast,
@@ -732,6 +768,7 @@ export function computeReview(input: ReviewInput): ReviewResult {
     ruleUnmapped,
     milestones,
     divergence,
+    formulaMetrics,
     coverage,
     catchAllShare,
     dispositions: input.dispositions,

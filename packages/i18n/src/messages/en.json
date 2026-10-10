@@ -627,6 +627,44 @@
         "reading": ""
       }
     },
+    "metric_formula": {
+      "close": "Close",
+      "inputs": "Inputs",
+      "interpretation": "Interpretation",
+      "period_change": "Change within the Period",
+      "period_change_value": "{delta} since the day before this Period started",
+      "period_change_unavailable": "—",
+      "show_tickets_wps": "Show Tickets / WPs",
+      "input": {
+        "bac": "BAC",
+        "ev": "EV",
+        "pv": "PV",
+        "ac": "AC",
+        "ac_planned": "AC (planned scope)",
+        "cpi": "CPI (all-in)",
+        "eac": "EAC",
+        "method_typical": "EAC Method"
+      },
+      "interpret": {
+        "unavailable": "Not enough data to interpret yet.",
+        "cv_under": "Under budget.",
+        "cv_over": "Over budget.",
+        "cv_on": "On budget.",
+        "sv_ahead": "Ahead of plan.",
+        "sv_behind": "Behind plan.",
+        "sv_on": "On plan.",
+        "cpi_under": "Under budget.",
+        "cpi_over": "Over budget.",
+        "cpi_on": "On budget.",
+        "spi_ahead": "Ahead of plan.",
+        "spi_behind": "Behind plan.",
+        "spi_on": "On plan.",
+        "tcpi_efficient": "Remaining work can beat the planned efficiency.",
+        "tcpi_must_beat": "Remaining work must beat the planned efficiency.",
+        "tcpi_on": "Remaining work matches planned efficiency.",
+        "bac_exhausted": "BAC is exhausted — no budget remains for TCPI."
+      }
+    },
     "ticket_count_mode": "Ticket-Count Mode",
     "rule_unmapped": {
       "heading": "Moved to Unmapped by a rule",

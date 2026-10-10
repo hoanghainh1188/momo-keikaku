@@ -1,4 +1,12 @@
-import { divRoundHalfEven, reduce, type Jpy, type Metric, type Mh, type Ratio } from '../units';
+import {
+  divRoundHalfEven,
+  ratio,
+  reduce,
+  type Jpy,
+  type Metric,
+  type Mh,
+  type Ratio,
+} from '../units';
 
 /**
  * `@momo/domain/present` is the ONE domain module `apps/web` may import (AD-1, decided
@@ -114,9 +122,31 @@ const REASONS: Record<string, string> = {
   no_project_start: 'unavailable — Project start not set',
 };
 
+/** Signed ratio Δ for Period change (exact rational, then rounded like `ratioText`). */
+export function ratioDeltaSigned(current: Ratio, prior: Ratio): string {
+  const diff = reduce(
+    ratio(
+      current.num * prior.den - prior.num * current.den,
+      current.den * prior.den,
+    ),
+  );
+  const text = ratioText(diff);
+  if (text.startsWith('-')) return text;
+  if (text === '0.00' || text === '0.0' || text === '0') return '0.00';
+  return `+${text}`;
+}
+
 /** FR-27: unavailable metrics render as an em dash plus the reason, never "0". */
 export function present(m: Metric): PresentedMetric {
   if (m.kind === 'unavailable') {
+    if (m.reasonCode === 'bac_exhausted') {
+      return {
+        text: REASONS.bac_exhausted,
+        unit: null,
+        unavailableReason: REASONS.bac_exhausted,
+        coverage: null,
+      };
+    }
     return {
       text: '—',
       unit: null,
