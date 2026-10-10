@@ -2960,6 +2960,10 @@
         "pct_override_event_den_check": {
           "name": "pct_override_event_den_check",
           "value": "\"pct_override_event\".\"recorded_pct_den\" <> 0"
+        },
+        "pct_override_event_source_check": {
+          "name": "pct_override_event_source_check",
+          "value": "\"source\" IS NULL OR \"source\" IN ('pm_override', 'plan_edit')"
         }
       },
       "isRLSEnabled": false

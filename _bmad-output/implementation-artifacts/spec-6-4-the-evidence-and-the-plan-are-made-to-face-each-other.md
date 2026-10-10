@@ -2,7 +2,7 @@
 title: '6.4 — The evidence and the plan are made to face each other'
 type: 'feature'
 created: '2026-10-10'
-status: 'in-progress'
+status: 'in-review'
 route: 'dispatch'
 review_loop_iteration: 0
 context: []
@@ -93,10 +93,14 @@ baseline_commit: 'ed8584cfb1a2b3e645ed1043da97c2ee343b3b39'
 ## Implementation Notes
 
 - **2026-10-10 — story 6.4 landed (Observed vs Recorded + Accept).** Expand `pct_override_event` with nullable `reason` + optional `source` (`0014_pct_override_reason_source.sql`). Fence `patch_recorded_pct` takes optional reason/source; Accept path requires non-empty reason + `pm_override`; Plan-grid sets `plan_edit` (reason may be null). Audit payload carries reason/source/wpId/pct for Recorded writes. Domain `computeReview` adds `observedVsRecorded` gap list (fixed >10 pts, worst first, dual EV, estimate-driven flag) and `estimateDrivenEv` on divergence; inputs `recordedPctByWp` + `durationDaysByWp` from `loadReview`. Review page: thin Progress & Dates after Ahead/Behind with Accept dialog (Esc/focus, this-WP remaining-duration consequence). Plan grid: PM-adjusted tag when head reason present. i18n EN/JA + present contract stub (Visibility Policy must not hide PM-adjusted). SM-C4 deferred. Verified: `pnpm typecheck`, targeted vitest (review gap matrix, fence reason refuse, i18n parity, divergence tags, plan-grid-view), `pnpm lint`. DB migrate / fence Postgres integration not run here (no `DATABASE_URL` in this environment). Sprint left at `in-progress` (not stamped done).
+- **2026-10-10 — review fixes.** Accept re-reads Observed via `getProjectReview` (ignores client %). Gap consequence `remainingDuration` try/caught. Accept Esc ignored while pending; clears reason; all refuse keys via `t()`. ReviewResult `pmAdjusted` list under gap table; empty-state; null Recorded shows 0% + none caption; pts i18n. `pct_override_event_source_check` on expand. Schema/append unit coverage + Comfort `|gap|==10` excluded.
 
 ## Spec Change Log
 
 ## Review Triage Log
+
+- **2026-10-10 — implementation review fixes applied** (Accept trust Observed, remainingDuration guard, Accept Esc/i18n, Progress & Dates empty/PM-adjusted/pts, ReviewResult.pmAdjusted, append fields unit, Comfort boundary, plan-grid PmAdjusted true, source CHECK).
+
 
 ## Design Notes
 

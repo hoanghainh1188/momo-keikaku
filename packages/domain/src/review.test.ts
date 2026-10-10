@@ -1048,4 +1048,108 @@ describe('computeReview Observed-vs-Recorded gap list (story 6.4)', () => {
     const d = r.divergence!.find((x) => x.wpId === 'WP-B')!;
     expect(d.estimateDrivenEv).toBe(true);
   });
+
+  it('excludes |gap| exactly equal to the Comfort threshold (10 pts)', () => {
+    // Observed 50% (count: 1 of 2 Resolved) vs Recorded 40% → gap 10 pts → excluded.
+    const r = computeReview(
+      gapInput({
+        mappingEvents: [
+          { seq: 1, ticketId: 't1', wpId: 'WP-B', source: 'manual', at: 'x', actor: 'pm' },
+          { seq: 2, ticketId: 't2', wpId: 'WP-B', source: 'manual', at: 'x', actor: 'pm' },
+        ],
+        pinnedSnapshot: {
+          ...input.pinnedSnapshot,
+          tickets: [
+            {
+              ...input.pinnedSnapshot.tickets[0]!,
+              trackerIssueId: 't1',
+              key: 't1',
+              statusId: 'Closed',
+              estimateMh: null,
+            },
+            {
+              ...input.pinnedSnapshot.tickets[0]!,
+              trackerIssueId: 't2',
+              key: 't2',
+              statusId: 'Open',
+              estimateMh: null,
+            },
+          ],
+        },
+        recordedPctByWp: new Map([
+          [
+            'WP-B',
+            {
+              pct: { num: 40n, den: 100n },
+              reason: null,
+              source: 'plan_edit' as const,
+            },
+          ],
+        ]),
+      }),
+    );
+    expect(r.observedVsRecorded!.find((x) => x.wpId === 'WP-B')).toBeUndefined();
+  });
+
+  it('lists pmAdjusted from heads with non-empty reason even when the gap has closed', () => {
+    const r = computeReview(
+      gapInput({
+        recordedPctByWp: new Map([
+          [
+            'WP-B',
+            {
+              pct: { num: 0n, den: 1n },
+              reason: 'Accepted from evidence',
+              source: 'pm_override' as const,
+            },
+          ],
+        ]),
+      }),
+    );
+    // Observed ~0 with no evidence vs Rec 0 → no gap row, but PM-adjusted remains.
+    expect(r.observedVsRecorded!.find((x) => x.wpId === 'WP-B')).toBeUndefined();
+    expect(r.pmAdjusted).toEqual([
+      {
+        wpId: 'WP-B',
+        wbsCode: '1.1',
+        name: 'Build',
+        recordedPct: { num: 0n, den: 1n },
+        reason: 'Accepted from evidence',
+        source: 'pm_override',
+      },
+    ]);
+  });
+
+  it('leaves remainingDays* null when remainingDuration would throw', () => {
+    const r = computeReview(
+      gapInput({
+        pinnedSnapshot: {
+          ...input.pinnedSnapshot,
+          tickets: [
+            {
+              ...input.pinnedSnapshot.tickets[0]!,
+              statusId: 'Closed',
+              estimateMh: hoursToMh(100),
+            },
+          ],
+        },
+        // Negative duration is invalid for remainingDuration — must not fail computeReview.
+        durationDaysByWp: new Map([['WP-B', -1]]),
+        recordedPctByWp: new Map([
+          [
+            'WP-B',
+            {
+              pct: { num: 10n, den: 100n },
+              reason: null,
+              source: 'plan_edit' as const,
+            },
+          ],
+        ]),
+      }),
+    );
+    const row = r.observedVsRecorded!.find((x) => x.wpId === 'WP-B');
+    expect(row).toBeDefined();
+    expect(row!.remainingDaysBefore).toBeNull();
+    expect(row!.remainingDaysAfter).toBeNull();
+  });
 });

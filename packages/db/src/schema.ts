@@ -591,6 +591,11 @@ export const pctOverrideEvent = pgTable(
   (t) => ({
     byWp: index('pct_override_event_wp_idx').on(t.tenantId, t.projectId, t.wpId, t.seq),
     denPositive: check('pct_override_event_den_check', sql`${t.recordedPctDen} <> 0`),
+    /** Story 6.4: R0 sources only; null allowed for legacy expand rows. */
+    sourceAllowed: check(
+      'pct_override_event_source_check',
+      sql`${t.source} IS NULL OR ${t.source} IN ('pm_override', 'plan_edit')`,
+    ),
     workPackage: foreignKey({
       name: 'pct_override_event_work_package_fk',
       columns: [t.tenantId, t.projectId, t.wpId],

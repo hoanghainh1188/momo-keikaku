@@ -48,7 +48,7 @@ export default async function ReviewPage({
   const overall = r.health.overall;
   // Story 2.2 (decision Q1-A): with no Baseline these are null, and each block that needs them
   // shows the "No Baseline yet" state instead. Coverage, AC and Unplanned Work always render.
-  const { evm, forecast, milestones, divergence, observedVsRecorded } = r;
+  const { evm, forecast, milestones, divergence, observedVsRecorded, pmAdjusted } = r;
   const recordedSourceLabel = (source: 'none' | 'pm_override' | 'plan_edit') =>
     source === 'none'
       ? t('review.gap_source_none')
@@ -605,90 +605,109 @@ export default async function ReviewPage({
           ) : (
             <>
               <h3 className="label">{t('review.observed_vs_recorded')}</h3>
-              <table className="ledger" data-testid="observed-vs-recorded">
-                <thead>
-                  <tr>
-                    <th>{t('clientView.wbs')}</th>
-                    <th>{t('clientView.work_package')}</th>
-                    <th>{t('review.gap_observed')}</th>
-                    <th>{t('review.gap_recorded')}</th>
-                    <th className="num">{t('review.gap_gap')}</th>
-                    <th className="num">{t('review.gap_ev_obs')}</th>
-                    <th className="num">{t('review.gap_ev_rec')}</th>
-                    <th>{t('review.accept')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {observedVsRecorded.map((row) => {
-                    const observedWhole = wholePercent(row.observedPct);
-                    const recordedWhole =
-                      row.recordedPct === null ? '0' : wholePercent(row.recordedPct);
-                    const pmAdjusted =
-                      row.recordedReason !== null && row.recordedReason.trim().length > 0;
-                    return (
-                      <tr key={row.wpId} data-testid={`gap-row-${row.wpId}`}>
-                        <td>{row.wbsCode}</td>
-                        <td>
-                          {row.name}{' '}
-                          {pmAdjusted ? (
-                            <span className="tag" data-testid={`pm-adjusted-review-${row.wpId}`}>
-                              {t('common.pm_adjusted')}
-                            </span>
-                          ) : null}
-                          {row.estimateDrivenEv ? (
-                            <span className="tag" data-testid={`estimate-driven-${row.wpId}`}>
-                              {t('review.gap_estimate_driven')}
-                            </span>
-                          ) : null}
-                          <div className="caption">
-                            {t('review.gap_wording', {
-                              observed: observedWhole,
-                              recorded: recordedWhole,
-                            })}
-                          </div>
-                        </td>
-                        <td>
-                          {observedWhole}%
-                          <div className="caption">
-                            <span className="tag">{row.pctBasis}</span>{' '}
-                            {t('review.gap_evidence_count', { count: row.evidenceCount })}
-                          </div>
-                        </td>
-                        <td>
-                          {row.recordedPct === null ? (
-                            <span className="caption">{recordedSourceLabel('none')}</span>
-                          ) : (
-                            <>
-                              {recordedWhole}%
-                              <div className="caption">
-                                {recordedSourceLabel(row.recordedSource)}
-                              </div>
-                            </>
-                          )}
-                        </td>
-                        <td className="num">{wholePercent(row.gapAbs)} pts</td>
-                        <td className="num">{hours(row.evObservedMh)}</td>
-                        <td className="num">{hours(row.evRecordedMh)}</td>
-                        <td>
-                          <AcceptObservedPctForm
-                            row={{
-                              projectId,
-                              wpId: row.wpId,
-                              wbsCode: row.wbsCode,
-                              name: row.name,
-                              observedPctNum: row.observedPct.num.toString(),
-                              observedPctDen: row.observedPct.den.toString(),
-                              observedWhole,
-                              remainingBefore: row.remainingDaysBefore,
-                              remainingAfter: row.remainingDaysAfter,
-                            }}
-                          />
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+              {observedVsRecorded.length === 0 ? (
+                <p className="caption" data-testid="observed-vs-recorded-empty">
+                  {t('review.gap_empty')}
+                </p>
+              ) : (
+                <table className="ledger" data-testid="observed-vs-recorded">
+                  <thead>
+                    <tr>
+                      <th>{t('clientView.wbs')}</th>
+                      <th>{t('clientView.work_package')}</th>
+                      <th>{t('review.gap_observed')}</th>
+                      <th>{t('review.gap_recorded')}</th>
+                      <th className="num">{t('review.gap_gap')}</th>
+                      <th className="num">{t('review.gap_ev_obs')}</th>
+                      <th className="num">{t('review.gap_ev_rec')}</th>
+                      <th>{t('review.accept')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {observedVsRecorded.map((row) => {
+                      const observedWhole = wholePercent(row.observedPct);
+                      const recordedWhole =
+                        row.recordedPct === null ? wholePercent({ num: 0n, den: 1n }) : wholePercent(row.recordedPct);
+                      const rowPmAdjusted =
+                        row.recordedReason !== null && row.recordedReason.trim().length > 0;
+                      return (
+                        <tr key={row.wpId} data-testid={`gap-row-${row.wpId}`}>
+                          <td>{row.wbsCode}</td>
+                          <td>
+                            {row.name}{' '}
+                            {rowPmAdjusted ? (
+                              <span className="tag" data-testid={`pm-adjusted-review-${row.wpId}`}>
+                                {t('common.pm_adjusted')}
+                              </span>
+                            ) : null}
+                            {row.estimateDrivenEv ? (
+                              <span className="tag" data-testid={`estimate-driven-${row.wpId}`}>
+                                {t('review.gap_estimate_driven')}
+                              </span>
+                            ) : null}
+                            <div className="caption">
+                              {t('review.gap_wording', {
+                                observed: observedWhole,
+                                recorded: recordedWhole,
+                              })}
+                            </div>
+                          </td>
+                          <td>
+                            {observedWhole}%
+                            <div className="caption">
+                              <span className="tag">{row.pctBasis}</span>{' '}
+                              {t('review.gap_evidence_count', { count: row.evidenceCount })}
+                            </div>
+                          </td>
+                          <td>
+                            {recordedWhole}%
+                            <div className="caption">
+                              {recordedSourceLabel(row.recordedSource)}
+                            </div>
+                          </td>
+                          <td className="num">
+                            {t('review.gap_pts', { pts: wholePercent(row.gapAbs) })}
+                          </td>
+                          <td className="num">{hours(row.evObservedMh)}</td>
+                          <td className="num">{hours(row.evRecordedMh)}</td>
+                          <td>
+                            <AcceptObservedPctForm
+                              row={{
+                                projectId,
+                                wpId: row.wpId,
+                                wbsCode: row.wbsCode,
+                                name: row.name,
+                                observedWhole,
+                                remainingBefore: row.remainingDaysBefore,
+                                remainingAfter: row.remainingDaysAfter,
+                              }}
+                            />
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+              {pmAdjusted.length > 0 ? (
+                <>
+                  <h3 className="label" style={{ marginTop: 24 }}>
+                    {t('review.pm_adjusted_list')}
+                  </h3>
+                  <ul data-testid="pm-adjusted-list" style={{ margin: '4px 0', paddingLeft: 18 }}>
+                    {pmAdjusted.map((row) => (
+                      <li key={row.wpId} data-testid={`pm-adjusted-list-${row.wpId}`}>
+                        <span className="tag">{t('common.pm_adjusted')}</span>{' '}
+                        {row.wbsCode} · {row.name} — {wholePercent(row.recordedPct)}%
+                        <span className="caption">
+                          {' '}
+                          ({recordedSourceLabel(row.source)}: {row.reason})
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              ) : null}
             </>
           )}
         </Section>

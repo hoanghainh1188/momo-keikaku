@@ -346,6 +346,18 @@ export interface DivergenceRow {
 }
 
 /**
+ * Story 6.4: a leaf WP whose pinned Recorded head carries a non-empty reason (PM-adjusted).
+ */
+export interface PmAdjustedRow {
+  wpId: string;
+  wbsCode: string;
+  name: string;
+  recordedPct: Ratio;
+  reason: string;
+  source: Exclude<RecordedPctSource, 'none'>;
+}
+
+/**
  * Story 6.4: one leaf WP on the Observed-vs-Recorded gap list (|gap| > 10 pts, worst first).
  */
 export interface ObservedVsRecordedGapRow {
@@ -424,6 +436,12 @@ export interface ReviewResult {
    * (same PARTIAL as divergence). Never includes SM-C4.
    */
   observedVsRecorded: ObservedVsRecordedGapRow[] | null;
+  /**
+   * Story 6.4: leaf WPs whose pinned Recorded head has a non-empty reason (PM-adjusted).
+   * Independent of the gap list so Accept that closes a gap still shows the marker.
+   * Empty when none; never null.
+   */
+  pmAdjusted: readonly PmAdjustedRow[];
   /** Story 6.3: formula popover payloads; null without Baseline. */
   formulaMetrics: FormulaMetricDetail[] | null;
   /**
@@ -663,6 +681,7 @@ export function computeReview(input: ReviewInput): ReviewResult {
       ? null
       : divergenceRows(baseline, evm, input.wps, attribution.acByWp);
 
+  const recordedPctByWp = input.recordedPctByWp ?? new Map();
   const observedVsRecorded =
     baseline === null || evm === null
       ? null
@@ -670,9 +689,10 @@ export function computeReview(input: ReviewInput): ReviewResult {
           baseline,
           evm,
           wps: input.wps,
-          recordedPctByWp: input.recordedPctByWp ?? new Map(),
+          recordedPctByWp,
           durationDaysByWp: input.durationDaysByWp ?? new Map(),
         });
+  const pmAdjusted = pmAdjustedRows(input.wps, recordedPctByWp);
 
   // --- FR-23 coverage (Review captions; hour share from Coverage/SM-5 pass)
   const inScopePinned = input.pinnedSnapshot.tickets.filter(
@@ -857,6 +877,7 @@ export function computeReview(input: ReviewInput): ReviewResult {
     milestones,
     divergence,
     observedVsRecorded,
+    pmAdjusted,
     formulaMetrics,
     coverage,
     catchAllShare,
@@ -1005,8 +1026,14 @@ function observedVsRecordedGapRows(input: {
     let remainingDaysBefore: number | null = null;
     let remainingDaysAfter: number | null = null;
     if (durationDays !== null && durationDays !== undefined) {
-      remainingDaysBefore = remainingDuration(durationDays, recordedPct);
-      remainingDaysAfter = remainingDuration(durationDays, observedPct);
+      // Consequence copy must never fail the Review (bad duration / pct → leave null).
+      try {
+        remainingDaysBefore = remainingDuration(durationDays, recordedPct);
+        remainingDaysAfter = remainingDuration(durationDays, observedPct);
+      } catch {
+        remainingDaysBefore = null;
+        remainingDaysAfter = null;
+      }
     }
 
     rows.push({
@@ -1034,6 +1061,35 @@ function observedVsRecordedGapRows(input: {
     if (gapCmp !== 0) return gapCmp;
     return compareWp({ id: a.wpId, wbsCode: a.wbsCode }, { id: b.wpId, wbsCode: b.wbsCode });
   });
+  return rows;
+}
+
+/** Leaf WPs with a non-empty pinned Recorded reason — PM-adjusted (story 6.4). */
+function pmAdjustedRows(
+  wps: readonly WorkPackage[],
+  recordedPctByWp: ReadonlyMap<string, RecordedPctHead>,
+): PmAdjustedRow[] {
+  const rows: PmAdjustedRow[] = [];
+  for (const w of wps) {
+    if (!w.isLeaf || w.isMilestone) continue;
+    const head = recordedPctByWp.get(w.id);
+    if (head === undefined) continue;
+    const reason = head.reason?.trim() ?? '';
+    if (reason.length === 0) continue;
+    const source: Exclude<RecordedPctSource, 'none'> =
+      head.source === 'pm_override' ? 'pm_override' : 'plan_edit';
+    rows.push({
+      wpId: w.id,
+      wbsCode: w.wbsCode,
+      name: w.name,
+      recordedPct: head.pct,
+      reason,
+      source,
+    });
+  }
+  rows.sort((a, b) =>
+    compareWp({ id: a.wpId, wbsCode: a.wbsCode }, { id: b.wpId, wbsCode: b.wbsCode }),
+  );
   return rows;
 }
 

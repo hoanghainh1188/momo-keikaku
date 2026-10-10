@@ -9,8 +9,6 @@ export type AcceptObservedPctModel = {
   readonly wpId: string;
   readonly wbsCode: string;
   readonly name: string;
-  readonly observedPctNum: string;
-  readonly observedPctDen: string;
   readonly observedWhole: string;
   readonly remainingBefore: number | null;
   readonly remainingAfter: number | null;
@@ -18,7 +16,7 @@ export type AcceptObservedPctModel = {
 
 /**
  * Story 6.4 Accept dialog: non-empty reason + this-WP remaining-duration consequence.
- * Esc closes and returns focus to the trigger; Cancel leaves the plan unchanged.
+ * Esc closes (when not pending) and returns focus to the trigger; Cancel leaves the plan unchanged.
  */
 export function AcceptObservedPctForm({ row }: { readonly row: AcceptObservedPctModel }) {
   const t = useTranslations();
@@ -26,6 +24,8 @@ export function AcceptObservedPctForm({ row }: { readonly row: AcceptObservedPct
   const [reason, setReason] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  const pendingRef = useRef(false);
+  pendingRef.current = pending;
   const titleId = useId();
   const triggerRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -35,12 +35,13 @@ export function AcceptObservedPctForm({ row }: { readonly row: AcceptObservedPct
     if (!open) return;
     reasonRef.current?.focus();
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        setOpen(false);
-        setError(null);
-        triggerRef.current?.focus();
-      }
+      if (e.key !== 'Escape') return;
+      if (pendingRef.current) return;
+      e.preventDefault();
+      setOpen(false);
+      setError(null);
+      setReason('');
+      triggerRef.current?.focus();
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
@@ -122,16 +123,10 @@ export function AcceptObservedPctForm({ row }: { readonly row: AcceptObservedPct
                   const outcome = await acceptObservedPctAction({
                     projectId: row.projectId,
                     wpId: row.wpId,
-                    observedPctNum: row.observedPctNum,
-                    observedPctDen: row.observedPctDen,
                     reason: trimmed,
                   });
                   if (!outcome.ok) {
-                    setError(
-                      outcome.messageKey === 'review.accept_reason_required'
-                        ? t('review.accept_reason_required')
-                        : outcome.messageKey,
-                    );
+                    setError(t(outcome.messageKey));
                     return;
                   }
                   setOpen(false);

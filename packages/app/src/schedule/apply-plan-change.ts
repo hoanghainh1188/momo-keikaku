@@ -284,6 +284,36 @@ export const planMutationSchema = planMutationBase.superRefine((value, ctx) => {
 
 export type PlanMutation = z.infer<typeof planMutationBase>;
 
+/**
+ * Story 6.4: fields appended to `pct_override_event` from a validated `patch_recorded_pct`.
+ * Pure so unit tests can assert reason/source without Postgres.
+ */
+export function pctOverrideAppendFields(mutation: {
+  readonly recordedPctNum: bigint;
+  readonly recordedPctDen: bigint;
+  readonly reason?: string;
+  readonly source?: 'pm_override' | 'plan_edit';
+}): {
+  readonly recordedPctNum: bigint;
+  readonly recordedPctDen: bigint;
+  readonly reason: string | null;
+  readonly source: 'pm_override' | 'plan_edit';
+} {
+  const source = mutation.source ?? 'plan_edit';
+  const reason =
+    source === 'pm_override'
+      ? (mutation.reason?.trim() ?? '')
+      : mutation.reason !== undefined
+        ? mutation.reason.trim() || null
+        : null;
+  return {
+    recordedPctNum: mutation.recordedPctNum,
+    recordedPctDen: mutation.recordedPctDen,
+    reason,
+    source,
+  };
+}
+
 export type ApplyPlanChangeScope = {
   readonly bound: SchedulingBound;
   readonly projectWrite: { readonly projectAnchor: (projectId: string) => Promise<Date> };
@@ -566,20 +596,14 @@ async function applyMutation(
       return warnings;
     }
     case 'patch_recorded_pct': {
-      const source = mutation.source ?? 'plan_edit';
-      const reason =
-        source === 'pm_override'
-          ? (mutation.reason?.trim() ?? '')
-          : mutation.reason !== undefined
-            ? mutation.reason.trim() || null
-            : null;
+      const fields = pctOverrideAppendFields(mutation);
       await planInput.appendPctOverride({
         projectId: mutation.projectId,
         wpId: mutation.wpId,
-        recordedPctNum: mutation.recordedPctNum,
-        recordedPctDen: mutation.recordedPctDen,
-        reason,
-        source,
+        recordedPctNum: fields.recordedPctNum,
+        recordedPctDen: fields.recordedPctDen,
+        reason: fields.reason,
+        source: fields.source,
         actor: stamp.actor,
         at: stamp.at,
       });
@@ -842,18 +866,16 @@ export async function applyPlanChange<Handle>(
           ...(settingsAudit !== undefined ? settingsAudit : {}),
           ...(warnings.length > 0 ? { warnings } : {}),
           ...(mutation.kind === 'patch_recorded_pct'
-            ? {
-                wpId: mutation.wpId,
-                recordedPctNum: mutation.recordedPctNum.toString(),
-                recordedPctDen: mutation.recordedPctDen.toString(),
-                reason:
-                  mutation.source === 'pm_override'
-                    ? (mutation.reason?.trim() ?? '')
-                    : mutation.reason !== undefined
-                      ? mutation.reason.trim() || null
-                      : null,
-                source: mutation.source ?? 'plan_edit',
-              }
+            ? (() => {
+                const fields = pctOverrideAppendFields(mutation);
+                return {
+                  wpId: mutation.wpId,
+                  recordedPctNum: fields.recordedPctNum.toString(),
+                  recordedPctDen: fields.recordedPctDen.toString(),
+                  reason: fields.reason,
+                  source: fields.source,
+                };
+              })()
             : {}),
         });
 

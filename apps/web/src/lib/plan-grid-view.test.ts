@@ -95,12 +95,22 @@ describe('plan-grid-view (story 2.13)', () => {
     expect(view.projectFinish).toBeNull();
     expect(view.whatMoved).toBeNull();
     expect(view.rows[0]!.recordedPct).toEqual({ num: '1', den: '4' });
+    expect(view.rows[0]!.recordedPctPmAdjusted).toBe(false);
     expect(view.rows[0]!.exceptionLabel).toBe('▲ Late 6d');
     expect(view.rows[0]!.floatDays).toBe(-3);
     expect(view.rows[0]!.isCritical).toBe(true);
     expect(view.rows[0]!.remainingDays).toBe(8);
     expect(view.rows[0]!.constraintType).toBe('asap');
     expect(view.leafCandidates).toEqual([{ wpId: 'leaf', wbsCode: '1.1', name: 'Leaf' }]);
+  });
+
+  it('serialises recordedPctPmAdjusted true when the Plan row flag is set', () => {
+    const withFlag = {
+      ...sample,
+      rows: [{ ...sample.rows[0]!, recordedPctPmAdjusted: true }],
+    };
+    const view = toPlanGridViewModel(withFlag, 'user-1');
+    expect(view.rows[0]!.recordedPctPmAdjusted).toBe(true);
   });
 
   it('names UX-DR2 slots and Schedule/Progress/Baseline column sets (Q4→A / 4.5)', () => {
