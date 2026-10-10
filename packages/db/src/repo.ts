@@ -716,7 +716,11 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
       const storedIn = parseStoredInputs(scheduleHead.inputs);
       const storedOut = parseStoredOutputs(scheduleHead.outputs);
       const orderedWpIds = storedIn.wps.map((w) => w.id);
-      const wps: NonNullable<ReviewInput['scheduleHealth']>['wps'] = [];
+      const wps: {
+        wpId: string;
+        floatDays: number | null;
+        earlyFinish: string | null;
+      }[] = [];
       for (let index = 0; index < storedOut.wps.length; index++) {
         const wpId = orderedWpIds[index];
         if (wpId === undefined) {
@@ -725,7 +729,11 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
         const row = storedOut.wps[index]!;
         wps.push({ wpId, floatDays: row.floatDays, earlyFinish: row.earlyFinish });
       }
-      const violations: NonNullable<ReviewInput['scheduleHealth']>['violations'] = [];
+      const violations: {
+        wpId: string;
+        constraintType: (typeof storedOut.violations)[number]['constraintType'];
+        daysLate: number;
+      }[] = [];
       for (const v of storedOut.violations) {
         const wpId = orderedWpIds[v.wpId];
         if (wpId === undefined) {

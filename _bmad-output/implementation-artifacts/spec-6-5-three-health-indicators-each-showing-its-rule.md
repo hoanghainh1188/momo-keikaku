@@ -2,7 +2,7 @@
 title: '6.5 — Three Health Indicators, each showing its rule'
 type: 'feature'
 created: '2026-10-10'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 context: []
@@ -103,6 +103,8 @@ baseline_commit: 'a09555fca33e25041e91be52c8b0aaf1c6e84baf'
 - 2026-10-10: UI — `HealthBadge` click/Enter disclosure (Esc focus return, Q2); Status shows threshold source; i18n EN/JA keys for source/disclosure/float/MFO/slip.
 - 2026-10-10: Verified `pnpm typecheck`, `pnpm lint`, `pnpm test` (1572 passed). No live Postgres in this environment — migration not applied here; `db:sql` write-only succeeded. Spurious drizzle DROP/ADD of `pct_override_event_source_check` in 0015 is expand-safe (same constraint text).
 - 2026-10-10: Review fixes — compose Schedule rule/driver so Float does not erase milestone/MFO naming; always append relative-Float caveat; drop unused `thresholdSource` + unused i18n keys; guard corrupt scheduleHealth remaps; split review Schedule cases; HealthBadge disclosure interaction test (Space toggles like click).
+
+- 2026-10-10: Review patches — compose Schedule rules; always-on relative-Float; repo decode guards; HealthBadge test; drop unused thresholdSource/i18n; deferred DB round-trip gaps. Fixed readonly array push typecheck in repo scheduleHealth decode.
 
 ## Spec Change Log
 
