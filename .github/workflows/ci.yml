@@ -71,11 +71,14 @@
 # `not_found` and lands nothing in any tenant-owned table, and an own-Tenant write lands exactly
 # the rows the action always wrote.
 #
-# Still absent: the golden Published Snapshot recompute per formulaVersion, the
-# compaction-then-recompute test, the ComputationInputs closure test, the concurrency test and
-# the six scheduler gates. Adding a gate before its code exists would make CI red on day one
+# Story 6.1 landed the ComputationInputs closure test, the formulaVersion golden file-fixture
+# recompute, and the shared-lock capture path (exercised by the watermark concurrency suite).
+# Still absent: the compaction-then-recompute test (AD-5) and any Epic 6 formula/UI stories
+# beyond the pin contract. Adding a gate before its code exists would make CI red on day one
 # for a reason nobody could fix that day — which is why dependency-cruiser waited for the
 # writes slice.
+#
+# Note: the six scheduler gates and the concurrency test already run under `pnpm test`.
 #
 # So this file gates on what is real: lint, all three typechecks, dependency-cruiser and the
 # test suite. Measured on 2026-09-22 — `pnpm lint`, all three typechecks and `pnpm depcruise`
