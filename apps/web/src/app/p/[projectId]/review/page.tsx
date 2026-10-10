@@ -666,7 +666,7 @@ export default async function ReviewPage({
                 unplanned
                 testId="evm-unplanned-line"
               />
-              {evm === null ? null : (
+              {evm === null || evmMoney === null ? null : (
                 <>
                   <EvmFormulaRow
                     name={t('review.evm.cv.name')}
