@@ -1,11 +1,14 @@
 import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 import {
+  assertLedgerSeqMax,
   buildCalendar,
   computeReview,
   DEFAULT_THRESHOLDS,
+  FORMULA_VERSION,
   mappingHead,
   periodOf,
   projectDate,
+  selectLedgerForPin,
   trackerAccountIdsFromLinkHeads,
   type BaselineVersion,
   type DispositionEvent,
@@ -23,6 +26,7 @@ import {
 import type { Db } from './client';
 import { projectNotFound } from './project-not-found';
 import * as s from './schema';
+import { lockWatermarkShared } from './watermark-lock';
 import { withTenant, type Tx } from './with-tenant';
 
 export const DEMO_PROJECT_ID = 'prj-ec2';
@@ -123,6 +127,14 @@ export async function loadProjectBundle(
 async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBundle> {
   const [p] = await tx.select().from(s.project).where(eq(s.project.id, projectId));
   if (!p) throw projectNotFound(projectId);
+
+  // Story 6.1 / AR-37: capture ComputationInputs under the shared Project watermark lock so no
+  // uncommitted lower seq can still land after the pin. Taken before reading watermark heads.
+  await lockWatermarkShared(
+    { tx, tenantId: p.tenantId },
+    { kind: 'project', projectId },
+  );
+
   const [ten] = await tx.select().from(s.tenant).where(eq(s.tenant.id, p.tenantId));
   const [dep] = await tx.select().from(s.department).where(eq(s.department.id, p.departmentId));
   const connectorRows = await tx
@@ -285,19 +297,51 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
     };
   });
 
-  // Story 5.15 decision 4: pin THIS Project's latest snapshot — only its own Connectors' snapshots,
-  // latest by observedAt, seq as tiebreak. A Tenant-wide "latest" pinned another Project's Tickets
-  // in any multi-Project Tenant.
+  // Story 5.15 + 6.1: pin THIS Project's Connectors only. Per-Connector latest snapshot
+  // (observedAt, seq as tiebreak) feeds `trackerSnapshotIdByConnector`; ledger filter uses
+  // snapshot seq ≤ pin per Connector (AR-21). Review ticket observations still come from the
+  // Project's overall latest snapshot (demo / single-Connector path).
   const projectConnectorIds = connectorRows.map((c) => c.id);
-  const [latestSnap] =
+  const snapshotRows =
     projectConnectorIds.length === 0
       ? []
       : await tx
-          .select()
+          .select({
+            id: s.trackerSnapshot.id,
+            seq: s.trackerSnapshot.seq,
+            connectorId: s.trackerSnapshot.connectorId,
+            observedAt: s.trackerSnapshot.observedAt,
+            measurementBasis: s.trackerSnapshot.measurementBasis,
+            adapterKind: s.trackerSnapshot.adapterKind,
+          })
           .from(s.trackerSnapshot)
-          .where(inArray(s.trackerSnapshot.connectorId, projectConnectorIds))
-          .orderBy(desc(s.trackerSnapshot.observedAt), desc(s.trackerSnapshot.seq))
-          .limit(1);
+          .where(inArray(s.trackerSnapshot.connectorId, projectConnectorIds));
+
+  const snapshotSeqById = new Map<string, number>();
+  for (const snap of snapshotRows) snapshotSeqById.set(snap.id, Number(snap.seq));
+
+  const trackerSnapshotIdByConnector = new Map<string, string>();
+  for (const c of connectorRows) {
+    const latestForConnector = snapshotRows
+      .filter((snap) => snap.connectorId === c.id)
+      .sort((a, b) => {
+        const byTime = b.observedAt.getTime() - a.observedAt.getTime();
+        if (byTime !== 0) return byTime;
+        return Number(b.seq) - Number(a.seq);
+      })[0];
+    if (latestForConnector) {
+      trackerSnapshotIdByConnector.set(c.id, latestForConnector.id);
+    }
+  }
+
+  const latestSnap =
+    snapshotRows.length === 0
+      ? undefined
+      : [...snapshotRows].sort((a, b) => {
+          const byTime = b.observedAt.getTime() - a.observedAt.getTime();
+          if (byTime !== 0) return byTime;
+          return Number(b.seq) - Number(a.seq);
+        })[0];
 
   // Story 5.2: greenfield Projects (no Connector / no snapshot yet) must still load so the
   // Connectors page can show AddConnectorForm. Empty pinned snapshot until the first ingest.
@@ -342,10 +386,26 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
     };
   }
 
-  const ledgerRowsAll = await tx
+  const ledgerRowsRaw = await tx
     .select()
     .from(s.actualsLedgerEntry)
+    .where(eq(s.actualsLedgerEntry.tenantId, p.tenantId))
     .orderBy(asc(s.actualsLedgerEntry.seq));
+
+  // Story 6.1 / AR-21: filter by pinned snapshot per Connector; ledger_seq_max is assertion only.
+  const pinSelection = selectLedgerForPin(
+    ledgerRowsRaw.map((e) => ({
+      seq: Number(e.seq),
+      connectorId: e.connectorId,
+      snapshotId: e.snapshotId,
+      row: e,
+    })),
+    trackerSnapshotIdByConnector,
+    snapshotSeqById,
+  );
+  assertLedgerSeqMax(pinSelection.entries, pinSelection.ledgerSeqMax);
+  const ledgerSeqMax = pinSelection.ledgerSeqMax;
+  const ledgerRowsAll = pinSelection.entries.map((e) => e.row);
 
   // Story 5.7: latched basis per Connector — Project basis = hours if any Connector is hours.
   const hoursConnectorIds = new Set<string>();
@@ -432,6 +492,8 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
       e.activeBaselineVersionSeq === null ? null : Number(e.activeBaselineVersionSeq),
     // Story 5.13: carry connector_id so Opening Balances group per Connector.
     connectorId: e.connectorId,
+    // Story 6.1 / AR-21: snapshot pin filter evidence on the domain entry.
+    snapshotId: e.snapshotId,
   }));
 
   const mapRows = await tx
@@ -502,15 +564,17 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
       parentKey: r.matchField === 'parent' ? (parentKeyById.get(r.matchValue) ?? null) : null,
     }));
 
-  const [settingHead] = await tx
+  const settingRows = await tx
     .select({
+      seq: s.projectSettingEvent.seq,
       tzOffsetMinutes: s.projectSettingEvent.tzOffsetMinutes,
       teireiWeekday: s.projectSettingEvent.teireiWeekday,
     })
     .from(s.projectSettingEvent)
     .where(eq(s.projectSettingEvent.projectId, projectId))
-    .orderBy(desc(s.projectSettingEvent.seq))
-    .limit(1);
+    .orderBy(desc(s.projectSettingEvent.seq));
+  const settingHead = settingRows[0];
+  const settingSeqMax = settingHead ? Number(settingHead.seq) : null;
   const tzOffsetMinutes = settingHead?.tzOffsetMinutes ?? p.tzOffsetMinutes;
   const teireiWeekday = settingHead?.teireiWeekday ?? p.teireiWeekday;
 
@@ -527,11 +591,66 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
   };
 
   const anchor = anchorIsoEarly;
-  const calendar = buildCalendar('jp-vn-2026', { jp: p.calendarJp, vn: p.calendarVn });
+  const calendarId = 'jp-vn-2026';
+  const calendar = buildCalendar(calendarId, { jp: p.calendarJp, vn: p.calendarVn });
   const period = periodOf(anchor, tzOffsetMinutes, teireiWeekday);
 
   const mappingSeqMax =
     mappingEvents.length > 0 ? mappingEvents[mappingEvents.length - 1]!.seq : null;
+  const dispositionSeqMax =
+    dispositions.length > 0 ? dispositions[dispositions.length - 1]!.seq : null;
+  const wpStatusSeqMax =
+    statusRows.length > 0 ? Number(statusRows[statusRows.length - 1]!.seq) : null;
+  const rateSeqMax = rateRows.length > 0 ? Number(rateRows[rateRows.length - 1]!.seq) : null;
+
+  const [defaultRateHead] = await tx
+    .select({ seq: s.projectDefaultRateEntry.seq })
+    .from(s.projectDefaultRateEntry)
+    .where(eq(s.projectDefaultRateEntry.projectId, projectId))
+    .orderBy(desc(s.projectDefaultRateEntry.seq))
+    .limit(1);
+  const projectDefaultRateSeqMax = defaultRateHead ? Number(defaultRateHead.seq) : null;
+
+  const [pctHead] = await tx
+    .select({ seq: s.pctOverrideEvent.seq })
+    .from(s.pctOverrideEvent)
+    .where(eq(s.pctOverrideEvent.projectId, projectId))
+    .orderBy(desc(s.pctOverrideEvent.seq))
+    .limit(1);
+  const pctOverrideSeqMax = pctHead ? Number(pctHead.seq) : null;
+
+  const [calendarHead] = await tx
+    .select({ seq: s.holidayCalendarVersion.seq })
+    .from(s.holidayCalendarVersion)
+    .where(eq(s.holidayCalendarVersion.projectId, projectId))
+    .orderBy(desc(s.holidayCalendarVersion.seq))
+    .limit(1);
+  const calendarVersion = calendarHead ? Number(calendarHead.seq) : null;
+  const calendarSeqMax = calendarVersion;
+
+  const [scheduleHead] = await tx
+    .select({ seq: s.scheduleRun.seq })
+    .from(s.scheduleRun)
+    .where(eq(s.scheduleRun.projectId, projectId))
+    .orderBy(desc(s.scheduleRun.seq))
+    .limit(1);
+  const scheduleRunSeq = scheduleHead ? Number(scheduleHead.seq) : null;
+
+  let connectorScopeSeqMax: number | null = null;
+  if (projectConnectorIds.length > 0) {
+    const [scopeHead] = await tx
+      .select({ seq: s.connectorScopeEvent.seq })
+      .from(s.connectorScopeEvent)
+      .where(
+        and(
+          eq(s.connectorScopeEvent.tenantId, p.tenantId),
+          inArray(s.connectorScopeEvent.connectorId, projectConnectorIds),
+        ),
+      )
+      .orderBy(desc(s.connectorScopeEvent.seq))
+      .limit(1);
+    connectorScopeSeqMax = scopeHead ? Number(scopeHead.seq) : null;
+  }
 
   let firstObservedAtByTicket: Map<string, string> | undefined;
   let resolvedAtByTicket: Map<string, string> | undefined;
@@ -590,6 +709,7 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
     period,
     asOf: projectDate(anchor, tzOffsetMinutes),
     dispositions,
+    formulaVersion: FORMULA_VERSION,
     measurementBasis,
     basisSeqMax,
     connectorSettingSeqMax,
@@ -602,6 +722,24 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
     acCoverage,
     firstObservedAtByTicket,
     resolvedAtByTicket,
+    // Story 6.1 / AD-10 pin
+    trackerSnapshotIdByConnector,
+    ledgerSeqMax,
+    baselineVersionId: activeBaseline?.id ?? null,
+    rateSeqMax,
+    projectDefaultRateSeqMax,
+    pctOverrideSeqMax,
+    dispositionSeqMax,
+    settingSeqMax,
+    tenantSettingSeqMax: null,
+    wpStatusSeqMax,
+    calendarSeqMax,
+    connectorScopeSeqMax,
+    visibilityPolicy: null,
+    visibilitySeqMax: null,
+    scheduleRunSeq,
+    calendarId,
+    calendarVersion,
   };
 
   const overlapRows = await tx

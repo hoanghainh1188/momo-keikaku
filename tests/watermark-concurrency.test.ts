@@ -18,6 +18,7 @@ import {
   removeProbeTenant,
   type ProbeTenant,
 } from '../packages/db/src/probe-tenants';
+import { loadProjectBundle } from '../packages/db/src/repo';
 import { inTenantTransaction } from '../packages/db/src/tenant-transaction';
 import {
   WATERMARK_NAMESPACE,
@@ -436,6 +437,35 @@ describe.skipIf(!reachable)('the watermark lock serialises appends per scope', (
     }
     await Promise.all([reader, writer]);
     expect(committed).toEqual(['reader', 'writer']);
+  }, 60_000);
+
+  it('loadProjectBundle captures under shared lock (story 6.1 / AR-37)', async () => {
+    const holder = holdLock(PROBE_A, projectScope(PROBE_A));
+    await holder.locked;
+    const load = loadProjectBundle(app(), PROBE_A.tenantId, PROBE_A.projectId).then((bundle) => {
+      expect(bundle.input.formulaVersion).toBeTruthy();
+      expect(bundle.input.trackerSnapshotIdByConnector).toBeInstanceOf(Map);
+      const pinMap = bundle.input.trackerSnapshotIdByConnector!;
+      // Demo probe always has Connectors; pin map size must match what capture loaded.
+      const probeConnectorCount = bundle.input.connectorsForCoverage?.length ?? 0;
+      if (probeConnectorCount > 0) {
+        expect(pinMap.size).toBe(probeConnectorCount);
+      }
+      const ledgerSeqMax = bundle.input.ledgerSeqMax ?? null;
+      if (bundle.input.ledger.length === 0) {
+        expect(ledgerSeqMax).toBeNull();
+      } else {
+        expect(typeof ledgerSeqMax).toBe('number');
+        expect(ledgerSeqMax).toBe(Math.max(...bundle.input.ledger.map((e) => e.seq)));
+      }
+      return bundle;
+    });
+    try {
+      await waiterOn(PROBE_A, projectScope(PROBE_A), load);
+    } finally {
+      holder.release();
+    }
+    await Promise.all([holder.done, load]);
   }, 60_000);
 
   it('a rolled-back append releases the lock, and its error propagates unchanged', async () => {

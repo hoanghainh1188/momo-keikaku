@@ -14,6 +14,20 @@ export * from './present';
 // may import — does not carry it (see the header of present/index.ts).
 export * from './present/codec';
 export * from './review';
+export type { ComputationInputs } from './computation-inputs';
+export {
+  assertLedgerSeqMax,
+  selectLedgerForPin,
+  type LedgerPinRow,
+  type LedgerPinSelection,
+} from './ledger-pin';
+export {
+  computeAt,
+  formulaAt,
+  registeredFormulaVersions,
+  type FormulaCompute,
+} from './formula-version';
+// FORMULA_VERSION stays exported from `./evm` only — avoid a duplicate barrel export.
 export * from './schedule/order';
 export * from './schedule/validate';
 export * from './schedule/recalculate';

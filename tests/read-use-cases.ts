@@ -998,29 +998,18 @@ export interface UnreachedTable {
  * use case" from a claim into a number. Both directions fail: a table that stops being
  * read without being declared here, and a table declared here that a use case has started
  * reading. Either way the change becomes a decision somebody makes on purpose.
+ *
+ * Story 6.1 removed `project_default_rate_entry`, `pct_override_event`,
+ * `holiday_calendar_version`, and `schedule_run` — `getProjectReview` / `loadProjectBundle`
+ * now reads them to fill ComputationInputs pin watermarks.
  */
 export const UNREACHED_TENANT_OWNED_TABLES: readonly UnreachedTable[] = [
-  {
-    table: 'project_default_rate_entry',
-    why:
-      'Written by createProject and appendProjectDefaultRate (story 1.6); live valuation still ' +
-      'reads project.default_rate_jpy. History is loaded only for a pinned lookup (Epic 5\'s ' +
-      'Published Snapshot). No dedicated Rate read this story — the day one lands, this entry ' +
-      'comes out or the reach assertion fails.',
-  },
   {
     table: 'wp_dependency',
     why:
       'Written through app/schedule\'s fence (stories 2.9 / 2.10); no READ use case yet — the tree ' +
       'grid (2.13) and schedule strip are the first readers. The first read use case over it must ' +
       'remove this entry.',
-  },
-  {
-    table: 'pct_override_event',
-    why:
-      'Created by story 2.10 as append-only Recorded %; written through the fence. No READ use ' +
-      'case yet — resolveScheduleInputs loads heads inside the fence, and the Plan grid (2.13) ' +
-      'will surface them. The first read use case removes this entry.',
   },
   {
     table: 'custom_field_definition',
@@ -1041,20 +1030,6 @@ export const UNREACHED_TENANT_OWNED_TABLES: readonly UnreachedTable[] = [
       'publish/settings paths; heads feed publishCalendarVersion. No READ use case yet — Project ' +
       'settings thin UI loads them inside the calendar writer path, not a declared read use case. ' +
       'The first dedicated read removes this entry.',
-  },
-  {
-    table: 'holiday_calendar_version',
-    why:
-      'Append-only resolved versions (AD-29). Written by seed and app/calendar.publishCalendarVersion ' +
-      '(2.12); schedule resolve loads the latest inside the fence. No product READ use case yet — ' +
-      'the first one removes this entry.',
-  },
-  {
-    table: 'schedule_run',
-    why:
-      'Created by story 2.1 (AD-26); app/schedule appends runs (2.9) and the schedule strip and ' +
-      'exception rail read them (2.15, 2.16). No READ use case yet — the first read of it removes ' +
-      'this entry.',
   },
   {
     table: 'wp_schedule',

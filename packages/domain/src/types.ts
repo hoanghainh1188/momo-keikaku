@@ -85,6 +85,12 @@ export interface LedgerEntry {
    * to group Opening Balances per Connector when reporting FR-20 / UX-DR23.
    */
   connectorId?: string | null;
+  /**
+   * Story 6.1 / AR-21: `actuals_ledger_entry.snapshot_id` — the Tracker Snapshot that
+   * produced this row. Required for pin filtering (`snapshot seq ≤ pinned` per Connector);
+   * optional on older in-memory fixtures that never exercise the filter.
+   */
+  snapshotId?: string | null;
 }
 
 export type MappingSource = 'manual' | 'rule' | 'disposition' | 'release';

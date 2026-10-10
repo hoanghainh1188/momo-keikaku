@@ -165,5 +165,9 @@ describe.skipIf(!reachable)('Review snapshot pin in a multi-Project Tenant (stor
     const c = await loadReview(app, PROBE.tenantId, PROJECT_C);
     expect(c.review.snapshot.id).toBe('');
     expect(c.bundle.input.pinnedSnapshot.tickets).toHaveLength(0);
+    // Story 6.1 greenfield: no Connector → empty pin map, empty filtered ledger.
+    expect(c.bundle.input.trackerSnapshotIdByConnector?.size ?? 0).toBe(0);
+    expect(c.bundle.input.ledger).toHaveLength(0);
+    expect(c.bundle.input.ledgerSeqMax ?? null).toBeNull();
   });
 });

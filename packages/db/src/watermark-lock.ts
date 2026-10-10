@@ -46,8 +46,8 @@ import type { Tx } from './with-tenant';
  * `project_default_rate_entry`, `wp_flag_event` (story 5.12). Tenant key: `rate_entry`.
  * `audit_log` rides on the held key.
  * `identity_event` is global — it has no Tenant or Project to key on — and takes none. The Epic 2/5
- * writers (2.9, 2.10, 5.5) call this when they land; the future `ComputationInputs` capture takes
- * `lockWatermarkShared`.
+ * writers (2.9, 2.10, 5.5) call this when they land; `loadProjectBundle` captures
+ * `ComputationInputs` under `lockWatermarkShared` (story 6.1 / AR-37).
  */
 
 /** The advisory-lock namespaces — the first argument of the two-argument form. */

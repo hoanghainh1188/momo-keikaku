@@ -52,7 +52,10 @@ export interface DispositionEvent {
   actor: string;
 }
 
-/** AD-10: a fully resolved ComputationInputs value. Nothing here reads the clock or the DB. */
+/**
+ * AD-10: a fully resolved ComputationInputs value. Nothing here reads the clock or the DB.
+ * Alias: {@link ComputationInputs} in `computation-inputs.ts` (story 6.1).
+ */
 export interface ReviewInput {
   project: ProjectConfig;
   calendar: HolidayCalendar;
@@ -142,6 +145,61 @@ export interface ReviewInput {
   wpFlagEvents?: readonly WpFlagEvent[];
   /** Pin ceiling for `wp_flag_event` (ComputationInputs). */
   wpFlagSeqMax?: number | null;
+
+  // --- Story 6.1 / AD-10 pin watermarks (fully resolved value) ---------------------------------
+
+  /**
+   * Pinned `tracker_snapshot.id` per Connector. Empty when the Project has no Connector /
+   * no snapshot yet (greenfield). Ledger selection filters by these pins (AR-21).
+   */
+  trackerSnapshotIdByConnector?: ReadonlyMap<string, string>;
+  /**
+   * Assertion only (AR-21): max ledger `seq` of the snapshot-filtered set. Never the filter.
+   * Null when the filtered ledger is empty.
+   */
+  ledgerSeqMax?: number | null;
+  /** Active Baseline version id (null while the Project has no Baseline). */
+  baselineVersionId?: string | null;
+  /** Pin ceiling for `rate_entry`. */
+  rateSeqMax?: number | null;
+  /** Pin ceiling for `project_default_rate_entry`. */
+  projectDefaultRateSeqMax?: number | null;
+  /** Pin ceiling for `pct_override_event`. */
+  pctOverrideSeqMax?: number | null;
+  /** Pin ceiling for `disposition_event`. */
+  dispositionSeqMax?: number | null;
+  /** Pin ceiling for `project_setting_event` (tz, teirei, Health overrides, …). */
+  settingSeqMax?: number | null;
+  /**
+   * Pin ceiling for Tenant Health defaults (`tenant_setting_event`). Null until that table
+   * lands (Story 6.5); resolution still uses Project thresholds when absent.
+   */
+  tenantSettingSeqMax?: number | null;
+  /** Pin ceiling for `wp_status_event` (actual dates / Milestone done). */
+  wpStatusSeqMax?: number | null;
+  /**
+   * Pin ceiling for `holiday_calendar_version.seq` (AD-29 working-day set). Capture sets this
+   * from the latest calendar version; live day-event edits land only by publishing a new version.
+   */
+  calendarSeqMax?: number | null;
+  /** Pin ceiling for `connector_scope_event`. */
+  connectorScopeSeqMax?: number | null;
+  /**
+   * Visibility Policy value in force at capture (FR-35). Null until publish/visibility
+   * events land; the pin field is reserved so a later story does not reshape the contract.
+   */
+  visibilityPolicy?: string | null;
+  /** Pin ceiling for Visibility Policy events. */
+  visibilitySeqMax?: number | null;
+  /**
+   * The `schedule_run.seq` whose `outputs` this Review displays and whose `inputs` re-derive
+   * it. Schedule compute reads only that run's inputs (AR-19), never live WP columns.
+   */
+  scheduleRunSeq?: number | null;
+  /** Holiday calendar id carried on the pin (AD-29). */
+  calendarId?: string;
+  /** `holiday_calendar_version.seq` pinned for the working-day set (AD-29). */
+  calendarVersion?: number | null;
 }
 
 /** Story 5.13 / UX-DR23: Opening Balance hours for one Connector. */
