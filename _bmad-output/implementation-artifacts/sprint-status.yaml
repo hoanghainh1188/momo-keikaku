@@ -32,7 +32,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 09-20-2026 16:55
-last_updated: 10-10-2026 08:50
+last_updated: 10-10-2026 08:58
 project: momo-keikaku
 project_key: NOKEY
 tracking_system: file-system
@@ -111,7 +111,7 @@ development_status:
   6-1-every-figure-comes-from-pinned-inputs-and-a-test-proves-it: done
   6-2-evm-in-hours-with-unplanned-work-carrying-no-earned-value: done
   6-3-the-formulas-and-the-one-eac-method-r0-ships: done
-  6-4-the-evidence-and-the-plan-are-made-to-face-each-other: review
+  6-4-the-evidence-and-the-plan-are-made-to-face-each-other: done
   6-5-three-health-indicators-each-showing-its-rule: backlog
   6-6-the-forecast-and-both-finish-dates: backlog
   6-7-the-reconciliation-review-pinned-and-in-one-fixed-order: backlog
