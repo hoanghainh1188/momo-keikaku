@@ -200,6 +200,11 @@ export interface ReviewInput {
   calendarId?: string;
   /** `holiday_calendar_version.seq` pinned for the working-day set (AD-29). */
   calendarVersion?: number | null;
+  /**
+   * Story 6.2 / Q1-A: prior per-WP EV (mh) when the loader has a last open Review / prior as-of.
+   * Passed into `computeEvm`; absent/empty → no EV-fall flags. Never invent priors.
+   */
+  priorEvByWp?: ReadonlyMap<string, Mh>;
 }
 
 /** Story 5.13 / UX-DR23: Opening Balance hours for one Connector. */
@@ -283,6 +288,8 @@ export interface DivergenceRow {
   pctComplete: Ratio;
   pctBasis: WpMeasure['pctBasis'];
   lowEvidence: boolean;
+  /** Story 6.2: current EV strictly below a supplied prior for this WP. */
+  evFell: boolean;
   isCatchAll: boolean;
   nonBaselined: boolean;
 }
@@ -422,6 +429,8 @@ export function computeReview(input: ReviewInput): ReviewResult {
           measurementBasis,
           acCoverage: input.acCoverage ?? null,
           resolvedStatusIds,
+          priorEvByWp: input.priorEvByWp,
+          formulaVersion: input.formulaVersion ?? FORMULA_VERSION,
         });
 
   const milestones = baseline === null ? null : milestoneRows(baseline, input.wps, input.asOf);
@@ -799,6 +808,7 @@ function divergenceRows(
         pctComplete: m?.pctComplete ?? ZERO,
         pctBasis: m?.pctBasis ?? 'no-evidence',
         lowEvidence: m?.lowEvidence ?? true,
+        evFell: m?.evFell ?? false,
         // Story 5.12: show the Baseline pin when present; else the live cache (display only).
         isCatchAll: b?.isCatchAll ?? w.isCatchAll,
         nonBaselined: !b,

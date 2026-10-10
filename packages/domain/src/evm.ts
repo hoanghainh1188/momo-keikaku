@@ -1,4 +1,10 @@
-import { workingDaysBetween, type HolidayCalendar, type IsoDate } from './calendar';
+import {
+  addDays,
+  isWorkingDay,
+  workingDaysBetween,
+  type HolidayCalendar,
+  type IsoDate,
+} from './calendar';
 import { compareRatio } from './health';
 import {
   DEFAULT_RESOLVED_STATUS_IDS,
@@ -8,6 +14,7 @@ import {
   type WorkPackage,
 } from './types';
 import {
+  allocateLargestRemainder,
   divRoundHalfEven,
   maxBigint,
   mhValue,
@@ -27,14 +34,20 @@ import {
 /**
  * FR-30: EVM in effort hours. Pure. Every figure is compute(inputs, formulaVersion).
  *
- * AD-4: every quantity is exact — `bigint` milli-hours and unreduced `Ratio`s. PV, EV and EAC
- * are stored-shape milli-hour integers, so each is ONE `divRoundHalfEven` from its exact
- * quotient; nothing here rounds for display.
+ * AD-4: every quantity is exact — `bigint` milli-hours and unreduced `Ratio`s. PV is allocated by
+ * largest remainder over day×resource cells (story 6.2); EV and EAC are ONE `divRoundHalfEven`
+ * from their exact quotient. Nothing here rounds for display.
  *
  * Story 5.7 / FR-27: PV/EV/SV/AC are metrics (value+coverage or unavailable). AC-family is
  * unavailable in Ticket-Count Mode; mixed Projects pass hours-only AC with a coverage caption.
  */
-export const FORMULA_VERSION = 'evm-2026-09-20';
+/** Story 6.1 golden key — half-even PV; kept executable after the 6.2 largest-remainder bump. */
+export const LEGACY_FORMULA_VERSION = 'evm-2026-09-20';
+/** Current EVM formula key (story 6.2: largest-remainder PV + EV-fall). */
+export const FORMULA_VERSION = 'evm-2026-10-10';
+
+/** Anonymous resource bucket when a WP has no `assignedResourceIds` (day-only LR). */
+const ANONYMOUS_RESOURCE_ID = '';
 
 export type PctBasis = 'estimate' | 'count' | 'no-evidence' | 'loe';
 
@@ -51,6 +64,8 @@ export interface WpMeasure {
   acMh: Mh;
   mappedTickets: number;
   resolvedTickets: number;
+  /** True when `priorEvByWp` supplied a prior for this WP and current EV is strictly lower. */
+  evFell: boolean;
 }
 
 export interface EvmInput {
@@ -85,6 +100,13 @@ export interface EvmInput {
    * `DEFAULT_RESOLVED_STATUS_IDS` (`Closed`) only as the seed fallback.
    */
   resolvedStatusIds?: ReadonlySet<string>;
+  /**
+   * Story 6.2 / Q1-A: prior per-WP EV (mh) from the last open Review / prior as-of when the
+   * loader has one. Absent or missing a WP → that WP is never flagged. Never invent priors.
+   */
+  priorEvByWp?: ReadonlyMap<string, Mh>;
+  /** Registered `formulaVersion`; defaults to {@link FORMULA_VERSION}. */
+  formulaVersion?: string;
 }
 
 export interface EvmResult {
@@ -107,8 +129,20 @@ export interface EvmResult {
   bacExhausted: boolean;
 }
 
-/** FR-30: PV = Baseline hours spread linearly over the WP's baseline working days. */
-export function plannedValue(
+/** Inclusive working days in `[start, finish]` under `cal`. */
+function workingDaysInclusive(start: IsoDate, finish: IsoDate, cal: HolidayCalendar): IsoDate[] {
+  const days: IsoDate[] = [];
+  for (let d = start; d <= finish; d = addDays(d, 1)) {
+    if (isWorkingDay(d, cal)) days.push(d);
+  }
+  return days;
+}
+
+/**
+ * Story 6.1 / legacy: PV = Baseline hours × elapsed/total via half-even (no resource axis).
+ * Kept so `evm-2026-09-20` goldens stay byte-stable.
+ */
+export function plannedValueLegacy(
   baselineMh: Mh,
   start: IsoDate,
   finish: IsoDate,
@@ -121,6 +155,64 @@ export function plannedValue(
   if (asOf >= finish) return baselineMh;
   const elapsed = workingDaysBetween(start, asOf, cal);
   return divRoundHalfEven(baselineMh * BigInt(elapsed), BigInt(total));
+}
+
+/**
+ * FR-30 / AD-4 / Q2-A: PV = sum of largest-remainder day×resource cells with `date ≤ asOf`.
+ * Resources = live `assignedResourceIds` (sorted); empty → one anonymous bucket (day-only LR).
+ */
+export function plannedValueLargestRemainder(
+  baselineMh: Mh,
+  start: IsoDate,
+  finish: IsoDate,
+  asOf: IsoDate,
+  cal: HolidayCalendar,
+  assignedResourceIds: readonly string[],
+): Mh {
+  // Before empty-days / finish checks: inverted windows (start > finish) must not treat
+  // asOf ≥ finish as "full BAC" when asOf is still before start.
+  if (asOf < start) return 0n;
+  const days = workingDaysInclusive(start, finish, cal);
+  if (days.length === 0) return asOf >= finish ? baselineMh : 0n;
+  if (asOf >= finish) return baselineMh;
+
+  const resources =
+    assignedResourceIds.length === 0
+      ? [ANONYMOUS_RESOURCE_ID]
+      : [...new Set(assignedResourceIds)].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+  const cells = days.flatMap((date) => resources.map((resourceId) => ({ date, resourceId })));
+  const amounts = allocateLargestRemainder(baselineMh, cells);
+  let pv = 0n;
+  for (let i = 0; i < cells.length; i += 1) {
+    if (cells[i]!.date <= asOf) pv += amounts[i]!;
+  }
+  return pv;
+}
+
+/**
+ * FR-30: PV for the active `formulaVersion`. Legacy half-even for `evm-2026-09-20`;
+ * largest-remainder day×resource otherwise.
+ */
+export function plannedValue(
+  baselineMh: Mh,
+  start: IsoDate,
+  finish: IsoDate,
+  asOf: IsoDate,
+  cal: HolidayCalendar,
+  assignedResourceIds: readonly string[] = [],
+  formulaVersion: string = FORMULA_VERSION,
+): Mh {
+  if (formulaVersion === LEGACY_FORMULA_VERSION) {
+    return plannedValueLegacy(baselineMh, start, finish, asOf, cal);
+  }
+  return plannedValueLargestRemainder(
+    baselineMh,
+    start,
+    finish,
+    asOf,
+    cal,
+    assignedResourceIds,
+  );
 }
 
 /** FR-30's 99% cap, as an exact constant. */
@@ -165,6 +257,7 @@ export const isMarkedComplete = (wp: WorkPackage): boolean =>
 
 export function computeEvm(input: EvmInput): EvmResult {
   const resolvedStatusIds = input.resolvedStatusIds ?? DEFAULT_RESOLVED_STATUS_IDS;
+  const formulaVersion = input.formulaVersion ?? FORMULA_VERSION;
   const wpById = new Map(input.wps.map((w) => [w.id, w]));
   const perWp: WpMeasure[] = [];
 
@@ -172,7 +265,15 @@ export function computeEvm(input: EvmInput): EvmResult {
     const wp = wpById.get(b.wpId);
     if (!wp) continue;
     const tickets = input.mappedTicketsByWp.get(b.wpId) ?? [];
-    const pv = plannedValue(b.baselineMh, b.start, b.finish, input.asOf, input.calendar);
+    const pv = plannedValue(
+      b.baselineMh,
+      b.start,
+      b.finish,
+      input.asOf,
+      input.calendar,
+      wp.assignedResourceIds,
+      formulaVersion,
+    );
     // Glossary: a Catch-all WP with Baseline hours is measured as Level of Effort,
     // so EV equals PV. Its hours beyond the Baseline are Unplanned Work (FR-24).
     // Story 5.12: LOE gate reads baseline_wp.is_catch_all — never the live WP cache (AR-22).
@@ -184,6 +285,8 @@ export function computeEvm(input: EvmInput): EvmResult {
             lowEvidence: false,
           }
         : percentComplete(tickets, b.baselineMh, isMarkedComplete(wp), resolvedStatusIds);
+    const evMh = divRoundHalfEven(b.baselineMh * pct.num, pct.den);
+    const prior = input.priorEvByWp?.get(b.wpId);
     perWp.push({
       wpId: b.wpId,
       wbsCode: wp.wbsCode,
@@ -193,10 +296,11 @@ export function computeEvm(input: EvmInput): EvmResult {
       pctComplete: pct,
       pctBasis: basis,
       lowEvidence,
-      evMh: divRoundHalfEven(b.baselineMh * pct.num, pct.den),
+      evMh,
       acMh: input.acByWp.get(b.wpId) ?? 0n,
       mappedTickets: tickets.length,
       resolvedTickets: tickets.filter((t) => isResolvedStatus(t.statusId, resolvedStatusIds)).length,
+      evFell: prior !== undefined && evMh < prior,
     });
   }
 
@@ -250,7 +354,7 @@ export function computeEvm(input: EvmInput): EvmResult {
       : ratioValue(ratio(bacMh - evRaw, bacMh - acRaw), acCoverage);
 
   return {
-    formulaVersion: FORMULA_VERSION,
+    formulaVersion,
     perWp,
     bacMh,
     pvMh,

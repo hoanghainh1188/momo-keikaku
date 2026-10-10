@@ -5,14 +5,20 @@
  * formula adds a new key; historical goldens keep theirs and still recompute. The current key
  * lives in `evm.ts` (`FORMULA_VERSION`); this module is the dispatch map CI and capture use.
  */
-import { FORMULA_VERSION } from './evm';
+import { FORMULA_VERSION, LEGACY_FORMULA_VERSION } from './evm';
 import { computeReview, type ReviewInput, type ReviewResult } from './review';
 
 /** One pure Review compute under a registered `formulaVersion`. */
 export type FormulaCompute = (inputs: ReviewInput) => ReviewResult;
 
+function bindVersion(version: string): FormulaCompute {
+  return (inputs) => computeReview({ ...inputs, formulaVersion: version });
+}
+
 const REGISTRY: Readonly<Record<string, FormulaCompute>> = {
-  [FORMULA_VERSION]: computeReview,
+  // Legacy half-even PV (story 6.1 goldens) — must stay executable after the 6.2 bump.
+  [LEGACY_FORMULA_VERSION]: bindVersion(LEGACY_FORMULA_VERSION),
+  [FORMULA_VERSION]: bindVersion(FORMULA_VERSION),
 };
 
 /** Every registered `formulaVersion`, in registration order. */

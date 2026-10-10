@@ -1,9 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import { buildCalendar } from './calendar';
-import { computeEvm, isMarkedComplete, percentComplete, plannedValue, type EvmResult } from './evm';
+import {
+  FORMULA_VERSION,
+  LEGACY_FORMULA_VERSION,
+  computeEvm,
+  isMarkedComplete,
+  percentComplete,
+  plannedValue,
+  plannedValueLargestRemainder,
+  plannedValueLegacy,
+  type EvmResult,
+} from './evm';
 import { computeHealth } from './health';
 import { DEFAULT_THRESHOLDS, type BaselineVersion, type TicketObservation, type WorkPackage } from './types';
-import { hoursToMh, ratio, type Ratio } from './units';
+import { hoursToMh, ratio, type Mh, type Ratio } from './units';
 
 /** A Ratio metric, exactly as carried — unreduced. */
 const ratioMetric = (num: bigint, den: bigint) => ({ kind: 'value', value: ratio(num, den), unit: 'ratio', coverage: null });
@@ -45,7 +55,7 @@ const ticket = (id: string, estimateHours: number | null, resolved: boolean): Ti
   attributes: [],
 });
 
-describe('plannedValue (FR-30: PV spread linearly over baseline working days)', () => {
+describe('plannedValue (FR-30 / AD-4: largest remainder over baseline working days)', () => {
   it('is 0 before the WP starts and the full Baseline after it finishes', () => {
     // 2026-06-01 Mon .. 2026-06-12 Fri = 10 working days
     expect(plannedValue(hoursToMh(100), '2026-06-01', '2026-06-12', '2026-05-29', cal)).toBe(0n);
@@ -54,8 +64,8 @@ describe('plannedValue (FR-30: PV spread linearly over baseline working days)', 
     );
   });
 
-  it('spreads over working days only, skipping the weekend', () => {
-    // as-of Fri 2026-06-05 = 5 of 10 working days elapsed -> 50h of 100h
+  it('spreads over working days only, skipping the weekend (empty resources = day-only LR)', () => {
+    // as-of Fri 2026-06-05 = 5 of 10 working days elapsed -> 50h of 100h (exact split)
     expect(plannedValue(hoursToMh(100), '2026-06-01', '2026-06-12', '2026-06-05', cal)).toBe(
       hoursToMh(50),
     );
@@ -63,6 +73,135 @@ describe('plannedValue (FR-30: PV spread linearly over baseline working days)', 
     expect(plannedValue(hoursToMh(100), '2026-06-01', '2026-06-12', '2026-06-07', cal)).toBe(
       hoursToMh(50),
     );
+  });
+
+  it('assigns remainder milli-hours to earlier dates (tie-break), not half-even cumulative', () => {
+    // 100_000 mh over 3 working days: LR → [33334, 33333, 33333]; half-even day-1 was 33333
+    expect(
+      plannedValueLargestRemainder(hoursToMh(100), '2026-06-01', '2026-06-03', '2026-06-01', cal, []),
+    ).toBe(33_334n);
+    expect(
+      plannedValueLegacy(hoursToMh(100), '2026-06-01', '2026-06-03', '2026-06-01', cal),
+    ).toBe(33_333n);
+    expect(
+      plannedValue(
+        hoursToMh(100),
+        '2026-06-01',
+        '2026-06-03',
+        '2026-06-01',
+        cal,
+        [],
+        LEGACY_FORMULA_VERSION,
+      ),
+    ).toBe(33_333n);
+  });
+
+  it('splits day×resource cells with resource-id tie-break on the same date', () => {
+    // 10 mh, 1 day, 2 resources → [5, 5]; with remainder 1 on 11 mh → lower id gets +1
+    expect(
+      plannedValueLargestRemainder(11n, '2026-06-01', '2026-06-01', '2026-06-01', cal, ['r-b', 'r-a']),
+    ).toBe(11n);
+    // Mid-window: 2 resources × 2 working days, 10 mh → cells get 2 or 3; as-of day 1 = first date's pair
+    // Sorted resources r-a, r-b; days Mon–Tue. 10/4 = 2 rem 2 → first two cells (Mon r-a, Mon r-b) get +1 → 3+3=6
+    expect(
+      plannedValueLargestRemainder(10n, '2026-06-01', '2026-06-02', '2026-06-01', cal, ['r-b', 'r-a']),
+    ).toBe(6n);
+  });
+
+  it('returns 0 when asOf is before start even if the baseline window is inverted (no working days)', () => {
+    // start > finish → empty day list; asOf still before start must win over asOf ≥ finish
+    expect(
+      plannedValueLargestRemainder(hoursToMh(100), '2026-06-05', '2026-06-01', '2026-06-03', cal, []),
+    ).toBe(0n);
+  });
+});
+
+describe('computeEvm — multi-resource largest-remainder PV (story 6.2 / Q2-A)', () => {
+  it('uses live assignedResourceIds for mid-window pvMh', () => {
+    const baseline: BaselineVersion = {
+      seq: 1,
+      id: 'bl-1',
+      reason: 'multi-res',
+      recordedAt: '2026-06-01T00:00:00.000Z',
+      actor: 'user:pm',
+      wps: [
+        {
+          wpId: 'WP-1',
+          start: '2026-06-01',
+          finish: '2026-06-02',
+          baselineMh: 10n,
+          isMilestone: false,
+          isCatchAll: false,
+        },
+      ],
+    };
+    const r = computeEvm({
+      asOf: '2026-06-01',
+      calendar: cal,
+      baseline,
+      wps: [wp({ id: 'WP-1', assignedResourceIds: ['r-b', 'r-a'] })],
+      mappedTicketsByWp: new Map(),
+      acByWp: new Map(),
+      unplannedAcMh: 0n,
+      totalAcMh: 0n,
+      plannedScopeAcMh: 0n,
+      measurementBasis: 'hours',
+      formulaVersion: FORMULA_VERSION,
+    });
+    // 10 mh / (2 days × 2 resources): rem to Mon r-a + Mon r-b → 3+3 = 6
+    expect(r.perWp[0]!.pvMh).toBe(6n);
+    expect(r.pvMh).toEqual({ kind: 'value', value: 6n, unit: 'mh', coverage: null });
+  });
+});
+
+describe('computeEvm — EV fall vs priorEvByWp (story 6.2 / Q1-A)', () => {
+  const baseline: BaselineVersion = {
+    seq: 1,
+    id: 'bl-1',
+    reason: 'ev-fall',
+    recordedAt: '2026-06-01T00:00:00.000Z',
+    actor: 'user:pm',
+    wps: [
+      {
+        wpId: 'WP-1',
+        start: '2026-06-01',
+        finish: '2026-06-12',
+        baselineMh: hoursToMh(100),
+        isMilestone: false,
+        isCatchAll: false,
+      },
+    ],
+  };
+  const tickets = [ticket('a', 25, true), ticket('b', 25, false), ticket('c', 25, false), ticket('d', 25, false)];
+  // 25% → EV = 25h
+  const run = (priorEvByWp?: ReadonlyMap<string, Mh>) =>
+    computeEvm({
+      asOf: '2026-06-05',
+      calendar: cal,
+      baseline,
+      wps: [wp({ id: 'WP-1' })],
+      mappedTicketsByWp: new Map([['WP-1', tickets]]),
+      acByWp: new Map(),
+      unplannedAcMh: 0n,
+      totalAcMh: hoursToMh(10),
+      plannedScopeAcMh: hoursToMh(10),
+      measurementBasis: 'hours',
+      priorEvByWp,
+      formulaVersion: FORMULA_VERSION,
+    });
+
+  it('flags a WP when current EV is strictly below a supplied prior', () => {
+    const r = run(new Map([['WP-1', hoursToMh(40)]]));
+    expect(r.perWp[0]!.evMh).toBe(hoursToMh(25));
+    expect(r.perWp[0]!.evFell).toBe(true);
+  });
+
+  it('does not flag when prior is absent, equal, or lower', () => {
+    expect(run().perWp[0]!.evFell).toBe(false);
+    expect(run(new Map()).perWp[0]!.evFell).toBe(false);
+    expect(run(new Map([['WP-1', hoursToMh(25)]])).perWp[0]!.evFell).toBe(false);
+    expect(run(new Map([['WP-1', hoursToMh(10)]])).perWp[0]!.evFell).toBe(false);
+    expect(run(new Map([['WP-OTHER', hoursToMh(99)]])).perWp[0]!.evFell).toBe(false);
   });
 });
 

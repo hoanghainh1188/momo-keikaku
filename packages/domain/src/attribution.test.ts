@@ -769,6 +769,25 @@ describe('attribution (FR-20, FR-21, FR-24)', () => {
       expect(r.cumulative.mappedNonBaselinedMh).toBe(hoursToMh(12));
       expect(r.cumulative.mappedBaselinedMh).toBe(0n);
     }
+    // Hours recorded under the new Baseline (stamp seq 2) are baselined; earlier stamp stays Unplanned.
+    const mixed: LedgerEntry[] = [
+      entry(1, 'tn', 12, IN), // seq 1 stamp → Unplanned
+      { ...entry(2, 'tn', 8, IN), activeBaselineVersionSeq: 2 },
+    ];
+    const after = attribute({
+      entries: mixed,
+      head: mappingHead(events),
+      wps,
+      baselineVersions: afterRebaseline,
+      resources,
+      project,
+      period,
+    });
+    expect(after.cumulative.mappedNonBaselinedMh).toBe(hoursToMh(12));
+    expect(after.cumulative.mappedBaselinedMh).toBe(hoursToMh(8));
+    expect(after.cumulative.unplannedMh).toBe(hoursToMh(12));
+    // acByWp includes both baselined and non-baselined hours on the WP (overflow stays off it).
+    expect(after.acByWp.get('WP-N')).toBe(hoursToMh(20));
   });
 
   it('costs each entry at the Resource Rate in effect, and falls back to the Project default', () => {

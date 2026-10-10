@@ -23,6 +23,9 @@ export interface FormulaGoldenFixture {
     readonly unplannedMh: Mh;
     readonly totalMh: Mh;
     readonly mappedBaselinedMh: Mh;
+    /** Story 6.2: pin PV (and EV when present) for LR formula versions. */
+    readonly pvMh?: Mh;
+    readonly evMh?: Mh;
   };
 }
 
@@ -36,6 +39,8 @@ interface FixtureFile {
     readonly unplannedMh: string;
     readonly totalMh: string;
     readonly mappedBaselinedMh: string;
+    readonly pvMh?: string;
+    readonly evMh?: string;
   };
 }
 
@@ -242,6 +247,12 @@ export function loadFormulaCorpus(): readonly FormulaGoldenFixture[] {
             file.expected.mappedBaselinedMh,
             'expected.mappedBaselinedMh',
           ),
+          ...(file.expected.pvMh !== undefined
+            ? { pvMh: asBigint(file.expected.pvMh, 'expected.pvMh') }
+            : {}),
+          ...(file.expected.evMh !== undefined
+            ? { evMh: asBigint(file.expected.evMh, 'expected.evMh') }
+            : {}),
         },
       });
     }

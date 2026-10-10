@@ -261,6 +261,80 @@ describe('computeReview divergence carries the WP\'s actual dates', () => {
   });
 });
 
+describe('computeReview EV fall + dual CPI + money (story 6.2)', () => {
+  it('exposes evFell on Divergence when priorEvByWp shows a drop; absent prior → false', () => {
+    const withPrior = computeReview({
+      ...input,
+      priorEvByWp: new Map([['WP-B', hoursToMh(999)]]),
+    });
+    expect(withPrior.divergence![0]!.evFell).toBe(true);
+    expect(computeReview(input).divergence![0]!.evFell).toBe(false);
+  });
+
+  it('keeps both CPIs with Unplanned AC, money at Project default Rate, and Unplanned outside EVM PV/EV', () => {
+    const withUnplanned = computeReview({
+      ...input,
+      ledger: [
+        ...input.ledger,
+        {
+          seq: 2,
+          ticketId: 'tu',
+          kind: 'delta',
+          deltaMh: hoursToMh(10),
+          windowStart: null,
+          windowEnd: '2026-09-15T09:00:00.000Z',
+          assigneeAccountId: 'acct-1',
+          activeBaselineVersionSeq: 1,
+        },
+      ],
+      // tu stays unmapped → Unplanned AC
+      pinnedSnapshot: {
+        ...input.pinnedSnapshot,
+        tickets: [
+          ...input.pinnedSnapshot.tickets,
+          {
+            trackerIssueId: 'tu',
+            key: 'tu',
+            title: 'tu',
+            statusId: 'Open',
+            estimateMh: null,
+            actualMh: hoursToMh(10),
+            assigneeAccountId: 'acct-1',
+            createdAt: '2026-06-01T00:00:00.000Z',
+            parentIssueId: null,
+            issueTypeId: 'Task',
+            trackerProjectId: null,
+            attributes: [],
+          },
+        ],
+      },
+    });
+    const baselineOnly = computeReview(input);
+    expect(withUnplanned.unplanned.cumulative.unplannedMh).toBe(hoursToMh(10));
+    expect(withUnplanned.evm).not.toBeNull();
+    expect(withUnplanned.evm!.cpiAllIn.kind).toBe('value');
+    expect(withUnplanned.evm!.cpiPlannedScope.kind).toBe('value');
+    // All-in uses total AC (baselined + Unplanned); planned-scope excludes Unplanned → CPIs differ.
+    expect(withUnplanned.evm!.cpiAllIn).not.toEqual(withUnplanned.evm!.cpiPlannedScope);
+    // Unplanned carries AC only (PV=EV=0): Project PV/EV ignore the Unplanned line.
+    expect(withUnplanned.evm!.pvMh).toEqual(baselineOnly.evm!.pvMh);
+    expect(withUnplanned.evm!.evMh).toEqual(baselineOnly.evm!.evMh);
+    // Roll-up AC = baselined leaf AC + Unplanned.
+    expect(withUnplanned.attribution.cumulative.totalMh).toBe(
+      withUnplanned.attribution.cumulative.mappedBaselinedMh +
+        withUnplanned.unplanned.cumulative.unplannedMh,
+    );
+    expect(withUnplanned.evm!.acMh).toEqual({
+      kind: 'value',
+      value: withUnplanned.attribution.cumulative.totalMh,
+      unit: 'mh',
+      coverage: null,
+    });
+    expect(withUnplanned.money).not.toBeNull();
+    expect(withUnplanned.money!.pvJpy).toBeGreaterThan(0n);
+  });
+});
+
 describe('computeReview milestones read the head actual finish', () => {
   const milestone: WorkPackage = {
     ...wp,

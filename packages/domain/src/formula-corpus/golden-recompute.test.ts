@@ -42,6 +42,22 @@ describe('formulaVersion golden recompute (AD-10 / Q1-A)', () => {
         expect(result.attribution.cumulative.mappedBaselinedMh).toBe(
           fixture.expected.mappedBaselinedMh,
         );
+        if (fixture.expected.pvMh !== undefined) {
+          expect(result.evm?.pvMh).toEqual({
+            kind: 'value',
+            value: fixture.expected.pvMh,
+            unit: 'mh',
+            coverage: null,
+          });
+        }
+        if (fixture.expected.evMh !== undefined) {
+          expect(result.evm?.evMh).toEqual({
+            kind: 'value',
+            value: fixture.expected.evMh,
+            unit: 'mh',
+            coverage: null,
+          });
+        }
       });
     }
   }
