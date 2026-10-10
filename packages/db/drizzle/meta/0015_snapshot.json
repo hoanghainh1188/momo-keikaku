@@ -1,6 +1,6 @@
 {
-  "id": "28467ae8-e42c-4aab-b7f0-22917370542d",
-  "prevId": "b8c4e2f1-5d3a-4a7b-9c1e-0f2a3b4c5d6e",
+  "id": "b14c9219-3ad0-4dbb-b9bd-f2ec2c87f8bc",
+  "prevId": "28467ae8-e42c-4aab-b7f0-22917370542d",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -2874,18 +2874,6 @@
           "primaryKey": false,
           "notNull": true
         },
-        "actor": {
-          "name": "actor",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "at": {
-          "name": "at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true
-        },
         "reason": {
           "name": "reason",
           "type": "text",
@@ -2897,6 +2885,18 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
+        },
+        "actor": {
+          "name": "actor",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "at": {
+          "name": "at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
         }
       },
       "indexes": {
@@ -2963,7 +2963,7 @@
         },
         "pct_override_event_source_check": {
           "name": "pct_override_event_source_check",
-          "value": "\"source\" IS NULL OR \"source\" IN ('pm_override', 'plan_edit')"
+          "value": "\"pct_override_event\".\"source\" IS NULL OR \"pct_override_event\".\"source\" IN ('pm_override', 'plan_edit')"
         }
       },
       "isRLSEnabled": false
@@ -3332,6 +3332,66 @@
           "primaryKey": false,
           "notNull": true
         },
+        "ratio_green_num": {
+          "name": "ratio_green_num",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ratio_green_den": {
+          "name": "ratio_green_den",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ratio_amber_num": {
+          "name": "ratio_amber_num",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ratio_amber_den": {
+          "name": "ratio_amber_den",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tcpi_red_num": {
+          "name": "tcpi_red_num",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tcpi_red_den": {
+          "name": "tcpi_red_den",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "unplanned_green_below_num": {
+          "name": "unplanned_green_below_num",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "unplanned_green_below_den": {
+          "name": "unplanned_green_below_den",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "unplanned_amber_max_num": {
+          "name": "unplanned_amber_max_num",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "unplanned_amber_max_den": {
+          "name": "unplanned_amber_max_den",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
         "actor": {
           "name": "actor",
           "type": "text",
@@ -3403,7 +3463,48 @@
         }
       },
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "project_setting_event_ratio_green_pair": {
+          "name": "project_setting_event_ratio_green_pair",
+          "value": "(\"project_setting_event\".\"ratio_green_num\" IS NULL) = (\"project_setting_event\".\"ratio_green_den\" IS NULL)"
+        },
+        "project_setting_event_ratio_amber_pair": {
+          "name": "project_setting_event_ratio_amber_pair",
+          "value": "(\"project_setting_event\".\"ratio_amber_num\" IS NULL) = (\"project_setting_event\".\"ratio_amber_den\" IS NULL)"
+        },
+        "project_setting_event_tcpi_red_pair": {
+          "name": "project_setting_event_tcpi_red_pair",
+          "value": "(\"project_setting_event\".\"tcpi_red_num\" IS NULL) = (\"project_setting_event\".\"tcpi_red_den\" IS NULL)"
+        },
+        "project_setting_event_unplanned_green_pair": {
+          "name": "project_setting_event_unplanned_green_pair",
+          "value": "(\"project_setting_event\".\"unplanned_green_below_num\" IS NULL) = (\"project_setting_event\".\"unplanned_green_below_den\" IS NULL)"
+        },
+        "project_setting_event_unplanned_amber_pair": {
+          "name": "project_setting_event_unplanned_amber_pair",
+          "value": "(\"project_setting_event\".\"unplanned_amber_max_num\" IS NULL) = (\"project_setting_event\".\"unplanned_amber_max_den\" IS NULL)"
+        },
+        "project_setting_event_ratio_green_den": {
+          "name": "project_setting_event_ratio_green_den",
+          "value": "\"project_setting_event\".\"ratio_green_den\" IS NULL OR \"project_setting_event\".\"ratio_green_den\" <> 0"
+        },
+        "project_setting_event_ratio_amber_den": {
+          "name": "project_setting_event_ratio_amber_den",
+          "value": "\"project_setting_event\".\"ratio_amber_den\" IS NULL OR \"project_setting_event\".\"ratio_amber_den\" <> 0"
+        },
+        "project_setting_event_tcpi_red_den": {
+          "name": "project_setting_event_tcpi_red_den",
+          "value": "\"project_setting_event\".\"tcpi_red_den\" IS NULL OR \"project_setting_event\".\"tcpi_red_den\" <> 0"
+        },
+        "project_setting_event_unplanned_green_den": {
+          "name": "project_setting_event_unplanned_green_den",
+          "value": "\"project_setting_event\".\"unplanned_green_below_den\" IS NULL OR \"project_setting_event\".\"unplanned_green_below_den\" <> 0"
+        },
+        "project_setting_event_unplanned_amber_den": {
+          "name": "project_setting_event_unplanned_amber_den",
+          "value": "\"project_setting_event\".\"unplanned_amber_max_den\" IS NULL OR \"project_setting_event\".\"unplanned_amber_max_den\" <> 0"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.rate_entry": {
@@ -3839,6 +3940,166 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.tenant_setting_event": {
+      "name": "tenant_setting_event",
+      "schema": "",
+      "columns": {
+        "seq": {
+          "name": "seq",
+          "type": "bigint",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "tenant_setting_event_seq_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "9223372036854775807",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ratio_green_num": {
+          "name": "ratio_green_num",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ratio_green_den": {
+          "name": "ratio_green_den",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ratio_amber_num": {
+          "name": "ratio_amber_num",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ratio_amber_den": {
+          "name": "ratio_amber_den",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "tcpi_red_num": {
+          "name": "tcpi_red_num",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "tcpi_red_den": {
+          "name": "tcpi_red_den",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "unplanned_green_below_num": {
+          "name": "unplanned_green_below_num",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "unplanned_green_below_den": {
+          "name": "unplanned_green_below_den",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "unplanned_amber_max_num": {
+          "name": "unplanned_amber_max_num",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "unplanned_amber_max_den": {
+          "name": "unplanned_amber_max_den",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "actor": {
+          "name": "actor",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "at": {
+          "name": "at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "tenant_setting_event_tenant_idx": {
+          "name": "tenant_setting_event_tenant_idx",
+          "columns": [
+            {
+              "expression": "tenant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "seq",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "tenant_setting_event_tenant_seq_key": {
+          "name": "tenant_setting_event_tenant_seq_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "tenant_id",
+            "seq"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "tenant_setting_event_ratio_green_den": {
+          "name": "tenant_setting_event_ratio_green_den",
+          "value": "\"tenant_setting_event\".\"ratio_green_den\" <> 0"
+        },
+        "tenant_setting_event_ratio_amber_den": {
+          "name": "tenant_setting_event_ratio_amber_den",
+          "value": "\"tenant_setting_event\".\"ratio_amber_den\" <> 0"
+        },
+        "tenant_setting_event_tcpi_red_den": {
+          "name": "tenant_setting_event_tcpi_red_den",
+          "value": "\"tenant_setting_event\".\"tcpi_red_den\" <> 0"
+        },
+        "tenant_setting_event_unplanned_green_den": {
+          "name": "tenant_setting_event_unplanned_green_den",
+          "value": "\"tenant_setting_event\".\"unplanned_green_below_den\" <> 0"
+        },
+        "tenant_setting_event_unplanned_amber_den": {
+          "name": "tenant_setting_event_unplanned_amber_den",
+          "value": "\"tenant_setting_event\".\"unplanned_amber_max_den\" <> 0"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.ticket": {
@@ -4988,6 +5249,133 @@
       },
       "isRLSEnabled": false
     },
+    "public.wp_flag_event": {
+      "name": "wp_flag_event",
+      "schema": "",
+      "columns": {
+        "seq": {
+          "name": "seq",
+          "type": "bigint",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "wp_flag_event_seq_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "9223372036854775807",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "project_id": {
+          "name": "project_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "wp_id": {
+          "name": "wp_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "is_catch_all": {
+          "name": "is_catch_all",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "actor": {
+          "name": "actor",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "at": {
+          "name": "at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "wp_flag_event_wp_idx": {
+          "name": "wp_flag_event_wp_idx",
+          "columns": [
+            {
+              "expression": "tenant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "project_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "wp_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "seq",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "wp_flag_event_work_package_fk": {
+          "name": "wp_flag_event_work_package_fk",
+          "tableFrom": "wp_flag_event",
+          "tableTo": "work_package",
+          "columnsFrom": [
+            "tenant_id",
+            "project_id",
+            "wp_id"
+          ],
+          "columnsTo": [
+            "tenant_id",
+            "project_id",
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "wp_flag_event_tenant_seq_key": {
+          "name": "wp_flag_event_tenant_seq_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "tenant_id",
+            "seq"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.wp_schedule": {
       "name": "wp_schedule",
       "schema": "",
@@ -5301,133 +5689,6 @@
         }
       },
       "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.wp_flag_event": {
-      "name": "wp_flag_event",
-      "schema": "",
-      "columns": {
-        "seq": {
-          "name": "seq",
-          "type": "bigint",
-          "primaryKey": true,
-          "notNull": true,
-          "identity": {
-            "type": "always",
-            "name": "wp_flag_event_seq_seq",
-            "increment": "1",
-            "minValue": "1",
-            "maxValue": "9223372036854775807",
-            "startWith": "1",
-            "cache": "1",
-            "cycle": false,
-            "schema": "public"
-          }
-        },
-        "tenant_id": {
-          "name": "tenant_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "project_id": {
-          "name": "project_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "wp_id": {
-          "name": "wp_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "is_catch_all": {
-          "name": "is_catch_all",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "actor": {
-          "name": "actor",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "at": {
-          "name": "at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {
-        "wp_flag_event_wp_idx": {
-          "name": "wp_flag_event_wp_idx",
-          "columns": [
-            {
-              "expression": "tenant_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "project_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "wp_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "seq",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "wp_flag_event_work_package_fk": {
-          "name": "wp_flag_event_work_package_fk",
-          "tableFrom": "wp_flag_event",
-          "tableTo": "work_package",
-          "columnsFrom": [
-            "tenant_id",
-            "project_id",
-            "wp_id"
-          ],
-          "columnsTo": [
-            "tenant_id",
-            "project_id",
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "wp_flag_event_tenant_seq_key": {
-          "name": "wp_flag_event_tenant_seq_key",
-          "columns": [
-            "tenant_id",
-            "seq"
-          ],
-          "nullsNotDistinct": false
-        }
-      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false

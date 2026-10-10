@@ -480,7 +480,9 @@
       "schedule": "Schedule",
       "effort_cost": "Effort / Cost",
       "unplanned": "Unplanned Work",
-      "unplanned_work": "Unplanned Work"
+      "unplanned_work": "Unplanned Work",
+      "disclosure_title": "Threshold rule & driving figure",
+      "threshold_source": "Thresholds from {source, select, project {Project override} tenant {Tenant default} other {built-in default}}"
     },
     "componentSource": {
       "unmapped": "Tickets in the Connector's scope with no Mapping to a Work Package.",

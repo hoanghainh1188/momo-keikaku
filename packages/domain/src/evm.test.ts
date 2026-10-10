@@ -681,7 +681,7 @@ describe('FR-31 threshold edges', () => {
     expect(at(ratio(110n, 100n)).colour).toBe('green');
     expect(at(ratio(1101n, 1000n)).colour).toBe('red');
     expect(at(ratio(1101n, 1000n)).rule).toBe(
-      'Red because TCPI 1.10 > 1.1 — the remaining work must beat the planned efficiency',
+      'Red because TCPI 1.10 > 1.1 — the remaining work must beat the planned efficiency; CPI 1.20 shown beside TCPI',
     );
   });
 

@@ -1561,3 +1561,11 @@ above can see where it went.
 - source_spec: `_bmad-output/implementation-artifacts/spec-6-4-the-evidence-and-the-plan-are-made-to-face-each-other.md`
   summary: DB-backed assertion that `loadReview` pins `recordedPctByWp` / `durationDaysByWp` (and gap rows reflect stored reason/source).
   evidence: Story 6.4 verification-gap — unit injects maps; no Postgres in build VM to extend baseline-read/db-round-trip.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-6-5-three-health-indicators-each-showing-its-rule.md`
+  summary: DB/fixture test that a real schedule_run row decodes into scheduleHealth (WP ids, float, MFO) and moves Schedule Health on loadReview.
+  evidence: Story 6.5 verification-gap — domain/review tests inject decoded scheduleHealth; no Postgres in build VM to extend repo round-trip.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-6-5-three-health-indicators-each-showing-its-rule.md`
+  summary: After seed / Project override columns, assert loadReview resolvedThresholds.source and bands match DB heads (tenant vs project).
+  evidence: Story 6.5 verification-gap — resolveThresholds unit-tested; Tenant/Project head load on repo path untested without Postgres.

@@ -4,6 +4,8 @@ import type { ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { present, type Metric } from '@momo/domain/present';
 
+export { HealthBadge } from './health-badge';
+
 export function Section({
   title,
   intro,
@@ -71,22 +73,6 @@ export function MetricCell({
       {coverage ? <div className="caption">{coverage}</div> : null}
       {note ? <div className="delta">{note}</div> : null}
     </div>
-  );
-}
-
-const GLYPH: Record<string, string> = {
-  green: '●',
-  amber: '▲',
-  red: '◆',
-  unavailable: '–',
-};
-
-export function HealthBadge({ colour, label }: { colour: string; label?: string }) {
-  return (
-    <span className={`badge ${colour}`}>
-      <span aria-hidden>{GLYPH[colour]}</span>
-      {label ?? colour}
-    </span>
   );
 }
 

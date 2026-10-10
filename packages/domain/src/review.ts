@@ -17,9 +17,15 @@ import {
   compareRatio,
   computeHealth,
   isBehindPlan,
+  resolveThresholds,
   type HealthColour,
   type HealthIndicator,
+  type HealthScheduleFeed,
+  type HealthThresholdOverride,
+  type HealthThresholds,
+  type ResolvedHealthThresholds,
 } from './health';
+import type { ConstraintViolation, ScheduleAnchor } from './schedule/recalculate';
 import { mappingHead, type MappingHeadEntry } from './mapping';
 import { compareWp } from './schedule/order';
 import { remainingDuration } from './schedule/recalculate';
@@ -208,10 +214,36 @@ export interface ReviewInput {
   /** Pin ceiling for `project_setting_event` (tz, teirei, Health overrides, …). */
   settingSeqMax?: number | null;
   /**
-   * Pin ceiling for Tenant Health defaults (`tenant_setting_event`). Null until that table
-   * lands (Story 6.5); resolution still uses Project thresholds when absent.
+   * Pin ceiling for Tenant Health defaults (`tenant_setting_event`). Null when no Tenant head
+   * ≤ pin (Story 6.5); `resolveThresholds` then falls through to `DEFAULT_THRESHOLDS`.
    */
   tenantSettingSeqMax?: number | null;
+  /**
+   * Tenant Health defaults at `tenantSettingSeqMax` (Story 6.5). Null/absent → fall through
+   * to `DEFAULT_THRESHOLDS` inside `resolveThresholds`.
+   */
+  tenantHealthThresholds?: HealthThresholds | null;
+  /**
+   * Project Health overrides at `settingSeqMax` (nullable keys = no override). Prefer this
+   * over `project.thresholds` when present so live `ProjectConfig.thresholds` stays a cache.
+   */
+  projectHealthOverride?: HealthThresholdOverride | null;
+  /**
+   * Pinned `schedule_run.outputs` subset for Schedule Health (Float / MFO / derived slip).
+   * Absent/null → those rules stay silent (SPI + calendar Milestone slip still apply).
+   */
+  scheduleHealth?: {
+    readonly anchor: ScheduleAnchor | null;
+    readonly wps: readonly {
+      readonly wpId: string;
+      readonly floatDays: number | null;
+      readonly earlyFinish: string | null;
+    }[];
+    readonly violations: readonly Pick<
+      ConstraintViolation,
+      'wpId' | 'constraintType' | 'daysLate'
+    >[];
+  } | null;
   /** Pin ceiling for `wp_status_event` (actual dates / Milestone done). */
   wpStatusSeqMax?: number | null;
   /**
@@ -411,7 +443,13 @@ export interface ReviewResult {
   behindPlan: boolean;
   /** Null while the Project has no Baseline. */
   forecast: ForecastResult | null;
-  health: { indicators: HealthIndicator[]; overall: HealthColour; overallNote: string | null };
+  health: {
+    indicators: HealthIndicator[];
+    overall: HealthColour;
+    overallNote: string | null;
+    /** Story 6.5: resolved bands + source stamped for the pin (FR-31 / AR-19). */
+    resolvedThresholds: ResolvedHealthThresholds;
+  };
   attribution: AttributionResult;
   unplanned: {
     period: Buckets;
@@ -592,16 +630,32 @@ export function computeReview(input: ReviewInput): ReviewResult {
       ? ratio(attribution.cumulative.unplannedMh, attribution.cumulative.totalMh)
       : null;
 
-  const health = computeHealth({
+  const resolvedThresholds = resolveThresholds({
+    // Prefer explicit pin override; else no Project override (Tenant / DEFAULT fall-through).
+    // `project.thresholds` is not treated as an override — it was historically the hard-coded
+    // DEFAULT_THRESHOLDS cache on the live ProjectConfig.
+    projectOverride: input.projectHealthOverride ?? null,
+    tenantDefaults: input.tenantHealthThresholds ?? null,
+  });
+
+  const scheduleFeed = buildScheduleFeed({
+    scheduleHealth: input.scheduleHealth ?? null,
+    baseline,
+    wps: input.wps,
+  });
+
+  const healthCompute = computeHealth({
     evm,
-    thresholds: input.project.thresholds,
+    thresholds: resolvedThresholds.thresholds,
     unplannedSharePeriod: sharePeriod,
     unplannedShareCumulative: shareCumulative,
     slippedMilestones: (milestones ?? [])
       .filter((m) => m.slipped)
       .map((m) => ({ wbsCode: m.wbsCode, name: m.name, baselineDate: m.baselineDate })),
     measurementBasis,
+    scheduleFeed,
   });
+  const health = { ...healthCompute, resolvedThresholds };
 
   const forecast =
     baseline === null || evm === null
@@ -898,6 +952,68 @@ function activeBaseline(input: ReviewInput): BaselineVersion | null {
   const baseline = input.baselineVersions.find((b) => b.seq === input.activeBaselineSeq);
   if (!baseline) throw new Error(`no baseline version with seq ${input.activeBaselineSeq}`);
   return baseline;
+}
+
+/** Build the Schedule Health feed from pinned schedule outputs + Baseline milestones. */
+function buildScheduleFeed(args: {
+  scheduleHealth: ReviewInput['scheduleHealth'];
+  baseline: BaselineVersion | null;
+  wps: readonly WorkPackage[];
+}): HealthScheduleFeed | null {
+  const sh = args.scheduleHealth;
+  if (sh == null) return null;
+
+  const wpById = new Map(args.wps.map((w) => [w.id, w]));
+  const baselineByWp = new Map((args.baseline?.wps ?? []).map((b) => [b.wpId, b]));
+
+  const floats = sh.wps.map((w) => w.floatDays).filter((f): f is number => f !== null);
+  const minFloatDays = floats.length > 0 ? Math.min(...floats) : null;
+
+  const mfoViolations = sh.violations
+    .filter((v) => v.constraintType === 'must_finish_on')
+    .map((v) => {
+      const wp = wpById.get(v.wpId);
+      const b = baselineByWp.get(v.wpId);
+      const isMilestone = Boolean(wp?.isMilestone || b?.isMilestone);
+      return {
+        wpId: v.wpId,
+        wbsCode: wp?.wbsCode ?? '',
+        name: wp?.name ?? '',
+        daysLate: v.daysLate,
+        isMilestone,
+      };
+    });
+  // Engine already sorts worst-first; keep stable if a partial feed arrives unsorted.
+  mfoViolations.sort((a, b) => b.daysLate - a.daysLate || a.wbsCode.localeCompare(b.wbsCode));
+
+  const derivedSlippedMilestones: {
+    wbsCode: string;
+    name: string;
+    baselineDate: string;
+    derivedDate: string;
+  }[] = [];
+  for (const b of args.baseline?.wps ?? []) {
+    if (!b.isMilestone) continue;
+    const wp = wpById.get(b.wpId);
+    if (wp?.actualFinish) continue; // done — calendar + derived slip do not apply
+    const out = sh.wps.find((w) => w.wpId === b.wpId);
+    if (!out?.earlyFinish) continue;
+    if (out.earlyFinish > b.finish) {
+      derivedSlippedMilestones.push({
+        wbsCode: wp?.wbsCode ?? '',
+        name: wp?.name ?? '',
+        baselineDate: b.finish,
+        derivedDate: out.earlyFinish,
+      });
+    }
+  }
+
+  return {
+    minFloatDays,
+    floatAnchorKind: sh.anchor?.kind ?? null,
+    mfoViolations,
+    derivedSlippedMilestones,
+  };
 }
 
 /** FR-31: milestone slip, judged against the Baseline date; done is the actual finish. */

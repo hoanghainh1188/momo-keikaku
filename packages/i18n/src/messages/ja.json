@@ -480,7 +480,9 @@
       "schedule": "Schedule",
       "effort_cost": "Effort / Cost",
       "unplanned": "Unplanned Work",
-      "unplanned_work": "Unplanned Work"
+      "unplanned_work": "Unplanned Work",
+      "disclosure_title": "しきい値ルールと駆動値",
+      "threshold_source": "しきい値の出典: {source, select, project {プロジェクト上書き} tenant {テナント既定} other {組み込み既定}}"
     },
     "componentSource": {
       "unmapped": "Tickets in the Connector's scope with no Mapping to a Work Package.",

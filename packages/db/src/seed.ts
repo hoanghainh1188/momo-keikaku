@@ -33,7 +33,13 @@
  * The composition root is `scripts/seed.ts`: this module takes its handle as an argument
  * because `packages/db` may not read the environment.
  */
-import { encode, INITIAL_BASIS_LATCH, replayBasisLatch, resolveCalendarVersion } from '@momo/domain';
+import {
+  DEFAULT_THRESHOLDS,
+  encode,
+  INITIAL_BASIS_LATCH,
+  replayBasisLatch,
+  resolveCalendarVersion,
+} from '@momo/domain';
 import { and, eq, sql } from 'drizzle-orm';
 import type { Db } from './client';
 import { actorOf, DEMO_USERS } from './demo-identities';
@@ -95,6 +101,7 @@ export const TRUNCATE_ORDER: readonly string[] = [
   'project_default_rate_entry',
   'resource',
   'project_setting_event',
+  'tenant_setting_event',
   'project',
   'program',
   'department',
@@ -251,6 +258,23 @@ export async function writeTenantRows(
       tenantId,
       departmentId: f.department.id,
       name: f.program.name,
+    });
+
+    // Story 6.5 / FR-31: seed Tenant Health defaults (DEFAULT_THRESHOLDS) as the head.
+    await tx.insert(s.tenantSettingEvent).values({
+      tenantId,
+      ratioGreenNum: DEFAULT_THRESHOLDS.ratioGreen.num,
+      ratioGreenDen: DEFAULT_THRESHOLDS.ratioGreen.den,
+      ratioAmberNum: DEFAULT_THRESHOLDS.ratioAmber.num,
+      ratioAmberDen: DEFAULT_THRESHOLDS.ratioAmber.den,
+      tcpiRedNum: DEFAULT_THRESHOLDS.tcpiRed.num,
+      tcpiRedDen: DEFAULT_THRESHOLDS.tcpiRed.den,
+      unplannedGreenBelowNum: DEFAULT_THRESHOLDS.unplannedGreenBelow.num,
+      unplannedGreenBelowDen: DEFAULT_THRESHOLDS.unplannedGreenBelow.den,
+      unplannedAmberMaxNum: DEFAULT_THRESHOLDS.unplannedAmberMax.num,
+      unplannedAmberMaxDen: DEFAULT_THRESHOLDS.unplannedAmberMax.den,
+      actor: actorOf(own(DEMO_USERS.linh.id)),
+      at: stamp,
     });
 
     // The Tenant's people (story 1.4 slice 1): users, their memberships and — for the demo seed
