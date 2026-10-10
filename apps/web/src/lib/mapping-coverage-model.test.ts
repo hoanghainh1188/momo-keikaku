@@ -159,7 +159,7 @@ describe('ticketsInBucket (Segment activate)', () => {
     expect(result.tickets.map((t) => t.trackerIssueId)).toEqual(['a', 'c']);
   });
 
-  it('catch-all-overflow uses inCatchAllOverflow from attribution overflowMhByTicket', () => {
+  it('catch-all-overflow uses inCatchAllOverflow from Coverage overflowMhByTicket', () => {
     // Story 5.12: honest per-Ticket overflow membership (closes 5.11 approximate deferral).
     const rows = [
       ticket({
