@@ -36,4 +36,18 @@ describe('ComputationInputs capture fence (AR-37 / Q2-A)', () => {
     expect(snapAt).toBeGreaterThanOrEqual(0);
     expect(lockAt).toBeLessThan(snapAt);
   });
+
+  it('loadBundleInTenant takes the shared lock before actualsLedgerEntry and measurementBasisEvent', () => {
+    const source = readFileSync(REPO, 'utf8');
+    const fnStart = source.indexOf('async function loadBundleInTenant');
+    const body = source.slice(fnStart);
+    const lockAt = body.indexOf('lockWatermarkShared');
+    const ledgerAt = body.indexOf('actualsLedgerEntry');
+    const basisAt = body.indexOf('measurementBasisEvent');
+    expect(lockAt, 'lockWatermarkShared not called in loadBundleInTenant').toBeGreaterThanOrEqual(0);
+    expect(ledgerAt, 'actualsLedgerEntry missing in loadBundleInTenant').toBeGreaterThanOrEqual(0);
+    expect(basisAt, 'measurementBasisEvent missing in loadBundleInTenant').toBeGreaterThanOrEqual(0);
+    expect(lockAt).toBeLessThan(ledgerAt);
+    expect(lockAt).toBeLessThan(basisAt);
+  });
 });

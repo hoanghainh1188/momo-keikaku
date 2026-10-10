@@ -12,6 +12,7 @@ import { fileURLToPath } from 'node:url';
 import type { ComputationInputs } from '../packages/domain/src/computation-inputs';
 import type { AttributionInput } from '../packages/domain/src/attribution';
 import type { EvmInput } from '../packages/domain/src/evm';
+import type { ForecastResult } from '../packages/domain/src/forecast';
 import type { HealthInput } from '../packages/domain/src/health';
 import type { ScheduleInputs } from '../packages/domain/src/schedule/recalculate';
 import type { StoredScheduleInputs } from '../packages/domain/src/schedule/stored-run';
@@ -26,6 +27,7 @@ const COMPUTE_MODULES = [
   'forecast.ts',
   'attribution.ts',
   'schedule/recalculate.ts',
+  'schedule/engine-version.ts',
   'schedule/stored-run.ts',
   'schedule/re-derive.ts',
 ] as const;
@@ -53,17 +55,26 @@ const REACHABLE_FROM_PIN = new Set([
 
 /**
  * Type-level reachability pins (compile fails if a field is removed from the pin without updating
- * this witness). Schedule is witnessed via `scheduleRunSeq` + stored inputs codec.
+ * this witness). Schedule is witnessed via `scheduleRunSeq` + stored inputs codec; forecast via
+ * `ForecastResult` (computeForecast args are pin-derived values, not a live read).
  */
 type _PinWitness = {
   evm: EvmInput;
   health: HealthInput;
+  forecast: ForecastResult;
   attribution: AttributionInput;
   scheduleViaRunInputs: ScheduleInputs;
   storedScheduleInputs: StoredScheduleInputs;
   pin: ComputationInputs;
-  scheduleRunSeq: ComputationInputs['scheduleRunSeq'];
+  /** AR-19 schedule path: ComputationInputs must carry the run seq that selects schedule_run.inputs. */
+  scheduleRunSeq: NonNullable<ComputationInputs['scheduleRunSeq']> | null | undefined;
 };
+
+type _ScheduleRunSeqOnPin = ComputationInputs extends { scheduleRunSeq?: number | null }
+  ? true
+  : never;
+const _scheduleRunSeqWitness: _ScheduleRunSeqOnPin = true;
+void _scheduleRunSeqWitness;
 
 const _witnessOk: _PinWitness | null = null;
 void _witnessOk;
@@ -181,6 +192,7 @@ describe('ComputationInputs closure (AR-19 / AD-10)', () => {
       'computeForecast',
       'attribute',
       'recalculate',
+      'recalculateAt',
       'decodeScheduleInputs',
     ]) {
       expect(seenEntrypoints.has(required), `missing compute entrypoint ${required}`).toBe(true);

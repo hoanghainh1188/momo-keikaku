@@ -177,7 +177,10 @@ export interface ReviewInput {
   tenantSettingSeqMax?: number | null;
   /** Pin ceiling for `wp_status_event` (actual dates / Milestone done). */
   wpStatusSeqMax?: number | null;
-  /** Pin ceiling for `calendar_day_event` / Project calendar edits. */
+  /**
+   * Pin ceiling for `holiday_calendar_version.seq` (AD-29 working-day set). Capture sets this
+   * from the latest calendar version; live day-event edits land only by publishing a new version.
+   */
   calendarSeqMax?: number | null;
   /** Pin ceiling for `connector_scope_event`. */
   connectorScopeSeqMax?: number | null;

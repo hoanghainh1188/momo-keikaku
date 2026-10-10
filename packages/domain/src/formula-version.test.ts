@@ -53,4 +53,10 @@ describe('formulaVersion registry (AD-10)', () => {
       /unknown formulaVersion/,
     );
   });
+
+  it('refuses when inputs.formulaVersion disagrees with the requested key', () => {
+    const mismatched = { ...minimalInput, formulaVersion: 'evm-other-key' };
+    expect(() => computeAt(FORMULA_VERSION, mismatched)).toThrow(/formulaVersion mismatch/);
+    expect(() => formulaAt(FORMULA_VERSION)(mismatched)).toThrow(/formulaVersion mismatch/);
+  });
 });

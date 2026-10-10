@@ -223,10 +223,16 @@ export function loadFormulaCorpus(): readonly FormulaGoldenFixture[] {
           `formula corpus ${version}/${name}: formulaVersion "${file.formulaVersion}" ≠ directory`,
         );
       }
+      const inputs = reviveInputs(file.inputs);
+      if (inputs.formulaVersion != null && inputs.formulaVersion !== file.formulaVersion) {
+        throw new Error(
+          `formula corpus ${version}/${name}: inputs.formulaVersion "${inputs.formulaVersion}" ≠ file key "${file.formulaVersion}"`,
+        );
+      }
       out.push({
         id: file.id,
         formulaVersion: file.formulaVersion,
-        inputs: reviveInputs(file.inputs),
+        inputs,
         expected: {
           formulaVersion: file.expected.formulaVersion,
           measurementBasis: file.expected.measurementBasis,

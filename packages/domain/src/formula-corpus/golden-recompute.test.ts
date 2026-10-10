@@ -5,6 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import { FORMULA_VERSION } from '../evm';
 import { computeAt, registeredFormulaVersions } from '../formula-version';
+import { assertLedgerSeqMax } from '../ledger-pin';
 import { loadFormulaCorpus } from './load';
 
 describe('formulaVersion golden recompute (AD-10 / Q1-A)', () => {
@@ -29,6 +30,10 @@ describe('formulaVersion golden recompute (AD-10 / Q1-A)', () => {
   for (const version of versions) {
     for (const fixture of corpus.filter((c) => c.formulaVersion === version)) {
       it(`recomputes ${fixture.id} under ${version}`, () => {
+        assertLedgerSeqMax(
+          fixture.inputs.ledger.map((e) => ({ seq: e.seq })),
+          fixture.inputs.ledgerSeqMax ?? null,
+        );
         const result = computeAt(version, fixture.inputs);
         expect(result.formulaVersion).toBe(fixture.expected.formulaVersion);
         expect(result.measurementBasis).toBe(fixture.expected.measurementBasis);

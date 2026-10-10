@@ -62,4 +62,11 @@ describe('selectLedgerForPin (AR-21)', () => {
     expect(() => assertLedgerSeqMax(filtered, ledgerSeqMax)).not.toThrow();
     expect(() => assertLedgerSeqMax(filtered, 99)).toThrow(/ledger_seq_max assertion failed/);
   });
+
+  it('throws naming an unknown pin snapshot id instead of silently emptying the connector', () => {
+    const pin = new Map([['ca', 'snap-missing']]);
+    expect(() => selectLedgerForPin(entries, pin, snapshotSeqById)).toThrow(
+      /unknown pin snapshot id "snap-missing" for connector "ca"/,
+    );
+  });
 });

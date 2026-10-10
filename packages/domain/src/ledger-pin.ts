@@ -32,6 +32,13 @@ export function selectLedgerForPin<T extends LedgerPinRow>(
   if (pinnedSnapshotIdByConnector.size === 0) {
     return { entries: [], ledgerSeqMax: null };
   }
+  for (const [connectorId, pinnedId] of pinnedSnapshotIdByConnector) {
+    if (!snapshotSeqById.has(pinnedId)) {
+      throw new Error(
+        `unknown pin snapshot id "${pinnedId}" for connector "${connectorId}"`,
+      );
+    }
+  }
   const filtered = entries.filter((entry) => {
     const connectorId = entry.connectorId;
     const snapshotId = entry.snapshotId;

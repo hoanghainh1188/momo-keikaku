@@ -26,7 +26,14 @@ export function formulaAt(formulaVersion: string): FormulaCompute {
   if (compute === undefined) {
     throw new RangeError(`unknown formulaVersion "${formulaVersion}"`);
   }
-  return compute;
+  return (inputs) => {
+    if (inputs.formulaVersion != null && inputs.formulaVersion !== formulaVersion) {
+      throw new RangeError(
+        `formulaVersion mismatch: requested "${formulaVersion}", inputs carry "${inputs.formulaVersion}"`,
+      );
+    }
+    return compute(inputs);
+  };
 }
 
 /** `computeReview` under a recorded `formulaVersion` (AD-10 golden recompute dispatch). */
