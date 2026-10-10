@@ -198,9 +198,9 @@ describe('demo dataset — golden EVM figures', () => {
   });
 
   it('reports Mapping coverage and the scope-ledger shares as the baseline rendered them', () => {
-    // Measured from the Review and Mapping pages at the baseline commit (3c52748), before the
-    // shares became exact Ratios: 90.0% of hours, 81.0% of Tickets, and the bar's legend.
-    expect(share(r.coverage.mappedHourShare)).toBe('90.0%');
+    // Epic-5-retro F6: mappedHourShare matches SM-5 / mappedExcludingCatchAll (82.1%),
+    // not the legacy (total−unmapped)/total that included Catch-all (90.0%).
+    expect(share(r.coverage.mappedHourShare)).toBe('82.1%');
     expect(share(r.coverage.mappedTicketShare)).toBe('81.0%');
     expect(Object.fromEntries(r.scopeLedger.map((s) => [s.key, share(s.share)]))).toEqual({
       'mapped-baselined': '82.1%',

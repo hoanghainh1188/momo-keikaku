@@ -3,6 +3,7 @@
  */
 import { performance } from 'node:perf_hooks';
 import { describe, expect, it } from 'vitest';
+import { partitionOwnedTickets } from './ledger';
 import {
   applyRules,
   evaluateRules,
@@ -165,6 +166,30 @@ describe('applyRules — the I/O matrix', () => {
   it('a rule-unmapped Ticket is remapped when a rule matches again', () => {
     const head = mappingHead([ev(1, 't1', { wpId: null, ruleId: 'r1' })]);
     expect(applyRules(rules, [support], head, 2, 'x')[0]).toMatchObject({ wpId: 'WP-A', ruleId: 'r1' });
+  });
+
+  it('ingest FR-22 fence: applyRules on owned partition never remaps overlap Tickets (epic-5-retro F3)', () => {
+    // Claimer snap sees an owner Ticket whose attributes would match a rule. Evaluating the
+    // full read would append a Mapping for the owner's Ticket; owned-only matches ingest.
+    const ownerTicket = obs('owned-by-a', {
+      issueTypeId: 'Bug',
+      attributes: [{ kind: 'category', id: 'Support' }],
+    });
+    const claimerFresh = obs('fresh-on-b', { issueTypeId: 'Bug' });
+    const read = [ownerTicket, claimerFresh];
+    const { owned, overlaps } = partitionOwnedTickets(
+      read,
+      new Map([['owned-by-a', 'con-a']]),
+      'con-b',
+    );
+    expect(overlaps.map((o) => o.ticket.trackerIssueId)).toEqual(['owned-by-a']);
+    expect(owned.map((t) => t.trackerIssueId)).toEqual(['fresh-on-b']);
+
+    const head = new Map();
+    const onOwned = applyRules(rules, owned, head, 1, 'at');
+    const onAll = applyRules(rules, read, head, 1, 'at');
+    expect(onOwned.map((e) => e.ticketId)).toEqual(['fresh-on-b']);
+    expect(onAll.map((e) => e.ticketId).sort()).toEqual(['fresh-on-b', 'owned-by-a']);
   });
 });
 

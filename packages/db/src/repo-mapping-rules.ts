@@ -321,6 +321,41 @@ export async function loadRuleEvaluation(
 }
 
 /**
+ * FR-22 shared write half (epic-5-retro F3): `applyRules` + append Mapping events.
+ * Call under the Project lock. Callers must pass only owned, non-`left_scope` Tickets —
+ * ingest uses the snapshot's owned partition; rule-save uses `loadRuleEvaluationOn`.
+ */
+export async function appendRuleMappingEvents(
+  bound: Bound,
+  stamp: WriteStamp,
+  projectId: string,
+  input: {
+    readonly rules: readonly MappingRule[];
+    readonly tickets: readonly TicketObservation[];
+    readonly head: ReadonlyMap<string, MappingHeadEntry>;
+    readonly seqFrom: number;
+    readonly at: string;
+    readonly nextId?: (ticketId: string) => string;
+  },
+): Promise<{ readonly moved: number }> {
+  const events = applyRules(input.rules, input.tickets, input.head, input.seqFrom, input.at);
+  if (events.length === 0) return { moved: 0 };
+  await appendMappingEvents(
+    bound,
+    stamp,
+    projectId,
+    events.map((e) => ({
+      ticketId: e.ticketId,
+      wpId: e.wpId,
+      source: 'rule' as const,
+      ruleId: e.ruleId ?? null,
+      id: input.nextId?.(e.ticketId) ?? `map-rule-${e.ticketId}-${stamp.at.getTime()}`,
+    })),
+  );
+  return { moved: events.length };
+}
+
+/**
  * Story 5.10: re-evaluate every in-scope Ticket against the live rules, under the Project lock,
  * appending (and dual-writing the head for) only the Tickets whose result changes. Each event
  * names the rule that fired — or, for a Ticket a rule no longer holds, the rule it left.
@@ -332,20 +367,13 @@ export async function reevaluateMappingRules(
 ): Promise<{ readonly moved: number }> {
   await lockWatermark(bound, { kind: 'project', projectId });
   const inputs = await loadRuleEvaluationOn(bound.tx, bound.tenantId, projectId);
-  const events = applyRules(inputs.rules, inputs.tickets, inputs.head, 0, stamp.at.toISOString());
-  await appendMappingEvents(
-    bound,
-    stamp,
-    projectId,
-    events.map((e) => ({
-      ticketId: e.ticketId,
-      wpId: e.wpId,
-      source: 'rule' as const,
-      ruleId: e.ruleId ?? null,
-      id: `map-rule-${e.ticketId}-${stamp.at.getTime()}`,
-    })),
-  );
-  return { moved: events.length };
+  return appendRuleMappingEvents(bound, stamp, projectId, {
+    rules: inputs.rules,
+    tickets: inputs.tickets,
+    head: inputs.head,
+    seqFrom: 0,
+    at: stamp.at.toISOString(),
+  });
 }
 
 async function anchorOf(tx: Tx, projectId: string): Promise<Date> {

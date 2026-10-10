@@ -32,7 +32,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 09-20-2026 16:55
-last_updated: 10-10-2026 00:10
+last_updated: 10-10-2026 00:30
 project: momo-keikaku
 project_key: NOKEY
 tracking_system: file-system
@@ -319,28 +319,28 @@ action_items:
       only on owned non-left_scope tickets; add overlap/claimer regression fence (retro
       F3)"
     owner: "dev"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-5-retro-2026-10-09.md"
   - id: "epic-5-retro-item-26-move-latestbaselineversionseq-after-lock"
     epic: 5
     action: "Move latestBaselineVersionSeq after lockWatermark in writeIngestSnapshot;
       add concurrency/regression assert (retro F4)"
     owner: "dev"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-5-retro-2026-10-09.md"
   - id: "epic-5-retro-item-27-fix-computecoverage-catch-all-loe-one-pr"
     epic: 5
     action: "Fix computeCoverage Catch-all LOE: one project-wide attribute then slice
       per owner; align overflow filter with same pass (retro F5)"
     owner: "dev"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-5-retro-2026-10-09.md"
   - id: "epic-5-retro-item-28-align-review-mappedhourshare-with-sm-5-c"
     epic: 5
     action: "Align Review mappedHourShare with SM-5/Coverage (exclude Catch-all) or
       rename the Review field (retro F6)"
     owner: "dev"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-5-retro-2026-10-09.md"
   - id: "epic-5-retro-item-29-reconcile-epics-md-epic-5-prose-with-as"
     epic: 5

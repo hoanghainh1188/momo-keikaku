@@ -310,4 +310,48 @@ describe('computeCoverage', () => {
     if (r.projectTotal.hourShare.kind !== 'value') throw new Error('expected value');
     expect(r.projectTotal.hourShare.totalMh).toBe(hoursToMh(100));
   });
+
+  it('applies Catch-all LOE once project-wide (does not stack Baseline caps per Connector)', () => {
+    // Two hours Connectors each book 15h on the same Catch-all WP (Baseline 20h).
+    // Per-Connector attribute would grant each a full 20h cap → 30h within / 0 overflow.
+    // Project-wide LOE: 20h within + 10h overflow; connector slices sum to that.
+    const r = computeCoverage(
+      baseInput({
+        connectors: [
+          { id: 'con-a', label: 'A', measurementBasis: 'hours' },
+          { id: 'con-b', label: 'B', measurementBasis: 'hours' },
+        ],
+        tickets: [ticket('t-a', 'KEY-A'), ticket('t-b', 'KEY-B')],
+        ownerConnectorByTicket: new Map([
+          ['t-a', 'con-a'],
+          ['t-b', 'con-b'],
+        ]),
+        ledger: [
+          entry(1, 't-a', 15),
+          entry(2, 't-b', 15),
+        ],
+        head: mappingHead([
+          { seq: 1, ticketId: 't-a', wpId: 'WP-CA', source: 'manual', at: 'x', actor: 'pm' },
+          { seq: 2, ticketId: 't-b', wpId: 'WP-CA', source: 'manual', at: 'x', actor: 'pm' },
+        ]),
+      }),
+    );
+    const total = r.projectTotal.hourShare;
+    expect(total.kind).toBe('value');
+    if (total.kind !== 'value') throw new Error('expected value');
+    const byKey = Object.fromEntries(total.segments.map((s) => [s.key, s.mh]));
+    expect(byKey['catch-all']).toBe(hoursToMh(20));
+    expect(byKey['catch-all-overflow']).toBe(hoursToMh(10));
+    expect(total.totalMh).toBe(hoursToMh(30));
+
+    const a = r.connectors[0]!.hourShare;
+    const b = r.connectors[1]!.hourShare;
+    expect(a.kind).toBe('value');
+    expect(b.kind).toBe('value');
+    if (a.kind !== 'value' || b.kind !== 'value') throw new Error('expected value');
+    const aSeg = Object.fromEntries(a.segments.map((s) => [s.key, s.mh]));
+    const bSeg = Object.fromEntries(b.segments.map((s) => [s.key, s.mh]));
+    expect(aSeg['catch-all']! + bSeg['catch-all']!).toBe(hoursToMh(20));
+    expect(aSeg['catch-all-overflow']! + bSeg['catch-all-overflow']!).toBe(hoursToMh(10));
+  });
 });

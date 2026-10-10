@@ -258,32 +258,6 @@ function emptyBucketsHourShare(basis: MeasurementBasis): HourShareFigure {
   );
 }
 
-function sumBuckets(parts: readonly Buckets[]): Buckets {
-  const out: Buckets = {
-    mappedBaselinedMh: 0n,
-    mappedNonBaselinedMh: 0n,
-    catchAllMh: 0n,
-    catchAllOverflowMh: 0n,
-    unmappedMh: 0n,
-    totalMh: 0n,
-    unplannedMh: 0n,
-    unplannedJpy: 0n,
-    totalJpy: 0n,
-  };
-  for (const b of parts) {
-    out.mappedBaselinedMh += b.mappedBaselinedMh;
-    out.mappedNonBaselinedMh += b.mappedNonBaselinedMh;
-    out.catchAllMh += b.catchAllMh;
-    out.catchAllOverflowMh += b.catchAllOverflowMh;
-    out.unmappedMh += b.unmappedMh;
-    out.totalMh += b.totalMh;
-    out.unplannedMh += b.unplannedMh;
-    out.unplannedJpy += b.unplannedJpy;
-    out.totalJpy += b.totalJpy;
-  }
-  return out;
-}
-
 /**
  * Calendar-day age of the Project on `asOf`, measured from `projectStart`.
  * Day 0 is the start date; day 14 is start + 14 calendar days.
@@ -311,6 +285,9 @@ function sm5Metric(
 /**
  * FR-23 / SM-5: per-Connector and Project-total coverage.
  * Pure — no clock, no DB. Opening Balances and left-scope Tickets stay out of the shares.
+ *
+ * Epic-5-retro F5: Catch-all LOE/LIFO runs once project-wide, then hour buckets are sliced
+ * per owning Connector — never sum independent per-Connector caps.
  */
 export function computeCoverage(input: CoverageInput): CoverageResult {
   const wpById = new Map(input.wps.map((w) => [w.id, w]));
@@ -321,15 +298,39 @@ export function computeCoverage(input: CoverageInput): CoverageResult {
   // Opening Balances stay out of hour shares (Q6).
   const ledgerNoOb = input.ledger.filter((e) => e.kind !== 'opening_balance');
 
+  const hoursConnectorIds = new Set(
+    input.connectors.filter((c) => c.measurementBasis === 'hours').map((c) => c.id),
+  );
+  const anyHoursConnector = hoursConnectorIds.size > 0;
+  const hoursTicketIds = new Set(
+    inScopeTickets
+      .filter((t) => hoursConnectorIds.has(input.ownerConnectorByTicket.get(t.trackerIssueId) ?? ''))
+      .map((t) => t.trackerIssueId),
+  );
+  const hoursEntries = ledgerNoOb.filter((e) => hoursTicketIds.has(e.ticketId));
+
+  const projectAttr =
+    anyHoursConnector && hoursEntries.length > 0
+      ? attribute({
+          entries: hoursEntries,
+          head: input.head,
+          wps: input.wps,
+          baselineVersions: input.baselineVersions,
+          resources: input.resources,
+          project: input.project,
+          period: input.period,
+          wpFlagEvents: input.wpFlagEvents,
+          wpFlagSeqMax: input.wpFlagSeqMax,
+          ownerConnectorByTicket: input.ownerConnectorByTicket,
+        })
+      : null;
+
   const connectorRows: ConnectorCoverage[] = [];
-  const hoursBucketsForTotal: Buckets[] = [];
-  let anyHoursConnector = false;
 
   for (const c of input.connectors) {
     const owned = inScopeTickets.filter(
       (t) => input.ownerConnectorByTicket.get(t.trackerIssueId) === c.id,
     );
-    const ownedIds = new Set(owned.map((t) => t.trackerIssueId));
     const ticketRows = owned.map((t) => ({
       id: t.trackerIssueId,
       bucket: ticketBucket(
@@ -345,26 +346,13 @@ export function computeCoverage(input: CoverageInput): CoverageResult {
     let hourShare: HourShareFigure;
     if (c.measurementBasis === 'count') {
       hourShare = { kind: 'unavailable', reasonCode: 'tracker_provides_no_hours' };
+    } else if (!projectAttr) {
+      hourShare = emptyBucketsHourShare('hours');
     } else {
-      anyHoursConnector = true;
-      const entries = ledgerNoOb.filter((e) => ownedIds.has(e.ticketId));
-      if (entries.length === 0) {
-        hourShare = emptyBucketsHourShare('hours');
-      } else {
-        const attr = attribute({
-          entries,
-          head: input.head,
-          wps: input.wps,
-          baselineVersions: input.baselineVersions,
-          resources: input.resources,
-          project: input.project,
-          period: input.period,
-          wpFlagEvents: input.wpFlagEvents,
-          wpFlagSeqMax: input.wpFlagSeqMax,
-        });
-        hoursBucketsForTotal.push(attr.cumulative);
-        hourShare = hourShareFromBuckets(attr.cumulative, 'hours');
-      }
+      const sliced = projectAttr.cumulativeByConnector.get(c.id);
+      hourShare = sliced
+        ? hourShareFromBuckets(sliced, 'hours')
+        : emptyBucketsHourShare('hours');
     }
 
     connectorRows.push({
@@ -390,7 +378,9 @@ export function computeCoverage(input: CoverageInput): CoverageResult {
 
   const totalHourShare: HourShareFigure = !anyHoursConnector
     ? { kind: 'unavailable', reasonCode: 'tracker_provides_no_hours' }
-    : hourShareFromBuckets(sumBuckets(hoursBucketsForTotal), 'hours');
+    : projectAttr
+      ? hourShareFromBuckets(projectAttr.cumulative, 'hours')
+      : emptyBucketsHourShare('hours');
 
   const projectTotal: ConnectorCoverage = {
     connectorId: 'project-total',
