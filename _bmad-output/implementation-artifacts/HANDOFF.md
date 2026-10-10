@@ -48,7 +48,8 @@ query time); `epic-5-context.md`.
 ### What already exists (do not rebuild)
 - `packages/domain/src/review.ts` `// --- FR-23 coverage` computes `mappedTicketShare`,
   `mappedHourShare` and `unmappedTickets`. It is **Project-wide**; `mappedHourShare` matches
-  SM-5 / Coverage `mappedExcludingCatchAll` (Catch-all and Opening Balances out of the den).
+  SM-5 / Coverage `mappedExcludingCatchAll` (Catch-all out of the numerator only; Opening
+  Balances out of the den via ledgerNoOb).
 - `packages/domain/src/attribution.ts` `attribute()` already splits hours into the FR-20 buckets
   (`catchAllMh`, `catchAllOverflowMh`, `unmappedMh`, …) and keys Catch-all off `wp.isCatchAll`.
 - `apps/web/src/components/scope-ledger-bar.tsx` is a **static** bar in hours (fixed segment order,

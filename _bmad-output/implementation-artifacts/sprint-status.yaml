@@ -374,7 +374,7 @@ action_items:
       Coverage vs attribution overflowMhByTicket so revert to attribution fails
       (open residual from code review R2 patch A)"
     owner: "dev"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-5-retro-2026-10-09.md"
   - id: "epic-5-retro-item-33-f3-positive-owned-match-control-ingest-f"
     epic: 5
@@ -390,7 +390,7 @@ action_items:
       project:<projectId> (not any exclusive watermark)
       (open residual from code review R2 patch C)"
     owner: "dev"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-5-retro-2026-10-09.md"
   - id: "epic-5-retro-item-35-f4-production-wire-up-test-lock-then-bas"
     epic: 5
@@ -406,7 +406,7 @@ action_items:
       totalMh den); OB out via ledgerNoOb; fix HANDOFF with same when touched
       (open residual from code review R2 patch E + defer)"
     owner: "dev"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-5-retro-2026-10-09.md"
   - id: "epic-5-retro-item-37-f-hourbucketforticket-comment-coverage-o"
     epic: 5

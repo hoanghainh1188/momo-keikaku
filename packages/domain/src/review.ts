@@ -275,10 +275,11 @@ export interface ReviewResult {
   /**
    * Project-wide FR-23 figures — Review captions.
    * `mappedHourShare` is Coverage `projectTotal.hourShare.mappedExcludingCatchAll`
-   * (epic-5-retro F6): same ledgerNoOb pass as SM-5 — Opening Balances and Catch-all
-   * stay out of the denominator. When Coverage hourShare is `unavailable` (e.g.
-   * count-only / tracker_provides_no_hours), this is `unavailable` too — never
-   * coerced to Ratio ZERO / 0.0% (Harry D1 = B). Story 5.11 adds `perConnector`.
+   * (epic-5-retro F6): same ledgerNoOb pass as SM-5 — Opening Balances stay out of
+   * the denominator; Catch-all stays out of the numerator only (still counted in
+   * `totalMh`). When Coverage hourShare is `unavailable` (e.g. count-only /
+   * tracker_provides_no_hours), this is `unavailable` too — never coerced to
+   * Ratio ZERO / 0.0% (Harry D1 = B). Story 5.11 adds `perConnector`.
    */
   coverage: {
     mappedTicketShare: Ratio;
