@@ -218,6 +218,8 @@ describe('computeReview with no Baseline (story 2.2, decision Q1-A)', () => {
     expect(r.unplanned.components.find((c) => c.key === 'non-baselined')?.mh).toBe(hoursToMh(30));
     expect(r.coverage.unmappedTickets).toBe(0);
     expect(r.coverage.mappedTicketShare).toEqual({ num: 1n, den: 1n });
+    // Epic-5-retro F6: SM-5-aligned (all hours are mapped non-baselined here).
+    expect(r.coverage.mappedHourShare).toEqual({ num: hoursToMh(30), den: hoursToMh(30) });
   });
 
   it('marks all three indicators unavailable, so Overall is never red for want of a Baseline', () => {

@@ -10,7 +10,6 @@ import {
   AdapterKindMismatchError,
   LedgerInvariantError,
   advanceLeftScopeState,
-  applyRules,
   checkLedgerInvariant,
   ingestSnapshot,
   INITIAL_BASIS_LATCH,
@@ -27,8 +26,7 @@ import {
   type TrackerAccountObservation,
 } from '@momo/domain';
 import type { Bound } from '../../bound';
-import { loadLiveMappingRules } from '../../repo-mapping-rules';
-import { appendMappingEvents } from '../../repo-writes';
+import { appendRuleMappingEvents, loadLiveMappingRules } from '../../repo-mapping-rules';
 import * as s from '../../schema';
 import { lockWatermark } from '../../watermark-lock';
 import { trackerRepositoryOn, type TrackerKind } from '../tracker';
@@ -96,6 +94,15 @@ export function ingestWriteRepositoryOn(bound: Bound) {
       .orderBy(desc(s.baselineVersion.seq))
       .limit(1);
     return row?.seq ?? null;
+  }
+
+  /**
+   * Epic-5-retro F4: Project watermark lock BEFORE Baseline head. Reading the seq first
+   * raced concurrent re-baseline and could stamp ledger rows with a superseded version.
+   */
+  async function lockProjectThenBaselineHead(projectId: string): Promise<number | null> {
+    await lockWatermark(bound, { kind: 'project', projectId });
+    return latestBaselineVersionSeq(projectId);
   }
 
   async function loadPrevSnapshot(connectorId: string): Promise<{
@@ -433,9 +440,8 @@ export function ingestWriteRepositoryOn(bound: Bound) {
         throw new Error(`connector ${input.connectorId} not found for project ${input.projectId}`);
       }
 
-      // AR-15: Baseline-by-seq is chosen before the lock; then one Project lock for the write.
-      const activeBaselineVersionSeq = await latestBaselineVersionSeq(input.projectId);
-      await lockWatermark(bound, { kind: 'project', projectId: input.projectId });
+      // AR-15 / epic-5-retro F4: lock first, then Baseline head under the same tx.
+      const activeBaselineVersionSeq = await lockProjectThenBaselineHead(input.projectId);
 
       // Load prev under the lock so concurrent jobs cannot both derive against a stale predecessor.
       const prev = await loadPrevSnapshot(input.connectorId);
@@ -647,34 +653,27 @@ export function ingestWriteRepositoryOn(bound: Bound) {
         nextIssueIds,
       });
 
-      // FR-22: re-evaluate Mapping Rules; manual/disposition head wins.
+      // FR-22 / epic-5-retro F3: same append helper as rule-save; evaluate owned Tickets
+      // only (overlap/claimer Tickets stay on connector_overlap, never enter applyRules).
+      // Sightings in this snap cleared left_scope above, so ownedTickets are in-scope.
       const rules = await loadMappingRules(input.projectId);
       const mappingEvents = await loadMappingEvents(input.projectId);
       const head = mappingHead(mappingEvents);
       const seqFrom =
         mappingEvents.reduce((max, e) => (e.seq > max ? e.seq : max), 0) + 1;
-      const newMappings = applyRules(
-        rules,
-        [...input.read.tickets],
-        head,
-        seqFrom,
-        input.read.observedAt,
+      await appendRuleMappingEvents(
+        bound,
+        { actor: 'system:rules', at: new Date(input.read.observedAt) },
+        input.projectId,
+        {
+          rules,
+          tickets: ownedTickets,
+          head,
+          seqFrom,
+          at: input.read.observedAt,
+          nextId: (ticketId) => `${input.nextId()}-rule-${ticketId}`,
+        },
       );
-      if (newMappings.length > 0) {
-        // Story 5.9: append + dual-write mapping_head (lock already held for ingest).
-        await appendMappingEvents(
-          { tx, tenantId },
-          { actor: 'system:rules', at: new Date(input.read.observedAt) },
-          input.projectId,
-          newMappings.map((m) => ({
-            id: input.nextId(),
-            ticketId: m.ticketId,
-            wpId: m.wpId,
-            source: 'rule' as const,
-            ruleId: m.ruleId ?? null,
-          })),
-        );
-      }
 
 
       // Story 5.7 / AD-8: N=3 hysteresis on complete snaps only — append basis event on flip.

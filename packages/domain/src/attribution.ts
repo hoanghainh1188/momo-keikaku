@@ -132,6 +132,12 @@ export interface AttributionResult {
    * Ticket set is every Ticket with a positive value here (honest; no invented distinct set).
    */
   overflowMhByTicket: Map<string, Mh>;
+  /**
+   * Epic-5-retro F5: cumulative FR-20 buckets sliced by owning Connector, using the same
+   * project-wide Catch-all LOE/LIFO pass as `cumulative`. Empty when no entry resolves an owner.
+   * Opening Balances are omitted (they live on `openingBalanceMhByConnector`).
+   */
+  cumulativeByConnector: Map<string, Buckets>;
 }
 
 /**
@@ -282,6 +288,7 @@ export function attribute(input: AttributionInput): AttributionResult {
   const acByWp = new Map<string, Mh>();
   const hoursByTicket = new Map<string, Mh>();
   const overflowMhByTicket = new Map<string, Mh>();
+  const cumulativeByConnector = new Map<string, Buckets>();
   /** Catch-all running state per WP (water-level + LIFO overflow stack). */
   const catchAllState = new Map<string, CatchAllState>();
   let openingBalanceMh: Mh = 0n;
@@ -303,19 +310,21 @@ export function attribute(input: AttributionInput): AttributionResult {
 
     hoursByTicket.set(e.ticketId, (hoursByTicket.get(e.ticketId) ?? 0n) + e.deltaMh);
 
+    // Owner for connector slices / OB grouping (ledger writer id, else ownership map).
+    const ownerConnectorId = e.connectorId ?? ownerConnectorByTicket?.get(e.ticketId) ?? null;
+
     if (e.kind === 'opening_balance') {
       openingBalanceMh += e.deltaMh;
       // FR-42: Opening Balances count in cumulative AC but never in Period metrics.
       // Story 5.13 / UX-DR23: group per Connector — refuse a row with no owner.
-      const connectorId = e.connectorId ?? ownerConnectorByTicket?.get(e.ticketId) ?? null;
-      if (!connectorId) {
+      if (!ownerConnectorId) {
         throw new Error(
           `opening_balance ledger entry seq ${e.seq} (ticket ${e.ticketId}) has no connector id`,
         );
       }
       openingBalanceMhByConnector.set(
-        connectorId,
-        (openingBalanceMhByConnector.get(connectorId) ?? 0n) + e.deltaMh,
+        ownerConnectorId,
+        (openingBalanceMhByConnector.get(ownerConnectorId) ?? 0n) + e.deltaMh,
       );
     }
 
@@ -353,6 +362,21 @@ export function attribute(input: AttributionInput): AttributionResult {
         if (unplanned) {
           periodB.unplannedMh += mh;
           periodB.unplannedJpy += jpy;
+        }
+      }
+      // Non-OB hours only — OB stays on openingBalanceMhByConnector (F5 / FR-42).
+      if (e.kind !== 'opening_balance' && ownerConnectorId) {
+        let byCon = cumulativeByConnector.get(ownerConnectorId);
+        if (!byCon) {
+          byCon = emptyBuckets();
+          cumulativeByConnector.set(ownerConnectorId, byCon);
+        }
+        byCon[field] += mh;
+        byCon.totalMh += mh;
+        byCon.totalJpy += jpy;
+        if (unplanned) {
+          byCon.unplannedMh += mh;
+          byCon.unplannedJpy += jpy;
         }
       }
     };
@@ -410,6 +434,7 @@ export function attribute(input: AttributionInput): AttributionResult {
     openingBalanceMhByConnector,
     hoursByTicket,
     overflowMhByTicket,
+    cumulativeByConnector,
   };
 }
 

@@ -273,8 +273,10 @@ export interface ReviewResult {
   /** Null while the Project has no Baseline. */
   divergence: DivergenceRow[] | null;
   /**
-   * Legacy Project-wide FR-23 figures (mapped includes Catch-all) — Review captions.
-   * Story 5.11 adds `perConnector` (mapped excludes Catch-all) for Mapping › Coverage.
+   * Project-wide FR-23 figures — Review captions.
+   * `mappedHourShare` matches SM-5 / Coverage `mappedExcludingCatchAll` (epic-5-retro F6):
+   * mapped baselined + mapped non-baselined over total hours (Catch-all excluded).
+   * Story 5.11 adds `perConnector` for Mapping › Coverage.
    */
   coverage: {
     mappedTicketShare: Ratio;
@@ -516,18 +518,18 @@ export function computeReview(input: ReviewInput): ReviewResult {
     wpFlagEvents: input.wpFlagEvents,
     wpFlagSeqMax: input.wpFlagSeqMax,
   });
+  const mappedExcludingCatchAllMh =
+    attribution.cumulative.mappedBaselinedMh + attribution.cumulative.mappedNonBaselinedMh;
   const coverage = {
     mappedTicketShare:
       totalTickets === 0
         ? ZERO
         : ratio(BigInt(totalTickets - unmappedTickets), BigInt(totalTickets)),
+    // Epic-5-retro F6: align with SM-5 / Coverage (exclude Catch-all within + overflow).
     mappedHourShare:
       attribution.cumulative.totalMh === 0n
         ? ZERO
-        : ratio(
-            attribution.cumulative.totalMh - attribution.cumulative.unmappedMh,
-            attribution.cumulative.totalMh,
-          ),
+        : ratio(mappedExcludingCatchAllMh, attribution.cumulative.totalMh),
     unmappedTickets,
     perConnector,
   };
