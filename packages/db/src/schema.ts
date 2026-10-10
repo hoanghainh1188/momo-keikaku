@@ -405,13 +405,10 @@ export const tenantSettingEvent = pgTable(
     at: timestamp('at', { withTimezone: true }).notNull(),
   },
   (t) => ({
+    // No FK to `tenant`: AD-3 requires tenant-owned FKs to be composite and tenant_id-led on
+    // both sides, and forbids pointing at non-tenant-owned parents. Same pattern as `department`.
     tenantKey: unique('tenant_setting_event_tenant_seq_key').on(t.tenantId, t.seq),
     byTenant: index('tenant_setting_event_tenant_idx').on(t.tenantId, t.seq),
-    tenant: foreignKey({
-      name: 'tenant_setting_event_tenant_fk',
-      columns: [t.tenantId],
-      foreignColumns: [tenant.id],
-    }),
     ratioGreenDenNz: check('tenant_setting_event_ratio_green_den', sql`${t.ratioGreenDen} <> 0`),
     ratioAmberDenNz: check('tenant_setting_event_ratio_amber_den', sql`${t.ratioAmberDen} <> 0`),
     tcpiRedDenNz: check('tenant_setting_event_tcpi_red_den', sql`${t.tcpiRedDen} <> 0`),

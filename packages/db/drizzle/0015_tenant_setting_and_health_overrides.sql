@@ -32,7 +32,6 @@ ALTER TABLE "project_setting_event" ADD COLUMN "unplanned_green_below_num" bigin
 ALTER TABLE "project_setting_event" ADD COLUMN "unplanned_green_below_den" bigint;--> statement-breakpoint
 ALTER TABLE "project_setting_event" ADD COLUMN "unplanned_amber_max_num" bigint;--> statement-breakpoint
 ALTER TABLE "project_setting_event" ADD COLUMN "unplanned_amber_max_den" bigint;--> statement-breakpoint
-ALTER TABLE "tenant_setting_event" ADD CONSTRAINT "tenant_setting_event_tenant_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenant"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "tenant_setting_event_tenant_idx" ON "tenant_setting_event" USING btree ("tenant_id","seq");--> statement-breakpoint
 ALTER TABLE "pct_override_event" ADD CONSTRAINT "pct_override_event_source_check" CHECK ("pct_override_event"."source" IS NULL OR "pct_override_event"."source" IN ('pm_override', 'plan_edit'));--> statement-breakpoint
 ALTER TABLE "project_setting_event" ADD CONSTRAINT "project_setting_event_ratio_green_pair" CHECK (("project_setting_event"."ratio_green_num" IS NULL) = ("project_setting_event"."ratio_green_den" IS NULL));--> statement-breakpoint

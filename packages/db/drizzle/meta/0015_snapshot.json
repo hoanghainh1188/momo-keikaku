@@ -4065,21 +4065,7 @@
           "with": {}
         }
       },
-      "foreignKeys": {
-        "tenant_setting_event_tenant_fk": {
-          "name": "tenant_setting_event_tenant_fk",
-          "tableFrom": "tenant_setting_event",
-          "tableTo": "tenant",
-          "columnsFrom": [
-            "tenant_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
+      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "tenant_setting_event_tenant_seq_key": {
