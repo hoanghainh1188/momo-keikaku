@@ -86,8 +86,6 @@ export interface HealthInput {
   measurementBasis: 'hours' | 'count';
   /** Pinned schedule outputs subset; absent/null → Float / MFO / derived-slip rules silent. */
   scheduleFeed?: HealthScheduleFeed | null;
-  /** Resolved threshold provenance (stamped on Review inputs / shown next to indicators). */
-  thresholdSource?: ThresholdSource;
 }
 
 /**
@@ -199,6 +197,8 @@ export function computeHealth(input: HealthInput): {
 
     const calendarSlipped = input.slippedMilestones.length > 0;
     const derivedSlipped = (feed?.derivedSlippedMilestones.length ?? 0) > 0;
+    /** True once a Schedule extra (milestone / MFO) has named itself in `rule`. */
+    let namedExtra = false;
 
     // Milestone calendar slip → at least amber; names the rule.
     if (calendarSlipped && (colour === 'green' || colour === 'unavailable')) {
@@ -224,6 +224,7 @@ export function computeHealth(input: HealthInput): {
       }
       const both = calendarSlipped && derivedSlipped;
       rule = `${cap(colour)} because ${both ? 'both milestone rules: ' : ''}${parts.join('; ')}`;
+      namedExtra = true;
     }
 
     // Unmet MFO → ≥ amber; red when the worst (first) violation is a Milestone.
@@ -232,24 +233,29 @@ export function computeHealth(input: HealthInput): {
       const worst = mfo[0]!;
       const mfoColour: HealthColour = worst.isMilestone ? 'red' : 'amber';
       colour = worse(colour, mfoColour);
-      rule = `${cap(colour)} because unmet must-finish-on on ${worst.wbsCode} ${worst.name} (${worst.daysLate} working day(s) late)${worst.isMilestone ? ' — Milestone' : ''}`;
+      const mfoCause = `unmet must-finish-on on ${worst.wbsCode} ${worst.name} (${worst.daysLate} working day(s) late)${worst.isMilestone ? ' — Milestone' : ''}`;
+      rule = namedExtra
+        ? `${cap(colour)} because ${stripBecause(rule)}; ${mfoCause}`
+        : `${cap(colour)} because ${mfoCause}`;
       driver = `MFO ${worst.daysLate}d late · ${driver}`;
+      namedExtra = true;
     }
 
     // Negative Float vs Project finish → red; relative Float cannot fire and says so.
     if (feed != null) {
       if (feed.floatAnchorKind === 'computed_finish') {
-        // Relative Float: rule cannot fire; say so rather than implying the plan is safe.
-        if (colour === 'green' || colour === 'unavailable') {
-          rule = `${rule}; Float is relative to computed finish — negative-Float rule cannot fire (plan not implied safe)`;
-        }
+        // Relative Float: rule cannot fire; always say so (whatever the colour).
+        rule = `${rule}; Float is relative to computed finish — negative-Float rule cannot fire (plan not implied safe)`;
       } else if (
         feed.floatAnchorKind === 'project_finish' &&
         feed.minFloatDays !== null &&
         feed.minFloatDays < 0
       ) {
         colour = 'red';
-        rule = `Red because Project minimum Float is ${feed.minFloatDays} working day(s) (vs Project finish)`;
+        const floatCause = `Project minimum Float is ${feed.minFloatDays} working day(s) (vs Project finish)`;
+        rule = namedExtra
+          ? `Red because ${stripBecause(rule)}; ${floatCause}`
+          : `Red because ${floatCause}`;
         driver = `Float ${feed.minFloatDays} · ${driver}`;
       }
     }
@@ -343,6 +349,10 @@ export function computeHealth(input: HealthInput): {
 }
 
 const NO_BASELINE_RULE = 'Unavailable — no Baseline yet';
+
+/** Drop the leading "Green/Amber/Red/Unavailable because " so causes can be recomposed. */
+const stripBecause = (rule: string): string =>
+  rule.replace(/^(Green|Amber|Red|Unavailable) because /i, '');
 
 const label = (k: HealthIndicator['key']) =>
   k === 'schedule' ? 'Schedule' : k === 'effort_cost' ? 'Effort/Cost' : 'Unplanned Work';

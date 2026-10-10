@@ -716,21 +716,30 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
       const storedIn = parseStoredInputs(scheduleHead.inputs);
       const storedOut = parseStoredOutputs(scheduleHead.outputs);
       const orderedWpIds = storedIn.wps.map((w) => w.id);
-      scheduleHealth = {
-        anchor: storedOut.anchor,
-        wps: storedOut.wps.map((row, index) => ({
-          wpId: orderedWpIds[index]!,
-          floatDays: row.floatDays,
-          earlyFinish: row.earlyFinish,
-        })),
-        violations: storedOut.violations.map((v) => ({
-          wpId: orderedWpIds[v.wpId]!,
+      const wps: NonNullable<ReviewInput['scheduleHealth']>['wps'] = [];
+      for (let index = 0; index < storedOut.wps.length; index++) {
+        const wpId = orderedWpIds[index];
+        if (wpId === undefined) {
+          throw new RangeError(`scheduleHealth: WP index ${index} missing from stored inputs`);
+        }
+        const row = storedOut.wps[index]!;
+        wps.push({ wpId, floatDays: row.floatDays, earlyFinish: row.earlyFinish });
+      }
+      const violations: NonNullable<ReviewInput['scheduleHealth']>['violations'] = [];
+      for (const v of storedOut.violations) {
+        const wpId = orderedWpIds[v.wpId];
+        if (wpId === undefined) {
+          throw new RangeError(`scheduleHealth: violation WP index ${v.wpId} missing from stored inputs`);
+        }
+        violations.push({
+          wpId,
           constraintType: v.constraintType,
           daysLate: v.daysLate,
-        })),
-      };
+        });
+      }
+      scheduleHealth = { anchor: storedOut.anchor, wps, violations };
     } catch {
-      // Malformed or dropped outputs: Schedule Health extras stay silent.
+      // Malformed, dropped, or corrupt index remaps: Schedule Health extras stay silent.
       scheduleHealth = null;
     }
   }

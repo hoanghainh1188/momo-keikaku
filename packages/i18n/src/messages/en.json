@@ -482,15 +482,7 @@
       "unplanned": "Unplanned Work",
       "unplanned_work": "Unplanned Work",
       "disclosure_title": "Threshold rule & driving figure",
-      "threshold_source": "Thresholds from {source, select, project {Project override} tenant {Tenant default} other {built-in default}}",
-      "source_project": "Project override",
-      "source_tenant": "Tenant default",
-      "source_default": "Built-in default",
-      "cumulative_beside": "cumulative {share}",
-      "float_relative": "Float is relative to the computed finish — the negative-Float rule cannot fire",
-      "mfo_worst": "Unmet must-finish-on: {name} ({days} working days late)",
-      "derived_slip": "Derived Milestone slip vs Baseline",
-      "calendar_slip": "Calendar Milestone slip (past Baseline, not done)"
+      "threshold_source": "Thresholds from {source, select, project {Project override} tenant {Tenant default} other {built-in default}}"
     },
     "componentSource": {
       "unmapped": "Tickets in the Connector's scope with no Mapping to a Work Package.",

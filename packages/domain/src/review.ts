@@ -654,7 +654,6 @@ export function computeReview(input: ReviewInput): ReviewResult {
       .map((m) => ({ wbsCode: m.wbsCode, name: m.name, baselineDate: m.baselineDate })),
     measurementBasis,
     scheduleFeed,
-    thresholdSource: resolvedThresholds.source,
   });
   const health = { ...healthCompute, resolvedThresholds };
 

@@ -182,7 +182,7 @@ describe('computeHealth matrix', () => {
     expect(both.indicators.find((i) => i.key === 'schedule')!.rule).toMatch(/both milestone rules/);
   });
 
-  it('negative Float vs Project finish → Schedule red; relative Float says cannot fire', () => {
+  it('negative Float vs Project finish → Schedule red; relative Float says cannot fire whatever the colour', () => {
     const neg = computeHealth(
       baseInput({
         evm: baseEvm({ spi: value(100n, 100n) }),
@@ -197,7 +197,7 @@ describe('computeHealth matrix', () => {
     expect(neg.indicators.find((i) => i.key === 'schedule')!.colour).toBe('red');
     expect(neg.indicators.find((i) => i.key === 'schedule')!.rule).toMatch(/minimum Float/);
 
-    const relative = computeHealth(
+    const relativeGreen = computeHealth(
       baseInput({
         evm: baseEvm({ spi: value(100n, 100n) }),
         scheduleFeed: {
@@ -208,10 +208,28 @@ describe('computeHealth matrix', () => {
         },
       }),
     );
-    const s = relative.indicators.find((i) => i.key === 'schedule')!;
-    expect(s.colour).toBe('green');
-    expect(s.rule).toMatch(/relative/);
-    expect(s.rule).toMatch(/cannot fire/);
+    const green = relativeGreen.indicators.find((i) => i.key === 'schedule')!;
+    expect(green.colour).toBe('green');
+    expect(green.rule).toMatch(/relative/);
+    expect(green.rule).toMatch(/cannot fire/);
+
+    // Caveat still appends when colour is already amber (calendar slip).
+    const relativeAmber = computeHealth(
+      baseInput({
+        evm: baseEvm({ spi: value(100n, 100n) }),
+        slippedMilestones: [{ wbsCode: '1.0', name: 'M', baselineDate: '2026-01-01' }],
+        scheduleFeed: {
+          minFloatDays: 0,
+          floatAnchorKind: 'computed_finish',
+          mfoViolations: [],
+          derivedSlippedMilestones: [],
+        },
+      }),
+    );
+    const amber = relativeAmber.indicators.find((i) => i.key === 'schedule')!;
+    expect(amber.colour).toBe('amber');
+    expect(amber.rule).toMatch(/calendar Milestone slip/);
+    expect(amber.rule).toMatch(/cannot fire/);
   });
 
   it('unmet MFO → ≥ amber; Milestone MFO → red; names worst + days late', () => {
@@ -260,6 +278,46 @@ describe('computeHealth matrix', () => {
     );
     expect(ms.indicators.find((i) => i.key === 'schedule')!.colour).toBe('red');
     expect(ms.indicators.find((i) => i.key === 'schedule')!.rule).toMatch(/Milestone/);
+  });
+
+  it('composes milestone + MFO naming when negative Float also fires (does not overwrite)', () => {
+    const r = computeHealth(
+      baseInput({
+        evm: baseEvm({ spi: value(100n, 100n) }),
+        slippedMilestones: [{ wbsCode: '1.0', name: 'M', baselineDate: '2026-01-01' }],
+        scheduleFeed: {
+          minFloatDays: -2,
+          floatAnchorKind: 'project_finish',
+          mfoViolations: [
+            {
+              wpId: 'm1',
+              wbsCode: '2.0',
+              name: 'Gate',
+              daysLate: 5,
+              isMilestone: true,
+            },
+          ],
+          derivedSlippedMilestones: [
+            {
+              wbsCode: '2.0',
+              name: 'Gate',
+              baselineDate: '2026-06-01',
+              derivedDate: '2026-06-10',
+            },
+          ],
+        },
+      }),
+    );
+    const s = r.indicators.find((i) => i.key === 'schedule')!;
+    expect(s.colour).toBe('red');
+    expect(s.rule).toMatch(/both milestone rules/);
+    expect(s.rule).toMatch(/calendar Milestone slip/);
+    expect(s.rule).toMatch(/derived-date Milestone slip/);
+    expect(s.rule).toMatch(/must-finish-on/);
+    expect(s.rule).toMatch(/5 working day/);
+    expect(s.rule).toMatch(/minimum Float/);
+    expect(s.driver).toMatch(/Float -2/);
+    expect(s.driver).toMatch(/MFO 5d late/);
   });
 
   it('overall is worst of three and never green while Schedule is red', () => {

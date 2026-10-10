@@ -243,53 +243,98 @@ describe('computeReview with no Baseline (story 2.2, decision Q1-A)', () => {
     expect(r.health.resolvedThresholds.source).toBe('default');
   });
 
-  it('stamps Tenant-resolved thresholds and fires Schedule Float/MFO/derived-slip from scheduleHealth', () => {
+  const milestoneWp: WorkPackage = {
+    ...wp,
+    id: 'WP-M',
+    wbsCode: '2.0',
+    name: 'Gate',
+    isMilestone: true,
+    plannedMh: 0n,
+  };
+  const withMilestoneBaseline = {
+    ...input,
+    tenantHealthThresholds: DEFAULT_THRESHOLDS,
+    wps: [wp, milestoneWp],
+    baselineVersions: [
+      {
+        ...input.baselineVersions[0]!,
+        wps: [
+          ...input.baselineVersions[0]!.wps,
+          {
+            wpId: 'WP-M',
+            start: '2026-06-01',
+            finish: '2026-06-15',
+            baselineMh: 0n,
+            isMilestone: true,
+            isCatchAll: false,
+          },
+        ],
+      },
+    ],
+  };
+
+  it('stamps Project-resolved thresholds on health.resolvedThresholds', () => {
     const r = computeReview({
-      ...input,
-      tenantHealthThresholds: DEFAULT_THRESHOLDS,
+      ...withMilestoneBaseline,
       projectHealthOverride: { ratioGreen: { num: 99n, den: 100n } },
+    });
+    expect(r.health.resolvedThresholds.source).toBe('project');
+    expect(r.health.resolvedThresholds.thresholds.ratioGreen).toEqual({ num: 99n, den: 100n });
+  });
+
+  it('Schedule Health: negative Float alone → red and names Float', () => {
+    const r = computeReview({
+      ...withMilestoneBaseline,
       scheduleHealth: {
         anchor: { kind: 'project_finish', date: '2026-12-01' },
         wps: [
           { wpId: 'WP-B', floatDays: -2, earlyFinish: '2026-12-15' },
-          { wpId: 'WP-M', floatDays: -2, earlyFinish: '2026-07-01' },
+          { wpId: 'WP-M', floatDays: 0, earlyFinish: '2026-06-15' },
         ],
-        violations: [
-          { wpId: 'WP-M', constraintType: 'must_finish_on', daysLate: 5 },
-        ],
+        violations: [],
       },
-      wps: [
-        wp,
-        {
-          ...wp,
-          id: 'WP-M',
-          wbsCode: '2.0',
-          name: 'Gate',
-          isMilestone: true,
-          plannedMh: 0n,
-        },
-      ],
-      baselineVersions: [
-        {
-          ...input.baselineVersions[0]!,
-          wps: [
-            ...input.baselineVersions[0]!.wps,
-            {
-              wpId: 'WP-M',
-              start: '2026-06-01',
-              finish: '2026-06-15',
-              baselineMh: 0n,
-              isMilestone: true,
-              isCatchAll: false,
-            },
-          ],
-        },
-      ],
     });
-    expect(r.health.resolvedThresholds.source).toBe('project');
-    expect(r.health.resolvedThresholds.thresholds.ratioGreen).toEqual({ num: 99n, den: 100n });
-    expect(r.health.indicators.find((i) => i.key === 'schedule')!.colour).toBe('red');
+    const s = r.health.indicators.find((i) => i.key === 'schedule')!;
+    expect(s.colour).toBe('red');
+    expect(s.rule).toMatch(/minimum Float/);
     expect(r.health.overall).toBe('red');
+  });
+
+  it('Schedule Health: Milestone MFO alone → red and names worst + days late', () => {
+    const r = computeReview({
+      ...withMilestoneBaseline,
+      scheduleHealth: {
+        anchor: { kind: 'project_finish', date: '2026-12-01' },
+        wps: [
+          { wpId: 'WP-B', floatDays: 1, earlyFinish: '2026-12-01' },
+          { wpId: 'WP-M', floatDays: 0, earlyFinish: '2026-06-15' },
+        ],
+        violations: [{ wpId: 'WP-M', constraintType: 'must_finish_on', daysLate: 5 }],
+      },
+    });
+    const s = r.health.indicators.find((i) => i.key === 'schedule')!;
+    expect(s.colour).toBe('red');
+    expect(s.rule).toMatch(/must-finish-on/);
+    expect(s.rule).toMatch(/5 working day/);
+    expect(s.rule).toMatch(/Milestone/);
+  });
+
+  it('Schedule Health: derived Milestone slip alone → ≥ amber and names derived-slip', () => {
+    const r = computeReview({
+      ...withMilestoneBaseline,
+      scheduleHealth: {
+        anchor: { kind: 'project_finish', date: '2026-12-01' },
+        wps: [
+          { wpId: 'WP-B', floatDays: 1, earlyFinish: '2026-12-01' },
+          { wpId: 'WP-M', floatDays: 0, earlyFinish: '2026-07-01' },
+        ],
+        violations: [],
+      },
+    });
+    const s = r.health.indicators.find((i) => i.key === 'schedule')!;
+    // Fixture SPI may already be red; derived slip still names itself and is ≥ amber.
+    expect(['amber', 'red']).toContain(s.colour);
+    expect(s.rule).toMatch(/derived-date Milestone slip/);
   });
 
   it('still throws for a Baseline seq that names no version — an inconsistent input, not a missing Baseline', () => {

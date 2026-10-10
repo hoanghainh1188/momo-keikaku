@@ -2,7 +2,7 @@
 title: '6.5 — Three Health Indicators, each showing its rule'
 type: 'feature'
 created: '2026-10-10'
-status: 'in-progress'
+status: 'in-review'
 route: 'dispatch'
 review_loop_iteration: 0
 context: []
@@ -102,10 +102,36 @@ baseline_commit: 'a09555fca33e25041e91be52c8b0aaf1c6e84baf'
 - 2026-10-10: Review — builds schedule feed from `scheduleHealth` + Baseline milestones; stamps `health.resolvedThresholds` on result. Repo loads Tenant/Project setting heads + decodes pinned `schedule_run` outputs into `scheduleHealth`.
 - 2026-10-10: UI — `HealthBadge` click/Enter disclosure (Esc focus return, Q2); Status shows threshold source; i18n EN/JA keys for source/disclosure/float/MFO/slip.
 - 2026-10-10: Verified `pnpm typecheck`, `pnpm lint`, `pnpm test` (1572 passed). No live Postgres in this environment — migration not applied here; `db:sql` write-only succeeded. Spurious drizzle DROP/ADD of `pct_override_event_source_check` in 0015 is expand-safe (same constraint text).
+- 2026-10-10: Review fixes — compose Schedule rule/driver so Float does not erase milestone/MFO naming; always append relative-Float caveat; drop unused `thresholdSource` + unused i18n keys; guard corrupt scheduleHealth remaps; split review Schedule cases; HealthBadge disclosure interaction test (Space toggles like click).
 
 ## Spec Change Log
 
 ## Review Triage Log
+
+- blind: hover/focus disclosure missing (click-only) — **false** — Q2→A chose 6.3 formula-popover (click/Enter+Esc); native `title` covers hover; FormulaMetricCell is likewise click-driven
+- blind: Overall HealthBadge lacks disclosure — **false** — AC “any indicator” means the three Health Indicators; Overall is the roll-up, not an indicator
+- blind: unused i18n float/MFO/slip/source_* keys; domain English rules — **low** → patch (remove unused keys; domain English rule strings are the established present pattern)
+- blind: Float overwrite drops milestone/MFO naming — **medium** → patch (compose rule text)
+- blind: relative-Float caveat only when green/unavailable — **medium** → patch (always append)
+- blind: migration no Tenant backfill — **false** — matrix allows Missing Tenant head → DEFAULT with source `default`; seed writes head on Tenant create
+- blind: later project_setting append drops overrides — **false** — Q1→A no editor; only insert-when-missing writers today; null override columns are intentional for heads without overrides
+- blind: thresholdSource unused; source not per-indicator — **low** → patch (drop unused `thresholdSource`); dominant source under Status matches Q1→A show-source without settings UI
+- blind: repo loads live heads not ≤ pin — **false** — live Review sets pin ceilings to the loaded head seq; historical pin replay is the existing ComputationInputs path (thresholds on resolve inputs)
+- blind: minFloat includes completed WPs — **false** — engine `floatDays` is null on complete WPs; min over non-null is remaining/in-progress only
+- blind: badge label muddies glyph+word — **low** rejected (caption carries rule; colour·driver matches prior Status chrome)
+- blind: no HealthBadge UI test / Space vs click — **medium** → patch (component test; align Space with toggle if needed)
+- blind: empty Spec Change / Triage logs + last_updated format — **false** — process noise; triage filled this pass
+- edge: scheduleHealth index remap unchecked — **medium** → patch (guard undefined wpIds)
+- edge: relative-Float when amber/red — **medium** → patch (same as blind relative-Float)
+- edge: slip overwrites SPI rule when non-green — **false** — colour uses `worse()`; rule naming milestone rules is what FR-31 asks when those fire
+- edge: resolvedThresholds not on ReviewInput — **false** — stamped on `ReviewResult.health.resolvedThresholds`; UI + matrix “store value+source” satisfied; raw heads remain on input for resolve
+- edge: focus alone never opens disclosure — **false** — same as Q2→A / FormulaMetricCell
+- vgap: scheduleHealth decode untested on repo path — **medium** unverified (no Postgres) → defer
+- vgap: Tenant/Project threshold load untested on loadReview — **medium** unverified (no Postgres) → defer
+- vgap: review.test Schedule case too weak for buildScheduleFeed — **medium** → patch (isolate rules)
+- vgap: HealthBadge disclosure UI untested — **medium** → patch
+- vgap other: unused thresholdSource — **low** → patch (same drop)
+- vgap other: unused i18n keys — **low** → patch (same remove)
 
 ## Design Notes
 
