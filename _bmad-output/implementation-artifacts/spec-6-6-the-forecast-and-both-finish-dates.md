@@ -93,6 +93,8 @@ baseline_commit: '9f8ed6f7ad0abfebeebfc6b6add93a6d45fbe0f6'
 - Verification: `pnpm exec tsc -b` 0; `pnpm test` 1589 passed / 512 skipped; `pnpm lint` 0. (Clean tsc emit `.js` siblings after `-b` so fence suites stay green.) Demo golden trend date unchanged (`2026-12-15`); in-memory fixture has null computedFinish/gap until a schedule_run pin exists.
 - Review fixes: empty trend when baselineStart > baselineFinish; null finishGapWd when gap helper returns 0; pinned review finishGapWd=-31; Ahead/Behind uses formula_forecast_trend; Status SV note omitted when unavailable; finishes_disagree uses absGap+direction; finish-dates-presence.test.ts for Review testids.
 
+- 2026-10-10: Review patches — inverted baseline window empties trend; null zero gaps; pinned review finishGapWd; Ahead/Behind trend formula aligned; Status SV note only when value; absGap/direction i18n; finish-dates presence test. Deferred DB loader pin assertion (no Postgres).
+
 ## Spec Change Log
 
 ## Review Triage Log

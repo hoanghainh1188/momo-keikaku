@@ -1569,3 +1569,7 @@ above can see where it went.
 - source_spec: `_bmad-output/implementation-artifacts/spec-6-5-three-health-indicators-each-showing-its-rule.md`
   summary: After seed / Project override columns, assert loadReview resolvedThresholds.source and bands match DB heads (tenant vs project).
   evidence: Story 6.5 verification-gap — resolveThresholds unit-tested; Tenant/Project head load on repo path untested without Postgres.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-6-6-the-forecast-and-both-finish-dates.md`
+  summary: DB/fixture test that loadProjectBundle retains scheduleHealth.computedFinish and baselineProjectStart from Baseline-pinned schedule_run into Review forecast.
+  evidence: Story 6.6 verification-gap / blind — domain injects the fields; demo-golden asserts null on in-memory fixture; no Postgres in build VM to extend baseline-read/db-round-trip.
