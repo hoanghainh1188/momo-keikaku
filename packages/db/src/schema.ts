@@ -305,7 +305,9 @@ export const project = pgTable(
 
 /**
  * Story 5.5 / FR-25 / AR-18: tz and teirei weekday history for Reporting Period placement.
- * Ingest seeds a head from `project` columns when missing; later settings stories append.
+ * Story 6.5 / FR-31: optional Health threshold overrides (nullable pairs; null = no override
+ * for that key — falls through to `tenant_setting_event`). Ingest seeds a head from `project`
+ * columns when missing; later settings stories append.
  */
 export const projectSettingEvent = pgTable(
   'project_setting_event',
@@ -315,6 +317,17 @@ export const projectSettingEvent = pgTable(
     projectId: text('project_id').notNull(),
     tzOffsetMinutes: integer('tz_offset_minutes').notNull(),
     teireiWeekday: integer('teirei_weekday').notNull(),
+    /** Health override ratios (Story 6.5). Both num+den null = no override for that key. */
+    ratioGreenNum: bigint('ratio_green_num', { mode: 'bigint' }),
+    ratioGreenDen: bigint('ratio_green_den', { mode: 'bigint' }),
+    ratioAmberNum: bigint('ratio_amber_num', { mode: 'bigint' }),
+    ratioAmberDen: bigint('ratio_amber_den', { mode: 'bigint' }),
+    tcpiRedNum: bigint('tcpi_red_num', { mode: 'bigint' }),
+    tcpiRedDen: bigint('tcpi_red_den', { mode: 'bigint' }),
+    unplannedGreenBelowNum: bigint('unplanned_green_below_num', { mode: 'bigint' }),
+    unplannedGreenBelowDen: bigint('unplanned_green_below_den', { mode: 'bigint' }),
+    unplannedAmberMaxNum: bigint('unplanned_amber_max_num', { mode: 'bigint' }),
+    unplannedAmberMaxDen: bigint('unplanned_amber_max_den', { mode: 'bigint' }),
     actor: text('actor').notNull(),
     at: timestamp('at', { withTimezone: true }).notNull(),
   },
@@ -326,6 +339,90 @@ export const projectSettingEvent = pgTable(
       columns: [t.tenantId, t.projectId],
       foreignColumns: [project.tenantId, project.id],
     }),
+    ratioGreenPair: check(
+      'project_setting_event_ratio_green_pair',
+      sql`(${t.ratioGreenNum} IS NULL) = (${t.ratioGreenDen} IS NULL)`,
+    ),
+    ratioAmberPair: check(
+      'project_setting_event_ratio_amber_pair',
+      sql`(${t.ratioAmberNum} IS NULL) = (${t.ratioAmberDen} IS NULL)`,
+    ),
+    tcpiRedPair: check(
+      'project_setting_event_tcpi_red_pair',
+      sql`(${t.tcpiRedNum} IS NULL) = (${t.tcpiRedDen} IS NULL)`,
+    ),
+    unplannedGreenPair: check(
+      'project_setting_event_unplanned_green_pair',
+      sql`(${t.unplannedGreenBelowNum} IS NULL) = (${t.unplannedGreenBelowDen} IS NULL)`,
+    ),
+    unplannedAmberPair: check(
+      'project_setting_event_unplanned_amber_pair',
+      sql`(${t.unplannedAmberMaxNum} IS NULL) = (${t.unplannedAmberMaxDen} IS NULL)`,
+    ),
+    ratioGreenDenNz: check(
+      'project_setting_event_ratio_green_den',
+      sql`${t.ratioGreenDen} IS NULL OR ${t.ratioGreenDen} <> 0`,
+    ),
+    ratioAmberDenNz: check(
+      'project_setting_event_ratio_amber_den',
+      sql`${t.ratioAmberDen} IS NULL OR ${t.ratioAmberDen} <> 0`,
+    ),
+    tcpiRedDenNz: check(
+      'project_setting_event_tcpi_red_den',
+      sql`${t.tcpiRedDen} IS NULL OR ${t.tcpiRedDen} <> 0`,
+    ),
+    unplannedGreenDenNz: check(
+      'project_setting_event_unplanned_green_den',
+      sql`${t.unplannedGreenBelowDen} IS NULL OR ${t.unplannedGreenBelowDen} <> 0`,
+    ),
+    unplannedAmberDenNz: check(
+      'project_setting_event_unplanned_amber_den',
+      sql`${t.unplannedAmberMaxDen} IS NULL OR ${t.unplannedAmberMaxDen} <> 0`,
+    ),
+  }),
+);
+
+/**
+ * Story 6.5 / FR-31 / A1: Tenant Health threshold defaults (append-only).
+ * Resolve at `tenant_setting_seq_max`; Project overrides live on `project_setting_event`.
+ */
+export const tenantSettingEvent = pgTable(
+  'tenant_setting_event',
+  {
+    seq: bigint('seq', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+    tenantId: text('tenant_id').notNull(),
+    ratioGreenNum: bigint('ratio_green_num', { mode: 'bigint' }).notNull(),
+    ratioGreenDen: bigint('ratio_green_den', { mode: 'bigint' }).notNull(),
+    ratioAmberNum: bigint('ratio_amber_num', { mode: 'bigint' }).notNull(),
+    ratioAmberDen: bigint('ratio_amber_den', { mode: 'bigint' }).notNull(),
+    tcpiRedNum: bigint('tcpi_red_num', { mode: 'bigint' }).notNull(),
+    tcpiRedDen: bigint('tcpi_red_den', { mode: 'bigint' }).notNull(),
+    unplannedGreenBelowNum: bigint('unplanned_green_below_num', { mode: 'bigint' }).notNull(),
+    unplannedGreenBelowDen: bigint('unplanned_green_below_den', { mode: 'bigint' }).notNull(),
+    unplannedAmberMaxNum: bigint('unplanned_amber_max_num', { mode: 'bigint' }).notNull(),
+    unplannedAmberMaxDen: bigint('unplanned_amber_max_den', { mode: 'bigint' }).notNull(),
+    actor: text('actor').notNull(),
+    at: timestamp('at', { withTimezone: true }).notNull(),
+  },
+  (t) => ({
+    tenantKey: unique('tenant_setting_event_tenant_seq_key').on(t.tenantId, t.seq),
+    byTenant: index('tenant_setting_event_tenant_idx').on(t.tenantId, t.seq),
+    tenant: foreignKey({
+      name: 'tenant_setting_event_tenant_fk',
+      columns: [t.tenantId],
+      foreignColumns: [tenant.id],
+    }),
+    ratioGreenDenNz: check('tenant_setting_event_ratio_green_den', sql`${t.ratioGreenDen} <> 0`),
+    ratioAmberDenNz: check('tenant_setting_event_ratio_amber_den', sql`${t.ratioAmberDen} <> 0`),
+    tcpiRedDenNz: check('tenant_setting_event_tcpi_red_den', sql`${t.tcpiRedDen} <> 0`),
+    unplannedGreenDenNz: check(
+      'tenant_setting_event_unplanned_green_den',
+      sql`${t.unplannedGreenBelowDen} <> 0`,
+    ),
+    unplannedAmberDenNz: check(
+      'tenant_setting_event_unplanned_amber_den',
+      sql`${t.unplannedAmberMaxDen} <> 0`,
+    ),
   }),
 );
 
@@ -1602,6 +1699,7 @@ export const schemaTables = {
   identityEvent,
   project,
   projectSettingEvent,
+  tenantSettingEvent,
   resource,
   rateEntry,
   projectDefaultRateEntry,

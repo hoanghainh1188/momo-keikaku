@@ -46,7 +46,7 @@ CREATE POLICY "maintenance_bypass" ON public."project"
   USING (true)
   WITH CHECK (true);
 
--- project_setting_event (append-only): Project tz / teirei history (story 5.5 / FR-25). Period placement reads the head; editing history would move ledger entries across Reporting Periods.
+-- project_setting_event (append-only): Project tz / teirei history (story 5.5 / FR-25) and Health threshold overrides (story 6.5 / FR-31). Period placement and Health resolve read the head ≤ pin; rewriting history would move Periods or colours.
 ALTER TABLE public."project_setting_event" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public."project_setting_event" FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "tenant_isolation" ON public."project_setting_event";
@@ -56,6 +56,20 @@ CREATE POLICY "tenant_isolation" ON public."project_setting_event"
   WITH CHECK ("tenant_id" = NULLIF(current_setting('app.tenant_id', true), ''));
 DROP POLICY IF EXISTS "maintenance_bypass" ON public."project_setting_event";
 CREATE POLICY "maintenance_bypass" ON public."project_setting_event"
+  FOR ALL TO "momo_maintenance"
+  USING (true)
+  WITH CHECK (true);
+
+-- tenant_setting_event (append-only): Tenant Health threshold defaults (story 6.5 / FR-31 / A1). Resolve at tenant_setting_seq_max; Project overrides live on project_setting_event. Append-only so a past Review pin stays reproducible.
+ALTER TABLE public."tenant_setting_event" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public."tenant_setting_event" FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "tenant_isolation" ON public."tenant_setting_event";
+CREATE POLICY "tenant_isolation" ON public."tenant_setting_event"
+  FOR ALL
+  USING ("tenant_id" = NULLIF(current_setting('app.tenant_id', true), ''))
+  WITH CHECK ("tenant_id" = NULLIF(current_setting('app.tenant_id', true), ''));
+DROP POLICY IF EXISTS "maintenance_bypass" ON public."tenant_setting_event";
+CREATE POLICY "maintenance_bypass" ON public."tenant_setting_event"
   FOR ALL TO "momo_maintenance"
   USING (true)
   WITH CHECK (true);

@@ -480,7 +480,17 @@
       "schedule": "Schedule",
       "effort_cost": "Effort / Cost",
       "unplanned": "Unplanned Work",
-      "unplanned_work": "Unplanned Work"
+      "unplanned_work": "Unplanned Work",
+      "disclosure_title": "しきい値ルールと駆動値",
+      "threshold_source": "しきい値の出典: {source, select, project {プロジェクト上書き} tenant {テナント既定} other {組み込み既定}}",
+      "source_project": "プロジェクト上書き",
+      "source_tenant": "テナント既定",
+      "source_default": "組み込み既定",
+      "cumulative_beside": "累計 {share}",
+      "float_relative": "フロートは計算完了日基準のため、負のフロート規則は発火しません",
+      "mfo_worst": "未達の must-finish-on: {name}（{days} 稼働日遅れ）",
+      "derived_slip": "導出マイルストーンのベースライン遅延",
+      "calendar_slip": "カレンダー上のマイルストーン遅延（ベースライン日経過・未完了）"
     },
     "componentSource": {
       "unmapped": "Tickets in the Connector's scope with no Mapping to a Work Package.",

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FORMULA_VERSION, LEGACY_FORMULA_VERSION } from './evm';
+import { FORMULA_VERSION, LEGACY_FORMULA_VERSION, PRIOR_FORMULA_VERSION } from './evm';
 import {
   computeAt,
   formulaAt,
@@ -41,11 +41,18 @@ const minimalInput: ReviewInput = {
 };
 
 describe('formulaVersion registry (AD-10)', () => {
-  it('registers the current and legacy EVM formula keys as executable', () => {
+  it('registers the current, prior, and legacy EVM formula keys as executable', () => {
     expect(registeredFormulaVersions()).toContain(FORMULA_VERSION);
+    expect(registeredFormulaVersions()).toContain(PRIOR_FORMULA_VERSION);
     expect(registeredFormulaVersions()).toContain(LEGACY_FORMULA_VERSION);
     expect(formulaAt(FORMULA_VERSION)(minimalInput).formulaVersion).toBe(FORMULA_VERSION);
     expect(computeAt(FORMULA_VERSION, minimalInput).formulaVersion).toBe(FORMULA_VERSION);
+    expect(
+      computeAt(PRIOR_FORMULA_VERSION, {
+        ...minimalInput,
+        formulaVersion: PRIOR_FORMULA_VERSION,
+      }).formulaVersion,
+    ).toBe(PRIOR_FORMULA_VERSION);
     expect(
       computeAt(LEGACY_FORMULA_VERSION, {
         ...minimalInput,

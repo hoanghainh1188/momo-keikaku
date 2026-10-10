@@ -43,8 +43,13 @@ import {
  */
 /** Story 6.1 golden key — half-even PV; kept executable after the 6.2 largest-remainder bump. */
 export const LEGACY_FORMULA_VERSION = 'evm-2026-09-20';
-/** Current EVM formula key (story 6.2: largest-remainder PV + EV-fall). */
-export const FORMULA_VERSION = 'evm-2026-10-10';
+/**
+ * Story 6.2 / 6.4 key — largest-remainder PV + EV-fall + Observed-vs-Recorded inputs.
+ * Kept executable after the 6.5 Health resolve / Schedule-rule bump (Q3-A).
+ */
+export const PRIOR_FORMULA_VERSION = 'evm-2026-10-10';
+/** Current formula key (story 6.5: Health resolve + Schedule Float/MFO/derived-slip in Review). */
+export const FORMULA_VERSION = 'evm-2026-10-11';
 
 /** Anonymous resource bucket when a WP has no `assignedResourceIds` (day-only LR). */
 const ANONYMOUS_RESOURCE_ID = '';

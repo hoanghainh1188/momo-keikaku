@@ -6,12 +6,16 @@ import {
   DEFAULT_THRESHOLDS,
   FORMULA_VERSION,
   mappingHead,
+  parseStoredInputs,
+  parseStoredOutputs,
   periodOf,
   projectDate,
   selectLedgerForPin,
   trackerAccountIdsFromLinkHeads,
   type BaselineVersion,
   type DispositionEvent,
+  type HealthThresholdOverride,
+  type HealthThresholds,
   type LedgerEntry,
   type MappingEvent,
   type MappingRule,
@@ -569,6 +573,16 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
       seq: s.projectSettingEvent.seq,
       tzOffsetMinutes: s.projectSettingEvent.tzOffsetMinutes,
       teireiWeekday: s.projectSettingEvent.teireiWeekday,
+      ratioGreenNum: s.projectSettingEvent.ratioGreenNum,
+      ratioGreenDen: s.projectSettingEvent.ratioGreenDen,
+      ratioAmberNum: s.projectSettingEvent.ratioAmberNum,
+      ratioAmberDen: s.projectSettingEvent.ratioAmberDen,
+      tcpiRedNum: s.projectSettingEvent.tcpiRedNum,
+      tcpiRedDen: s.projectSettingEvent.tcpiRedDen,
+      unplannedGreenBelowNum: s.projectSettingEvent.unplannedGreenBelowNum,
+      unplannedGreenBelowDen: s.projectSettingEvent.unplannedGreenBelowDen,
+      unplannedAmberMaxNum: s.projectSettingEvent.unplannedAmberMaxNum,
+      unplannedAmberMaxDen: s.projectSettingEvent.unplannedAmberMaxDen,
     })
     .from(s.projectSettingEvent)
     .where(eq(s.projectSettingEvent.projectId, projectId))
@@ -577,6 +591,33 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
   const settingSeqMax = settingHead ? Number(settingHead.seq) : null;
   const tzOffsetMinutes = settingHead?.tzOffsetMinutes ?? p.tzOffsetMinutes;
   const teireiWeekday = settingHead?.teireiWeekday ?? p.teireiWeekday;
+  const projectHealthOverride = settingHead
+    ? healthOverrideFromSettingRow(settingHead)
+    : null;
+
+  // Story 6.5: Tenant Health defaults at head (pin ceiling = max seq for this Tenant).
+  const [tenantSettingHead] = await tx
+    .select({
+      seq: s.tenantSettingEvent.seq,
+      ratioGreenNum: s.tenantSettingEvent.ratioGreenNum,
+      ratioGreenDen: s.tenantSettingEvent.ratioGreenDen,
+      ratioAmberNum: s.tenantSettingEvent.ratioAmberNum,
+      ratioAmberDen: s.tenantSettingEvent.ratioAmberDen,
+      tcpiRedNum: s.tenantSettingEvent.tcpiRedNum,
+      tcpiRedDen: s.tenantSettingEvent.tcpiRedDen,
+      unplannedGreenBelowNum: s.tenantSettingEvent.unplannedGreenBelowNum,
+      unplannedGreenBelowDen: s.tenantSettingEvent.unplannedGreenBelowDen,
+      unplannedAmberMaxNum: s.tenantSettingEvent.unplannedAmberMaxNum,
+      unplannedAmberMaxDen: s.tenantSettingEvent.unplannedAmberMaxDen,
+    })
+    .from(s.tenantSettingEvent)
+    .where(eq(s.tenantSettingEvent.tenantId, p.tenantId))
+    .orderBy(desc(s.tenantSettingEvent.seq))
+    .limit(1);
+  const tenantSettingSeqMax = tenantSettingHead ? Number(tenantSettingHead.seq) : null;
+  const tenantHealthThresholds = tenantSettingHead
+    ? healthThresholdsFromRow(tenantSettingHead)
+    : null;
 
   const project: ProjectConfig = {
     id: p.id,
@@ -587,6 +628,7 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
     teireiWeekday,
     defaultRateYenPerHour: BigInt(p.defaultRateJpy),
     eacMethod: 'typical',
+    // Live cache stays DEFAULT until a settings editor exists; resolve uses pin heads.
     thresholds: DEFAULT_THRESHOLDS,
   };
 
@@ -658,12 +700,40 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
   const calendarSeqMax = calendarVersion;
 
   const [scheduleHead] = await tx
-    .select({ seq: s.scheduleRun.seq })
+    .select({
+      seq: s.scheduleRun.seq,
+      inputs: s.scheduleRun.inputs,
+      outputs: s.scheduleRun.outputs,
+    })
     .from(s.scheduleRun)
     .where(eq(s.scheduleRun.projectId, projectId))
     .orderBy(desc(s.scheduleRun.seq))
     .limit(1);
   const scheduleRunSeq = scheduleHead ? Number(scheduleHead.seq) : null;
+  let scheduleHealth: ReviewInput['scheduleHealth'] = null;
+  if (scheduleHead?.outputs != null && scheduleHead.inputs != null) {
+    try {
+      const storedIn = parseStoredInputs(scheduleHead.inputs);
+      const storedOut = parseStoredOutputs(scheduleHead.outputs);
+      const orderedWpIds = storedIn.wps.map((w) => w.id);
+      scheduleHealth = {
+        anchor: storedOut.anchor,
+        wps: storedOut.wps.map((row, index) => ({
+          wpId: orderedWpIds[index]!,
+          floatDays: row.floatDays,
+          earlyFinish: row.earlyFinish,
+        })),
+        violations: storedOut.violations.map((v) => ({
+          wpId: orderedWpIds[v.wpId]!,
+          constraintType: v.constraintType,
+          daysLate: v.daysLate,
+        })),
+      };
+    } catch {
+      // Malformed or dropped outputs: Schedule Health extras stay silent.
+      scheduleHealth = null;
+    }
+  }
 
   let connectorScopeSeqMax: number | null = null;
   if (projectConnectorIds.length > 0) {
@@ -764,7 +834,10 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
     durationDaysByWp,
     dispositionSeqMax,
     settingSeqMax,
-    tenantSettingSeqMax: null,
+    tenantSettingSeqMax,
+    tenantHealthThresholds,
+    projectHealthOverride,
+    scheduleHealth,
     wpStatusSeqMax,
     calendarSeqMax,
     connectorScopeSeqMax,
@@ -926,4 +999,52 @@ export async function loadReview(
 ): Promise<{ bundle: ProjectBundle; review: ReviewResult }> {
   const bundle = await loadProjectBundle(db, tenantId, projectId);
   return { bundle, review: computeReview(bundle.input) };
+}
+
+type RatioPairRow = {
+  ratioGreenNum: bigint | null;
+  ratioGreenDen: bigint | null;
+  ratioAmberNum: bigint | null;
+  ratioAmberDen: bigint | null;
+  tcpiRedNum: bigint | null;
+  tcpiRedDen: bigint | null;
+  unplannedGreenBelowNum: bigint | null;
+  unplannedGreenBelowDen: bigint | null;
+  unplannedAmberMaxNum: bigint | null;
+  unplannedAmberMaxDen: bigint | null;
+};
+
+function pairRatio(num: bigint | null, den: bigint | null): { num: bigint; den: bigint } | null {
+  if (num === null || den === null || den === 0n) return null;
+  return { num, den };
+}
+
+/** Tenant head → full HealthThresholds (all columns NOT NULL). */
+function healthThresholdsFromRow(row: RatioPairRow): HealthThresholds {
+  return {
+    ratioGreen: pairRatio(row.ratioGreenNum, row.ratioGreenDen) ?? DEFAULT_THRESHOLDS.ratioGreen,
+    ratioAmber: pairRatio(row.ratioAmberNum, row.ratioAmberDen) ?? DEFAULT_THRESHOLDS.ratioAmber,
+    tcpiRed: pairRatio(row.tcpiRedNum, row.tcpiRedDen) ?? DEFAULT_THRESHOLDS.tcpiRed,
+    unplannedGreenBelow:
+      pairRatio(row.unplannedGreenBelowNum, row.unplannedGreenBelowDen) ??
+      DEFAULT_THRESHOLDS.unplannedGreenBelow,
+    unplannedAmberMax:
+      pairRatio(row.unplannedAmberMaxNum, row.unplannedAmberMaxDen) ??
+      DEFAULT_THRESHOLDS.unplannedAmberMax,
+  };
+}
+
+/** Project setting head → sparse override (null pairs omitted). */
+function healthOverrideFromSettingRow(row: RatioPairRow): HealthThresholdOverride | null {
+  const override: HealthThresholdOverride = {
+    ratioGreen: pairRatio(row.ratioGreenNum, row.ratioGreenDen) ?? undefined,
+    ratioAmber: pairRatio(row.ratioAmberNum, row.ratioAmberDen) ?? undefined,
+    tcpiRed: pairRatio(row.tcpiRedNum, row.tcpiRedDen) ?? undefined,
+    unplannedGreenBelow:
+      pairRatio(row.unplannedGreenBelowNum, row.unplannedGreenBelowDen) ?? undefined,
+    unplannedAmberMax:
+      pairRatio(row.unplannedAmberMaxNum, row.unplannedAmberMaxDen) ?? undefined,
+  };
+  const any = Object.values(override).some((v) => v != null);
+  return any ? override : null;
 }

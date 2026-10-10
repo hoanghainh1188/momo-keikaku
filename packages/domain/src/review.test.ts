@@ -240,6 +240,56 @@ describe('computeReview with no Baseline (story 2.2, decision Q1-A)', () => {
       'Unavailable — no Baseline yet',
       'Unavailable — no Baseline yet',
     ]);
+    expect(r.health.resolvedThresholds.source).toBe('default');
+  });
+
+  it('stamps Tenant-resolved thresholds and fires Schedule Float/MFO/derived-slip from scheduleHealth', () => {
+    const r = computeReview({
+      ...input,
+      tenantHealthThresholds: DEFAULT_THRESHOLDS,
+      projectHealthOverride: { ratioGreen: { num: 99n, den: 100n } },
+      scheduleHealth: {
+        anchor: { kind: 'project_finish', date: '2026-12-01' },
+        wps: [
+          { wpId: 'WP-B', floatDays: -2, earlyFinish: '2026-12-15' },
+          { wpId: 'WP-M', floatDays: -2, earlyFinish: '2026-07-01' },
+        ],
+        violations: [
+          { wpId: 'WP-M', constraintType: 'must_finish_on', daysLate: 5 },
+        ],
+      },
+      wps: [
+        wp,
+        {
+          ...wp,
+          id: 'WP-M',
+          wbsCode: '2.0',
+          name: 'Gate',
+          isMilestone: true,
+          plannedMh: 0n,
+        },
+      ],
+      baselineVersions: [
+        {
+          ...input.baselineVersions[0]!,
+          wps: [
+            ...input.baselineVersions[0]!.wps,
+            {
+              wpId: 'WP-M',
+              start: '2026-06-01',
+              finish: '2026-06-15',
+              baselineMh: 0n,
+              isMilestone: true,
+              isCatchAll: false,
+            },
+          ],
+        },
+      ],
+    });
+    expect(r.health.resolvedThresholds.source).toBe('project');
+    expect(r.health.resolvedThresholds.thresholds.ratioGreen).toEqual({ num: 99n, den: 100n });
+    expect(r.health.indicators.find((i) => i.key === 'schedule')!.colour).toBe('red');
+    expect(r.health.overall).toBe('red');
   });
 
   it('still throws for a Baseline seq that names no version — an inconsistent input, not a missing Baseline', () => {

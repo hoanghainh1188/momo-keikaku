@@ -94,24 +94,21 @@ export interface TableEntry {
 }
 
 /**
- * The 41 tables of this release (story 1.3 slice 2 added `program`; story 1.4 slice 1 removed
+ * The 47 tables of this release (story 1.3 slice 2 added `program`; story 1.4 slice 1 removed
  * `app_user` and added the four Better Auth tables and `tenant_membership`; slice 4 added
  * `identity_event`; story 1.6 `project_default_rate_entry`; story 2.1 the five scheduling tables;
  * story 2.10 `pct_override_event` + Custom Field definition/value; story 2.12
  * `calendar_day_event`; story 5.1 `ticket`, `tracker_account`, `fixture_cursor`; story 5.2
  * `connector_scope_event`, `tracker_snapshot_attempt`; story 5.5 `project_setting_event`;
- * story 5.6 `connector_ownership_event`, `connector_overlap`; story 5.9 `mapping_head`),
+ * story 5.6 `connector_ownership_event`, `connector_overlap`; story 5.9 `mapping_head`;
+ * story 6.5 `tenant_setting_event`),
  * in DEPENDENCY ORDER: every table comes after each table its foreign keys reference, so this order
  * is an insert order and its reverse is a delete order (`probe-tenants.ts` deletes by it). Story
  * 2.1's composite foreign keys made that load-bearing: `schedule_run` before `baseline_version`,
  * `mapping_rule` before `mapping_event`.
  *
- * Nineteen are insert-only and are classed `append-only` accordingly:
- * rate_entry, project_default_rate_entry, wp_status_event, pct_override_event,
- * calendar_day_event, holiday_calendar_version, schedule_run, baseline_version, baseline_wp,
- * project_setting_event, connector_scope_event, tracker_snapshot_attempt, tracker_snapshot,
- * ticket_observation, connector_ownership_event, actuals_ledger_entry, mapping_event,
- * disposition_event, audit_log.
+ * Twenty-four are insert-only and are classed `append-only` accordingly (incl. story 6.5
+ * `tenant_setting_event`; Health overrides expand `project_setting_event` columns only).
  */
 export const TABLE_REGISTRY: readonly TableEntry[] = [
   {
@@ -190,8 +187,16 @@ export const TABLE_REGISTRY: readonly TableEntry[] = [
     class: 'append-only',
     tenantColumn: 'tenant_id',
     why:
-      'Project tz / teirei history (story 5.5 / FR-25). Period placement reads the head; ' +
-      'editing history would move ledger entries across Reporting Periods.',
+      'Project tz / teirei history (story 5.5 / FR-25) and Health threshold overrides (story 6.5 / FR-31). ' +
+      'Period placement and Health resolve read the head ≤ pin; rewriting history would move Periods or colours.',
+  },
+  {
+    table: 'tenant_setting_event',
+    class: 'append-only',
+    tenantColumn: 'tenant_id',
+    why:
+      'Tenant Health threshold defaults (story 6.5 / FR-31 / A1). Resolve at tenant_setting_seq_max; ' +
+      'Project overrides live on project_setting_event. Append-only so a past Review pin stays reproducible.',
   },
   {
     table: 'resource',

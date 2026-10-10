@@ -209,17 +209,28 @@ export default async function ReviewPage({
         >
           <div style={{ marginBottom: 16 }} data-testid="overall-status">
             <span className="label">{t('clientView.overall')}</span>{' '}
-            <HealthBadge colour={overall} label={overall} />
+            <HealthBadge colour={overall} word={overall} label={overall} />
             {r.health.overallNote ? (
               <span className="caption"> · {r.health.overallNote}</span>
             ) : null}
+            <span className="caption" data-testid="health-threshold-source">
+              {' '}
+              · {t('review.health.threshold_source', { source: r.health.resolvedThresholds.source })}
+            </span>
           </div>
           <div className="health-row">
             {r.health.indicators.map((i) => (
               <div className="health" key={i.key} data-testid={`health-${i.key}`}>
                 <div className="label">{t(`review.health.${i.key}`)}</div>
                 <div style={{ margin: '6px 0 4px' }}>
-                  <HealthBadge colour={i.colour} label={`${i.colour} · ${i.driver}`} />
+                  <HealthBadge
+                    colour={i.colour}
+                    word={i.colour}
+                    label={`${i.colour} · ${i.driver}`}
+                    disclosure={i.disclosure}
+                    disclosureTitle={t('review.health.disclosure_title')}
+                    closeLabel={t('review.metric_formula.close')}
+                  />
                 </div>
                 <div className="caption">{i.rule}</div>
               </div>

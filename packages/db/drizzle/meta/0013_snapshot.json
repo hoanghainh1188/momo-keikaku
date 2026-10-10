@@ -5306,7 +5306,8 @@
             "maxValue": "9223372036854775807",
             "startWith": "1",
             "cache": "1",
-            "cycle": false
+            "cycle": false,
+            "schema": "public"
           }
         },
         "tenant_id": {
