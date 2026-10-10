@@ -229,11 +229,15 @@ export interface ReviewInput {
    */
   projectHealthOverride?: HealthThresholdOverride | null;
   /**
-   * Pinned `schedule_run.outputs` subset for Schedule Health (Float / MFO / derived slip).
-   * Absent/null → those rules stay silent (SPI + calendar Milestone slip still apply).
+   * Pinned `schedule_run.outputs` subset for Schedule Health (Float / MFO / derived slip)
+   * and Forecast computed finish (FR-32 / Story 6.6).
+   * Absent/null → those rules stay silent (SPI + calendar Milestone slip still apply);
+   * computed finish stays null.
    */
   scheduleHealth?: {
     readonly anchor: ScheduleAnchor | null;
+    /** FR-6b / `ScheduleOutputs.computedFinish` — never Project finish or Float anchor alone. */
+    readonly computedFinish?: IsoDate | null;
     readonly wps: readonly {
       readonly wpId: string;
       readonly floatDays: number | null;
@@ -244,6 +248,12 @@ export interface ReviewInput {
       'wpId' | 'constraintType' | 'daysLate'
     >[];
   } | null;
+  /**
+   * Project start from the active Baseline's pinned `schedule_run.inputs.projectStart` (FR-32).
+   * Null/absent → `computeForecast` falls back to the earliest Baseline WP start.
+   * Distinct from live `projectStart` (SM-5).
+   */
+  baselineProjectStart?: IsoDate | null;
   /** Pin ceiling for `wp_status_event` (actual dates / Milestone done). */
   wpStatusSeqMax?: number | null;
   /**
@@ -660,7 +670,10 @@ export function computeReview(input: ReviewInput): ReviewResult {
   const forecast =
     baseline === null || evm === null
       ? null
-      : computeForecast(evm, baseline, input.asOf, input.calendar);
+      : computeForecast(evm, baseline, input.asOf, input.calendar, {
+          computedFinish: input.scheduleHealth?.computedFinish ?? null,
+          baselineProjectStart: input.baselineProjectStart ?? null,
+        });
 
   // --- FR-28 / Story 5.13: every in-scope Ticket is mapped or listed unmapped
   // (null/absent/orphan head, including 0h). Left-scope stays out of this census.

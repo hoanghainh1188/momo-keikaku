@@ -51,6 +51,8 @@ const REACHABLE_FROM_PIN = new Set([
   'IsoDate',
   'HolidayCalendar',
   'CalendarVersion',
+  // Story 6.6: computed finish + Baseline-pinned Project start are pin-derived (schedule_run).
+  'ComputeForecastOptions',
 ]);
 
 /**

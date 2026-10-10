@@ -745,10 +745,41 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
           daysLate: v.daysLate,
         });
       }
-      scheduleHealth = { anchor: storedOut.anchor, wps, violations };
+      scheduleHealth = {
+        anchor: storedOut.anchor,
+        computedFinish: storedOut.computedFinish,
+        wps,
+        violations,
+      };
     } catch {
-      // Malformed, dropped, or corrupt index remaps: Schedule Health extras stay silent.
+      // Malformed, dropped, or corrupt index remaps: Schedule Health extras stay silent
+      // (computed finish follows the same silent-null path — Story 6.6).
       scheduleHealth = null;
+    }
+  }
+
+  // Story 6.6 / FR-32: Baseline-pinned Project start for the trend finish (not live project_start).
+  let baselineProjectStart: string | null = null;
+  if (activeBaselineSeq !== null) {
+    const activeBv = bvRows.find((b) => Number(b.seq) === activeBaselineSeq);
+    if (activeBv) {
+      const [baselineRun] = await tx
+        .select({ inputs: s.scheduleRun.inputs })
+        .from(s.scheduleRun)
+        .where(
+          and(
+            eq(s.scheduleRun.projectId, projectId),
+            eq(s.scheduleRun.seq, activeBv.scheduleRunSeq),
+          ),
+        )
+        .limit(1);
+      if (baselineRun?.inputs != null) {
+        try {
+          baselineProjectStart = parseStoredInputs(baselineRun.inputs).projectStart;
+        } catch {
+          baselineProjectStart = null;
+        }
+      }
     }
   }
 
@@ -855,6 +886,7 @@ async function loadBundleInTenant(tx: Tx, projectId: string): Promise<ProjectBun
     tenantHealthThresholds,
     projectHealthOverride,
     scheduleHealth,
+    baselineProjectStart,
     wpStatusSeqMax,
     calendarSeqMax,
     connectorScopeSeqMax,
