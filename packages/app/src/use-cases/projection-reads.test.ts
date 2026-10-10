@@ -258,7 +258,7 @@ describe('getProjectMapping', () => {
     expect(page1.tickets).toHaveLength(5);
   });
 
-  it('sets inCatchAllOverflow only for Tickets with coverage overflowMhByTicket > 0', async () => {
+  it('sets inCatchAllOverflow from Coverage membership even when attribution disagrees', async () => {
     const review = {
       bundle: {
         ...REVIEW.bundle,
@@ -279,7 +279,8 @@ describe('getProjectMapping', () => {
       },
       review: {
         ...REVIEW.review,
-        // Review attribution may still disagree (OB path); Mapping filter uses Coverage pass.
+        // Membership disagree: attribution marks t-3 only; Coverage marks t-4 only.
+        // Mapping must follow Coverage — reverting to attribution.overflowMhByTicket fails here.
         attribution: {
           ...REVIEW.review.attribution,
           cumulative: { totalMh: 99_000n, catchAllOverflowMh: 50_800n },
@@ -292,10 +293,9 @@ describe('getProjectMapping', () => {
           ...REVIEW.review.coverage,
           perConnector: {
             ...PER_CONNECTOR,
-            // Only t-3 has positive overflow on the Coverage (ledgerNoOb) pass.
             overflowMhByTicket: new Map<string, bigint>([
-              ['t-3', 3_000n],
-              ['t-4', 0n],
+              ['t-3', 0n],
+              ['t-4', 3_000n],
             ]),
           },
         },
@@ -305,8 +305,8 @@ describe('getProjectMapping', () => {
     const result = await getProjectMapping(deps, ctxOf('ten-a'), { projectId: 'prj-1' });
     if (!result.ok) throw new Error(`answered ${result.error.code}`);
     const byId = new Map(result.value.allTickets.map((t) => [t.trackerIssueId, t]));
-    expect(byId.get('t-3')?.inCatchAllOverflow).toBe(true);
-    expect(byId.get('t-4')?.inCatchAllOverflow).toBe(false);
+    expect(byId.get('t-3')?.inCatchAllOverflow).toBe(false);
+    expect(byId.get('t-4')?.inCatchAllOverflow).toBe(true);
     expect(byId.get('t-1')?.inCatchAllOverflow).toBe(false);
   });
 

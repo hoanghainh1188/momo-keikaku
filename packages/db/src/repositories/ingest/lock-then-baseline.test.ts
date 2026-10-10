@@ -1,8 +1,9 @@
 /**
- * Epic-5-retro F4 regression: lock-then-baseline order and the holdsWatermark guard.
+ * Epic-5-retro F4 regression: lock-then-baseline order and the Project-key guard.
  * Pure — no Postgres. A REQUIRE_DB write path still exercises the live lock.
  */
 import { describe, expect, it } from 'vitest';
+import { stubExclusiveWatermark } from '../../watermark-lock';
 import type { Tx } from '../../with-tenant';
 import {
   assertBaselineHeadUnderProjectLock,
@@ -43,10 +44,32 @@ describe('lockThenReadBaselineHead (epic-5-retro F4)', () => {
 });
 
 describe('assertBaselineHeadUnderProjectLock (epic-5-retro F4)', () => {
-  it('refuses a transaction that does not hold the Project watermark', () => {
+  it('refuses a transaction that does not hold any watermark', () => {
     const fakeTx = {} as Tx;
-    expect(() => assertBaselineHeadUnderProjectLock(fakeTx)).toThrow(
-      /without Project watermark lock/,
+    expect(() => assertBaselineHeadUnderProjectLock(fakeTx, 'prj-1')).toThrow(
+      /project:prj-1/,
     );
+  });
+
+  it('refuses Tenant-only exclusive (not project:<projectId>)', () => {
+    const fakeTx = {} as Tx;
+    stubExclusiveWatermark(fakeTx, 'tenant');
+    expect(() => assertBaselineHeadUnderProjectLock(fakeTx, 'prj-1')).toThrow(
+      /project:prj-1/,
+    );
+  });
+
+  it('refuses exclusive on a different Project id', () => {
+    const fakeTx = {} as Tx;
+    stubExclusiveWatermark(fakeTx, 'project:prj-other');
+    expect(() => assertBaselineHeadUnderProjectLock(fakeTx, 'prj-1')).toThrow(
+      /project:prj-1/,
+    );
+  });
+
+  it('allows exclusive on project:<projectId>', () => {
+    const fakeTx = {} as Tx;
+    stubExclusiveWatermark(fakeTx, 'project:prj-1');
+    expect(() => assertBaselineHeadUnderProjectLock(fakeTx, 'prj-1')).not.toThrow();
   });
 });

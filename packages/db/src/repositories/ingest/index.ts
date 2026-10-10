@@ -28,18 +28,19 @@ import {
 import type { Bound } from '../../bound';
 import { appendRuleMappingEvents, loadLiveMappingRules } from '../../repo-mapping-rules';
 import * as s from '../../schema';
-import { holdsWatermark, lockWatermark } from '../../watermark-lock';
+import { holdsProjectWatermark, lockWatermark } from '../../watermark-lock';
 import type { Tx } from '../../with-tenant';
 import { trackerRepositoryOn, type TrackerKind } from '../tracker';
 
 /**
- * Epic-5-retro F4: Baseline head must be read only under the Project watermark.
+ * Epic-5-retro F4: Baseline head must be read only under the Project watermark
+ * for this `projectId` (`project:<projectId>` exclusive) — not any exclusive key.
  * Exported so a unit test can prove the guard without Postgres.
  */
-export function assertBaselineHeadUnderProjectLock(tx: Tx): void {
-  if (!holdsWatermark(tx)) {
+export function assertBaselineHeadUnderProjectLock(tx: Tx, projectId: string): void {
+  if (!holdsProjectWatermark(tx, projectId)) {
     throw new Error(
-      'Baseline head refuses to read without Project watermark lock (epic-5-retro F4)',
+      `Baseline head refuses to read without Project watermark lock project:${projectId} (epic-5-retro F4)`,
     );
   }
 }
@@ -110,7 +111,7 @@ export function ingestWriteRepositoryOn(bound: Bound) {
   const tracker = trackerRepositoryOn(bound);
 
   async function latestBaselineVersionSeq(projectId: string): Promise<number | null> {
-    assertBaselineHeadUnderProjectLock(tx);
+    assertBaselineHeadUnderProjectLock(tx, projectId);
     const [row] = await tx
       .select({ seq: s.baselineVersion.seq })
       .from(s.baselineVersion)

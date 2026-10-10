@@ -127,3 +127,20 @@ export function holdsWatermark(tx: Tx): boolean {
   const keys = held.get(tx);
   return keys !== undefined && [...keys.values()].includes('exclusive');
 }
+
+/**
+ * Whether this transaction holds EXCLUSIVE on `project:<projectId>` specifically
+ * (epic-5-retro F4 residual — Baseline head must not accept a Tenant-only exclusive).
+ */
+export function holdsProjectWatermark(tx: Tx, projectId: string): boolean {
+  return held.get(tx)?.get(`project:${projectId}`) === 'exclusive';
+}
+
+/**
+ * Pure-test seam: record exclusive hold on `label` without Postgres.
+ * Production writers must call `lockWatermark`.
+ */
+export function stubExclusiveWatermark(tx: Tx, label: string): void {
+  const prev = held.get(tx) ?? new Map<string, LockMode>();
+  held.set(tx, new Map([...prev, [label, 'exclusive']]));
+}
