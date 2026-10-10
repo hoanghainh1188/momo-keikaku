@@ -372,11 +372,18 @@ export default async function ReviewPage({
               </tr>
             </tbody>
           </table>
-          <p className="caption" style={{ marginTop: 8 }}>
-            {t('review.unplanned.mapping_coverage', {
-              hourShare: share(r.coverage.mappedHourShare),
-              ticketShare: share(r.coverage.mappedTicketShare),
-            })}
+          <p className="caption" style={{ marginTop: 8 }} data-testid="review-mapping-coverage">
+            {r.coverage.mappedHourShare.kind === 'unavailable'
+              ? t('review.unplanned.mapping_coverage_hour_unavailable', {
+                  hourReason: t(
+                    `mapping.ledger.unavailable.${r.coverage.mappedHourShare.reasonCode}` as 'mapping.ledger.unavailable.tracker_provides_no_hours',
+                  ),
+                  ticketShare: share(r.coverage.mappedTicketShare),
+                })
+              : t('review.unplanned.mapping_coverage', {
+                  hourShare: share(r.coverage.mappedHourShare.value),
+                  ticketShare: share(r.coverage.mappedTicketShare),
+                })}
           </p>
 
           {r.ruleUnmapped.length > 0 && (

@@ -219,7 +219,12 @@ describe('computeReview with no Baseline (story 2.2, decision Q1-A)', () => {
     expect(r.coverage.unmappedTickets).toBe(0);
     expect(r.coverage.mappedTicketShare).toEqual({ num: 1n, den: 1n });
     // Epic-5-retro F6: SM-5-aligned (all hours are mapped non-baselined here).
-    expect(r.coverage.mappedHourShare).toEqual({ num: hoursToMh(30), den: hoursToMh(30) });
+    expect(r.coverage.mappedHourShare).toEqual({
+      kind: 'value',
+      value: { num: hoursToMh(30), den: hoursToMh(30) },
+      unit: 'ratio',
+      coverage: null,
+    });
   });
 
   it('marks all three indicators unavailable, so Overall is never red for want of a Baseline', () => {
@@ -420,6 +425,15 @@ describe('computeReview Ticket-Count Mode Unplanned share', () => {
     expect(r.unplanned.sharePeriod).toEqual({ num: 1n, den: 2n });
     expect(r.unplanned.ticketCountPeriod).toBe(1);
     expect(r.unplanned.period.totalMh).toBe(0n);
+    // Harry D1=B: count-only Coverage hourShare → Review mappedHourShare unavailable, not 0.0%.
+    expect(r.coverage.perConnector.projectTotal.hourShare).toEqual({
+      kind: 'unavailable',
+      reasonCode: 'tracker_provides_no_hours',
+    });
+    expect(r.coverage.mappedHourShare).toEqual({
+      kind: 'unavailable',
+      reasonCode: 'tracker_provides_no_hours',
+    });
   });
 });
 
@@ -606,10 +620,17 @@ describe('computeReview scope honesty (story 5.13 / FR-20)', () => {
     const hourShare = withOb.coverage.perConnector.projectTotal.hourShare;
     expect(hourShare.kind).toBe('value');
     if (hourShare.kind !== 'value') throw new Error('expected value');
-    expect(withOb.coverage.mappedHourShare).toEqual(hourShare.mappedExcludingCatchAll);
     expect(withOb.coverage.mappedHourShare).toEqual({
-      num: hoursToMh(10),
-      den: hoursToMh(10),
+      kind: 'value',
+      value: hourShare.mappedExcludingCatchAll,
+      unit: 'ratio',
+      coverage: null,
+    });
+    expect(withOb.coverage.mappedHourShare).toEqual({
+      kind: 'value',
+      value: { num: hoursToMh(10), den: hoursToMh(10) },
+      unit: 'ratio',
+      coverage: null,
     });
     // Attribution still sees OB in its total — that is why the old ratio drifted from SM-5.
     expect(withOb.attribution.cumulative.totalMh).toBe(hoursToMh(75));

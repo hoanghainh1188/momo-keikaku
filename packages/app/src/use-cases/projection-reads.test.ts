@@ -116,7 +116,12 @@ const REVIEW = {
     scopeLedger: [{ key: 'unmapped', label: 'Unmapped Work', mh: 1n, share: ratio(1n, 1n) }],
     coverage: {
       mappedTicketShare: ratio(2n, 5n),
-      mappedHourShare: ratio(1n, 2n),
+      mappedHourShare: {
+        kind: 'value' as const,
+        value: ratio(1n, 2n),
+        unit: 'ratio' as const,
+        coverage: null,
+      },
       unmappedTickets: 3,
       perConnector: PER_CONNECTOR,
     },

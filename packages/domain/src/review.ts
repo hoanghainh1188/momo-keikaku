@@ -276,11 +276,13 @@ export interface ReviewResult {
    * Project-wide FR-23 figures — Review captions.
    * `mappedHourShare` is Coverage `projectTotal.hourShare.mappedExcludingCatchAll`
    * (epic-5-retro F6): same ledgerNoOb pass as SM-5 — Opening Balances and Catch-all
-   * stay out of the denominator. Story 5.11 adds `perConnector` for Mapping › Coverage.
+   * stay out of the denominator. When Coverage hourShare is `unavailable` (e.g.
+   * count-only / tracker_provides_no_hours), this is `unavailable` too — never
+   * coerced to Ratio ZERO / 0.0% (Harry D1 = B). Story 5.11 adds `perConnector`.
    */
   coverage: {
     mappedTicketShare: Ratio;
-    mappedHourShare: Ratio;
+    mappedHourShare: RatioMetric;
     unmappedTickets: number;
     /** Story 5.11: per-Connector + Project total + SM-5. */
     perConnector: CoverageResult;
@@ -518,12 +520,13 @@ export function computeReview(input: ReviewInput): ReviewResult {
     wpFlagEvents: input.wpFlagEvents,
     wpFlagSeqMax: input.wpFlagSeqMax,
   });
-  // Epic-5-retro F6: same figure as SM-5 / Coverage (ledgerNoOb; OB stripped from den).
+  // Epic-5-retro F6 + Harry D1=B: same figure as SM-5 / Coverage (ledgerNoOb);
+  // propagate `unavailable` — never coerce to Ratio ZERO / 0.0%.
   const coverageHourShare = perConnector.projectTotal.hourShare;
-  const mappedHourShare =
-    coverageHourShare.kind === 'unavailable' || coverageHourShare.totalMh === 0n
-      ? ZERO
-      : coverageHourShare.mappedExcludingCatchAll;
+  const mappedHourShare: RatioMetric =
+    coverageHourShare.kind === 'unavailable'
+      ? unavailable(coverageHourShare.reasonCode)
+      : ratioValue(coverageHourShare.mappedExcludingCatchAll);
   const coverage = {
     mappedTicketShare:
       totalTickets === 0

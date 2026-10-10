@@ -362,11 +362,11 @@ action_items:
   # --- open residual from code review R2 (PR #139 / a4323a6); not new retro findings ---
   - id: "epic-5-retro-item-31-d1-mappedhourshare-when-coverage-hoursha"
     epic: 5
-    action: "DECISION-NEEDED (Harry): Review mappedHourShare when Coverage hourShare
-      is unavailable — keep Ratio+ZERO (may show 0.0%) vs RatioMetric/unavailable
-      caption (open residual from code review R2 D1)"
-    owner: "founder"
-    status: open
+    action: "D1=B (Harry): Review mappedHourShare is RatioMetric — when Coverage
+      hourShare is unavailable, surface unavailable caption (never Ratio ZERO /
+      0.0%); available path still golden 84.1% (open residual from code review R2 D1)"
+    owner: "dev"
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-5-retro-2026-10-09.md"
   - id: "epic-5-retro-item-32-f5-membership-disagree-fence-mapping-ov"
     epic: 5

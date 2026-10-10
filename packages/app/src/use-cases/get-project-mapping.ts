@@ -89,7 +89,7 @@ export interface ProjectMapping {
   readonly openingBalanceMh: Mh;
   /** All attributed hours, cumulative — the Scope Ledger bar's whole. */
   readonly totalMh: Mh;
-  /** Project-wide coverage (`mappedHourShare` excludes Catch-all; SM-5-aligned). */
+  /** Project-wide coverage (`mappedHourShare` RatioMetric; excludes Catch-all; SM-5-aligned). */
   readonly coverage: ReviewResult['coverage'];
   /** Story 5.11: per-Connector + Project total + SM-5. */
   readonly coverageByConnector: CoverageResult;

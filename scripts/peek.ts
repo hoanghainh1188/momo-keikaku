@@ -23,7 +23,16 @@ console.log('unplanned cum', hours(r.unplanned.cumulative.unplannedMh), 'share',
 console.log('components', r.unplanned.components.map(c => `${c.label}=${hours(c.mh)}h`).join(' | '));
 console.log('opening balance', hours(r.openingBalanceMh));
 console.log('period total', hours(r.attribution.period.totalMh), 'cum total', hours(r.attribution.cumulative.totalMh));
-console.log('coverage tickets', share(r.coverage.mappedTicketShare), 'hours', share(r.coverage.mappedHourShare), 'unmapped tickets', r.coverage.unmappedTickets);
+console.log(
+  'coverage tickets',
+  share(r.coverage.mappedTicketShare),
+  'hours',
+  r.coverage.mappedHourShare.kind === 'value'
+    ? share(r.coverage.mappedHourShare.value)
+    : `unavailable(${r.coverage.mappedHourShare.reasonCode})`,
+  'unmapped tickets',
+  r.coverage.unmappedTickets,
+);
 console.log('health', r.health.indicators.map(i => `${i.key}:${i.colour}`).join(' '), '=> overall', r.health.overall);
 console.log('groups', r.unmappedGroups.map(g => `${g.label}(${g.ticketCount},${hours(g.mh)}h)`).join(' '));
 console.log('milestones slipped', r.milestones.filter(m=>m.slipped).map(m=>m.name).join(','));
