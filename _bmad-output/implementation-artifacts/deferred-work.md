@@ -1517,3 +1517,23 @@ above can see where it went.
 - source_spec: `_bmad-output/implementation-artifacts/spec-5-15-the-ticket-half-of-the-load-fixture.md`
   summary: A multi-Connector (or mixed hours/count) Project's Review pins a single snapshot, so the other Connector's Tickets drop out of coverage and may not match the hours-filtered ledger.
   evidence: Pre-existing (the Tenant-wide query also pinned one snapshot); story 5.15 decision 4 only scoped it to the Project. Per-Connector pinning belongs to Epic 6 (epic-5-context Downstream).
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-6-1-every-figure-comes-from-pinned-inputs-and-a-test-proves-it.md`
+  summary: Resolve Review working-day set from pinned `holiday_calendar_version` payload (AD-29) instead of live `project.calendarJp`/`calendarVn` via `buildCalendar`.
+  evidence: Story 6.1 review — Design Note asked for version resolve; capture records `calendarVersion` seq but still builds HolidayCalendar from live flags. Impedance: version `nonWorkingDays` includes weekends while HolidayCalendar treats weekends separately.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-6-1-every-figure-comes-from-pinned-inputs-and-a-test-proves-it.md`
+  summary: Multi-Connector Review ticket observations must come from each Connector's pinned snapshot, not the Project's overall latest snapshot.
+  evidence: Story 6.1 review — ledger filter is per-Connector pin; tickets still from overall latest. Can mix newer tickets with older pinned ledger.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-6-1-every-figure-comes-from-pinned-inputs-and-a-test-proves-it.md`
+  summary: Injectable/runtime probe that shared lock is acquired before snapshot/ledger head reads (beyond source-text fence + exclusive-wait).
+  evidence: Story 6.1 verification-gap review — moving lock to end of `loadBundleInTenant` still passes exclusive-wait if lock eventually runs; source fence catches it but is not runtime order evidence.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-6-1-every-figure-comes-from-pinned-inputs-and-a-test-proves-it.md`
+  summary: Widen formulaVersion golden fixtures to lock a fuller `ReviewResult` shape (PV/EV/AC/ratios), not only attribution milli-hours + basis.
+  evidence: Story 6.1 blind-hunter / low defer — Q1-A corpus exists but assertions are narrow.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-6-1-every-figure-comes-from-pinned-inputs-and-a-test-proves-it.md`
+  summary: Prove pin-by-observedAt vs filter-by-seq cannot invert under backfilled snapshots; refuse cross-wired ledger snapshotId/connectorId pairs.
+  evidence: Story 6.1 edge-case maybe-false findings — need backfill / integrity fixtures to settle (unverified medium).

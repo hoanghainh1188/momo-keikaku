@@ -2,7 +2,7 @@
 title: 'Story 6.1 — Every figure comes from pinned inputs, and a test proves it'
 type: 'feature'
 created: '2026-10-10'
-status: 'in-progress'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: 'e7f12c9d01592f4a93cfc2d92f2be29d2c1d4037'
@@ -93,6 +93,25 @@ context:
 ## Spec Change Log
 
 ## Review Triage Log
+
+- `medium` → patch — VG: greenfield `loadReview` Project C never asserts empty filtered ledger — fixed (assert empty ledger / null ledgerSeqMax / empty pin map).
+- `medium` → patch — VG: golden recompute never calls `assertLedgerSeqMax` — fixed.
+- `medium` → patch — VG: live capture pin watermarks mostly unasserted — fixed (watermark suite asserts pin map size + ledgerSeqMax↔ledger empty).
+- `medium` → patch — VG/ECH/BH: closure allowlist gaps (forecast witness, `recalculateAt`) — fixed; full AST reachability deferred.
+- `medium` → patch — BH/ECH: `computeAt` / corpus `formulaVersion` mismatch — fixed.
+- `medium` → patch — ECH: unknown pin snapshot id silent empty — fixed (throws).
+- `low` → patch — BH: capture fence lock order widened to ledger/basis substrings — fixed.
+- `low` → patch — BH: `calendarSeqMax` JSDoc vs capture — fixed.
+- `medium` → defer — calendar working-day set still from live `calendarJp`/`Vn` while version seq is pinned (AD-29 Design Note overreach vs HolidayCalendar impedance).
+- `medium` → defer — multi-Connector Review tickets still from overall latest snapshot while ledger is per-Connector pin.
+- `medium` → defer — injectable/runtime shared-lock-before-read probe beyond source fence + exclusive-wait.
+- `low` → defer — golden corpus asserts only a subset of `ReviewResult`.
+- `maybe-false` → defer — pin by `observedAt` vs filter by seq under backfill (unverified medium).
+- `maybe-false` → defer — cross-wired entry `snapshotId`/`connectorId` (unverified medium).
+- `false` — BH: `assertLedgerSeqMax` max-seq-only matches AD-10 `*_seq_max` convention.
+- `false` — BH: `project-read` port already imports `ReviewInput` with optional pin fields.
+- `false` — BH: sprint/spec paperwork is process, not a product defect.
+- `low` → reject — extra matrix goldens beyond `ledger-pin` unit coverage are nice-to-have.
 
 ## Design Notes
 
