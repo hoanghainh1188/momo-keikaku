@@ -592,6 +592,69 @@ a {
 .metric .value.unavailable {
   color: var(--ink-faint);
 }
+.metric--interactive .metric-trigger {
+  all: unset;
+  display: block;
+  width: 100%;
+  cursor: pointer;
+  text-align: inherit;
+}
+.metric--interactive .metric-trigger:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+.formula-popover {
+  margin-top: 8px;
+  padding: 12px 14px;
+  background: var(--paper);
+  border: 1px solid var(--ink-muted);
+  box-shadow: 0 4px 16px rgba(29, 31, 35, 0.12);
+  max-width: 420px;
+  z-index: 2;
+}
+.formula-popover--table {
+  margin: 8px 0 12px;
+}
+.formula-popover-kv {
+  display: grid;
+  gap: 4px 12px;
+  grid-template-columns: auto 1fr;
+  font-size: 12px;
+  margin: 8px 0;
+}
+.formula-popover-kv dt {
+  color: var(--ink-muted);
+}
+.formula-popover-kv dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+.formula-popover-formula {
+  font-weight: 500;
+  margin: 0 0 8px;
+}
+.formula-popover-interpret {
+  margin: 8px 0;
+  font-size: 13px;
+}
+.formula-popover-drill {
+  margin: 8px 0;
+}
+.formula-popover-close {
+  margin-top: 8px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 0;
+}
+.evm-row--interactive {
+  cursor: pointer;
+}
+.evm-row--interactive:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: -2px;
+}
 
 /* ---------------------------------------------------------------- health */
 .health-row {

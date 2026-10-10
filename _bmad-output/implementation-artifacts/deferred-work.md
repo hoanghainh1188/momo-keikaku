@@ -1545,3 +1545,7 @@ above can see where it went.
 - source_spec: `_bmad-output/implementation-artifacts/spec-6-2-evm-in-hours-with-unplanned-work-carrying-no-earned-value.md`
   summary: Fill `priorEvByWp` on Review capture from a last-open-Review / prior as-of store so EV-fall flags can fire in live Reviews (Q1-A path unfinished without inventing priors).
   evidence: Story 6.2 — pin field + compute/UI wired; loader leaves the map absent because no persisted prior-EV source exists yet. Never synthesize priors.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-6-3-the-formulas-and-the-one-eac-method-r0-ships.md`
+  summary: BAC money at Baseline date with equal split across assigned Resources (unassigned → Project default Rate), aligned with epic AC §3 — not the R0 default-Rate shortcut.
+  evidence: Story 6.3 founder decision Q4-B — R0 ships `bacJpy = costOf(bacMh, project.defaultRateYenPerHour)` matching PV/EV money; defer equal-split / rate-at-Baseline-date until a dedicated money slice.

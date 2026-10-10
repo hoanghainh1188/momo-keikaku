@@ -627,6 +627,44 @@
         "reading": ""
       }
     },
+    "metric_formula": {
+      "close": "閉じる",
+      "inputs": "入力値",
+      "interpretation": "読み方",
+      "period_change": "期間内の変化",
+      "period_change_value": "この期間の前日から {delta}",
+      "period_change_unavailable": "—",
+      "show_tickets_wps": "チケット / WP を表示",
+      "input": {
+        "bac": "BAC",
+        "ev": "EV",
+        "pv": "PV",
+        "ac": "AC",
+        "ac_planned": "AC（計画内）",
+        "cpi": "CPI（全体）",
+        "eac": "EAC",
+        "method_typical": "EAC 手法"
+      },
+      "interpret": {
+        "unavailable": "解釈するデータがまだ足りません。",
+        "cv_under": "予算内です。",
+        "cv_over": "予算超過です。",
+        "cv_on": "予算どおりです。",
+        "sv_ahead": "計画より進んでいます。",
+        "sv_behind": "計画より遅れています。",
+        "sv_on": "計画どおりです。",
+        "cpi_under": "予算内です。",
+        "cpi_over": "予算超過です。",
+        "cpi_on": "予算どおりです。",
+        "spi_ahead": "計画より進んでいます。",
+        "spi_behind": "計画より遅れています。",
+        "spi_on": "計画どおりです。",
+        "tcpi_efficient": "残作業は計画効率を上回れます。",
+        "tcpi_must_beat": "残作業は計画効率を上回る必要があります。",
+        "tcpi_on": "残作業は計画効率どおりです。",
+        "bac_exhausted": "BAC を使い切っています — TCPI は算出できません。"
+      }
+    },
     "ticket_count_mode": "チケット数モード",
     "rule_unmapped": {
       "heading": "ルールにより未マッピングになったチケット",

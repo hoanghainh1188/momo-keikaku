@@ -3,7 +3,14 @@ import Link from 'next/link';
 import { baselineSetState, getProjectReview, requestContext } from '@/server/composition';
 import { valueOrNotFound } from '@/server/result';
 import { hours, hoursSigned, present, share, wholePercent, yen } from '@momo/domain/present';
+import { FormulaMetricCell } from '@/components/formula-metric-cell';
+import { EvmFormulaRow } from '@/components/evm-formula-row';
 import { HealthBadge, Internal, MetricCell, Section, UnplannedChip } from '@/components/ui';
+import {
+  interpretationText,
+  toFormulaPopoverModel,
+  type FormulaMetricDetailLike,
+} from '@/lib/review-formula-popover';
 import { ScopeLedgerBar } from '@/components/scope-ledger-bar';
 import { DispositionRail } from '@/components/disposition-rail';
 import { ReviewPinRegistrar } from '@/components/review-pin-context';
@@ -42,6 +49,17 @@ export default async function ReviewPage({
   // shows the "No Baseline yet" state instead. Coverage, AC and Unplanned Work always render.
   const { evm, forecast, milestones, divergence } = r;
   const evmMoney = r.money;
+  const formulaDetail = (id: string): FormulaMetricDetailLike | undefined =>
+    r.formulaMetrics?.find((m) => m.id === id);
+  const formulaPopover = (id: string, formula: string) => {
+    const d = formulaDetail(id);
+    if (!d) return null;
+    return toFormulaPopoverModel(d, formula, t);
+  };
+  const formulaReading = (id: string, fallback: string) => {
+    const text = interpretationText(formulaDetail(id), t);
+    return text || fallback;
+  };
   const noBaseline = (section: string) => (
     <div className="caption" data-testid={`no-baseline-${section}`}>
       <p>
@@ -205,29 +223,32 @@ export default async function ReviewPage({
           <div className="metric-row" style={{ marginTop: 24 }}>
             {evm === null ? null : (
               <>
-                <MetricCell
+                <FormulaMetricCell
                   xl
                   label={t('review.spi')}
                   metric={evm.spi}
                   formula={t('review.metrics.formula_spi')}
                   note={`${present(evm.evMh).text}h ÷ ${present(evm.pvMh).text}h — ${t(r.behindPlan ? 'review.metrics.behind_plan' : 'review.metrics.on_or_ahead_of_plan')}`}
                   testId="m-spi"
+                  popover={formulaPopover('spi', t('review.metrics.formula_spi'))}
                 />
-                <MetricCell
+                <FormulaMetricCell
                   xl
                   label={t('review.cpi_all_in')}
                   metric={evm.cpiAllIn}
                   formula={t('review.metrics.formula_cpi_all_in')}
                   note={t('review.metrics.note_cpi_all_in', { ev: present(evm.evMh).text, ac: present(evm.acMh).text })}
                   testId="m-cpi-allin"
+                  popover={formulaPopover('cpi_all_in', t('review.metrics.formula_cpi_all_in'))}
                 />
-                <MetricCell
+                <FormulaMetricCell
                   xl
                   label={t('review.cpi_planned_scope')}
                   metric={evm.cpiPlannedScope}
                   formula={t('review.metrics.formula_cpi_planned')}
                   note={t('review.metrics.note_cpi_gap')}
                   testId="m-cpi-planned"
+                  popover={formulaPopover('cpi_planned', t('review.metrics.formula_cpi_planned'))}
                 />
               </>
             )}
@@ -427,7 +448,7 @@ export default async function ReviewPage({
           ) : (
             <>
               <div className="metric-row">
-                <MetricCell
+                <FormulaMetricCell
                   label={t('review.sv_schedule_variance')}
                   metric={evm.svMh}
                   formula={t('review.metrics.formula_sv')}
@@ -437,11 +458,13 @@ export default async function ReviewPage({
                       : 'review.metrics.ahead_of_plan',
                   )}
                   testId="m-sv"
+                  popover={formulaPopover('sv', t('review.metrics.formula_sv'))}
                 />
-                <MetricCell
+                <FormulaMetricCell
                   label={t('review.spi')}
                   metric={evm.spi}
                   formula={t('review.metrics.formula_spi')}
+                  popover={formulaPopover('spi', t('review.metrics.formula_spi'))}
                 />
                 <MetricCell
                   label={t('review.forecast_finish')}
@@ -579,24 +602,26 @@ export default async function ReviewPage({
             <tbody>
               {evm === null || evmMoney === null ? null : (
                 <>
-                  <EvmRow
+                  <EvmFormulaRow
                     name={t('review.evm.pv.name')}
                     value={`${present(evm.pvMh).text}h`}
                     money={money(evmMoney.pvJpy)}
                     formula={t('review.evm.pv.formula')}
-                    reading={t('review.evm.pv.reading')}
+                    reading={formulaReading('pv', t('review.evm.pv.reading'))}
+                    popover={formulaPopover('pv', t('review.evm.pv.formula'))}
                   />
-                  <EvmRow
+                  <EvmFormulaRow
                     name={t('review.evm.ev.name')}
                     value={`${present(evm.evMh).text}h`}
                     money={money(evmMoney.evJpy)}
                     formula={t('review.evm.ev.formula')}
-                    reading={t('review.evm.ev.reading')}
+                    reading={formulaReading('ev', t('review.evm.ev.reading'))}
                     testId="evm-ev"
+                    popover={formulaPopover('ev', t('review.evm.ev.formula'))}
                   />
                 </>
               )}
-              <EvmRow
+              <EvmFormulaRow
                 name={t('review.evm.ac.name')}
                 value={
                   evm !== null
@@ -618,9 +643,10 @@ export default async function ReviewPage({
                 reading={
                   evm !== null && evm.acMh.kind === 'value' && evm.acMh.coverage
                     ? evm.acMh.coverage
-                    : t('review.evm.ac.reading')
+                    : formulaReading('ac', t('review.evm.ac.reading'))
                 }
                 testId="evm-ac"
+                popover={evm !== null ? formulaPopover('ac', t('review.evm.ac.formula')) : null}
               />
               {evm === null ? null : (
                 <EvmRow
@@ -642,14 +668,15 @@ export default async function ReviewPage({
               />
               {evm === null ? null : (
                 <>
-                  <EvmRow
+                  <EvmFormulaRow
                     name={t('review.evm.cv.name')}
-                    value={evm.cvMh.kind === 'value' ? `${hoursSigned(evm.cvMh.value)}h` : em}
+                    value={evm.cvMh.kind === 'value' ? `${hoursSigned(evm.cvMh.value)}h` : present(evm.cvMh).text}
                     money=""
                     formula={t('review.evm.cv.formula')}
-                    reading={t('review.evm.cv.reading')}
+                    reading={formulaReading('cv', t('review.evm.cv.reading'))}
+                    popover={formulaPopover('cv', t('review.evm.cv.formula'))}
                   />
-                  <EvmRow
+                  <EvmFormulaRow
                     name={t('review.evm.sv.name')}
                     value={
                       evm.svMh.kind === 'value'
@@ -658,36 +685,41 @@ export default async function ReviewPage({
                     }
                     money=""
                     formula={t('review.evm.sv.formula')}
-                    reading={t('review.evm.sv.reading')}
+                    reading={formulaReading('sv', t('review.evm.sv.reading'))}
+                    popover={formulaPopover('sv', t('review.evm.sv.formula'))}
                   />
-                  <EvmRow
+                  <EvmFormulaRow
                     name={t('review.evm.cpi_all_in.name')}
                     value={present(evm.cpiAllIn).text}
                     money=""
                     formula={t('review.evm.cpi_all_in.formula')}
-                    reading={t('review.evm.cpi_all_in.reading')}
+                    reading={formulaReading('cpi_all_in', t('review.evm.cpi_all_in.reading'))}
+                    popover={formulaPopover('cpi_all_in', t('review.evm.cpi_all_in.formula'))}
                   />
-                  <EvmRow
+                  <EvmFormulaRow
                     name={t('review.evm.cpi_planned.name')}
                     value={present(evm.cpiPlannedScope).text}
                     money=""
                     formula={t('review.evm.cpi_planned.formula')}
-                    reading={t('review.evm.cpi_planned.reading')}
+                    reading={formulaReading('cpi_planned', t('review.evm.cpi_planned.reading'))}
+                    popover={formulaPopover('cpi_planned', t('review.evm.cpi_planned.formula'))}
                   />
-                  <EvmRow
+                  <EvmFormulaRow
                     name={t('review.evm.tcpi.name')}
                     value={present(evm.tcpi).text}
                     money=""
                     formula={t('review.evm.tcpi.formula')}
-                    reading={t('review.evm.tcpi.reading')}
+                    reading={formulaReading('tcpi', t('review.evm.tcpi.reading'))}
                     testId="evm-tcpi"
+                    popover={formulaPopover('tcpi', t('review.evm.tcpi.formula'))}
                   />
-                  <EvmRow
+                  <EvmFormulaRow
                     name={t('review.evm.bac.name')}
                     value={`${hours(evm.bacMh)}h`}
-                    money=""
+                    money={money(evmMoney.bacJpy)}
                     formula={t('review.evm.bac.formula')}
-                    reading={t('review.evm.bac.reading')}
+                    reading={formulaReading('bac', t('review.evm.bac.reading'))}
+                    popover={formulaPopover('bac', t('review.evm.bac.formula'))}
                   />
                 </>
               )}
@@ -706,25 +738,28 @@ export default async function ReviewPage({
           ) : (
             <>
               <div className="metric-row">
-                <MetricCell
+                <FormulaMetricCell
                   label={t('review.eac_typical')}
                   metric={evm.eacMh}
                   formula={t('review.metrics.formula_eac')}
                   note={t('review.metrics.note_eac')}
                   testId="m-eac"
+                  popover={formulaPopover('eac', t('review.metrics.formula_eac'))}
                 />
-                <MetricCell
+                <FormulaMetricCell
                   label={t('review.etc')}
                   metric={evm.etcMh}
                   formula={t('review.metrics.formula_etc')}
                   testId="m-etc"
+                  popover={formulaPopover('etc', t('review.metrics.formula_etc'))}
                 />
-                <MetricCell
+                <FormulaMetricCell
                   label={t('review.vac')}
                   metric={evm.vacMh}
                   formula={t('review.metrics.formula_vac')}
                   note={t('review.metrics.note_vac')}
                   testId="m-vac"
+                  popover={formulaPopover('vac', t('review.metrics.formula_vac'))}
                 />
                 <MetricCell
                   label={t('review.forecast_finish')}

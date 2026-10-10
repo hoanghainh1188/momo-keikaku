@@ -7,6 +7,8 @@ export * from './attribution';
 export * from './basis';
 export * from './coverage';
 export * from './evm';
+export * from './metric-formula';
+export * from './formula-popover-detail';
 export * from './health';
 export * from './forecast';
 export * from './present';

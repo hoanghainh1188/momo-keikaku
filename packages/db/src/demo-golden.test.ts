@@ -142,7 +142,11 @@ describe('demo dataset — golden EVM figures', () => {
     });
     // Story 6.2: largest-remainder PV (evm-2026-10-10) shifts milli-hours vs half-even;
     // hours still present as 1459.8 / 1330.8; yen follows costOf at the Project default Rate.
-    expect(r.money).toEqual({ pvJpy: 5_839_264n, evJpy: 5_323_204n });
+    expect(r.money).toEqual({
+      pvJpy: 5_839_264n,
+      evJpy: 5_323_204n,
+      bacJpy: 11_744_000n,
+    });
     expect(r.behindPlan).toBe(true);
   });
 
