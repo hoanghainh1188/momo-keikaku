@@ -297,6 +297,21 @@ const ALLOCATED_SEQ_KEYS: ReadonlySet<string> = new Set([
   // Story 5.12: wp_flag_event.seq is generatedAlwaysAsIdentity (global); probes land in
   // different bands so wpFlagSeqMax cannot agree across tenants.
   'wpFlagSeqMax',
+  // Story 6.1: ComputationInputs pin watermarks — identity / fixture-band seqs that differ
+  // between probe Tenants by construction.
+  'ledgerSeqMax',
+  'rateSeqMax',
+  'projectDefaultRateSeqMax',
+  'pctOverrideSeqMax',
+  'dispositionSeqMax',
+  'settingSeqMax',
+  'tenantSettingSeqMax',
+  'wpStatusSeqMax',
+  'calendarSeqMax',
+  'calendarVersion',
+  'connectorScopeSeqMax',
+  'visibilitySeqMax',
+  'scheduleRunSeq',
 ]);
 
 /**
