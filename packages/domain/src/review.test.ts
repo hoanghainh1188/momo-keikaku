@@ -602,6 +602,17 @@ describe('computeReview scope honesty (story 5.13 / FR-20)', () => {
       { connectorId: 'con-a', label: 'Space A', mh: hoursToMh(40) },
       { connectorId: 'con-b', label: 'Space B', mh: hoursToMh(25) },
     ]);
+    // Epic-5-retro F6: mappedHourShare uses Coverage ledgerNoOb den (10h), not OB+delta (75h).
+    const hourShare = withOb.coverage.perConnector.projectTotal.hourShare;
+    expect(hourShare.kind).toBe('value');
+    if (hourShare.kind !== 'value') throw new Error('expected value');
+    expect(withOb.coverage.mappedHourShare).toEqual(hourShare.mappedExcludingCatchAll);
+    expect(withOb.coverage.mappedHourShare).toEqual({
+      num: hoursToMh(10),
+      den: hoursToMh(10),
+    });
+    // Attribution still sees OB in its total — that is why the old ratio drifted from SM-5.
+    expect(withOb.attribution.cumulative.totalMh).toBe(hoursToMh(75));
 
     const noOb = computeReview(input);
     expect(noOb.openingBalanceMh).toBe(0n);

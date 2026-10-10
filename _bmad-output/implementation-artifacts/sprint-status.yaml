@@ -32,7 +32,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 09-20-2026 16:55
-last_updated: 10-10-2026 00:30
+last_updated: 10-10-2026 00:45
 project: momo-keikaku
 project_key: NOKEY
 tracking_system: file-system
@@ -331,14 +331,15 @@ action_items:
   - id: "epic-5-retro-item-27-fix-computecoverage-catch-all-loe-one-pr"
     epic: 5
     action: "Fix computeCoverage Catch-all LOE: one project-wide attribute then slice
-      per owner; align overflow filter with same pass (retro F5)"
+      per owner; Coverage bar + Mapping overflow filter share overflowMhByTicket
+      from that pass (retro F5)"
     owner: "dev"
     status: done
     ref: "_bmad-output/implementation-artifacts/epic-5-retro-2026-10-09.md"
   - id: "epic-5-retro-item-28-align-review-mappedhourshare-with-sm-5-c"
     epic: 5
-    action: "Align Review mappedHourShare with SM-5/Coverage (exclude Catch-all) or
-      rename the Review field (retro F6)"
+    action: "Align Review mappedHourShare with SM-5/Coverage mappedExcludingCatchAll
+      (ledgerNoOb den; Opening Balances out) (retro F6)"
     owner: "dev"
     status: done
     ref: "_bmad-output/implementation-artifacts/epic-5-retro-2026-10-09.md"

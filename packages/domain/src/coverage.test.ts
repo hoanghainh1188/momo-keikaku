@@ -353,5 +353,9 @@ describe('computeCoverage', () => {
     const bSeg = Object.fromEntries(b.segments.map((s) => [s.key, s.mh]));
     expect(aSeg['catch-all']! + bSeg['catch-all']!).toBe(hoursToMh(20));
     expect(aSeg['catch-all-overflow']! + bSeg['catch-all-overflow']!).toBe(hoursToMh(10));
+    // Epic-5-retro F5: overflow map is the same pass as the bar segments.
+    const overflowTotal = [...r.overflowMhByTicket.values()].reduce((a, b) => a + b, 0n);
+    expect(overflowTotal).toBe(hoursToMh(10));
+    expect(byKey['catch-all-overflow']).toBe(overflowTotal);
   });
 });

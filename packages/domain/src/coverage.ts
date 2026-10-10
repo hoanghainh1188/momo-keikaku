@@ -116,6 +116,12 @@ export interface CoverageResult {
    * `unavailable` before day 14 from Project start (never shown as 0).
    */
   sm5: RatioMetric;
+  /**
+   * Epic-5-retro F5: Catch-all overflow milli-hours per Ticket from the same project-wide
+   * `attribute()` pass that feeds the Coverage bar. Mapping's overflow filter must use this
+   * — not Review attribution (which still includes Opening Balances).
+   */
+  overflowMhByTicket: ReadonlyMap<string, Mh>;
 }
 
 export interface CoverageConnectorInput {
@@ -394,6 +400,7 @@ export function computeCoverage(input: CoverageInput): CoverageResult {
     connectors: connectorRows,
     projectTotal,
     sm5: sm5Metric(input.projectStart, input.asOf, totalHourShare),
+    overflowMhByTicket: projectAttr?.overflowMhByTicket ?? new Map(),
   };
 }
 

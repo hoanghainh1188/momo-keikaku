@@ -118,7 +118,7 @@ describe.skipIf(!reachable)('persistence round trip — the database reproduces 
     expect(hours(review.openingBalanceMh)).toBe('900.2');
     expect(hours(review.attribution.period.totalMh)).toBe('172.9');
     // Epic-5-retro F6: SM-5-aligned (mapped excluding Catch-all).
-    expect(share(review.coverage.mappedHourShare)).toBe('82.1%');
+    expect(share(review.coverage.mappedHourShare)).toBe('84.1%');
     expect(share(review.coverage.mappedTicketShare)).toBe('81.0%');
     expect(review.coverage.unmappedTickets).toBe(22);
     expect(review.unmappedGroups.map((g) => [g.label, g.ticketCount, hours(g.mh)])).toEqual([

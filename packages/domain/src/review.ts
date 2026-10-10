@@ -274,9 +274,9 @@ export interface ReviewResult {
   divergence: DivergenceRow[] | null;
   /**
    * Project-wide FR-23 figures — Review captions.
-   * `mappedHourShare` matches SM-5 / Coverage `mappedExcludingCatchAll` (epic-5-retro F6):
-   * mapped baselined + mapped non-baselined over total hours (Catch-all excluded).
-   * Story 5.11 adds `perConnector` for Mapping › Coverage.
+   * `mappedHourShare` is Coverage `projectTotal.hourShare.mappedExcludingCatchAll`
+   * (epic-5-retro F6): same ledgerNoOb pass as SM-5 — Opening Balances and Catch-all
+   * stay out of the denominator. Story 5.11 adds `perConnector` for Mapping › Coverage.
    */
   coverage: {
     mappedTicketShare: Ratio;
@@ -482,7 +482,7 @@ export function computeReview(input: ReviewInput): ReviewResult {
       ? null
       : divergenceRows(baseline, evm, input.wps, attribution.acByWp);
 
-  // --- FR-23 coverage (legacy Project-wide: mapped includes Catch-all, for Review captions)
+  // --- FR-23 coverage (Review captions; hour share from Coverage/SM-5 pass)
   const inScopePinned = input.pinnedSnapshot.tickets.filter(
     (t) => !leftScope.has(t.trackerIssueId),
   );
@@ -518,18 +518,18 @@ export function computeReview(input: ReviewInput): ReviewResult {
     wpFlagEvents: input.wpFlagEvents,
     wpFlagSeqMax: input.wpFlagSeqMax,
   });
-  const mappedExcludingCatchAllMh =
-    attribution.cumulative.mappedBaselinedMh + attribution.cumulative.mappedNonBaselinedMh;
+  // Epic-5-retro F6: same figure as SM-5 / Coverage (ledgerNoOb; OB stripped from den).
+  const coverageHourShare = perConnector.projectTotal.hourShare;
+  const mappedHourShare =
+    coverageHourShare.kind === 'unavailable' || coverageHourShare.totalMh === 0n
+      ? ZERO
+      : coverageHourShare.mappedExcludingCatchAll;
   const coverage = {
     mappedTicketShare:
       totalTickets === 0
         ? ZERO
         : ratio(BigInt(totalTickets - unmappedTickets), BigInt(totalTickets)),
-    // Epic-5-retro F6: align with SM-5 / Coverage (exclude Catch-all within + overflow).
-    mappedHourShare:
-      attribution.cumulative.totalMh === 0n
-        ? ZERO
-        : ratio(mappedExcludingCatchAllMh, attribution.cumulative.totalMh),
+    mappedHourShare,
     unmappedTickets,
     perConnector,
   };

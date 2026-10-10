@@ -63,6 +63,7 @@ const PER_CONNECTOR = {
     hourShare: { kind: 'unavailable', reasonCode: 'tracker_provides_no_hours' },
   },
   sm5: { kind: 'unavailable', reasonCode: 'project_younger_than_14_days' },
+  overflowMhByTicket: new Map<string, bigint>(),
 };
 
 const REVIEW = {
@@ -252,7 +253,7 @@ describe('getProjectMapping', () => {
     expect(page1.tickets).toHaveLength(5);
   });
 
-  it('sets inCatchAllOverflow only for Tickets with overflowMhByTicket > 0', async () => {
+  it('sets inCatchAllOverflow only for Tickets with coverage overflowMhByTicket > 0', async () => {
     const review = {
       bundle: {
         ...REVIEW.bundle,
@@ -273,14 +274,25 @@ describe('getProjectMapping', () => {
       },
       review: {
         ...REVIEW.review,
+        // Review attribution may still disagree (OB path); Mapping filter uses Coverage pass.
         attribution: {
           ...REVIEW.review.attribution,
-          cumulative: { totalMh: 99_000n, catchAllOverflowMh: 3_000n },
-          // Only t-3 has positive overflow; t-4 is Catch-all within-cap.
+          cumulative: { totalMh: 99_000n, catchAllOverflowMh: 50_800n },
           overflowMhByTicket: new Map<string, bigint>([
-            ['t-3', 3_000n],
+            ['t-3', 50_800n],
             ['t-4', 0n],
           ]),
+        },
+        coverage: {
+          ...REVIEW.review.coverage,
+          perConnector: {
+            ...PER_CONNECTOR,
+            // Only t-3 has positive overflow on the Coverage (ledgerNoOb) pass.
+            overflowMhByTicket: new Map<string, bigint>([
+              ['t-3', 3_000n],
+              ['t-4', 0n],
+            ]),
+          },
         },
       },
     } as unknown as ProjectReview;

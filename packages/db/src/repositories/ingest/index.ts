@@ -28,8 +28,33 @@ import {
 import type { Bound } from '../../bound';
 import { appendRuleMappingEvents, loadLiveMappingRules } from '../../repo-mapping-rules';
 import * as s from '../../schema';
-import { lockWatermark } from '../../watermark-lock';
+import { holdsWatermark, lockWatermark } from '../../watermark-lock';
+import type { Tx } from '../../with-tenant';
 import { trackerRepositoryOn, type TrackerKind } from '../tracker';
+
+/**
+ * Epic-5-retro F4: Baseline head must be read only under the Project watermark.
+ * Exported so a unit test can prove the guard without Postgres.
+ */
+export function assertBaselineHeadUnderProjectLock(tx: Tx): void {
+  if (!holdsWatermark(tx)) {
+    throw new Error(
+      'Baseline head refuses to read without Project watermark lock (epic-5-retro F4)',
+    );
+  }
+}
+
+/**
+ * Epic-5-retro F4: lock, then read Baseline head. Order is the regression fence —
+ * inverting the callbacks reintroduces the re-baseline race.
+ */
+export async function lockThenReadBaselineHead<T>(
+  lock: () => Promise<void>,
+  readHead: () => Promise<T>,
+): Promise<T> {
+  await lock();
+  return readHead();
+}
 
 export interface IngestScopeRead {
   readonly complete: boolean;
@@ -85,6 +110,7 @@ export function ingestWriteRepositoryOn(bound: Bound) {
   const tracker = trackerRepositoryOn(bound);
 
   async function latestBaselineVersionSeq(projectId: string): Promise<number | null> {
+    assertBaselineHeadUnderProjectLock(tx);
     const [row] = await tx
       .select({ seq: s.baselineVersion.seq })
       .from(s.baselineVersion)
@@ -101,8 +127,10 @@ export function ingestWriteRepositoryOn(bound: Bound) {
    * raced concurrent re-baseline and could stamp ledger rows with a superseded version.
    */
   async function lockProjectThenBaselineHead(projectId: string): Promise<number | null> {
-    await lockWatermark(bound, { kind: 'project', projectId });
-    return latestBaselineVersionSeq(projectId);
+    return lockThenReadBaselineHead(
+      () => lockWatermark(bound, { kind: 'project', projectId }),
+      () => latestBaselineVersionSeq(projectId),
+    );
   }
 
   async function loadPrevSnapshot(connectorId: string): Promise<{

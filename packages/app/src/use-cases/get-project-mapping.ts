@@ -113,10 +113,10 @@ function activeBaselineWpIds(bundle: ProjectReview['bundle']): Set<string> {
   return new Set(bl.wps.filter((w) => w.baselineMh > 0n).map((w) => w.wpId));
 }
 
-function catchAllOverflowTicketIds(review: ReviewResult): Set<string> {
-  // Story 5.12: honest per-Ticket overflow from attribution (closes 5.11 deferral).
+function catchAllOverflowTicketIds(coverage: CoverageResult): Set<string> {
+  // Epic-5-retro F5: same project-wide attribute pass as the Coverage bar (ledgerNoOb).
   const ids = new Set<string>();
-  for (const [ticketId, mh] of review.attribution.overflowMhByTicket) {
+  for (const [ticketId, mh] of coverage.overflowMhByTicket) {
     if (mh > 0n) ids.add(ticketId);
   }
   return ids;
@@ -129,7 +129,7 @@ function toTicketRows({ bundle, review }: ProjectReview): MappingTicketRow[] {
     .map((w) => ({ id: w.id, wbsCode: w.wbsCode, name: w.name, label: `${w.wbsCode} ${w.name}` }));
   const labelOf = new Map(leafWps.map((w) => [w.id, w.label]));
   const baselineWpIds = activeBaselineWpIds(bundle);
-  const overflowIds = catchAllOverflowTicketIds(review);
+  const overflowIds = catchAllOverflowTicketIds(review.coverage.perConnector);
   const ownerByTicket = bundle.input.ownerConnectorByTicket ?? new Map<string, string>();
   const leftScope = bundle.input.leftScopeTicketIds ?? new Set<string>();
 
