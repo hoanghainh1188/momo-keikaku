@@ -32,7 +32,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 09-20-2026 16:55
-last_updated: 10-10-2026 00:45
+last_updated: 10-10-2026 01:00
 project: momo-keikaku
 project_key: NOKEY
 tracking_system: file-system
@@ -356,6 +356,62 @@ action_items:
     action: "Deferred track: split ingest orchestrator; extract search-budget and
       ticketsInBucket helpers; approval tz; preview OB filter; REQUIRE_DB matrices
       / Resolved UI / compaction / notify fan-out per deferred-work (retro F7/F9-F12)"
+    owner: "dev"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-5-retro-2026-10-09.md"
+  # --- open residual from code review R2 (PR #139 / a4323a6); not new retro findings ---
+  - id: "epic-5-retro-item-31-d1-mappedhourshare-when-coverage-hoursha"
+    epic: 5
+    action: "DECISION-NEEDED (Harry): Review mappedHourShare when Coverage hourShare
+      is unavailable — keep Ratio+ZERO (may show 0.0%) vs RatioMetric/unavailable
+      caption (open residual from code review R2 D1)"
+    owner: "founder"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-5-retro-2026-10-09.md"
+  - id: "epic-5-retro-item-32-f5-membership-disagree-fence-mapping-ov"
+    epic: 5
+    action: "F5: strengthen Mapping overflow fence — membership disagree between
+      Coverage vs attribution overflowMhByTicket so revert to attribution fails
+      (open residual from code review R2 patch A)"
+    owner: "dev"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-5-retro-2026-10-09.md"
+  - id: "epic-5-retro-item-33-f3-positive-owned-match-control-ingest-f"
+    epic: 5
+    action: "F3: add positive owned-match control to ingest-owned-rules fence
+      (Ticket owned by claimer matching rule → expect rule Mapping event)
+      (open residual from code review R2 patch B)"
+    owner: "dev"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-5-retro-2026-10-09.md"
+  - id: "epic-5-retro-item-34-f4-assert-held-key-is-project-projectid"
+    epic: 5
+    action: "F4: assertBaselineHeadUnderProjectLock must require held key
+      project:<projectId> (not any exclusive watermark)
+      (open residual from code review R2 patch C)"
+    owner: "dev"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-5-retro-2026-10-09.md"
+  - id: "epic-5-retro-item-35-f4-production-wire-up-test-lock-then-bas"
+    epic: 5
+    action: "F4: add production wire-up/spy test for lockProjectThenBaselineHead
+      / latestBaselineVersionSeq composition (open residual from code review R2
+      patch D)"
+    owner: "dev"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-5-retro-2026-10-09.md"
+  - id: "epic-5-retro-item-36-f6-jsdoc-catchall-numerator-only-not-den"
+    epic: 5
+    action: "F6: fix review.ts JSDoc — Catch-all out of numerator only (still in
+      totalMh den); OB out via ledgerNoOb; fix HANDOFF with same when touched
+      (open residual from code review R2 patch E + defer)"
+    owner: "dev"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-5-retro-2026-10-09.md"
+  - id: "epic-5-retro-item-37-f-hourbucketforticket-comment-coverage-o"
+    epic: 5
+    action: "Comment hygiene: hourBucketForTicket overflow membership from Coverage
+      overflowMhByTicket not attribution (open residual from code review R2 patch F)"
     owner: "dev"
     status: open
     ref: "_bmad-output/implementation-artifacts/epic-5-retro-2026-10-09.md"
