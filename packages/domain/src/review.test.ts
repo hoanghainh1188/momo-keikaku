@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { periodOf } from './calendar';
 import { computeReview, type ReviewInput } from './review';
 import { DEFAULT_THRESHOLDS, type WorkPackage } from './types';
-import { hoursToMh } from './units';
+import { costOf, hoursToMh } from './units';
 import { expectShuffleInvariant } from '../../../tests/support/shuffle-invariant';
 
 /**
@@ -734,7 +734,7 @@ describe('computeReview scope honesty (story 5.13 / FR-20)', () => {
     expect(listedIds).not.toContain('tb');
     // Story 6.7: expanded Unmapped Tickets carry money (hours × Project default Rate).
     const orphan = r.unmappedGroups.flatMap((g) => g.tickets).find((t) => t.ticketId === 'orphan');
-    expect(orphan).toEqual(expect.objectContaining({ jpy: expect.any(BigInt) }));
+    expect(orphan!.jpy).toBe(costOf(orphan!.mh, input.project.defaultRateYenPerHour));
   });
 
   it('keeps left-scope Tickets out of Unmapped groups', () => {

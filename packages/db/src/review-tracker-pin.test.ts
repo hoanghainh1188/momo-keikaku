@@ -49,6 +49,42 @@ describe('resolveTrackerPins (Story 6.7 Q1→C)', () => {
     expect(r.usedFreeze).toBe(false);
     expect(r.overallSnapshotId).toBe('snap-new');
   });
+
+  it('falls back when freeze omits a current connector', () => {
+    const multi = [
+      ...rows,
+      { id: 'snap-c2', seq: 3, connectorId: 'c2', observedAt: t1 },
+    ];
+    const freeze: ReviewTrackerPin = {
+      overallSnapshotId: 'snap-old',
+      snapshotIdByConnector: { c1: 'snap-old' },
+    };
+    const r = resolveTrackerPins({
+      snapshotRows: multi,
+      connectorIds: ['c1', 'c2'],
+      freeze,
+    });
+    expect(r.usedFreeze).toBe(false);
+    expect(r.trackerSnapshotIdByConnector.get('c1')).toBe('snap-new');
+    expect(r.trackerSnapshotIdByConnector.get('c2')).toBe('snap-c2');
+  });
+
+  it('falls back when a mapped snapshot belongs to another connector', () => {
+    const multi = [
+      ...rows,
+      { id: 'snap-c2', seq: 3, connectorId: 'c2', observedAt: t1 },
+    ];
+    const freeze: ReviewTrackerPin = {
+      overallSnapshotId: 'snap-old',
+      snapshotIdByConnector: { c1: 'snap-old', c2: 'snap-old' },
+    };
+    const r = resolveTrackerPins({
+      snapshotRows: multi,
+      connectorIds: ['c1', 'c2'],
+      freeze,
+    });
+    expect(r.usedFreeze).toBe(false);
+  });
 });
 
 describe('captureReviewTrackerPin', () => {

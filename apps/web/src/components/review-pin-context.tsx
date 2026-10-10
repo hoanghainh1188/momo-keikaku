@@ -8,6 +8,8 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { ensureReviewTrackerPinAction } from '@/app/p/[projectId]/snapshot-actions';
+import type { ReviewTrackerPinCookie } from '@/lib/review-tracker-pin-cookie';
 
 interface ReviewPinContextValue {
   readonly reviewPinnedSnapshotId: string | null;
@@ -32,12 +34,27 @@ export function useReviewPin(): ReviewPinContextValue {
   return useContext(ReviewPinContext);
 }
 
-/** Review page registers the snapshot id it loaded so the top-bar pin can offer Re-pin. */
-export function ReviewPinRegistrar({ snapshotId }: { readonly snapshotId: string }) {
+/**
+ * Review page registers the snapshot id it loaded so the top-bar pin can offer Re-pin,
+ * and persists the Tracker freeze via Server Action (Story 6.7 / Q1→C — not from RSC).
+ */
+export function ReviewPinRegistrar({
+  snapshotId,
+  projectId,
+  trackerPin,
+}: {
+  readonly snapshotId: string;
+  readonly projectId: string;
+  /** Pin actually used for this load (live capture when cookie freeze was missing/invalid). */
+  readonly trackerPin: ReviewTrackerPinCookie | null;
+}) {
   const { setReviewPinnedSnapshotId } = useReviewPin();
   useEffect(() => {
     setReviewPinnedSnapshotId(snapshotId);
+    if (trackerPin) {
+      void ensureReviewTrackerPinAction({ projectId, pin: trackerPin });
+    }
     return () => setReviewPinnedSnapshotId(null);
-  }, [snapshotId, setReviewPinnedSnapshotId]);
+  }, [snapshotId, projectId, trackerPin, setReviewPinnedSnapshotId]);
   return null;
 }

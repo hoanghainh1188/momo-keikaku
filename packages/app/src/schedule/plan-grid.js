@@ -1,0 +1,803 @@
+/**
+ * Story 2.13 — authorised Plan tree-grid read.
+ * Story 2.15 — schedule strip scalars + What-moved band (prev/latest run join).
+ * Story 2.16 — schedule-exceptions rail lists + calendar-range halt bounds.
+ *
+ * Joins live WP/edge inputs with `wp_schedule` and the latest `schedule_run` outputs (exceptions,
+ * anchor). Display order is always `compareWp` (AD-28). Writes stay on `applyPlanChange`.
+ */
+import { and, eq } from 'drizzle-orm';
+import { compareWp, parseStoredInputs, parseStoredOutputs, planBaselineCompare, remainingDuration, WP_MOVE_CAUSES, } from '@momo/domain';
+import { SUMMARY_NA_LABEL, formatFloatDisplay, formatMinFloat, formatPlanDate, formatPlanDateLong, formatPlanDateShort, inkTone, } from '@momo/domain/present';
+import { projectNotFound } from '../../../db/src/project-not-found';
+import { planInputRepositoryOn } from '../../../db/src/repositories/plan-input';
+import { scheduleRepositoryOn } from '../../../db/src/repositories/schedule';
+import * as s from '../../../db/src/schema';
+import { loadActiveBaselineForGrid } from '../baseline/active-baseline-for-grid';
+import { authorize, PROJECT_REACH_ROLES } from '../authz/authorize';
+import { ok } from '../result';
+import { PROJECT_FINISH_TEACHING } from './plan-edit';
+export { SUMMARY_NA_LABEL, formatFloatDisplay, formatMinFloat, formatPlanDate, formatPlanDateLong, formatPlanDateShort, inkTone, };
+/** Audit / schedule_run actor stamps are `user:<id>`; bare id for auth lookup + UI compare. */
+const USER_ACTOR = /^user:(.+)$/;
+export function actorUserIdOf(actor) {
+    return USER_ACTOR.exec(actor)?.[1] ?? actor;
+}
+/** Empty rail payload — halted run, no run, or parse failure. */
+export function emptyExceptionsRail(partial) {
+    return {
+        totalCount: 0,
+        holidayCalendarVersionSeq: partial?.holidayCalendarVersionSeq ?? null,
+        calendarRangeStart: partial?.calendarRangeStart ?? null,
+        calendarRangeEnd: partial?.calendarRangeEnd ?? null,
+        violations: [],
+        outOfSequence: [],
+        notSchedulable: [],
+    };
+}
+/**
+ * Q1→A calendar-range halt banner copy. Never invents bounds.
+ * Missing range → "range unavailable" instead of fake dates.
+ */
+export function calendarRangeHaltBanner(input) {
+    const loaded = input.rangeStart !== null && input.rangeEnd !== null
+        ? `Loaded ${formatPlanDate(input.rangeStart)}–${formatPlanDate(input.rangeEnd)}.`
+        : 'Loaded range unavailable.';
+    return `Schedule halted: calendar range. ${loaded} Derived dates are stale — extend the Holiday Calendar range in Project settings.`;
+}
+/**
+ * Build the ranked exceptions rail from a successful stored run + live joins.
+ * Does not decode exceptions from halted (null outputs) runs — callers must pass empty.
+ */
+export function buildExceptionsRail(input) {
+    const labelOf = (wpId, isMilestone, daysLate) => {
+        const resolved = resolveException({
+            wpId,
+            isLeaf: true,
+            notSchedulableReason: null,
+            violationsByWp: new Map([[wpId, { daysLate, isMilestone }]]),
+            oosWpIds: new Set(),
+        });
+        return resolved?.label ?? `${isMilestone ? '◆' : '▲'} Late ${daysLate}d`;
+    };
+    const resolveWpLabel = (wpId) => {
+        const present = input.liveWpIds.has(wpId);
+        const wbsCode = input.wbsById.get(wpId) ?? '';
+        const name = input.nameById.get(wpId) ?? '';
+        if (wbsCode !== '' || name !== '') {
+            return { wbsCode: wbsCode || wpId.slice(0, 8), name: name || wpId.slice(0, 8), present };
+        }
+        const short = wpId.length > 8 ? wpId.slice(0, 8) : wpId;
+        return { wbsCode: short, name: short, present };
+    };
+    const finishOf = (wpId) => {
+        const actual = input.actualByWp.get(wpId);
+        if (actual?.actualFinish)
+            return actual.actualFinish;
+        return input.earlyFinishByWp.get(wpId) ?? null;
+    };
+    const violationsSorted = [...input.violations].sort((a, b) => {
+        if (b.daysLate !== a.daysLate)
+            return b.daysLate - a.daysLate;
+        return compareWp({ id: a.wpId, wbsCode: input.wbsById.get(a.wpId) ?? '' }, { id: b.wpId, wbsCode: input.wbsById.get(b.wpId) ?? '' });
+    });
+    const violations = violationsSorted.map((v) => {
+        const isMilestone = input.milestoneIds.has(v.wpId);
+        const self = resolveWpLabel(v.wpId);
+        // Chain is immediate-driver first: chain[0] drives the violated WP; chain[i] drives chain[i-1].
+        const chain = v.chain.map((id, i) => {
+            const meta = resolveWpLabel(id);
+            const successorId = i === 0 ? v.wpId : v.chain[i - 1];
+            const lagDays = input.lagByEdge.get(`${id}\0${successorId}`) ?? null;
+            return {
+                wpId: id,
+                wbsCode: meta.wbsCode,
+                name: meta.name,
+                finish: finishOf(id),
+                lagDays,
+                presentInLiveTree: meta.present,
+            };
+        });
+        return {
+            wpId: v.wpId,
+            wbsCode: self.wbsCode,
+            name: self.name,
+            label: labelOf(v.wpId, isMilestone, v.daysLate),
+            isMilestone,
+            constraintType: v.constraintType,
+            askedDate: v.askedDate,
+            derivedDate: v.derivedDate,
+            daysLate: v.daysLate,
+            chain,
+        };
+    });
+    const outOfSequence = input.outOfSequence.map((e) => {
+        const pred = resolveWpLabel(e.predecessorId);
+        const succ = resolveWpLabel(e.successorId);
+        const succActual = input.actualByWp.get(e.successorId);
+        return {
+            predecessorWpId: e.predecessorId,
+            successorWpId: e.successorId,
+            predecessorWbsCode: pred.wbsCode,
+            predecessorName: pred.name,
+            successorWbsCode: succ.wbsCode,
+            successorName: succ.name,
+            label: '⇄ Out of sequence',
+            successorActualStart: succActual?.actualStart ?? null,
+            predecessorFinish: finishOf(e.predecessorId),
+            predecessorPresent: pred.present,
+            successorPresent: succ.present,
+        };
+    });
+    const notSchedulable = input.notSchedulable.map((n) => {
+        const meta = resolveWpLabel(n.wpId);
+        return {
+            wpId: n.wpId,
+            wbsCode: meta.wbsCode,
+            name: meta.name,
+            label: '⊘ No duration',
+            reason: 'no_duration',
+        };
+    });
+    return {
+        totalCount: violations.length + outOfSequence.length + notSchedulable.length,
+        holidayCalendarVersionSeq: input.holidayCalendarVersionSeq,
+        calendarRangeStart: input.calendarRangeStart,
+        calendarRangeEnd: input.calendarRangeEnd,
+        violations,
+        outOfSequence,
+        notSchedulable,
+    };
+}
+function asBound(scheduling) {
+    return scheduling;
+}
+export function formatConstraintLabel(constraintType, constraintDate) {
+    if (constraintType === 'must_start_on' && constraintDate) {
+        return `Must start on ${formatPlanDate(constraintDate)}`;
+    }
+    if (constraintType === 'must_finish_on' && constraintDate) {
+        return `Must finish on ${formatPlanDate(constraintDate)}`;
+    }
+    return 'As soon as possible';
+}
+/** MS-Project-shaped predecessor cell: `2.3FS+2d, 2.4`. */
+export function formatPredecessorsText(successorWpId, edges, wbsById) {
+    const preds = edges
+        .filter((e) => e.successorWpId === successorWpId)
+        .map((e) => {
+        const code = wbsById.get(e.predecessorWpId) ?? e.predecessorWpId;
+        if (e.lagDays === 0)
+            return code;
+        const sign = e.lagDays > 0 ? '+' : '';
+        return `${code}FS${sign}${e.lagDays}d`;
+    })
+        .sort((a, b) => a.localeCompare(b));
+    return preds.join(', ');
+}
+export function floatAnchorHeader(anchor) {
+    if (anchor === null)
+        return null;
+    return anchor.kind === 'project_finish' ? 'vs Project finish' : 'vs computed finish';
+}
+/**
+ * UX-DR5 Float anchor sentence for the schedule strip.
+ * Halted / missing run → null (strip shows "—" for derived scalars separately).
+ */
+export function floatAnchorSentence(anchor, projectFinish) {
+    if (anchor === null)
+        return null;
+    const date = formatPlanDate(anchor.date);
+    if (anchor.kind === 'project_finish') {
+        return `Float measured against the Project finish, ${date}`;
+    }
+    if (projectFinish === null) {
+        return `Float measured against the computed finish, ${date} — relative, because no Project finish is set`;
+    }
+    return `Float measured against the computed finish, ${date}`;
+}
+/** Minimum Float scalar from scheduled outputs (same rule as the backward pass). */
+export function minFloatFromRows(rows) {
+    let min = null;
+    for (const row of rows) {
+        if (row.floatDays === null)
+            continue;
+        if (min === null || row.floatDays < min)
+            min = row.floatDays;
+    }
+    return min;
+}
+/** Spoken Float for polite announce: "minus 3" / "plus 4" / "0". */
+export function speakFloat(minFloat) {
+    if (minFloat === null)
+        return 'unavailable';
+    if (minFloat < 0)
+        return `minus ${Math.abs(minFloat)}`;
+    if (minFloat > 0)
+        return `plus ${minFloat}`;
+    return '0';
+}
+export function formatRelativeAgo(at, now) {
+    const ms = Math.max(0, now.getTime() - at.getTime());
+    const minutes = Math.floor(ms / 60_000);
+    if (minutes < 1)
+        return 'just now';
+    if (minutes === 1)
+        return '1 min ago';
+    if (minutes < 60)
+        return `${minutes} min ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours === 1)
+        return '1 hour ago';
+    if (hours < 48)
+        return `${hours} hours ago`;
+    const days = Math.floor(hours / 24);
+    if (days === 1)
+        return '1 day ago';
+    return `${days} days ago`;
+}
+/**
+ * Build What-moved from latest vs previous successful stored outputs.
+ * First successful run (no previous) → nothing-moved wording without fake deltas.
+ */
+export function buildWhatMovedBand(input) {
+    const entries = [];
+    for (const wp of input.latest.wps) {
+        if (wp.cause === null)
+            continue;
+        const prev = input.previous?.earlyByWp.get(wp.wpId);
+        entries.push({
+            wpId: wp.wpId,
+            wbsCode: wp.wbsCode,
+            name: wp.name,
+            cause: wp.cause,
+            oldEarlyStart: prev?.earlyStart ?? null,
+            oldEarlyFinish: prev?.earlyFinish ?? null,
+            newEarlyStart: wp.earlyStart,
+            newEarlyFinish: wp.earlyFinish,
+        });
+    }
+    entries.sort((a, b) => compareWp({ id: a.wpId, wbsCode: a.wbsCode }, { id: b.wpId, wbsCode: b.wbsCode }));
+    const groups = [];
+    for (const cause of WP_MOVE_CAUSES) {
+        const groupEntries = entries.filter((e) => e.cause === cause);
+        if (groupEntries.length === 0)
+            continue;
+        groups.push({ cause, entries: groupEntries });
+    }
+    const movedCount = entries.length;
+    const nothingMoved = movedCount === 0;
+    const prevFinish = input.previous?.computedFinish ?? null;
+    const nextFinish = input.latest.computedFinish;
+    const prevMin = input.previous?.minFloat ?? null;
+    const nextMin = input.latest.minFloat;
+    const summaryLine = nothingMoved
+        ? 'No dates moved'
+        : `${movedCount} work package${movedCount === 1 ? '' : 's'} moved · computed finish ${formatPlanDateShort(prevFinish)} → ${formatPlanDate(nextFinish)} · minimum Float ${formatMinFloat(prevMin)} → ${formatMinFloat(nextMin)}`;
+    const politeAnnounce = nothingMoved
+        ? 'No dates moved.'
+        : `${movedCount} work package${movedCount === 1 ? '' : 's'} moved. Computed finish ${formatPlanDateLong(nextFinish)}. Minimum Float ${speakFloat(nextMin)}.`;
+    return {
+        runSeq: input.runSeq,
+        movedCount,
+        nothingMoved,
+        summaryLine,
+        politeAnnounce,
+        previousComputedFinish: prevFinish,
+        computedFinish: nextFinish,
+        previousMinFloat: prevMin,
+        minFloat: nextMin,
+        groups: nothingMoved ? [] : groups,
+        actorUserId: input.actorUserId,
+        actorName: input.actorName,
+        atIso: input.at.toISOString(),
+    };
+}
+/**
+ * Strip derived scalars: halted/missing run → honest "—" (null), never a stale finish/Float.
+ * Used by getPlanGridState so the strip and What-moved cannot disagree with the matrix.
+ */
+export function stripDerivedScalars(input) {
+    if (input.haltedReason !== null) {
+        return { computedFinish: null, minFloat: null, floatAnchorSentence: null };
+    }
+    return {
+        computedFinish: input.computedFinish,
+        minFloat: input.minFloat,
+        floatAnchorSentence: floatAnchorSentence(input.anchor, input.projectFinish),
+    };
+}
+/**
+ * Whether Start/Finish/Float/Critical cells should blank to "—".
+ * `calendar_range` keeps last-good `wp_schedule` values marked stale (founder 2026-09-27);
+ * other halt reasons and non-halt stale rows stay blanked (Story 2.13).
+ */
+export function blankDerivedDates(input) {
+    if (input.haltedReason === 'calendar_range')
+        return false;
+    return input.haltedReason !== null || input.scheduleStale;
+}
+export function recordedPctDisplay(pct) {
+    if (pct === null || pct.den === 0n)
+        return 'none — scheduled as 0%';
+    const tenths = Number((pct.num * 1000n) / pct.den);
+    const whole = Math.floor(tenths / 10);
+    const frac = tenths % 10;
+    return frac === 0 ? `${whole}%` : `${whole}.${frac}%`;
+}
+/**
+ * Pick one Exception cell label: violation (worst) → out-of-sequence → not-schedulable.
+ * Full explainer popovers stay in 2.16.
+ */
+export function resolveException(input) {
+    if (!input.isLeaf)
+        return null;
+    const violation = input.violationsByWp.get(input.wpId);
+    if (violation) {
+        const glyph = violation.isMilestone ? '◆' : '▲';
+        return {
+            kind: 'violation',
+            label: `${glyph} Late ${violation.daysLate}d`,
+            daysLate: violation.daysLate,
+        };
+    }
+    if (input.oosWpIds.has(input.wpId)) {
+        return { kind: 'out_of_sequence', label: '⇄ Out of sequence' };
+    }
+    if (input.notSchedulableReason === 'no_duration') {
+        return { kind: 'not_schedulable', label: '⊘ No duration' };
+    }
+    return null;
+}
+/** Exception cell for a grid row — cleared when the latest run is halted (story 2.16 / retro F23). */
+export function planGridExceptionCell(haltedReason, input) {
+    if (haltedReason !== null)
+        return null;
+    return resolveException(input);
+}
+function depthOf(wpId, parentOf) {
+    let depth = 1;
+    let cur = parentOf.get(wpId) ?? null;
+    const seen = new Set();
+    while (cur) {
+        if (seen.has(cur))
+            break;
+        seen.add(cur);
+        depth += 1;
+        cur = parentOf.get(cur) ?? null;
+    }
+    return depth;
+}
+/** Authorised Plan-grid read for story 2.13 / 2.15. */
+export async function getPlanGridState(deps, ctx, input) {
+    const roles = authorize(ctx, { roles: PROJECT_REACH_ROLES, projectId: input.projectId });
+    if (!roles.ok)
+        return roles;
+    const value = await deps.transaction(deps.handle, ctx.tenantId, async (scope) => {
+        const bound = asBound(scope.bound);
+        const [project] = await bound.tx
+            .select({
+            projectStart: s.project.projectStart,
+            projectFinish: s.project.projectFinish,
+            dataDate: s.project.dataDate,
+            tzOffsetMinutes: s.project.tzOffsetMinutes,
+        })
+            .from(s.project)
+            .where(and(eq(s.project.tenantId, bound.tenantId), eq(s.project.id, input.projectId)));
+        if (!project)
+            throw projectNotFound(input.projectId);
+        const planInput = planInputRepositoryOn(bound);
+        const schedule = scheduleRepositoryOn(bound);
+        const [wps, edges, wpSchedules, latest, planRows, activeBaseline] = await Promise.all([
+            planInput.listLiveWorkPackages(input.projectId),
+            planInput.listLiveDependencies(input.projectId),
+            schedule.loadWpSchedule(input.projectId),
+            schedule.latestRun(input.projectId),
+            schedule.loadPlanRows(input.projectId),
+            loadActiveBaselineForGrid(bound, input.projectId),
+        ]);
+        const previous = latest !== null && latest.haltedReason === null && latest.outputs !== null
+            ? await schedule.previousSuccessfulRun(input.projectId, latest.seq)
+            : null;
+        const ordered = [...wps].sort(compareWp);
+        const wbsById = new Map(ordered.map((w) => [w.id, w.wbsCode]));
+        const nameById = new Map(ordered.map((w) => [w.id, w.name]));
+        const parentOf = new Map(ordered.map((w) => [w.id, w.parentId]));
+        const childrenOf = new Map();
+        for (const wp of ordered) {
+            const key = wp.parentId;
+            const list = childrenOf.get(key) ?? [];
+            list.push(wp);
+            childrenOf.set(key, list);
+        }
+        for (const [, kids] of childrenOf) {
+            kids.sort(compareWp);
+        }
+        const scheduleByWp = new Map(wpSchedules.map((row) => [row.wpId, row]));
+        const anyStale = wpSchedules.some((row) => row.stale);
+        const milestoneIds = new Set(ordered.filter((w) => w.isMilestone).map((w) => w.id));
+        const violationsByWp = new Map();
+        const oosWpIds = new Set();
+        let anchor = null;
+        let computedFinish = latest?.computedFinish ?? null;
+        let minFloat = null;
+        let whatMoved = null;
+        let exceptions = emptyExceptionsRail();
+        const haltedReason = latest?.haltedReason ?? null;
+        if (latest?.outputs !== null && latest?.outputs !== undefined && latest.haltedReason === null) {
+            try {
+                const storedInputs = parseStoredInputs(latest.inputs);
+                const storedOutputs = parseStoredOutputs(latest.outputs);
+                const orderedIds = storedInputs.wps.map((w) => w.id);
+                for (const v of storedOutputs.violations) {
+                    const wpId = orderedIds[v.wpId];
+                    if (wpId === undefined)
+                        continue;
+                    const prev = violationsByWp.get(wpId);
+                    if (prev === undefined || v.daysLate > prev.daysLate) {
+                        violationsByWp.set(wpId, {
+                            daysLate: v.daysLate,
+                            isMilestone: milestoneIds.has(wpId),
+                        });
+                    }
+                }
+                for (const e of storedOutputs.outOfSequence) {
+                    const succ = orderedIds[e.successorId];
+                    if (succ !== undefined)
+                        oosWpIds.add(succ);
+                }
+                anchor = storedOutputs.anchor;
+                computedFinish = storedOutputs.computedFinish;
+                minFloat = minFloatFromRows(storedOutputs.wps);
+                // Story 2.16 — full rail payload (violations keep asked/derived/chain; OOS joins dates).
+                const liveWpIds = new Set(ordered.map((w) => w.id));
+                const actualByWp = new Map();
+                for (const wp of ordered) {
+                    const status = planRows.statusHeads.get(wp.id);
+                    actualByWp.set(wp.id, {
+                        actualStart: status?.actualStart ?? null,
+                        actualFinish: status?.actualFinish ?? null,
+                    });
+                }
+                // Prefer live schedule projection; fall back to stored output earlyFinish.
+                const earlyFinishByWp = new Map();
+                for (const row of wpSchedules) {
+                    earlyFinishByWp.set(row.wpId, row.earlyFinish);
+                }
+                for (let i = 0; i < storedOutputs.wps.length; i += 1) {
+                    const id = orderedIds[i];
+                    const row = storedOutputs.wps[i];
+                    if (id === undefined || row === undefined)
+                        continue;
+                    if (!earlyFinishByWp.has(id) || earlyFinishByWp.get(id) === null) {
+                        earlyFinishByWp.set(id, row.earlyFinish);
+                    }
+                }
+                // Lag from live edges; fall back to stored input edges (index-decoded).
+                const lagByEdge = new Map();
+                for (const e of edges) {
+                    lagByEdge.set(`${e.predecessorWpId}\0${e.successorWpId}`, e.lagDays);
+                }
+                for (const e of storedInputs.edges) {
+                    const pred = orderedIds[e.predecessorId];
+                    const succ = orderedIds[e.successorId];
+                    if (pred === undefined || succ === undefined)
+                        continue;
+                    const key = `${pred}\0${succ}`;
+                    if (!lagByEdge.has(key))
+                        lagByEdge.set(key, e.lagDays);
+                }
+                // Also seed wbs/name from stored inputs for deleted WPs still named in exceptions.
+                const railWbs = new Map(wbsById);
+                const railName = new Map(nameById);
+                for (const w of storedInputs.wps) {
+                    if (!railWbs.has(w.id) && w.wbsCode)
+                        railWbs.set(w.id, w.wbsCode);
+                }
+                const decodedViolations = storedOutputs.violations.flatMap((v) => {
+                    const wpId = orderedIds[v.wpId];
+                    if (wpId === undefined)
+                        return [];
+                    const chain = v.chain.flatMap((idx) => {
+                        const id = orderedIds[idx];
+                        return id === undefined ? [] : [id];
+                    });
+                    return [
+                        {
+                            wpId,
+                            constraintType: v.constraintType,
+                            askedDate: v.askedDate,
+                            derivedDate: v.derivedDate,
+                            daysLate: v.daysLate,
+                            chain,
+                        },
+                    ];
+                });
+                const decodedOos = storedOutputs.outOfSequence.flatMap((e) => {
+                    const predecessorId = orderedIds[e.predecessorId];
+                    const successorId = orderedIds[e.successorId];
+                    if (predecessorId === undefined || successorId === undefined)
+                        return [];
+                    return [{ predecessorId, successorId }];
+                });
+                const decodedNs = storedOutputs.notSchedulable.flatMap((n) => {
+                    const wpId = orderedIds[n.wpId];
+                    if (wpId === undefined)
+                        return [];
+                    return [{ wpId, reason: 'no_duration' }];
+                });
+                exceptions = buildExceptionsRail({
+                    orderedIds,
+                    wbsById: railWbs,
+                    nameById: railName,
+                    liveWpIds,
+                    milestoneIds,
+                    holidayCalendarVersionSeq: storedInputs.calendar.versionSeq ?? latest.holidayCalendarVersionSeq,
+                    calendarRangeStart: storedInputs.calendar.rangeStart,
+                    calendarRangeEnd: storedInputs.calendar.rangeEnd,
+                    violations: decodedViolations,
+                    outOfSequence: decodedOos,
+                    notSchedulable: decodedNs,
+                    actualByWp,
+                    earlyFinishByWp,
+                    lagByEdge,
+                });
+                let previousPayload = null;
+                if (previous?.outputs !== null && previous?.outputs !== undefined) {
+                    try {
+                        const prevInputs = parseStoredInputs(previous.inputs);
+                        const prevOutputs = parseStoredOutputs(previous.outputs);
+                        const prevIds = prevInputs.wps.map((w) => w.id);
+                        const earlyByWp = new Map();
+                        for (let i = 0; i < prevOutputs.wps.length; i += 1) {
+                            const id = prevIds[i];
+                            const row = prevOutputs.wps[i];
+                            if (id === undefined || row === undefined)
+                                continue;
+                            earlyByWp.set(id, {
+                                earlyStart: row.earlyStart,
+                                earlyFinish: row.earlyFinish,
+                            });
+                        }
+                        previousPayload = {
+                            computedFinish: prevOutputs.computedFinish,
+                            minFloat: minFloatFromRows(prevOutputs.wps),
+                            earlyByWp,
+                        };
+                    }
+                    catch {
+                        previousPayload = null;
+                    }
+                }
+                const actorUserId = actorUserIdOf(latest.actor);
+                let actorName = actorUserId;
+                try {
+                    const [user] = await bound.tx
+                        .select({ name: s.authUser.name })
+                        .from(s.authUser)
+                        .where(eq(s.authUser.id, actorUserId));
+                    if (user?.name)
+                        actorName = user.name;
+                }
+                catch {
+                    // Global table may be unreachable under some RLS setups — fall back to actor id.
+                }
+                whatMoved = buildWhatMovedBand({
+                    runSeq: latest.seq,
+                    actorUserId,
+                    actorName,
+                    at: latest.at,
+                    latest: {
+                        computedFinish,
+                        minFloat,
+                        wps: storedOutputs.wps.flatMap((row, i) => {
+                            const wpId = orderedIds[i];
+                            if (wpId === undefined)
+                                return [];
+                            return [
+                                {
+                                    wpId,
+                                    wbsCode: wbsById.get(wpId) ?? storedInputs.wps[i]?.wbsCode ?? '',
+                                    name: nameById.get(wpId) ?? '',
+                                    earlyStart: row.earlyStart,
+                                    earlyFinish: row.earlyFinish,
+                                    cause: row.cause,
+                                },
+                            ];
+                        }),
+                    },
+                    previous: previousPayload,
+                });
+            }
+            catch {
+                // Malformed stored payload — infer kind from Project finish vs column date.
+                if (latest.anchor) {
+                    const kind = project.projectFinish !== null && latest.anchor === project.projectFinish
+                        ? 'project_finish'
+                        : 'computed_finish';
+                    anchor = { kind, date: latest.anchor };
+                }
+                minFloat = minFloatFromRows(wpSchedules);
+            }
+        }
+        else if (latest !== null) {
+            // Halted or outputs-null: never decode exception lists; still surface calendar bounds for
+            // the calendar_range banner (Q1→A).
+            let rangeStart = null;
+            let rangeEnd = null;
+            let versionSeq = latest.holidayCalendarVersionSeq;
+            try {
+                const storedInputs = parseStoredInputs(latest.inputs);
+                rangeStart = storedInputs.calendar.rangeStart;
+                rangeEnd = storedInputs.calendar.rangeEnd;
+                versionSeq = storedInputs.calendar.versionSeq;
+            }
+            catch {
+                // Inputs unreadable — banner will say "range unavailable".
+            }
+            exceptions = emptyExceptionsRail({
+                holidayCalendarVersionSeq: versionSeq,
+                calendarRangeStart: rangeStart,
+                calendarRangeEnd: rangeEnd,
+            });
+            if (latest.anchor) {
+                const kind = project.projectFinish !== null && latest.anchor === project.projectFinish
+                    ? 'project_finish'
+                    : 'computed_finish';
+                anchor = { kind, date: latest.anchor };
+            }
+            else {
+                minFloat = haltedReason === null ? minFloatFromRows(wpSchedules) : null;
+            }
+        }
+        else {
+            minFloat = null;
+        }
+        if (minFloat === null && haltedReason === null) {
+            minFloat = minFloatFromRows(wpSchedules);
+        }
+        const leafCandidates = ordered
+            .filter((w) => w.isLeaf)
+            .map((w) => ({ wpId: w.id, wbsCode: w.wbsCode, name: w.name }));
+        // Current Plan effort: leaf plannedMh from plan-input load; summaries roll up descendants.
+        const plannedMhByWp = new Map(planRows.wps.map((w) => [w.id, w.plannedMh]));
+        const rolledPlannedMh = (wpId, isLeaf) => {
+            if (isLeaf)
+                return plannedMhByWp.get(wpId) ?? 0n;
+            let sum = 0n;
+            const stack = [...(childrenOf.get(wpId) ?? [])];
+            while (stack.length > 0) {
+                const child = stack.pop();
+                if (child.isLeaf)
+                    sum += plannedMhByWp.get(child.id) ?? 0n;
+                else
+                    stack.push(...(childrenOf.get(child.id) ?? []));
+            }
+            return sum;
+        };
+        // Prefer Current Plan calendar for working-day Δ; fall back to pin calendar.
+        const planCalendar = planRows.calendar !== null
+            ? {
+                nonWorkingDays: planRows.calendar.nonWorkingDays,
+                rangeStart: planRows.calendar.rangeStart,
+                rangeEnd: planRows.calendar.rangeEnd,
+            }
+            : activeBaseline.pinCalendar;
+        const rows = ordered.map((wp) => {
+            const sched = scheduleByWp.get(wp.id);
+            const notSchedulable = sched?.notSchedulableReason === 'no_duration';
+            const siblings = childrenOf.get(wp.parentId) ?? [];
+            const posInSet = siblings.findIndex((sib) => sib.id === wp.id) + 1;
+            const status = planRows.statusHeads.get(wp.id);
+            const pctHead = planRows.pctHeads.get(wp.id) ?? null;
+            const pct = pctHead === null ? null : { num: pctHead.num, den: pctHead.den };
+            const recordedPctPmAdjusted = pctHead !== null && pctHead.reason !== null && pctHead.reason.trim().length > 0;
+            // calendar_range keeps last-good dates marked stale; other halt/stale → "—".
+            const blankDerived = blankDerivedDates({
+                haltedReason,
+                scheduleStale: sched?.stale ?? false,
+            });
+            let remaining = null;
+            if (wp.isLeaf && wp.durationDays !== null) {
+                try {
+                    remaining = remainingDuration(wp.durationDays, pct);
+                }
+                catch {
+                    remaining = null;
+                }
+            }
+            const predecessorEdges = edges
+                .filter((e) => e.successorWpId === wp.id)
+                .map((e) => ({ predecessorWpId: e.predecessorWpId, lagDays: e.lagDays }));
+            const earlyStart = blankDerived ? null : (sched?.earlyStart ?? null);
+            const earlyFinish = blankDerived ? null : (sched?.earlyFinish ?? null);
+            const plannedMh = rolledPlannedMh(wp.id, wp.isLeaf);
+            const compare = planBaselineCompare({
+                wpId: wp.id,
+                isLeaf: wp.isLeaf,
+                baseline: activeBaseline.baselineByWp.get(wp.id) ?? null,
+                baselineDurationDays: activeBaseline.baselineDurationByWp.get(wp.id) ?? null,
+                derivedStart: earlyStart,
+                derivedFinish: earlyFinish,
+                durationDays: wp.durationDays,
+                plannedMh,
+                calendar: planCalendar,
+            });
+            return {
+                wpId: wp.id,
+                wbsCode: wp.wbsCode,
+                name: wp.name,
+                parentId: wp.parentId,
+                isLeaf: wp.isLeaf,
+                isMilestone: wp.isMilestone,
+                isCatchAll: wp.isCatchAll,
+                level: depthOf(wp.id, parentOf),
+                posInSet: posInSet > 0 ? posInSet : 1,
+                setSize: siblings.length || 1,
+                hasChildren: (childrenOf.get(wp.id) ?? []).length > 0,
+                durationDays: wp.durationDays,
+                constraintType: wp.constraintType,
+                constraintDate: wp.constraintDate,
+                constraintLabel: formatConstraintLabel(wp.constraintType, wp.constraintDate),
+                predecessorsText: formatPredecessorsText(wp.id, edges, wbsById),
+                predecessorEdges,
+                earlyStart,
+                earlyFinish,
+                floatDays: blankDerived ? null : (sched?.floatDays ?? null),
+                isCritical: blankDerived ? false : (sched?.isCritical ?? false),
+                state: sched?.state ?? null,
+                notSchedulable,
+                stale: sched?.stale ?? false,
+                actualStart: status?.actualStart ?? null,
+                actualFinish: status?.actualFinish ?? null,
+                recordedPct: pct,
+                recordedPctPmAdjusted,
+                remainingDays: remaining,
+                exception: planGridExceptionCell(haltedReason, {
+                    wpId: wp.id,
+                    isLeaf: wp.isLeaf,
+                    notSchedulableReason: sched?.notSchedulableReason ?? null,
+                    violationsByWp,
+                    oosWpIds,
+                }),
+                plannedMh: compare.plannedMh,
+                baselineStart: compare.baselineStart,
+                baselineFinish: compare.baselineFinish,
+                baselineDurationDays: compare.baselineDurationDays,
+                baselineMh: compare.baselineMh,
+                startDeltaDays: compare.startDeltaDays,
+                finishDeltaDays: compare.finishDeltaDays,
+                durationDeltaDays: compare.durationDeltaDays,
+                effortDeltaMh: compare.effortDeltaMh,
+            };
+        });
+        const strip = stripDerivedScalars({
+            haltedReason,
+            computedFinish,
+            minFloat,
+            anchor,
+            projectFinish: project.projectFinish,
+        });
+        return {
+            projectId: input.projectId,
+            projectStart: project.projectStart,
+            projectFinish: project.projectFinish,
+            dataDate: project.dataDate,
+            tzOffsetMinutes: project.tzOffsetMinutes,
+            anchor,
+            computedFinish: strip.computedFinish,
+            minFloat: strip.minFloat,
+            floatAnchorSentence: strip.floatAnchorSentence,
+            haltedReason,
+            scheduleStale: anyStale || haltedReason !== null,
+            floatAnchorLabel: floatAnchorHeader(anchor),
+            finishTeaching: PROJECT_FINISH_TEACHING,
+            whatMoved,
+            exceptions,
+            leafCandidates,
+            hasBaseline: activeBaseline.versionSeq !== null,
+            rows,
+        };
+    });
+    return ok(value);
+}

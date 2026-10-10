@@ -40,12 +40,7 @@ export function resolveTrackerPins(input: {
   const liveOverall = overallLatest(input.snapshotRows)?.id;
 
   const freeze = input.freeze;
-  if (
-    freeze &&
-    freeze.overallSnapshotId !== '' &&
-    Object.keys(freeze.snapshotIdByConnector).length > 0 &&
-    freezeIdsExist(freeze, input.snapshotRows)
-  ) {
+  if (freeze && freezeCoversConnectors(freeze, input.snapshotRows, input.connectorIds)) {
     return {
       trackerSnapshotIdByConnector: new Map(Object.entries(freeze.snapshotIdByConnector)),
       overallSnapshotId: freeze.overallSnapshotId,
@@ -99,14 +94,22 @@ function compareSnapNewestFirst(a: SnapshotPinRow, b: SnapshotPinRow): number {
   return b.seq - a.seq;
 }
 
-function freezeIdsExist(
+/**
+ * Freeze is valid only when every current connector is mapped and each mapped snapshot
+ * belongs to that connector (partial / mismatched maps fall back to live).
+ */
+function freezeCoversConnectors(
   freeze: ReviewTrackerPin,
   snapshotRows: readonly SnapshotPinRow[],
+  connectorIds: readonly string[],
 ): boolean {
-  const ids = new Set(snapshotRows.map((r) => r.id));
-  if (!ids.has(freeze.overallSnapshotId)) return false;
-  for (const snapshotId of Object.values(freeze.snapshotIdByConnector)) {
-    if (!ids.has(snapshotId)) return false;
+  if (freeze.overallSnapshotId === '' || connectorIds.length === 0) return false;
+  if (!snapshotRows.some((row) => row.id === freeze.overallSnapshotId)) return false;
+  for (const connectorId of connectorIds) {
+    const snapshotId = freeze.snapshotIdByConnector[connectorId];
+    if (snapshotId === undefined || snapshotId === '') return false;
+    const row = snapshotRows.find((snap) => snap.id === snapshotId);
+    if (!row || row.connectorId !== connectorId) return false;
   }
   return true;
 }

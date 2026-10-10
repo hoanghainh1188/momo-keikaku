@@ -110,9 +110,9 @@ export function SnapshotPin({
 
   function onRepin() {
     startTransition(async () => {
-      // Story 6.7 / Q1→C: Re-pin is explicit — rewrite Tracker freeze, then refresh.
-      await repinReviewTrackerAction({ projectId });
-      router.refresh();
+      // Story 6.7 / Q1→C: Re-pin is explicit — rewrite Tracker freeze, then refresh only on ok.
+      const result = await repinReviewTrackerAction({ projectId });
+      if (result.ok) router.refresh();
     });
   }
 

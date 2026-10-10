@@ -35,7 +35,7 @@ export default async function ReviewPage({
   const { projectId } = await params;
   const ctx = await requestContext();
   const [{ bundle, review: r }, baselineState] = await Promise.all([
-    getProjectReview({ projectId }, ctx, { openReview: true }).then(valueOrNotFound),
+    getProjectReview({ projectId }, ctx).then(valueOrNotFound),
     baselineSetState(projectId, ctx).then(valueOrNotFound),
   ]);
   const p = bundle.project;
@@ -99,10 +99,26 @@ export default async function ReviewPage({
   const stalePin = pinAgeMinutes > 24 * 60;
   const mappingHref = `/p/${projectId}/mapping`;
   const planHref = `/p/${projectId}/plan`;
+  // Pin actually loaded (live heads when cookie freeze was missing/invalid) — client persists it.
+  const loadedTrackerPin =
+    r.snapshot.id &&
+    bundle.input.trackerSnapshotIdByConnector &&
+    bundle.input.trackerSnapshotIdByConnector.size > 0
+      ? {
+          overallSnapshotId: r.snapshot.id,
+          snapshotIdByConnector: Object.fromEntries(bundle.input.trackerSnapshotIdByConnector),
+        }
+      : null;
 
   return (
     <div className="layout-review" data-testid="layout-review">
-      {r.snapshot.id ? <ReviewPinRegistrar snapshotId={r.snapshot.id} /> : null}
+      {r.snapshot.id ? (
+        <ReviewPinRegistrar
+          snapshotId={r.snapshot.id}
+          projectId={projectId}
+          trackerPin={loadedTrackerPin}
+        />
+      ) : null}
       <div className="sheet">
         <header data-testid="review-header">
           <h1 className="report-title" data-testid="report-title">

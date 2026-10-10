@@ -556,32 +556,24 @@ export async function resetPassword(input: { readonly token: string; readonly pa
  * The project read port, wired. Built per call rather than at module load, so importing this
  * file reads no configuration — `next build` evaluates route modules without a database.
  *
- * Story 6.7 / Q1→C: optional Tracker freeze. Header stays live; Review ensures a pin on open;
- * Mapping respects an existing pin without creating one.
+ * Story 6.7 / Q1→C: optional Tracker freeze. Header stays live. Cookie writes happen only from
+ * Server Actions (`ensureReviewTrackerPin` / `repinReviewTracker`), never on the RSC load path.
+ * Omit the 4th loader arg when there is no freeze so arity stays 3 for the default path.
  */
-function projectReadDeps(options?: {
-  readonly trackerPin?: ReviewTrackerPin | null;
-  readonly ensurePin?: boolean;
-}) {
-  const pin = options?.trackerPin ?? null;
-  const ensurePin = options?.ensurePin === true;
+function projectReadDeps(options?: { readonly trackerPin?: ReviewTrackerPin }) {
+  const pin = options?.trackerPin;
   return {
     handle: webDb(),
     projectRead: {
-      loadProjectBundle: (handle: Db, tenantId: string, projectId: string) =>
-        loadProjectBundle(handle, tenantId, projectId, { trackerPin: pin }),
-      loadReview: async (handle: Db, tenantId: string, projectId: string) => {
-        const result = await loadReview(handle, tenantId, projectId, { trackerPin: pin });
-        if (ensurePin && !pin) {
-          const captured = captureReviewTrackerPin({
-            overallSnapshotId: result.bundle.input.pinnedSnapshot.snapshotId,
-            trackerSnapshotIdByConnector:
-              result.bundle.input.trackerSnapshotIdByConnector ?? new Map(),
-          });
-          if (captured) await writeReviewTrackerPin(projectId, captured);
-        }
-        return result;
-      },
+      // Parameter names without `tenantId:` annotations — web-composition fence bans that literal.
+      loadProjectBundle: (handle, tenantId, projectId) =>
+        pin
+          ? loadProjectBundle(handle, tenantId, projectId, { trackerPin: pin })
+          : loadProjectBundle(handle, tenantId, projectId),
+      loadReview: (handle, tenantId, projectId) =>
+        pin
+          ? loadReview(handle, tenantId, projectId, { trackerPin: pin })
+          : loadReview(handle, tenantId, projectId),
       loadRuleEvaluation,
     },
   } satisfies ProjectReadDeps<Db>;
@@ -594,38 +586,49 @@ export async function getProjectHeader(input: ProjectInput, ctx?: RequestContext
 }
 
 /**
- * The bundle and its Review, for every project page. See `packages/app`'s `getProjectReview`.
- * Story 6.7 / Q1→C: pass `{ openReview: true }` from the Review page so the first open persists
- * the Tracker freeze; other surfaces reuse an existing freeze without creating one.
+ * The bundle and its Review. Story 6.7 / Q1→C: reads an existing Tracker freeze cookie (if any)
+ * and passes it into the loader; does not write cookies (RSC-safe). Persist via
+ * `ensureReviewTrackerPin` from a Server Action after Review open.
  */
-export async function getProjectReview(
-  input: ProjectInput,
-  ctx?: RequestContext,
-  options?: { readonly openReview?: boolean },
-) {
+export async function getProjectReview(input: ProjectInput, ctx?: RequestContext) {
   const context = ctx ?? (await requestContext());
   const existing = await readReviewTrackerPin(input.projectId);
   return getProjectReviewUseCase(
-    projectReadDeps({
-      trackerPin: existing,
-      ensurePin: options?.openReview === true,
-    }),
+    existing ? projectReadDeps({ trackerPin: existing }) : projectReadDeps(),
     context,
     input,
   );
 }
 
 /**
- * Story 6.7 / Q1→C: explicit Re-pin — drop the freeze, capture live Tracker heads, persist.
+ * Story 6.7 / Q1→C: persist Tracker freeze from a Server Action (not RSC).
+ * Call after Review open with the pin the page just loaded (live capture when freeze was
+ * missing/invalid so the cookie does not keep tracking live heads forever).
+ */
+export async function ensureReviewTrackerPin(input: {
+  readonly projectId: string;
+  readonly pin: ReviewTrackerPin;
+}) {
+  await writeReviewTrackerPin(input.projectId, input.pin);
+}
+
+/**
+ * Story 6.7 / Q1→C: explicit Re-pin — drop the freeze, load live heads, persist the new pin.
+ * Cookie mutation is valid here (Server Action path).
  */
 export async function repinReviewTracker(input: ProjectInput, ctx?: RequestContext) {
   const context = ctx ?? (await requestContext());
   await clearReviewTrackerPin(input.projectId);
-  return getProjectReviewUseCase(
-    projectReadDeps({ trackerPin: null, ensurePin: true }),
-    context,
-    input,
-  );
+  const result = await getProjectReviewUseCase(projectReadDeps(), context, input);
+  if (result.ok) {
+    const captured = captureReviewTrackerPin({
+      overallSnapshotId: result.value.bundle.input.pinnedSnapshot.snapshotId,
+      trackerSnapshotIdByConnector:
+        result.value.bundle.input.trackerSnapshotIdByConnector ?? new Map(),
+    });
+    if (captured) await writeReviewTrackerPin(input.projectId, captured);
+  }
+  return result;
 }
 
 /** The Mapping surface, joined and ordered. See `packages/app`'s `getProjectMapping`. */
@@ -633,7 +636,7 @@ export async function getProjectMapping(input: ProjectInput, ctx?: RequestContex
   const context = ctx ?? (await requestContext());
   const existing = await readReviewTrackerPin(input.projectId);
   return getProjectMappingUseCase(
-    projectReadDeps({ trackerPin: existing, ensurePin: false }),
+    existing ? projectReadDeps({ trackerPin: existing }) : projectReadDeps(),
     context,
     input,
   );

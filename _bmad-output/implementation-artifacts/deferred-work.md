@@ -1577,3 +1577,23 @@ above can see where it went.
 - source_spec: `_bmad-output/implementation-artifacts/spec-6-7-the-reconciliation-review-pinned-and-in-one-fixed-order.md`
   summary: Write-side PM watermark and `schedule_run_seq` re-capture after each successful PM write inside a Review (AR-20 split-pin half).
   evidence: Story 6.7 founder decision Q1→C — Tracker-side freeze persists on Review open in 6.7; write-side re-capture of mapping/disposition/pct_override/setting/wp_status/wp_flag watermarks and `schedule_run_seq` is deferred to Story 6.9 with Disposition write semantics.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-6-7-the-reconciliation-review-pinned-and-in-one-fixed-order.md`
+  summary: Unit tests for `review-tracker-pin-cookie` encode/parse/clear under a fake Next cookies jar.
+  evidence: Story 6.7 review — cookie codec untested; db `resolveTrackerPins` covered; jar needs Next request or injectable fake.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-6-7-the-reconciliation-review-pinned-and-in-one-fixed-order.md`
+  summary: Plan surface honors `?wp=` (scroll/focus) for Divergence WP drills from Review.
+  evidence: Story 6.7 Q2→B links to `/plan?wp=`; Plan today only reads exceptions query — WP focus is Plan work.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-6-7-the-reconciliation-review-pinned-and-in-one-fixed-order.md`
+  summary: Align SnapshotPin chip amber age with Review freeze age when on Review (or document dual live-vs-freeze signal in UX).
+  evidence: Story 6.7 edge review — banner ages frozen snapshot; chip ages live latest from `getSnapshotPinState`.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-6-7-the-reconciliation-review-pinned-and-in-one-fixed-order.md`
+  summary: Set `Secure` on `momo.review-tracker-pin` when request is HTTPS / production.
+  evidence: Story 6.7 blind review — cookie is httpOnly+sameSite lax only.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-6-7-the-reconciliation-review-pinned-and-in-one-fixed-order.md`
+  summary: DB/integration test that `loadReview`/`loadProjectBundle` with `trackerPin` keep snapshot/ledger on freeze after a newer ingest.
+  evidence: Story 6.7 verification-gap — pure `resolveTrackerPins` tests pass without wiring; no Postgres in build VM.

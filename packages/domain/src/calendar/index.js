@@ -1,0 +1,277 @@
+/**
+ * FR-14 / AD-15: working-day maths and Reporting Periods live here and nowhere else.
+ * Pure: never reads the clock.
+ *
+ * Dates are handled as plain 'YYYY-MM-DD' strings in the Project time zone.
+ * The demo Project runs in Asia/Tokyo (fixed +09:00), so instant -> project date
+ * is a fixed offset. A real implementation needs a tz database; noted as a demo
+ * simplification in README-DEMO.md.
+ */
+import { DEFAULT_CALENDAR_RANGE_END, DEFAULT_CALENDAR_RANGE_START, JP_HOLIDAYS_2026, JP_NATIONAL_HOLIDAYS, NATIONAL_DATASET_VERSION, VN_HOLIDAYS_2026, VN_NATIONAL_HOLIDAYS, } from './national-dataset';
+export { DEFAULT_CALENDAR_RANGE_END, DEFAULT_CALENDAR_RANGE_START, JP_HOLIDAYS_2026, JP_NATIONAL_HOLIDAYS, NATIONAL_DATASET_VERSION, VN_HOLIDAYS_2026, VN_NATIONAL_HOLIDAYS, };
+export function buildCalendar(id, opts) {
+    const holidays = {};
+    const add = (d, k) => {
+        holidays[d] = [...(holidays[d] ?? []), k];
+    };
+    if (opts.jp)
+        JP_HOLIDAYS_2026.forEach((d) => add(d, 'jp'));
+    if (opts.vn)
+        VN_HOLIDAYS_2026.forEach((d) => add(d, 'vn'));
+    (opts.extra ?? []).forEach((d) => add(d, 'jp'));
+    return { id, holidays };
+}
+export function parseDate(d) {
+    return new Date(`${d}T00:00:00.000Z`);
+}
+export function formatDate(d) {
+    return d.toISOString().slice(0, 10);
+}
+export function addDays(d, n) {
+    const t = parseDate(d);
+    t.setUTCDate(t.getUTCDate() + n);
+    return formatDate(t);
+}
+/** 0 = Sunday .. 6 = Saturday */
+export function weekday(d) {
+    return parseDate(d).getUTCDay();
+}
+export function isWeekend(d) {
+    const w = weekday(d);
+    return w === 0 || w === 6;
+}
+export function isWorkingDay(d, cal) {
+    return !isWeekend(d) && !(d in cal.holidays);
+}
+/** Fixed Asia/Tokyo offset used by the snapshot schedule (AD-15 / AR-28). */
+export const ASIA_TOKYO_OFFSET_MINUTES = 9 * 60;
+/**
+ * Project-local calendar date and hour-of-day for a fixed-offset zone.
+ * Pure: never reads the clock; `instant` is caller-supplied (AD-15).
+ */
+export function projectDateAndHour(instant, tzOffsetMinutes = ASIA_TOKYO_OFFSET_MINUTES) {
+    const shifted = new Date(instant.getTime() + tzOffsetMinutes * 60_000);
+    return {
+        date: formatDate(shifted),
+        hour: shifted.getUTCHours(),
+    };
+}
+/**
+ * True when `instant` is inside the snapshot business window: 09:00–19:00 Asia/Tokyo
+ * on a day that is a working day for JP **or** VN (AR-28 / FR-19).
+ *
+ * A day is a JP-or-VN working day when it is a weekday and not a holiday for *both*
+ * countries — a JP-only holiday still counts when VN works (and the reverse). Weekends
+ * and days that are holidays in both sets fall outside the window (matrix: both JP+VN
+ * holiday → off-window / ≥6 h cadence).
+ *
+ * `cal.holidays` must carry per-date `HolidayKind[]` so JP and VN can be distinguished
+ * (as `buildCalendar({ jp: true, vn: true })` does).
+ */
+export function isSnapshotBusinessWindow(instant, cal, tzOffsetMinutes = ASIA_TOKYO_OFFSET_MINUTES) {
+    const { date, hour } = projectDateAndHour(instant, tzOffsetMinutes);
+    if (hour < 9 || hour >= 19)
+        return false;
+    if (isWeekend(date))
+        return false;
+    const kinds = cal.holidays[date] ?? [];
+    const jpHoliday = kinds.includes('jp');
+    const vnHoliday = kinds.includes('vn');
+    return !(jpHoliday && vnHoliday);
+}
+/** Inclusive count of working days in [start, end]. Returns 0 when end < start. */
+export function workingDaysBetween(start, end, cal) {
+    if (end < start)
+        return 0;
+    let n = 0;
+    for (let d = start; d <= end; d = addDays(d, 1))
+        if (isWorkingDay(d, cal))
+            n += 1;
+    return n;
+}
+export function addWorkingDays(start, n, cal) {
+    let d = start;
+    let left = n;
+    while (left > 0) {
+        d = addDays(d, 1);
+        if (isWorkingDay(d, cal))
+            left -= 1;
+    }
+    return d;
+}
+export function nextWorkingDay(d, cal) {
+    return addWorkingDays(d, 1, cal);
+}
+/** Project-local calendar date of an instant, for a fixed-offset time zone. */
+export function projectDate(instantIso, tzOffsetMinutes) {
+    const t = new Date(instantIso);
+    return formatDate(new Date(t.getTime() + tzOffsetMinutes * 60_000));
+}
+/**
+ * FR-28 / AD-15: weekly Reporting Period aligned to the teirei weekday.
+ * The Period ENDS on the teirei weekday, so Wednesday evening's Review covers
+ * the week that the Thursday meeting reports on.
+ */
+export function periodOf(instantIso, tzOffsetMinutes, teireiWeekday) {
+    const d = projectDate(instantIso, tzOffsetMinutes);
+    let end = d;
+    // walk forward to the next teirei weekday (inclusive of today)
+    for (let i = 0; i < 7; i += 1) {
+        if (weekday(end) === teireiWeekday)
+            break;
+        end = addDays(end, 1);
+    }
+    const start = addDays(end, -6);
+    return { start, end, label: `${start} – ${end}` };
+}
+export function periodContains(p, date) {
+    return date >= p.start && date <= p.end;
+}
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+/** Throws unless `d` is a real calendar date written `YYYY-MM-DD`. */
+export function assertIsoDate(d, what) {
+    if (!ISO_DATE.test(d) || Number.isNaN(parseDate(d).getTime()) || formatDate(parseDate(d)) !== d) {
+        throw new RangeError(`${what} "${d}" is not a YYYY-MM-DD calendar date`);
+    }
+}
+/**
+ * Indexes a calendar version. Throws (a caller defect) on a malformed date, an empty range, or
+ * a non-working day outside the range: the set is exhaustive for the range and nothing else.
+ */
+export function workingDayIndex(version) {
+    assertIsoDate(version.rangeStart, 'calendar rangeStart');
+    assertIsoDate(version.rangeEnd, 'calendar rangeEnd');
+    if (version.rangeEnd < version.rangeStart) {
+        throw new RangeError(`calendar range ${version.rangeStart} – ${version.rangeEnd} ends before it starts`);
+    }
+    const nonWorking = new Set();
+    for (const d of version.nonWorkingDays) {
+        assertIsoDate(d, 'calendar non-working day');
+        if (d < version.rangeStart || d > version.rangeEnd) {
+            throw new RangeError(`calendar non-working day ${d} is outside its range ${version.rangeStart} – ${version.rangeEnd}`);
+        }
+        nonWorking.add(d);
+    }
+    const days = [];
+    const floorOf = new Map();
+    const working = new Set();
+    for (let d = version.rangeStart; d <= version.rangeEnd; d = addDays(d, 1)) {
+        if (!nonWorking.has(d)) {
+            days.push(d);
+            working.add(d);
+        }
+        floorOf.set(d, days.length - 1);
+    }
+    return { rangeStart: version.rangeStart, rangeEnd: version.rangeEnd, days, floorOf, working };
+}
+function outside(idx, d) {
+    if (d < idx.rangeStart)
+        return 'before';
+    if (d > idx.rangeEnd)
+        return 'after';
+    return null;
+}
+/** The floor position of an in-range date. Throws on a malformed one such as '2026-10-1'. */
+function positionOf(idx, d) {
+    const floor = idx.floorOf.get(d);
+    if (floor === undefined)
+        throw new RangeError(`"${d}" is not a YYYY-MM-DD calendar date`);
+    return floor;
+}
+/** The working day at position `i`, or the side of the range `i` lies beyond. */
+export function workingDayAt(idx, i) {
+    if (i < 0)
+        return { ok: false, side: 'before' };
+    if (i >= idx.days.length)
+        return { ok: false, side: 'after' };
+    return { ok: true, value: idx.days[i] };
+}
+/**
+ * The position of the last working day on or before `d`: `d`'s own position on a working day,
+ * −1 when no working day in range precedes it. Fails only when `d` itself is outside the range.
+ */
+export function floorPosition(idx, d) {
+    const side = outside(idx, d);
+    if (side !== null)
+        return { ok: false, side };
+    return { ok: true, value: positionOf(idx, d) };
+}
+/**
+ * The position of the first working day on or after `d`: `d`'s own position on a working day,
+ * `days.length` when no working day in range follows it. Fails only when `d` is outside the range.
+ */
+export function ceilPosition(idx, d) {
+    const side = outside(idx, d);
+    if (side !== null)
+        return { ok: false, side };
+    const floor = positionOf(idx, d);
+    return { ok: true, value: idx.working.has(d) ? floor : floor + 1 };
+}
+/** Q2: a date on a non-working day rolls forward to the next working day; a working day stays. */
+export function rollForward(idx, d) {
+    const position = ceilPosition(idx, d);
+    return position.ok ? workingDayAt(idx, position.value) : position;
+}
+/**
+ * The working day `n` working days after (`n` > 0) or before (`n` < 0) the working day `d`.
+ * `d` must be a working day in range (roll it first); anything else is a caller defect and throws.
+ */
+export function shiftWorkingDays(idx, d, n) {
+    if (!Number.isSafeInteger(n))
+        throw new RangeError(`shiftWorkingDays: ${n} is not an integer`);
+    const side = outside(idx, d);
+    if (side !== null)
+        return { ok: false, side };
+    if (!idx.working.has(d)) {
+        throw new RangeError(`shiftWorkingDays: ${d} is not a working day; roll it forward first`);
+    }
+    return workingDayAt(idx, idx.floorOf.get(d) + n);
+}
+/**
+ * Build the fully resolved non-working-day set over `[rangeStart, rangeEnd]`: every weekend,
+ * selected national holidays that fall in range, and live Project days in range.
+ */
+export function resolveCalendarVersion(args) {
+    const rangeStart = args.rangeStart ?? DEFAULT_CALENDAR_RANGE_START;
+    const rangeEnd = args.rangeEnd ?? DEFAULT_CALENDAR_RANGE_END;
+    assertIsoDate(rangeStart, 'calendar rangeStart');
+    assertIsoDate(rangeEnd, 'calendar rangeEnd');
+    if (rangeEnd < rangeStart) {
+        throw new RangeError(`calendar range ${rangeStart} – ${rangeEnd} ends before it starts`);
+    }
+    const nationalSets = [];
+    const nationals = new Set();
+    if (args.calendarJp) {
+        nationalSets.push('jp');
+        for (const d of JP_NATIONAL_HOLIDAYS) {
+            if (d >= rangeStart && d <= rangeEnd)
+                nationals.add(d);
+        }
+    }
+    if (args.calendarVn) {
+        nationalSets.push('vn');
+        for (const d of VN_NATIONAL_HOLIDAYS) {
+            if (d >= rangeStart && d <= rangeEnd)
+                nationals.add(d);
+        }
+    }
+    const projectDays = new Set();
+    for (const d of args.projectDays ?? []) {
+        assertIsoDate(d, 'project non-working day');
+        if (d >= rangeStart && d <= rangeEnd)
+            projectDays.add(d);
+    }
+    const nonWorkingDays = [];
+    for (let d = rangeStart; d <= rangeEnd; d = addDays(d, 1)) {
+        if (isWeekend(d) || nationals.has(d) || projectDays.has(d)) {
+            nonWorkingDays.push(d);
+        }
+    }
+    return {
+        nonWorkingDays,
+        rangeStart,
+        rangeEnd,
+        nationalSets,
+        nationalDatasetVersion: NATIONAL_DATASET_VERSION,
+    };
+}

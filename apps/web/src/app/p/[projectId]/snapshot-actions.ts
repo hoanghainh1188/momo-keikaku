@@ -5,12 +5,14 @@
  */
 import { revalidatePath } from 'next/cache';
 import {
+  ensureReviewTrackerPin,
   getSnapshotPinState,
   requestSnapshotRefresh,
   repinReviewTracker,
   requestContext,
 } from '@/server/composition';
 import { messageFromKey } from '@/server/error-message';
+import type { ReviewTrackerPinCookie } from '@/lib/review-tracker-pin-cookie';
 
 import type { SnapshotRefreshState } from './snapshot-refresh-state';
 
@@ -55,6 +57,19 @@ export async function loadSnapshotPinStateAction(input: {
       })),
     },
   };
+}
+
+/**
+ * Story 6.7 / Q1→C: persist Tracker freeze from a Server Action after Review open.
+ * Cookie writes are illegal on the RSC load path — the client registrar calls this.
+ */
+export async function ensureReviewTrackerPinAction(input: {
+  readonly projectId: string;
+  readonly pin: ReviewTrackerPinCookie;
+}) {
+  await requestContext();
+  await ensureReviewTrackerPin({ projectId: input.projectId, pin: input.pin });
+  return { ok: true as const };
 }
 
 /** Story 6.7 / Q1→C: explicit Re-pin rewrites the Tracker freeze then refreshes Review. */

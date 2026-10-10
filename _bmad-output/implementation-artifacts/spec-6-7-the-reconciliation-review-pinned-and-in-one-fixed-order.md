@@ -2,7 +2,7 @@
 title: '6.7 — The Reconciliation Review, pinned and in one fixed order'
 type: 'feature'
 created: '2026-10-10'
-status: 'in-progress'
+status: 'in-review'
 route: 'dispatch'
 review_loop_iteration: 0
 context: []
@@ -93,7 +93,7 @@ baseline_commit: 'd3efabb2166abdb1fdb0341143d8329c2798a852'
 - Given the Review opens, when it renders, then it is one Reporting Period pinned to a Tracker Snapshot (time shown) and shows EVM, Health, Divergence by WP, mapping coverage, and Unplanned's three components (FR-28).
 - Given page order, when it renders, then order is Header, Status, Unplanned Work, Ahead/Behind, Progress & Dates, Effort & Cost, Forecast with Disposition rail at the right (UX-DR15 Core).
 - Given each section, when it renders, then title + 1px ink rule markup is present (UX-DR15 Core).
-- Given the Review pin (Q1), when inputs are captured / PM writes succeed, then Tracker-side stays frozen for Review life and PM watermarks + `schedule_run_seq` follow the chosen Q1 option (AR-20).
+- Given the Review pin (Q1→C), when Review opens, then Tracker-side snapshot/ledger stay frozen for Review life and Re-pin is explicit; write-side PM watermark + `schedule_run_seq` re-capture is deferred to Story 6.9 (AR-20 partial).
 - Given Unmapped Work, when expanded, then Tickets show hours and money (PM) and in-scope numbers link to Tickets/WPs (FR-28, UX-DR17, Q2).
 - Given Contract Type, when Unplanned renders, then Contract Type appears next to it (FR-28).
 - Given snapshot age >24h, when Review renders, then header banner offers *Refresh now* and pin is amber (UX-DR23).
@@ -101,14 +101,44 @@ baseline_commit: 'd3efabb2166abdb1fdb0341143d8329c2798a852'
 
 ## Implementation Notes
 
-- Q1→C Tracker freeze: `resolveTrackerPins` / `captureReviewTrackerPin` in `packages/db`; `loadBundleInTenant` accepts optional `trackerPin`. Composition persists pin in httpOnly session cookie `momo.review-tracker-pin` on Review open (`openReview: true`); Re-pin calls `repinReviewTrackerAction`. No new DB table this story (Code Map: optional session table).
+- Q1→C Tracker freeze: `resolveTrackerPins` / `captureReviewTrackerPin` in `packages/db`; `loadBundleInTenant` accepts optional `trackerPin` (omit 4th arg when null). RSC reads cookie only; `ReviewPinRegistrar` persists via `ensureReviewTrackerPinAction` with the loaded pin (rewrites when freeze was invalid). Re-pin clears + loads live + writes in the action path. No new DB table this story.
 - Write-side PM/`schedule_run_seq` re-capture deferred — appended to `deferred-work.md` for Story 6.9.
 - Chrome: Contract Type beside Unplanned; stale >24h header banner + `ReviewRefreshNowForm` (same `refreshSnapshotAction`); Unmapped expand money + Mapping links; component hour drills; Divergence WP → Plan; Disposition drawer below 1280px; `@media print` A4 landscape hides topbar/sidebar/rail.
-- Verified: `pnpm exec tsc -b`, `apps/web` `tsc --noEmit`, `pnpm lint`, presence/unit/i18n/pin tests, `vitest.nfr` (load-fixture skipped without Postgres in this env).
+- Verified: `pnpm exec tsc -b`, `pnpm lint`, presence/pin/review/i18n + composition read/fence tests; load-fixture NFR skipped without Postgres.
+- Review patch round: RSC cookie write → Server Action; freeze must cover connectors; Refresh/Re-pin honor `ok`; concrete Unmapped `jpy`; composition `tenantId:` fence avoided on wrapped loaders.
 
 ## Spec Change Log
 
+- 2026-10-10 review: Tasks & Acceptance pin AC still described full AR-20 write-side re-capture; amended that AC line to match frozen Q1→C (freeze on open; write-side → 6.9). KEEP: all Q1→C cookie/action freeze implementation and Review chrome.
+
 ## Review Triage Log
+
+- blind: AC still required write-side re-capture under Q1→C — **medium** → patch (AC rewritten to frozen Q1→C; Spec Change Log)
+- blind: cookie `set` during RSC load — **high** → patch (persist via `ensureReviewTrackerPinAction` from `ReviewPinRegistrar`)
+- blind: freeze valid without covering current connectors — **medium** → patch (`freezeCoversConnectors`)
+- blind: Contract Type is caption under Unplanned not heading — **false** — FR-28 “next to Unplanned Work”; `unplanned-contract-type` sits in Unplanned section
+- blind: drills are page-level `/mapping`/`/plan` — **false** — frozen Q2→B pragmatic; not exhaustive deep-links
+- blind: no unit tests for cookie codec — **medium** → defer (helper covered in db; cookie jar needs Next request)
+- blind: drawer missing a11y/Escape/`rail--drawer-open` CSS — **low** → rejected (toggle + matchMedia enough for everyday; Comfort polish)
+- blind: Refresh ignores `ok: false` — **medium** → patch (alert on failure)
+- blind: empty Spec Change Log / Triage — **false** — process; filled this pass
+- blind: Re-pin refreshes even when action fails — **medium** → patch (refresh only on `ok`)
+- blind: print verified only by source strings — **false** — same presence pattern as Story 6.6 finish-dates
+- blind: cookie omits `Secure` / unbounded project map — **low** → defer (`Secure` needs HTTPS-aware flag; session-scoped growth acceptable for R0)
+- edge: invalid freeze silently tracks live — **medium** → patch (client ensure rewrites loaded pin after open)
+- edge: freeze omits connector — **medium** → patch (same cover check)
+- edge: freeze maps wrong connector’s snapshot — **medium** → patch (connector ownership check)
+- edge: Divergence `?wp=` unused on Plan — **medium** → defer (Plan focus not in 6.7; Q2→B allows Plan link)
+- edge: Refresh failure silent — **medium** → patch (same as blind Refresh)
+- edge: Re-pin fail still refresh — **medium** → patch (same as blind Re-pin)
+- edge: Invalid Date pin age → NaN skips banner — **low** → rejected (anchor/observedAt from DB ISO; not everyday)
+- edge: narrow drawer flash before matchMedia — **low** → rejected
+- edge: pin chip amber uses live age while banner uses freeze — **medium** → defer (chip is shell live freshness; banner is Review freeze age — dual signal)
+- edge: claim freeze drifts after invalid cookie — **medium** → patch (ensure rewrite)
+- vgap: freeze never tested beyond pure helper — **medium** → defer (no Postgres; extend when DB harness available; resolve tests strengthened)
+- vgap: presence suite is source-text only — **false** — intentional fence style matching 6.6; not broken-verification for this repo
+- vgap: Unmapped `jpy` asserted as `any BigInt` — **medium** → patch (concrete `costOf` amount)
+- vgap other: composition arity / `tenantId:` fence red — **high** → patch (omit 4th arg when null; no `tenantId:` annotations on wrappers)
 
 ## Design Notes
 

@@ -1,0 +1,92 @@
+/**
+ * Shared Plan EN display helpers (Epic 2 retro F2/F5).
+ * Client-safe via `@momo/domain/present` (AD-1) — app and web must not keep local copies.
+ */
+export const SUMMARY_NA_LABEL = 'not applicable — summary work package, rolled up from its children';
+const MONTHS = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+];
+const MONTHS_LONG = [
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
+];
+/** EN display date: `19 Sep 2026` (EXPERIENCE). */
+export function formatPlanDate(iso) {
+    if (!iso)
+        return '—';
+    const [y, m, d] = iso.split('-').map(Number);
+    if (!y || !m || !d)
+        return iso;
+    return `${d} ${MONTHS[m - 1] ?? 'Jan'} ${y}`;
+}
+/** Short EN date without year — used in What-moved arrows. */
+export function formatPlanDateShort(iso) {
+    if (!iso)
+        return '—';
+    const [y, m, d] = iso.split('-').map(Number);
+    if (!y || !m || !d)
+        return iso;
+    return `${d} ${MONTHS[m - 1] ?? 'Jan'}`;
+}
+/** Long month for polite announce: `26 March 2027`. */
+export function formatPlanDateLong(iso) {
+    if (!iso)
+        return '—';
+    const [y, m, d] = iso.split('-').map(Number);
+    if (!y || !m || !d)
+        return iso;
+    return `${d} ${MONTHS_LONG[m - 1] ?? 'January'} ${y}`;
+}
+export function formatMinFloat(minFloat) {
+    if (minFloat === null)
+        return '—';
+    const sign = minFloat > 0 ? '+' : '';
+    return `${sign}${minFloat}`;
+}
+export function inkTone(date, dataDate) {
+    if (date === null)
+        return 'na';
+    if (dataDate === null)
+        return 'full';
+    return date <= dataDate ? 'muted' : 'full';
+}
+export function formatFloatDisplay(floatDays, notSchedulable) {
+    if (notSchedulable || floatDays === null)
+        return { text: '—', negative: false };
+    const sign = floatDays > 0 ? '+' : '';
+    return { text: `${sign}${floatDays}`, negative: floatDays < 0 };
+}
+/**
+ * Signed whole-day Δ for Baseline compare columns (DESIGN): `+` / real minus `−` / `0` /
+ * em dash when N/A. Zero is never blank.
+ */
+export function daysSigned(delta) {
+    if (delta === null || delta === undefined)
+        return '—';
+    if (delta === 0)
+        return '0';
+    if (delta > 0)
+        return `+${delta}`;
+    return `\u2212${Math.abs(delta)}`;
+}
