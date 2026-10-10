@@ -2,7 +2,7 @@
 title: 'Story 6.2 — EVM in hours, with Unplanned Work carrying no earned value'
 type: 'feature'
 created: '2026-10-10'
-status: 'in-progress'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: 'dbf2b338bb35feb836e581d131b48b40f0549426'
@@ -97,6 +97,20 @@ context:
 ## Spec Change Log
 
 ## Review Triage Log
+
+- `medium` → patch — VG: `computeEvm` never asserted with multi-resource `assignedResourceIds` (only helper); resource axis can be unwired without failing tests.
+- `medium` → patch — VG: Review `ev-fell` tag has no render/HTML test; domain `evFell` alone does not prove UI.
+- `medium` → patch — BH: `review.test` dual-CPI case never asserts Unplanned PV=EV=0 / roll-up AC identity.
+- `medium` → patch — ECH: `plannedValueLargestRemainder` empty-days guard returns full BAC when `asOf >= finish` before checking `asOf < start` — inverted start>finish yields full BAC while asOf is still before start.
+- `medium` → patch — BH: `evm-2026-10-10` golden expected omits PV/EV despite the version existing to change PV.
+- `low` → patch — BH: sprint `6-2-…` still `in-progress` while tasks complete / spec `in-review` — move to `review`.
+- `low` → defer — BH/ECH: loader never fills `priorEvByWp` (no last-open-Review store); frozen Q1-A allows empty when unavailable — record deferred product path.
+- `low` → reject — BH: Design Notes hierarchical vs flat day×resource wording; fix would edit this build's spec; frozen matrix + code agree on flat cells.
+- `false` — BH: empty Spec Change Log; that section is for bad_spec loopbacks, not every formula bump.
+- `false` — VG/BH: `ja.review.ev_fell` English — R0 Review UI locale is `en` (`REPORT_LOCALE`).
+- `low` → reject — BH: missing trailing newline on corpus JSON; cosmetic.
+- `low` → reject — BH: weekend/dup-resource/zero-working-day PV edge tests; Set already dedupes; weekend mid-window covered; zero-day path exists; unlikely everyday miss after patches above.
+- `false` — BH: task checkboxes vs loader — Q1-A “when available” with no store is absent priors by design (see defer).
 
 ## Design Notes
 
