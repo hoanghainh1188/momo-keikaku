@@ -32,7 +32,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 09-20-2026 16:55
-last_updated: 10-10-2026 07:45
+last_updated: 10-10-2026 00:10
 project: momo-keikaku
 project_key: NOKEY
 tracking_system: file-system
@@ -89,7 +89,7 @@ development_status:
   4-5-baseline-comparison-as-columns-on-the-plan-grid: done
   epic-4-retrospective: done
 
-  epic-5: in-progress
+  epic-5: done
   5-1-one-port-to-every-tracker-and-a-fixture-that-replays-like-on: done
   5-2-connect-a-backlog-space-read-only: done
   5-3-a-paginated-read-is-complete-or-it-is-not-a-read: done
@@ -105,7 +105,7 @@ development_status:
   5-13-nothing-in-scope-is-silently-excluded: done
   5-14-approximate-figures-say-they-are-approximate: done
   5-15-the-ticket-half-of-the-load-fixture: done
-  epic-5-retrospective: optional
+  epic-5-retrospective: done
 
   epic-6: backlog
   6-1-every-figure-comes-from-pinned-inputs-and-a-test-proves-it: backlog
@@ -313,3 +313,48 @@ action_items:
     owner: "dev"
     status: done
     ref: "_bmad-output/implementation-artifacts/epic-4-retro-2026-10-04.md"
+  - id: "epic-5-retro-item-25-unify-fr-22-re-eval-shared-helper-for-in"
+    epic: 5
+    action: "Unify FR-22 re-eval: shared helper for ingest + rule-save; ingest applyRules
+      only on owned non-left_scope tickets; add overlap/claimer regression fence (retro
+      F3)"
+    owner: "dev"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-5-retro-2026-10-09.md"
+  - id: "epic-5-retro-item-26-move-latestbaselineversionseq-after-lock"
+    epic: 5
+    action: "Move latestBaselineVersionSeq after lockWatermark in writeIngestSnapshot;
+      add concurrency/regression assert (retro F4)"
+    owner: "dev"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-5-retro-2026-10-09.md"
+  - id: "epic-5-retro-item-27-fix-computecoverage-catch-all-loe-one-pr"
+    epic: 5
+    action: "Fix computeCoverage Catch-all LOE: one project-wide attribute then slice
+      per owner; align overflow filter with same pass (retro F5)"
+    owner: "dev"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-5-retro-2026-10-09.md"
+  - id: "epic-5-retro-item-28-align-review-mappedhourshare-with-sm-5-c"
+    epic: 5
+    action: "Align Review mappedHourShare with SM-5/Coverage (exclude Catch-all) or
+      rename the Review field (retro F6)"
+    owner: "dev"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-5-retro-2026-10-09.md"
+  - id: "epic-5-retro-item-29-reconcile-epics-md-epic-5-prose-with-as"
+    epic: 5
+    action: "Reconcile epics.md Epic 5 prose with as-built deferrals (compaction;
+      KMS/SES to Epic 8; FR-26 contract-only; NFR-P1 page-load to 6.1; deleteWp re-eval
+      timing) (retro F1)"
+    owner: "founder"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-5-retro-2026-10-09.md"
+  - id: "epic-5-retro-item-30-deferred-track-split-ingest-orchestrator"
+    epic: 5
+    action: "Deferred track: split ingest orchestrator; extract search-budget and
+      ticketsInBucket helpers; approval tz; preview OB filter; REQUIRE_DB matrices
+      / Resolved UI / compaction / notify fan-out per deferred-work (retro F7/F9-F12)"
+    owner: "dev"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-5-retro-2026-10-09.md"
