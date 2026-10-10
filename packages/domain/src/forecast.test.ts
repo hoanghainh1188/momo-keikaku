@@ -171,4 +171,34 @@ describe('computeForecast (FR-32 dual finishes)', () => {
     expect(r.eacMh).toBe(evm.eacMh);
     expect(r.eacMh.kind === 'value' && r.eacMh.value).toBe(hoursToMh(999));
   });
+
+  it('signed negative finishGapWd when trend is earlier than computed', () => {
+    const r = computeForecast(
+      evmStub({ spiNum: 100n, spiDen: 100n, ev: hoursToMh(100), bac: hoursToMh(100) }),
+      baseline,
+      '2026-06-05',
+      cal,
+      { computedFinish: '2026-06-26', baselineProjectStart: '2026-06-08' },
+    );
+    expect(r.forecastFinish).toBe('2026-06-19');
+    expect(r.computedFinish).toBe('2026-06-26');
+    expect(r.finishGapWd).toBe(finishGapWorkingDays('2026-06-26', '2026-06-19', cal));
+    expect(r.finishGapWd).toBeLessThan(0);
+  });
+
+  it('baselineStart > baselineFinish → empty trend; computedFinish kept', () => {
+    const r = computeForecast(
+      evmStub({ spiNum: 100n, spiDen: 100n, ev: hoursToMh(100), bac: hoursToMh(100) }),
+      baseline,
+      '2026-06-05',
+      cal,
+      { computedFinish: '2026-06-19', baselineProjectStart: '2026-06-30' },
+    );
+    expect(r.baselineStart).toBe('2026-06-30');
+    expect(r.baselineFinish).toBe('2026-06-19');
+    expect(r.forecastFinish).toBeNull();
+    expect(r.trendFinish).toBeNull();
+    expect(r.computedFinish).toBe('2026-06-19');
+    expect(r.finishGapWd).toBeNull();
+  });
 });

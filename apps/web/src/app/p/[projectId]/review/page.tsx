@@ -240,11 +240,15 @@ export default async function ReviewPage({
                       label={t('review.sv_schedule_variance')}
                       metric={evm.svMh}
                       formula={t('review.metrics.formula_sv')}
-                      note={t(
-                        evm.svMh.kind === 'value' && evm.svMh.value < 0n
-                          ? 'review.metrics.behind_plan_cap'
-                          : 'review.metrics.ahead_of_plan',
-                      )}
+                      note={
+                        evm.svMh.kind === 'value'
+                          ? t(
+                              evm.svMh.value < 0n
+                                ? 'review.metrics.behind_plan_cap'
+                                : 'review.metrics.ahead_of_plan',
+                            )
+                          : undefined
+                      }
                       testId="m-status-sv"
                       popover={formulaPopover('sv', t('review.metrics.formula_sv'))}
                     />
@@ -271,7 +275,10 @@ export default async function ReviewPage({
                 forecast !== null &&
                 forecast.finishGapWd !== null ? (
                   <p className="caption" data-testid="status-finish-gap" style={{ marginTop: 8 }}>
-                    {t('review.finishes_disagree', { gap: forecast.finishGapWd })}
+                    {t('review.finishes_disagree', {
+                      absGap: Math.abs(forecast.finishGapWd),
+                      direction: forecast.finishGapWd > 0 ? 'later' : 'earlier',
+                    })}
                   </p>
                 ) : null}
               </div>
@@ -535,7 +542,7 @@ export default async function ReviewPage({
                 <MetricCell
                   label={t('review.trend_finish')}
                   metric={{ text: forecast.trendFinish ?? forecast.forecastFinish ?? em }}
-                  formula={t('review.metrics.formula_forecast_finish')}
+                  formula={t('review.metrics.formula_forecast_trend')}
                   note={t('review.metrics.note_forecast_finish', {
                     baselineFinish: forecast.baselineFinish ?? em,
                     note: forecast.note,
@@ -545,7 +552,10 @@ export default async function ReviewPage({
               </div>
               {forecast.finishGapWd !== null ? (
                 <p className="caption" data-testid="ahead-behind-finish-gap" style={{ marginTop: 8 }}>
-                  {t('review.finishes_disagree', { gap: forecast.finishGapWd })}
+                  {t('review.finishes_disagree', {
+                    absGap: Math.abs(forecast.finishGapWd),
+                    direction: forecast.finishGapWd > 0 ? 'later' : 'earlier',
+                  })}
                 </p>
               ) : null}
 
@@ -975,7 +985,10 @@ export default async function ReviewPage({
               </div>
               {forecast.finishGapWd !== null ? (
                 <p className="caption" data-testid="forecast-finish-gap" style={{ marginTop: 8 }}>
-                  {t('review.finishes_disagree', { gap: forecast.finishGapWd })}
+                  {t('review.finishes_disagree', {
+                    absGap: Math.abs(forecast.finishGapWd),
+                    direction: forecast.finishGapWd > 0 ? 'later' : 'earlier',
+                  })}
                 </p>
               ) : null}
               <p className="caption" style={{ marginTop: 16 }}>{t('review.the_effort_forecast_is_the_eac_from_the_project_')}</p>

@@ -346,8 +346,19 @@ describe('computeReview with no Baseline (story 2.2, decision Q1-A)', () => {
 
 describe('computeReview forecast dual finishes (Story 6.6 / FR-32)', () => {
   it('threads scheduleHealth.computedFinish and baselineProjectStart into forecast', () => {
+    // Closed + estimate → EV > 0 so SPI > 0 and the trend finish is present (disagrees with computed).
     const r = computeReview({
       ...input,
+      pinnedSnapshot: {
+        ...input.pinnedSnapshot,
+        tickets: [
+          {
+            ...input.pinnedSnapshot.tickets[0]!,
+            statusId: 'Closed',
+            estimateMh: hoursToMh(200),
+          },
+        ],
+      },
       scheduleHealth: {
         anchor: { kind: 'computed_finish', date: '2026-11-01' },
         computedFinish: '2026-11-01',
@@ -359,11 +370,9 @@ describe('computeReview forecast dual finishes (Story 6.6 / FR-32)', () => {
     expect(r.forecast).not.toBeNull();
     expect(r.forecast!.computedFinish).toBe('2026-11-01');
     expect(r.forecast!.baselineStart).toBe('2026-06-01');
-    expect(r.forecast!.trendFinish).toBe(r.forecast!.forecastFinish);
-    // Trend and computed disagree → gap chrome present.
-    if (r.forecast!.forecastFinish !== null && r.forecast!.forecastFinish !== '2026-11-01') {
-      expect(r.forecast!.finishGapWd).not.toBeNull();
-    }
+    expect(r.forecast!.forecastFinish).toBe('2026-09-17');
+    expect(r.forecast!.trendFinish).toBe('2026-09-17');
+    expect(r.forecast!.finishGapWd).toBe(-31);
   });
 
   it('leaves computedFinish null when scheduleHealth omits it', () => {

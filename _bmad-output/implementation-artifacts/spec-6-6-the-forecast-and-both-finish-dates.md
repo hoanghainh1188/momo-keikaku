@@ -2,7 +2,7 @@
 title: '6.6 — The forecast, and both finish dates'
 type: 'feature'
 created: '2026-10-10'
-status: 'in-progress'
+status: 'in-review'
 route: 'dispatch'
 review_loop_iteration: 0
 context: []
@@ -91,10 +91,30 @@ baseline_commit: '9f8ed6f7ad0abfebeebfc6b6add93a6d45fbe0f6'
 - `ReviewInput.scheduleHealth.computedFinish` + `baselineProjectStart`; `repo.ts` retains `storedOut.computedFinish` and loads Baseline schedule_run `inputs.projectStart`.
 - Review UI: dual labelled finishes in Ahead/Behind + Forecast; Status Schedule HealthBadge co-displays SV + both finishes + gap caption (Q1→A). i18n EN/JA keys added with parity.
 - Verification: `pnpm exec tsc -b` 0; `pnpm test` 1589 passed / 512 skipped; `pnpm lint` 0. (Clean tsc emit `.js` siblings after `-b` so fence suites stay green.) Demo golden trend date unchanged (`2026-12-15`); in-memory fixture has null computedFinish/gap until a schedule_run pin exists.
+- Review fixes: empty trend when baselineStart > baselineFinish; null finishGapWd when gap helper returns 0; pinned review finishGapWd=-31; Ahead/Behind uses formula_forecast_trend; Status SV note omitted when unavailable; finishes_disagree uses absGap+direction; finish-dates-presence.test.ts for Review testids.
 
 ## Spec Change Log
 
 ## Review Triage Log
+
+- blind: ja.json new 6.6 strings English despite "EN/JA parity" — **false** — repo contract is key-set parity (`key-parity.test.ts`); Review label English in `ja.json` is the established convention (see most `review.*` keys); Health disclosure JA is the exception already shipped
+- blind: negative `finishGapWd` reads as “-N working days” with no earlier/later wording — **low** → patch (ICU direction + abs gap in copy; add signed-gap unit test)
+- blind: Ahead/Behind trend cell uses `formula_forecast_finish` while Status/Forecast use `formula_forecast_trend` — **low** → patch (unify Ahead/Behind to trend-heuristic formula key)
+- blind: no DB/repo test for `computedFinish` / `baselineProjectStart` loader — **medium** → defer (no Postgres in this environment; `baseline-read`/`demo-golden` skip or null-only; same class as Story 6.5 deferred DB round-trips)
+- blind: `review.test` soft-asserts gap with conditional that never runs — **medium** → patch (pin expected `finishGapWd` / force disagreement)
+- blind: no UI tests for Status Q1→A / dual finish / gap testids — **medium** → patch (source/`data-testid` presence guard in web test style)
+- blind: tasks `[x]` while status/sprint still in-progress — **false** — workflow state (now `in-review`); not a product defect
+- blind: Status SV note labels unavailable SV as ahead_of_plan — **low** → patch (only claim ahead/behind when `svMh.kind === 'value'`)
+- blind: `finishGapWorkingDays` returns 0 for equal dates while `finishGapWd` is null — **false** — intentional: helper is numeric; chrome field nulls equal/missing per frozen matrix
+- blind: Ahead/Behind keeps `m-forecast-finish` vs `m-*-trend-finish` — **low** rejected (legacy testId continuity; everyday harm unlikely)
+- edge: unequal ISO with zero working-day span → gap 0 chrome — **false** — both finishes are produced by working-day calendar helpers so both are working days; inclusive span ≥ 1 when ISO differs
+- edge: `baselineProjectStart` after `baselineFinish` → zero-duration bogus trend — **medium** → patch (empty trend when start > finish)
+- edge: empty/non-ISO computedFinish or pin start throws — **false** — DB path Zod-parses stored outputs/inputs; corrupt injects are test-only
+- edge: JA English labels (claim) — **false** — same as blind ja parity
+- vgap: `loadBundleInTenant` pin fields unverified — **medium** → defer (no Postgres; see blind DB loader)
+- vgap: Review page dual-finish / Q1→A UI unverified — **medium** → patch (same UI source guard as blind)
+- vgap other: review.test soft gap branch — **medium** → patch (same as blind soft-assert)
+- vgap other: ja English values — **false** — same as blind ja parity
 
 ## Design Notes
 

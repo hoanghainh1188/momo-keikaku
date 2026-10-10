@@ -86,6 +86,7 @@ export function computeForecast(
   if (
     !baselineStart ||
     !baselineFinish ||
+    baselineStart > baselineFinish ||
     evm.spi.kind !== 'value' ||
     compareRatio(evm.spi.value, ZERO) <= 0
   ) {
@@ -102,17 +103,19 @@ export function computeForecast(
     if (finish < floorDate) finish = floorDate;
   }
 
-  const gap =
-    computedFinish !== null && computedFinish !== finish
-      ? finishGapWorkingDays(computedFinish, finish, cal)
-      : null;
+  let finishGapWd: number | null = null;
+  if (computedFinish !== null && computedFinish !== finish) {
+    const gap = finishGapWorkingDays(computedFinish, finish, cal);
+    // Defensive: never show zero-gap chrome for unequal ISO dates.
+    if (gap !== 0) finishGapWd = gap;
+  }
 
   return {
     eacMh: evm.eacMh,
     forecastFinish: finish,
     trendFinish: finish,
     computedFinish,
-    finishGapWd: gap,
+    finishGapWd,
     baselineStart,
     baselineFinish,
     note,

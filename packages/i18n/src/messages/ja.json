@@ -460,7 +460,7 @@
     "forecast_finish": "Trend finish",
     "computed_finish": "Computed finish",
     "trend_finish": "Trend finish",
-    "finishes_disagree": "The finishes disagree by {gap, plural, one {# working day} other {# working days}} (trend relative to computed).",
+    "finishes_disagree": "The finishes disagree by {absGap, plural, one {# working day} other {# working days}} (trend {direction, select, later {later} earlier {earlier} other {relative}} than computed).",
     "slipped": "slipped",
     "eac_typical": "EAC (Typical)",
     "etc": "ETC",
