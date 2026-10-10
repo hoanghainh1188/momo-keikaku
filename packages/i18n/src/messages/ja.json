@@ -550,7 +550,8 @@
       "opening_balance_footnote": "期首残高 {hours}h — momo-keikaku が観測できるようになる前の時間です。期間メトリクスからは除外されます。",
       "opening_balance_caption": "期首残高 {hours}h — momo-keikaku が観測できるようになる前の時間です。期間メトリクスからは除外されます。",
       "opening_balance_connector": "{label}: 期首残高 {hours}h — momo-keikaku が観測できるようになる前の時間です。期間メトリクスからは除外されます。",
-      "mapping_coverage": "Mapping coverage: {hourShare} of hours and {ticketShare} of Tickets are mapped (FR-23 reports the two separately)."
+      "mapping_coverage": "Mapping coverage: {hourShare} of hours and {ticketShare} of Tickets are mapped (FR-23 reports the two separately).",
+      "mapping_coverage_hour_unavailable": "Mapping coverage: 時間の割合は {hourReason} · マップ済みチケット {ticketShare}（FR-23 は両者を分けて報告します）。"
     },
     "scope_change_title": "Connector スコープ変更",
     "scope_change_intro": "Connector ごとの最新スコープ変更と、スコープ外になった Ticket および保持時間。",

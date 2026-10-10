@@ -734,7 +734,11 @@ describe.skipIf(!reachable)('the cross-tenant harness, driven against two probe 
       });
       expect(hours(review.unplanned.cumulative.unplannedMh)).toBe('1661.5');
       // Epic-5-retro F6: SM-5-aligned mapped-excluding-Catch-all (was 90.0% incl. Catch-all).
-      expect(share(review.coverage.mappedHourShare), 'Coverage over the relabelled copy').toBe('84.1%');
+      expect(review.coverage.mappedHourShare.kind).toBe('value');
+      if (review.coverage.mappedHourShare.kind !== 'value') throw new Error('expected value');
+      expect(share(review.coverage.mappedHourShare.value), 'Coverage over the relabelled copy').toBe(
+        '84.1%',
+      );
       // The numeric census sees the bigint figures, not only the counts: without this, a
       // census that skipped `bigint` would compare two lists of counts and call it faithful.
       const census = numberCensus(review);

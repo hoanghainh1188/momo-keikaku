@@ -550,7 +550,8 @@
       "opening_balance_footnote": "Opening Balance {hours}h — hours before momo-keikaku could observe them. Excluded from period metrics.",
       "opening_balance_caption": "Opening Balance {hours}h — hours before momo-keikaku could observe them. Excluded from period metrics.",
       "opening_balance_connector": "{label}: Opening Balance {hours}h — hours before momo-keikaku could observe them. Excluded from period metrics.",
-      "mapping_coverage": "Mapping coverage: {hourShare} of hours and {ticketShare} of Tickets are mapped (FR-23 reports the two separately)."
+      "mapping_coverage": "Mapping coverage: {hourShare} of hours and {ticketShare} of Tickets are mapped (FR-23 reports the two separately).",
+      "mapping_coverage_hour_unavailable": "Mapping coverage: hour share {hourReason}; {ticketShare} of Tickets are mapped (FR-23 reports the two separately)."
     },
     "scope_change_title": "Connector scope change",
     "scope_change_intro": "Latest scope change per Connector, with Tickets that left scope and their retained hours.",

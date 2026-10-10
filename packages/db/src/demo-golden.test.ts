@@ -203,8 +203,10 @@ describe('demo dataset — golden EVM figures', () => {
     const coverageHours = r.coverage.perConnector.projectTotal.hourShare;
     expect(coverageHours.kind).toBe('value');
     if (coverageHours.kind !== 'value') throw new Error('expected value');
-    expect(share(r.coverage.mappedHourShare)).toBe(share(coverageHours.mappedExcludingCatchAll));
-    expect(share(r.coverage.mappedHourShare)).toBe('84.1%');
+    expect(r.coverage.mappedHourShare.kind).toBe('value');
+    if (r.coverage.mappedHourShare.kind !== 'value') throw new Error('expected value');
+    expect(share(r.coverage.mappedHourShare.value)).toBe(share(coverageHours.mappedExcludingCatchAll));
+    expect(share(r.coverage.mappedHourShare.value)).toBe('84.1%');
     expect(share(r.coverage.mappedTicketShare)).toBe('81.0%');
     expect(Object.fromEntries(r.scopeLedger.map((s) => [s.key, share(s.share)]))).toEqual({
       'mapped-baselined': '82.1%',
