@@ -64,14 +64,14 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `packages/domain/src/computation-inputs.ts` (or evolve `review.ts`) — define `ComputationInputs` as the fully resolved pin (AD-10 field set); alias/bridge `ReviewInput`; document schedule exception.
-- [ ] `packages/domain/src/formula-version.ts` (+ tests) — registry of executable versions; current `evm-2026-09-20` registered; changing a formula requires a new key.
-- [ ] `packages/domain` ledger helper — filter entries by `snapshot_id ≤ pinned` per Connector; compute `ledger_seq_max` as assertion over that set only.
-- [ ] `packages/db` capture — take `lockWatermarkShared` inside `loadProjectBundle` before reading heads; apply ledger filter; return pin on `ReviewInput`/`ComputationInputs` (Q2-A).
-- [ ] Closure test — enumerate exported compute signatures in `domain/{evm,health,forecast,attribution,schedule}`; fail if an input type is unreachable from `ComputationInputs` (schedule via `schedule_run.inputs` only).
-- [ ] Golden recompute CI — file fixture corpus keyed by `formulaVersion` (Q1-A); update `ci.yml` absent-list comments.
-- [ ] Unit/integration tests for matrix rows (filter, greenfield, lock ordering, registry).
-- [ ] `sprint-status.yaml` — mark story/epic in-progress; leave Epic 5 residuals untouched.
+- [x] `packages/domain/src/computation-inputs.ts` (or evolve `review.ts`) — define `ComputationInputs` as the fully resolved pin (AD-10 field set); alias/bridge `ReviewInput`; document schedule exception.
+- [x] `packages/domain/src/formula-version.ts` (+ tests) — registry of executable versions; current `evm-2026-09-20` registered; changing a formula requires a new key.
+- [x] `packages/domain` ledger helper — filter entries by `snapshot_id ≤ pinned` per Connector; compute `ledger_seq_max` as assertion over that set only.
+- [x] `packages/db` capture — take `lockWatermarkShared` inside `loadProjectBundle` before reading heads; apply ledger filter; return pin on `ReviewInput`/`ComputationInputs` (Q2-A).
+- [x] Closure test — enumerate exported compute signatures in `domain/{evm,health,forecast,attribution,schedule}`; fail if an input type is unreachable from `ComputationInputs` (schedule via `schedule_run.inputs` only).
+- [x] Golden recompute CI — file fixture corpus keyed by `formulaVersion` (Q1-A); update `ci.yml` absent-list comments.
+- [x] Unit/integration tests for matrix rows (filter, greenfield, lock ordering, registry).
+- [x] `sprint-status.yaml` — mark story/epic in-progress; leave Epic 5 residuals untouched.
 
 **Acceptance Criteria:**
 - Given `domain/evm|health|forecast|attribution|schedule`, when any of them reads a value, then it comes from an append-only source `ComputationInputs` pins — and for schedule that source is `schedule_run.inputs` only (AR-19).
@@ -82,6 +82,13 @@ context:
 - Given `formulaVersion`, when a formula changes, then a new version is registered, old stays executable, and CI recomputes file-fixture goldens for every registered version (Q1-A; AR-19, AR-35).
 
 ## Implementation Notes
+
+- `ComputationInputs` is a type alias of `ReviewInput`; AD-10 pin watermarks added on `ReviewInput`.
+- Ledger filter compares snapshot **seq** (not text id) per Connector; `assertLedgerSeqMax` guards the assertion wall.
+- Live capture: `lockWatermarkShared` at start of `loadBundleInTenant`; source fence in `tests/computation-inputs-capture-fence.test.ts` (no DB). Wait behaviour covered by `tests/watermark-concurrency.test.ts` when Postgres is up.
+- Golden corpus: `packages/domain/src/formula-corpus/evm-2026-09-20/no-unplanned.json` + `golden-recompute.test.ts`.
+- Visibility / `tenantSettingSeqMax` pin fields are present as `null` until later stories land producers.
+- Multi-Connector: pin map is per-Connector; Review ticket observations still come from the Project’s overall latest snapshot (demo / single-Connector path) — deferred widening.
 
 ## Spec Change Log
 
