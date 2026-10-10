@@ -233,6 +233,47 @@ export default async function ReviewPage({
                   />
                 </div>
                 <div className="caption">{i.rule}</div>
+                {/* Story 6.6 / Q1→A: SV + both finishes under/beside Schedule HealthBadge (FR-31). */}
+                {i.key === 'schedule' && evm !== null && forecast !== null ? (
+                  <div className="metric-row" style={{ marginTop: 12 }} data-testid="schedule-finish-context">
+                    <FormulaMetricCell
+                      label={t('review.sv_schedule_variance')}
+                      metric={evm.svMh}
+                      formula={t('review.metrics.formula_sv')}
+                      note={t(
+                        evm.svMh.kind === 'value' && evm.svMh.value < 0n
+                          ? 'review.metrics.behind_plan_cap'
+                          : 'review.metrics.ahead_of_plan',
+                      )}
+                      testId="m-status-sv"
+                      popover={formulaPopover('sv', t('review.metrics.formula_sv'))}
+                    />
+                    <MetricCell
+                      label={t('review.computed_finish')}
+                      metric={{ text: forecast.computedFinish ?? em }}
+                      formula={t('review.metrics.formula_computed_finish')}
+                      note={t('review.metrics.note_computed_finish')}
+                      testId="m-status-computed-finish"
+                    />
+                    <MetricCell
+                      label={t('review.trend_finish')}
+                      metric={{ text: forecast.trendFinish ?? forecast.forecastFinish ?? em }}
+                      formula={t('review.metrics.formula_forecast_trend')}
+                      note={t('review.metrics.note_forecast_finish', {
+                        baselineFinish: forecast.baselineFinish ?? em,
+                        note: forecast.note,
+                      })}
+                      testId="m-status-trend-finish"
+                    />
+                  </div>
+                ) : null}
+                {i.key === 'schedule' &&
+                forecast !== null &&
+                forecast.finishGapWd !== null ? (
+                  <p className="caption" data-testid="status-finish-gap" style={{ marginTop: 8 }}>
+                    {t('review.finishes_disagree', { gap: forecast.finishGapWd })}
+                  </p>
+                ) : null}
               </div>
             ))}
           </div>
@@ -485,8 +526,15 @@ export default async function ReviewPage({
                   popover={formulaPopover('spi', t('review.metrics.formula_spi'))}
                 />
                 <MetricCell
-                  label={t('review.forecast_finish')}
-                  metric={{ text: forecast.forecastFinish ?? em }}
+                  label={t('review.computed_finish')}
+                  metric={{ text: forecast.computedFinish ?? em }}
+                  formula={t('review.metrics.formula_computed_finish')}
+                  note={t('review.metrics.note_computed_finish')}
+                  testId="m-computed-finish"
+                />
+                <MetricCell
+                  label={t('review.trend_finish')}
+                  metric={{ text: forecast.trendFinish ?? forecast.forecastFinish ?? em }}
                   formula={t('review.metrics.formula_forecast_finish')}
                   note={t('review.metrics.note_forecast_finish', {
                     baselineFinish: forecast.baselineFinish ?? em,
@@ -495,6 +543,11 @@ export default async function ReviewPage({
                   testId="m-forecast-finish"
                 />
               </div>
+              {forecast.finishGapWd !== null ? (
+                <p className="caption" data-testid="ahead-behind-finish-gap" style={{ marginTop: 8 }}>
+                  {t('review.finishes_disagree', { gap: forecast.finishGapWd })}
+                </p>
+              ) : null}
 
               <h3 className="label" style={{ marginTop: 32 }}>{t('clientView.milestones')}</h3>
               <table className="ledger" data-testid="milestones">
@@ -903,11 +956,28 @@ export default async function ReviewPage({
                   popover={formulaPopover('vac', t('review.metrics.formula_vac'))}
                 />
                 <MetricCell
-                  label={t('review.forecast_finish')}
-                  metric={{ text: forecast.forecastFinish ?? em }}
+                  label={t('review.computed_finish')}
+                  metric={{ text: forecast.computedFinish ?? em }}
+                  formula={t('review.metrics.formula_computed_finish')}
+                  note={t('review.metrics.note_computed_finish')}
+                  testId="m-forecast-computed-finish"
+                />
+                <MetricCell
+                  label={t('review.trend_finish')}
+                  metric={{ text: forecast.trendFinish ?? forecast.forecastFinish ?? em }}
                   formula={t('review.metrics.formula_forecast_trend')}
+                  note={t('review.metrics.note_forecast_finish', {
+                    baselineFinish: forecast.baselineFinish ?? em,
+                    note: forecast.note,
+                  })}
+                  testId="m-forecast-trend-finish"
                 />
               </div>
+              {forecast.finishGapWd !== null ? (
+                <p className="caption" data-testid="forecast-finish-gap" style={{ marginTop: 8 }}>
+                  {t('review.finishes_disagree', { gap: forecast.finishGapWd })}
+                </p>
+              ) : null}
               <p className="caption" style={{ marginTop: 16 }}>{t('review.the_effort_forecast_is_the_eac_from_the_project_')}</p>
             </>
           )}

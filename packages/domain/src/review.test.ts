@@ -344,6 +344,37 @@ describe('computeReview with no Baseline (story 2.2, decision Q1-A)', () => {
   });
 });
 
+describe('computeReview forecast dual finishes (Story 6.6 / FR-32)', () => {
+  it('threads scheduleHealth.computedFinish and baselineProjectStart into forecast', () => {
+    const r = computeReview({
+      ...input,
+      scheduleHealth: {
+        anchor: { kind: 'computed_finish', date: '2026-11-01' },
+        computedFinish: '2026-11-01',
+        wps: [{ wpId: 'WP-B', floatDays: 2, earlyFinish: '2026-11-01' }],
+        violations: [],
+      },
+      baselineProjectStart: '2026-06-01',
+    });
+    expect(r.forecast).not.toBeNull();
+    expect(r.forecast!.computedFinish).toBe('2026-11-01');
+    expect(r.forecast!.baselineStart).toBe('2026-06-01');
+    expect(r.forecast!.trendFinish).toBe(r.forecast!.forecastFinish);
+    // Trend and computed disagree → gap chrome present.
+    if (r.forecast!.forecastFinish !== null && r.forecast!.forecastFinish !== '2026-11-01') {
+      expect(r.forecast!.finishGapWd).not.toBeNull();
+    }
+  });
+
+  it('leaves computedFinish null when scheduleHealth omits it', () => {
+    const r = computeReview(input);
+    expect(r.forecast).not.toBeNull();
+    expect(r.forecast!.computedFinish).toBeNull();
+    expect(r.forecast!.finishGapWd).toBeNull();
+    expect(r.forecast!.trendFinish).toBe(r.forecast!.forecastFinish);
+  });
+});
+
 describe('computeReview divergence carries the WP\'s actual dates', () => {
   it('a WP with actual dates carries them in its divergence row', () => {
     const r = computeReview({

@@ -115,7 +115,11 @@ describe('demo dataset — golden EVM figures', () => {
     expect(present(evm.etcMh).text).toBe('2004.1');
     expect(present(evm.vacMh).text).toBe('-729.6');
     expect(forecast.forecastFinish).toBe('2026-12-15');
+    expect(forecast.trendFinish).toBe('2026-12-15');
     expect(forecast.baselineFinish).toBe('2026-11-27');
+    // In-memory fixture has no schedule_run pin → computed finish / gap stay null (Story 6.6).
+    expect(forecast.computedFinish).toBeNull();
+    expect(forecast.finishGapWd).toBeNull();
   });
 
   it('splits Unplanned Work into all three of its components', () => {
