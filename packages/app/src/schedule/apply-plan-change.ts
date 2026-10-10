@@ -37,6 +37,7 @@ import {
   resolveScheduleInputs,
   type RecalculateProjectResult,
 } from './recalculate-project';
+import { pctOverrideAppendFields } from './pct-override-append-fields';
 
 const noNul = (value: string) => !value.includes('\0');
 const id = z.string().min(1).refine(noNul, 'must not contain a NUL character');
@@ -283,36 +284,6 @@ export const planMutationSchema = planMutationBase.superRefine((value, ctx) => {
 });
 
 export type PlanMutation = z.infer<typeof planMutationBase>;
-
-/**
- * Story 6.4: fields appended to `pct_override_event` from a validated `patch_recorded_pct`.
- * Pure so unit tests can assert reason/source without Postgres.
- */
-export function pctOverrideAppendFields(mutation: {
-  readonly recordedPctNum: bigint;
-  readonly recordedPctDen: bigint;
-  readonly reason?: string;
-  readonly source?: 'pm_override' | 'plan_edit';
-}): {
-  readonly recordedPctNum: bigint;
-  readonly recordedPctDen: bigint;
-  readonly reason: string | null;
-  readonly source: 'pm_override' | 'plan_edit';
-} {
-  const source = mutation.source ?? 'plan_edit';
-  const reason =
-    source === 'pm_override'
-      ? (mutation.reason?.trim() ?? '')
-      : mutation.reason !== undefined
-        ? mutation.reason.trim() || null
-        : null;
-  return {
-    recordedPctNum: mutation.recordedPctNum,
-    recordedPctDen: mutation.recordedPctDen,
-    reason,
-    source,
-  };
-}
 
 export type ApplyPlanChangeScope = {
   readonly bound: SchedulingBound;

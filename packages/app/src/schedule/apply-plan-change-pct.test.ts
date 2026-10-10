@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { pctOverrideAppendFields, planMutationSchema } from './apply-plan-change';
+import { planMutationSchema } from './apply-plan-change';
+import { pctOverrideAppendFields } from './pct-override-append-fields';
 
 describe('patch_recorded_pct fence (story 6.4)', () => {
   it('refuses Accept (pm_override) with empty reason', () => {
