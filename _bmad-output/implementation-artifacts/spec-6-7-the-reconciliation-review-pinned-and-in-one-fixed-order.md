@@ -2,7 +2,7 @@
 title: '6.7 — The Reconciliation Review, pinned and in one fixed order'
 type: 'feature'
 created: '2026-10-10'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 context: []
