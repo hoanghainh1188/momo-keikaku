@@ -123,6 +123,7 @@ export function toPlanGridViewModel(
       r.recordedPct === null
         ? null
         : { num: r.recordedPct.num.toString(), den: r.recordedPct.den.toString() },
+    recordedPctPmAdjusted: r.recordedPctPmAdjusted,
     remainingDays: r.remainingDays,
     exceptionLabel: r.exception?.label ?? null,
     exceptionKind: r.exception?.kind ?? null,

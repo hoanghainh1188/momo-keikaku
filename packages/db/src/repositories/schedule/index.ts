@@ -417,7 +417,13 @@ export function scheduleRepositoryOn(bound: Bound) {
       readonly wpStatusSeqMax: number;
       readonly pctHeads: ReadonlyMap<
         string,
-        { readonly num: bigint; readonly den: bigint }
+        {
+          readonly num: bigint;
+          readonly den: bigint;
+          /** Story 6.4: head reason; presence ⇒ PM-adjusted on Plan. */
+          readonly reason: string | null;
+          readonly source: string | null;
+        }
       >;
       /** AR-48: max `pct_override_event.seq` for the Project (0 when none). */
       readonly pctOverrideSeqMax: number;
@@ -507,6 +513,8 @@ export function scheduleRepositoryOn(bound: Bound) {
           wpId: s.pctOverrideEvent.wpId,
           recordedPctNum: s.pctOverrideEvent.recordedPctNum,
           recordedPctDen: s.pctOverrideEvent.recordedPctDen,
+          reason: s.pctOverrideEvent.reason,
+          source: s.pctOverrideEvent.source,
           seq: s.pctOverrideEvent.seq,
         })
         .from(s.pctOverrideEvent)
@@ -516,7 +524,15 @@ export function scheduleRepositoryOn(bound: Bound) {
             eq(s.pctOverrideEvent.projectId, projectId),
           ),
         );
-      const pctHeads = new Map<string, { readonly num: bigint; readonly den: bigint }>();
+      const pctHeads = new Map<
+        string,
+        {
+          readonly num: bigint;
+          readonly den: bigint;
+          readonly reason: string | null;
+          readonly source: string | null;
+        }
+      >();
       const pctMaxSeq = new Map<string, number>();
       let pctOverrideSeqMax = 0;
       for (const row of pctRows) {
@@ -524,7 +540,12 @@ export function scheduleRepositoryOn(bound: Bound) {
         const prev = pctMaxSeq.get(row.wpId);
         if (prev === undefined || row.seq > prev) {
           pctMaxSeq.set(row.wpId, row.seq);
-          pctHeads.set(row.wpId, { num: row.recordedPctNum, den: row.recordedPctDen });
+          pctHeads.set(row.wpId, {
+            num: row.recordedPctNum,
+            den: row.recordedPctDen,
+            reason: row.reason,
+            source: row.source,
+          });
         }
       }
 

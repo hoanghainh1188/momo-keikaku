@@ -234,6 +234,12 @@ export const AUDIT_PAYLOAD_BY_ACTION = {
         })
         .strict()
         .optional(),
+      // Story 6.4 — Recorded % Accept / Plan-grid audit fields.
+      wpId: z.string().optional(),
+      recordedPctNum: z.string().optional(),
+      recordedPctDen: z.string().optional(),
+      reason: z.string().nullable().optional(),
+      source: z.enum(['pm_override', 'plan_edit']).optional(),
     })
     .strict(),
   'calendar.publish_version': z

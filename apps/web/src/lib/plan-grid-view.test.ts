@@ -68,6 +68,7 @@ const sample: PlanGridState = {
       actualStart: null,
       actualFinish: null,
       recordedPct: { num: 1n, den: 4n },
+      recordedPctPmAdjusted: false,
       remainingDays: 8,
       exception: { kind: 'violation', label: '▲ Late 6d', daysLate: 6 },
       plannedMh: 40_000n,

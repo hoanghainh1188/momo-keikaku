@@ -46,6 +46,7 @@ function leafRow(overrides: Partial<PlanGridRowView> = {}): PlanGridRowView {
     actualStart: null,
     actualFinish: null,
     recordedPct: null,
+    recordedPctPmAdjusted: false,
     remainingDays: null,
     exceptionLabel: null,
     exceptionKind: null,

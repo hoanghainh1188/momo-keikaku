@@ -106,6 +106,11 @@ export interface PlanGridRow {
   readonly actualStart: string | null;
   readonly actualFinish: string | null;
   readonly recordedPct: { readonly num: bigint; readonly den: bigint } | null;
+  /**
+   * Story 6.4: head `pct_override_event.reason` is non-empty — show PM-adjusted on Plan.
+   * Contract stub: no Visibility Policy may hide this marker (Publish lands later).
+   */
+  readonly recordedPctPmAdjusted: boolean;
   /** Recomputed for Progress — never stored (2.9 Q1→B). */
   readonly remainingDays: number | null;
   readonly exception: PlanGridException | null;
@@ -1062,7 +1067,11 @@ export async function getPlanGridState<Handle>(
       const siblings = childrenOf.get(wp.parentId) ?? [];
       const posInSet = siblings.findIndex((sib) => sib.id === wp.id) + 1;
       const status = planRows.statusHeads.get(wp.id);
-      const pct = planRows.pctHeads.get(wp.id) ?? null;
+      const pctHead = planRows.pctHeads.get(wp.id) ?? null;
+      const pct =
+        pctHead === null ? null : { num: pctHead.num, den: pctHead.den };
+      const recordedPctPmAdjusted =
+        pctHead !== null && pctHead.reason !== null && pctHead.reason.trim().length > 0;
       // calendar_range keeps last-good dates marked stale; other halt/stale → "—".
       const blankDerived = blankDerivedDates({
         haltedReason,
@@ -1121,6 +1130,7 @@ export async function getPlanGridState<Handle>(
         actualStart: status?.actualStart ?? null,
         actualFinish: status?.actualFinish ?? null,
         recordedPct: pct,
+        recordedPctPmAdjusted,
         remainingDays: remaining,
         exception: planGridExceptionCell(haltedReason, {
           wpId: wp.id,

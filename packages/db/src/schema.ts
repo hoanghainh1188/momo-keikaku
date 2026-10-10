@@ -561,8 +561,8 @@ export const wpFlagEvent = pgTable(
 
 /**
  * Recorded Percent Complete (AD-25 / FR-6b / story 2.10). Append-only; the head (max `seq` per
- * WP) is the value `resolveScheduleInputs` feeds the engine. FR-30's mandatory-reason ceremony
- * is Epic 6 — this table is the ordinary Plan-grid writer path.
+ * WP) is the value `resolveScheduleInputs` feeds the engine. Story 6.4 expands nullable `reason`
+ * + optional `source` for FR-30 Accept (mandatory reason) vs Plan-grid edits (reason may be null).
  */
 export const pctOverrideEvent = pgTable(
   'pct_override_event',
@@ -575,6 +575,16 @@ export const pctOverrideEvent = pgTable(
     recordedPctNum: bigint('recorded_pct_num', { mode: 'bigint' }).notNull(),
     /** Unreduced Ratio denominator; never zero. */
     recordedPctDen: bigint('recorded_pct_den', { mode: 'bigint' }).notNull(),
+    /**
+     * Story 6.4 / FR-30: Accept requires a non-empty reason; Plan-grid / legacy rows may leave
+     * this null. Presence marks the head as PM-adjusted on Review and Plan.
+     */
+    reason: text('reason'),
+    /**
+     * Story 6.4 R0 sources: `pm_override` (Review Accept) or `plan_edit` (Plan-grid). Null on
+     * legacy rows written before this expand.
+     */
+    source: text('source'),
     actor: text('actor').notNull(),
     at: timestamp('at', { withTimezone: true }).notNull(),
   },

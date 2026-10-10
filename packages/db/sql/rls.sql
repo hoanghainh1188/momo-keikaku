@@ -158,7 +158,7 @@ CREATE POLICY "maintenance_bypass" ON public."wp_flag_event"
   USING (true)
   WITH CHECK (true);
 
--- pct_override_event (append-only): Recorded Percent Complete for Plan-grid edits (story 2.10, AD-25). Append-only; the head feeds schedule_run.inputs. FR-30's audited override ceremony is Epic 6.
+-- pct_override_event (append-only): Recorded Percent Complete for Plan-grid edits (story 2.10, AD-25) and Review Accept (story 6.4 / FR-30 reason+source). Append-only; the head feeds schedule_run.inputs.
 ALTER TABLE public."pct_override_event" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public."pct_override_event" FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "tenant_isolation" ON public."pct_override_event";

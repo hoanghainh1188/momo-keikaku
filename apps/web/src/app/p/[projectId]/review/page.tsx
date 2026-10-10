@@ -18,6 +18,7 @@ import { SetBaselineButton } from '@/components/set-baseline-button';
 import { UnmappedGroupRows } from '@/components/unmapped-group-rows';
 import { REPORT_LOCALE } from '@/lib/report-locale';
 import { divergenceStatusTags } from '@/lib/divergence-status-tags';
+import { AcceptObservedPctForm } from '@/components/accept-observed-pct-form';
 import { OverlapResolveForm } from '../connectors/overlap-resolve-form';
 
 export const dynamic = 'force-dynamic';
@@ -47,7 +48,13 @@ export default async function ReviewPage({
   const overall = r.health.overall;
   // Story 2.2 (decision Q1-A): with no Baseline these are null, and each block that needs them
   // shows the "No Baseline yet" state instead. Coverage, AC and Unplanned Work always render.
-  const { evm, forecast, milestones, divergence } = r;
+  const { evm, forecast, milestones, divergence, observedVsRecorded } = r;
+  const recordedSourceLabel = (source: 'none' | 'pm_override' | 'plan_edit') =>
+    source === 'none'
+      ? t('review.gap_source_none')
+      : source === 'pm_override'
+        ? t('review.gap_source_pm_override')
+        : t('review.gap_source_plan_edit');
   const evmMoney = r.money;
   const formulaDetail = (id: string): FormulaMetricDetailLike | undefined =>
     r.formulaMetrics?.find((m) => m.id === id);
@@ -558,6 +565,7 @@ export default async function ReviewPage({
                             lowEvidence: d.lowEvidence,
                             baselineMh: d.baselineMh,
                             evFell: d.evFell,
+                            estimateDrivenEv: d.estimateDrivenEv,
                           }).map((tag) => (
                             <span
                               key={tag.key}
@@ -578,6 +586,109 @@ export default async function ReviewPage({
                   baselineCount: bundle.baseline?.wps.length ?? 0,
                 })}
               </p>
+            </>
+          )}
+        </Section>
+
+        {/*
+          Story 6.4 — thin Progress & Dates after Ahead/Behind: gap list + Accept only.
+          Date-moved list + Data Date stay for 6.8 / 6.7.
+          PM-adjusted marker: no Visibility Policy may hide it (contract stub until Publish).
+        */}
+        <Section
+          title={t('review.progress_and_dates')}
+          id="progress-dates"
+          intro={t('review.progress_and_dates_intro')}
+        >
+          {observedVsRecorded === null ? (
+            noBaseline('progress-dates')
+          ) : (
+            <>
+              <h3 className="label">{t('review.observed_vs_recorded')}</h3>
+              <table className="ledger" data-testid="observed-vs-recorded">
+                <thead>
+                  <tr>
+                    <th>{t('clientView.wbs')}</th>
+                    <th>{t('clientView.work_package')}</th>
+                    <th>{t('review.gap_observed')}</th>
+                    <th>{t('review.gap_recorded')}</th>
+                    <th className="num">{t('review.gap_gap')}</th>
+                    <th className="num">{t('review.gap_ev_obs')}</th>
+                    <th className="num">{t('review.gap_ev_rec')}</th>
+                    <th>{t('review.accept')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {observedVsRecorded.map((row) => {
+                    const observedWhole = wholePercent(row.observedPct);
+                    const recordedWhole =
+                      row.recordedPct === null ? '0' : wholePercent(row.recordedPct);
+                    const pmAdjusted =
+                      row.recordedReason !== null && row.recordedReason.trim().length > 0;
+                    return (
+                      <tr key={row.wpId} data-testid={`gap-row-${row.wpId}`}>
+                        <td>{row.wbsCode}</td>
+                        <td>
+                          {row.name}{' '}
+                          {pmAdjusted ? (
+                            <span className="tag" data-testid={`pm-adjusted-review-${row.wpId}`}>
+                              {t('common.pm_adjusted')}
+                            </span>
+                          ) : null}
+                          {row.estimateDrivenEv ? (
+                            <span className="tag" data-testid={`estimate-driven-${row.wpId}`}>
+                              {t('review.gap_estimate_driven')}
+                            </span>
+                          ) : null}
+                          <div className="caption">
+                            {t('review.gap_wording', {
+                              observed: observedWhole,
+                              recorded: recordedWhole,
+                            })}
+                          </div>
+                        </td>
+                        <td>
+                          {observedWhole}%
+                          <div className="caption">
+                            <span className="tag">{row.pctBasis}</span>{' '}
+                            {t('review.gap_evidence_count', { count: row.evidenceCount })}
+                          </div>
+                        </td>
+                        <td>
+                          {row.recordedPct === null ? (
+                            <span className="caption">{recordedSourceLabel('none')}</span>
+                          ) : (
+                            <>
+                              {recordedWhole}%
+                              <div className="caption">
+                                {recordedSourceLabel(row.recordedSource)}
+                              </div>
+                            </>
+                          )}
+                        </td>
+                        <td className="num">{wholePercent(row.gapAbs)} pts</td>
+                        <td className="num">{hours(row.evObservedMh)}</td>
+                        <td className="num">{hours(row.evRecordedMh)}</td>
+                        <td>
+                          <AcceptObservedPctForm
+                            row={{
+                              projectId,
+                              wpId: row.wpId,
+                              wbsCode: row.wbsCode,
+                              name: row.name,
+                              observedPctNum: row.observedPct.num.toString(),
+                              observedPctDen: row.observedPct.den.toString(),
+                              observedWhole,
+                              remainingBefore: row.remainingDaysBefore,
+                              remainingAfter: row.remainingDaysAfter,
+                            }}
+                          />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </>
           )}
         </Section>
