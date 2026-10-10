@@ -419,6 +419,8 @@
   "review": {
     "status": "Status",
     "unplanned_work": "Unplanned Work",
+    "contract_type_beside_unplanned": "Contract type: {contractType}",
+    "stale_snapshot_banner": "This Review's Tracker Snapshot is more than 24 hours old. Refresh now to pull a newer snapshot; figures stay pinned until you Re-pin.",
     "sm_c1_catch_all_share": "SM-C1 キャッチオール時間割合: {share}",
     "sm_c1_catch_all_share_unavailable": "SM-C1 キャッチオール時間割合: 利用不可（{reason}）",
     "ahead_behind": "Ahead / Behind",
@@ -510,7 +512,8 @@
       "disposition_line": " · disposition: {disposition}",
       "explain_note_line": "“{note}” — {hours}h",
       "map_tickets_submit": "Map {count, plural, one {# Ticket} other {# Tickets}}",
-      "column_header": "Disposition"
+      "column_header": "Disposition",
+      "drawer_toggle": "Dispositions ({count})"
     },
     "total_unmapped_work": "Total Unmapped Work",
     "milestones": "Milestones",

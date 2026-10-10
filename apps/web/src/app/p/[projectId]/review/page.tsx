@@ -14,6 +14,7 @@ import {
 import { ScopeLedgerBar } from '@/components/scope-ledger-bar';
 import { DispositionRail } from '@/components/disposition-rail';
 import { ReviewPinRegistrar } from '@/components/review-pin-context';
+import { ReviewRefreshNowForm } from '@/components/review-refresh-now-form';
 import { SetBaselineButton } from '@/components/set-baseline-button';
 import { UnmappedGroupRows } from '@/components/unmapped-group-rows';
 import { REPORT_LOCALE } from '@/lib/report-locale';
@@ -91,11 +92,35 @@ export default async function ReviewPage({
     </div>
   );
 
+  // Story 6.7 / UX-DR23: pin age from the Review's frozen snapshot (not live head).
+  const pinAgeMinutes = Math.round(
+    (new Date(bundle.meta.anchor).getTime() - new Date(r.snapshot.observedAt).getTime()) / 60_000,
+  );
+  const stalePin = pinAgeMinutes > 24 * 60;
+  const mappingHref = `/p/${projectId}/mapping`;
+  const planHref = `/p/${projectId}/plan`;
+  // Pin actually loaded (live heads when cookie freeze was missing/invalid) — client persists it.
+  const loadedTrackerPin =
+    r.snapshot.id &&
+    bundle.input.trackerSnapshotIdByConnector &&
+    bundle.input.trackerSnapshotIdByConnector.size > 0
+      ? {
+          overallSnapshotId: r.snapshot.id,
+          snapshotIdByConnector: Object.fromEntries(bundle.input.trackerSnapshotIdByConnector),
+        }
+      : null;
+
   return (
-    <div className="layout-review">
-      {r.snapshot.id ? <ReviewPinRegistrar snapshotId={r.snapshot.id} /> : null}
+    <div className="layout-review" data-testid="layout-review">
+      {r.snapshot.id ? (
+        <ReviewPinRegistrar
+          snapshotId={r.snapshot.id}
+          projectId={projectId}
+          trackerPin={loadedTrackerPin}
+        />
+      ) : null}
       <div className="sheet">
-        <header>
+        <header data-testid="review-header">
           <h1 className="report-title" data-testid="report-title">
             {t('review.report_title', { projectName: p.name })}
           </h1>
@@ -122,9 +147,22 @@ export default async function ReviewPage({
             ·{' '}
             {t('review.meta.formula')} {r.formulaVersion}
           </div>
-          <div className="btn-row">
-            <Link className="btn" href={`/p/${projectId}/mapping`}>{t('review.mapping')}</Link>
-            <Link className="btn" href={`/p/${projectId}/plan`}>{t('review.plan')}</Link>
+          {stalePin ? (
+            <div
+              className="review-stale-banner"
+              role="status"
+              data-testid="review-stale-banner"
+            >
+              <strong>{t('review.stale_snapshot_banner')}</strong>
+              <ReviewRefreshNowForm
+                projectId={projectId}
+                connectorId={bundle.meta.connector.id}
+              />
+            </div>
+          ) : null}
+          <div className="btn-row no-print">
+            <Link className="btn" href={mappingHref}>{t('review.mapping')}</Link>
+            <Link className="btn" href={planHref}>{t('review.plan')}</Link>
           </div>
         </header>
 
@@ -358,6 +396,13 @@ export default async function ReviewPage({
           id="unplanned"
           intro={t('review.hours_spent_outside_the_baselined_plan_they_carr')}
         >
+          <p
+            className="caption"
+            style={{ marginTop: 0, marginBottom: 12 }}
+            data-testid="unplanned-contract-type"
+          >
+            {t('review.contract_type_beside_unplanned', { contractType: p.contractType })}
+          </p>
           <ScopeLedgerBar
             segments={r.scopeLedger}
             openingBalanceMh={r.openingBalanceMh}
@@ -385,21 +430,39 @@ export default async function ReviewPage({
               </tr>
             </thead>
             <tbody>
-              {r.unplanned.components.map((c) => (
-                <tr key={c.key} data-testid={`component-${c.key}`}>
-                  <td>
-                    <UnplannedChip>{c.label}</UnplannedChip>
-                  </td>
-                  <td className="num">
-                    {hours(c.mh)}
-                    <span className="unit">h</span>
-                  </td>
-                  <td className="num">
-                    {c.share === null ? em : share(c.share)}
-                  </td>
-                  <td className="caption">{t(`review.componentSource.${componentSourceKey(c.key)}`)}</td>
-                </tr>
-              ))}
+              {r.unplanned.components.map((c) => {
+                const drillHref =
+                  c.key === 'unmapped' ? mappingHref : c.key === 'non-baselined' || c.key === 'catch-all-overflow'
+                    ? planHref
+                    : null;
+                return (
+                  <tr key={c.key} data-testid={`component-${c.key}`}>
+                    <td>
+                      <UnplannedChip>{c.label}</UnplannedChip>
+                    </td>
+                    <td className="num">
+                      {c.mh > 0n && drillHref ? (
+                        <Link
+                          href={drillHref}
+                          data-testid={`component-hours-link-${c.key}`}
+                        >
+                          {hours(c.mh)}
+                          <span className="unit">h</span>
+                        </Link>
+                      ) : (
+                        <>
+                          {hours(c.mh)}
+                          <span className="unit">h</span>
+                        </>
+                      )}
+                    </td>
+                    <td className="num">
+                      {c.share === null ? em : share(c.share)}
+                    </td>
+                    <td className="caption">{t(`review.componentSource.${componentSourceKey(c.key)}`)}</td>
+                  </tr>
+                );
+              })}
               <tr className="total-row">
                 <td>{t('review.total_unplanned_work')}</td>
                 <td className="num" data-testid="unplanned-total-cum">
@@ -447,7 +510,7 @@ export default async function ReviewPage({
             </thead>
             <tbody>
               {r.unmappedGroups.map((g) => (
-                <UnmappedGroupRows key={g.key} group={g} />
+                <UnmappedGroupRows key={g.key} projectId={projectId} group={g} />
               ))}
               <tr className="total-row">
                 <td colSpan={2}>{t('review.total_unmapped_work')}</td>
@@ -613,7 +676,16 @@ export default async function ReviewPage({
                       <tr key={d.wpId}>
                         <td>{d.wbsCode}</td>
                         <td>
-                          {d.name}{' '}
+                          {d.wpId ? (
+                            <Link
+                              href={`${planHref}?wp=${encodeURIComponent(d.wpId)}`}
+                              data-testid={`divergence-wp-link-${d.wpId}`}
+                            >
+                              {d.name}
+                            </Link>
+                          ) : (
+                            d.name
+                          )}{' '}
                           {d.isCatchAll ? <span className="tag">{t('plan.catch_all_loe')}</span> : null}
                           {d.nonBaselined ? (
                             <span className="tag unplanned">{t('plan.non_baselined')}</span>

@@ -2,7 +2,7 @@
 
 import { useTranslations } from 'next-intl';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { crCandidate, explainTickets, mapTickets, planTickets } from '@/app/actions';
 
 export interface RailGroup {
@@ -14,10 +14,15 @@ export interface RailGroup {
   ticketIds: string[];
 }
 
+const NARROW_MQ = '(max-width: 1279px)';
+
 /**
  * FR-29: the Disposition queue. Map applies immediately and the Unplanned figures
  * update in place. Plan creates a WP in the Current Plan and states that the hours
  * stay Unplanned until the next Re-baseline.
+ *
+ * Story 6.7: below ~1280px the rail becomes a drawer (Plan exceptions pattern), not
+ * only buried below the fold.
  */
 export function DispositionRail({
   projectId,
@@ -34,8 +39,23 @@ export function DispositionRail({
 }) {
   const t = useTranslations();
   const queue = groups.filter((g) => !g.dispositioned);
-  return (
-    <aside className="rail" data-testid="disposition-rail">
+  const [narrow, setNarrow] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
+  useEffect(() => {
+    const mq = window.matchMedia(NARROW_MQ);
+    const sync = () => setNarrow(mq.matches);
+    sync();
+    mq.addEventListener('change', sync);
+    return () => mq.removeEventListener('change', sync);
+  }, []);
+
+  const rail = (
+    <aside
+      className={`rail${narrow ? ' rail--drawer' : ''}${narrow && drawerOpen ? ' rail--drawer-open' : ''}`}
+      data-testid="disposition-rail"
+      data-drawer={narrow ? (drawerOpen ? 'open' : 'closed') : 'pinned'}
+    >
       <h2>{t('review.disposition.dispositions')}</h2>
       <p className="caption">
         {queue.length === 0
@@ -58,6 +78,25 @@ export function DispositionRail({
         </div>
       ) : null}
     </aside>
+  );
+
+  if (!narrow) return rail;
+
+  return (
+    <div className="review-rail-drawer-root" data-testid="disposition-rail-drawer">
+      <button
+        type="button"
+        className={`btn review-rail-toggle${drawerOpen ? ' review-rail-toggle--open' : ''}`}
+        data-testid="disposition-rail-toggle"
+        aria-pressed={drawerOpen}
+        aria-expanded={drawerOpen}
+        onClick={() => setDrawerOpen((v) => !v)}
+      >
+        {t('review.disposition.drawer_toggle', { count: queue.length })}
+        <span aria-hidden="true"> {drawerOpen ? '▾' : '▸'}</span>
+      </button>
+      {drawerOpen ? rail : null}
+    </div>
   );
 }
 

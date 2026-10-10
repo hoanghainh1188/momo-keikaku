@@ -10,6 +10,7 @@ import { useEffect, useState, useTransition, type FormEvent } from 'react';
 import {
   loadSnapshotPinStateAction,
   refreshSnapshotAction,
+  repinReviewTrackerAction,
 } from '@/app/p/[projectId]/snapshot-actions';
 import { INITIAL_SNAPSHOT_REFRESH } from '@/app/p/[projectId]/snapshot-refresh-state';
 
@@ -108,8 +109,10 @@ export function SnapshotPin({
   }
 
   function onRepin() {
-    startTransition(() => {
-      router.refresh();
+    startTransition(async () => {
+      // Story 6.7 / Q1→C: Re-pin is explicit — rewrite Tracker freeze, then refresh only on ok.
+      const result = await repinReviewTrackerAction({ projectId });
+      if (result.ok) router.refresh();
     });
   }
 
